@@ -63,8 +63,15 @@ var openapi = map[string]interface{}{
 									"value": map[string]interface{}{
 										"code": "graph LR\n  A --> B\n  B --> C",
 										"config": map[string]interface{}{
-											"max-fanout": map[string]interface{}{
-												"limit": 2,
+											"rules": map[string]interface{}{
+												"max-fanout": map[string]interface{}{
+													"enabled":  true,
+													"severity": "error",
+													"limit":    2,
+												},
+												"no-disconnected-nodes": map[string]interface{}{
+													"enabled": false,
+												},
 											},
 										},
 									},
@@ -260,11 +267,15 @@ var openapi = map[string]interface{}{
 						"type":        "object",
 						"description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`",
 						"example": map[string]interface{}{
-							"max-fanout": map[string]interface{}{
-								"limit": 3,
-							},
-							"no-disconnected-nodes": map[string]interface{}{
-								"enabled": true,
+							"rules": map[string]interface{}{
+								"max-fanout": map[string]interface{}{
+									"enabled":  true,
+									"severity": "error",
+									"limit":    3,
+								},
+								"no-disconnected-nodes": map[string]interface{}{
+									"enabled": false,
+								},
 							},
 						},
 					},
@@ -294,6 +305,13 @@ var openapi = map[string]interface{}{
 						"$ref":        "#/components/schemas/Metrics",
 						"description": "Aggregate statistics about the diagram. Present if valid.",
 						"nullable":    true,
+					},
+					"warnings": map[string]interface{}{
+						"type":        "array",
+						"description": "Non-fatal configuration warnings.",
+						"items": map[string]interface{}{
+							"type": "string",
+						},
 					},
 				},
 			},
@@ -353,7 +371,7 @@ var openapi = map[string]interface{}{
 			},
 			"Metrics": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"node_count", "edge_count", "max_fanout"},
+				"required": []string{"node_count", "edge_count", "max_fanout", "unknown_rule_config_count"},
 				"properties": map[string]interface{}{
 					"node_count": map[string]interface{}{
 						"type":        "integer",
@@ -369,6 +387,11 @@ var openapi = map[string]interface{}{
 						"type":        "integer",
 						"description": "Maximum number of outgoing edges from any single node",
 						"example":     2,
+					},
+					"unknown_rule_config_count": map[string]interface{}{
+						"type":        "integer",
+						"description": "Number of unknown rule IDs ignored from request config",
+						"example":     1,
 					},
 				},
 			},

@@ -61,8 +61,15 @@
                   "value": {
                     "code": "graph LR\n  A --> B\n  B --> C\n",
                     "config": {
-                      "max_fanout": {
-                        "max": 2
+                      "rules": {
+                        "max-fanout": {
+                          "enabled": true,
+                          "severity": "error",
+                          "limit": 2
+                        },
+                        "no-disconnected-nodes": {
+                          "enabled": false
+                        }
                       }
                     }
                   }
@@ -95,8 +102,10 @@
                       "metrics": {
                         "node_count": 2,
                         "edge_count": 1,
-                        "max_fanout": 1
-                      }
+                        "max_fanout": 1,
+                        "unknown_rule_config_count": 0
+                      },
+                      "warnings": []
                     }
                   },
                   "syntaxError": {
@@ -243,13 +252,17 @@
           },
           "config": {
             "type": "object",
-            "description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`\n",
+            "description": "Optional lint rule configuration. Shared rule keys: enabled, severity, suppress. Unknown rule IDs are ignored and reported via warnings and metrics.unknown_rule_config_count. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`",
             "example": {
-              "max_fanout": {
-                "max": 3
-              },
-              "no_disconnected_nodes": {
-                "enabled": true
+              "rules": {
+                "max-fanout": {
+                  "enabled": true,
+                  "severity": "error",
+                  "limit": 3
+                },
+                "no-disconnected-nodes": {
+                  "enabled": false
+                }
               }
             }
           }
@@ -282,6 +295,13 @@
             "$ref": "#/components/schemas/Metrics",
             "description": "Aggregate statistics about the diagram. Present if valid.",
             "nullable": true
+          },
+          "warnings": {
+            "type": "array",
+            "description": "Non-fatal configuration warnings.",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -356,7 +376,8 @@
         "required": [
           "node_count",
           "edge_count",
-          "max_fanout"
+          "max_fanout",
+          "unknown_rule_config_count"
         ],
         "properties": {
           "node_count": {
@@ -373,6 +394,11 @@
             "type": "integer",
             "description": "Maximum number of outgoing edges from any single node",
             "example": 2
+          },
+          "unknown_rule_config_count": {
+            "type": "integer",
+            "description": "Number of unknown rule IDs ignored from request config",
+            "example": 1
           }
         }
       }

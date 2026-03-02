@@ -61,8 +61,13 @@ paths:
                       A --> B
                       B --> C
                   config:
-                    max_fanout:
-                      max: 2
+                    rules:
+                      max-fanout:
+                        enabled: true
+                        severity: error
+                        limit: 2
+                      no-disconnected-nodes:
+                        enabled: false
               syntaxError:
                 summary: Invalid Mermaid syntax
                 value:
@@ -85,6 +90,8 @@ paths:
                       node_count: 2
                       edge_count: 1
                       max_fanout: 1
+                      unknown_rule_config_count: 0
+                    warnings: []
                 syntaxError:
                   summary: Syntax error response
                   value:
@@ -184,14 +191,19 @@ components:
         config:
           type: object
           description: |
-            Optional lint rule configuration. Supports both flat and nested formats:
+            Optional lint rule configuration. Shared keys: enabled, severity, suppress.
+            Unknown rule IDs are ignored and reported via warnings and metrics.unknown_rule_config_count.
+            Supports both flat and nested formats:
             - Flat format: `{"rule-id": {"option": "value"}}`
             - Nested format: `{"rules": {"rule-id": {"option": "value"}}}`
           example:
-            max_fanout:
-              max: 3
-            no_disconnected_nodes:
-              enabled: true
+            rules:
+              max-fanout:
+                enabled: true
+                severity: error
+                limit: 3
+              no-disconnected-nodes:
+                enabled: false
 
     AnalyzeResponse:
       type: object
@@ -215,6 +227,11 @@ components:
           $ref: '#/components/schemas/Metrics'
           description: Aggregate statistics about the diagram. Present if valid.
           nullable: true
+        warnings:
+          type: array
+          description: Non-fatal configuration warnings.
+          items:
+            type: string
 
     SyntaxError:
       type: object
@@ -275,6 +292,7 @@ components:
         - node_count
         - edge_count
         - max_fanout
+        - unknown_rule_config_count
       properties:
         node_count:
           type: integer
@@ -288,3 +306,7 @@ components:
           type: integer
           description: Maximum number of outgoing edges from any single node
           example: 2
+        unknown_rule_config_count:
+          type: integer
+          description: Number of unknown rule IDs ignored from request config
+          example: 1

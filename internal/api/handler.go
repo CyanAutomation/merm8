@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -39,18 +40,49 @@ func parseConfig(raw json.RawMessage) rules.Config {
 
 	// Try nested format first: {"rules": {...}}
 	var nested struct {
-		Rules rules.Config `json:"rules"`
+		Rules map[string]map[string]interface{} `json:"rules"`
 	}
 	if err := json.Unmarshal(raw, &nested); err == nil && len(nested.Rules) > 0 {
-		return nested.Rules
+		return toRuleConfig(nested.Rules)
 	}
 
 	// Fall back to flat format: {"rule-id": {...}}
-	var flat rules.Config
+	var flat map[string]map[string]interface{}
 	if err := json.Unmarshal(raw, &flat); err == nil {
-		return flat
+		return toRuleConfig(flat)
 	}
 	return rules.Config{}
+}
+
+func toRuleConfig(raw map[string]map[string]interface{}) rules.Config {
+	cfg := make(rules.Config, len(raw))
+	for id, values := range raw {
+		rc := rules.RuleConfig{Options: map[string]interface{}{}}
+		for k, v := range values {
+			switch strings.ToLower(k) {
+			case "enabled":
+				if b, ok := v.(bool); ok {
+					rc.Enabled = &b
+				}
+			case "severity":
+				if s, ok := v.(string); ok {
+					rc.Severity = s
+				}
+			case "suppress":
+				if arr, ok := v.([]interface{}); ok {
+					for _, it := range arr {
+						if s, ok := it.(string); ok {
+							rc.Suppress = append(rc.Suppress, s)
+						}
+					}
+				}
+			default:
+				rc.Options[k] = v
+			}
+		}
+		cfg[id] = rc
+	}
+	return cfg
 }
 
 // syntaxErrorResponse mirrors parser.SyntaxError for the JSON response.
@@ -62,9 +94,10 @@ type syntaxErrorResponse struct {
 
 // metricsResponse holds aggregate statistics about the diagram.
 type metricsResponse struct {
-	NodeCount int `json:"node_count"`
-	EdgeCount int `json:"edge_count"`
-	MaxFanout int `json:"max_fanout"`
+	NodeCount              int `json:"node_count"`
+	EdgeCount              int `json:"edge_count"`
+	MaxFanout              int `json:"max_fanout"`
+	UnknownRuleConfigCount int `json:"unknown_rule_config_count"`
 }
 
 // analyzeResponse is returned by POST /analyze.
@@ -73,6 +106,7 @@ type analyzeResponse struct {
 	SyntaxError *syntaxErrorResponse `json:"syntax_error"`
 	Issues      []model.Issue        `json:"issues"`
 	Metrics     *metricsResponse     `json:"metrics,omitempty"`
+	Warnings    []string             `json:"warnings,omitempty"`
 }
 
 // Handler holds the dependencies needed to serve HTTP requests.
@@ -151,19 +185,21 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg := parseConfig(req.Config)
-	issues := h.engine.Run(diagram, cfg)
+	normalized, warnings := h.engine.NormalizeConfig(cfg)
+	issues := h.engine.Run(diagram, normalized)
 
 	resp := analyzeResponse{
 		Valid:       true,
 		SyntaxError: nil,
 		Issues:      issues,
-		Metrics:     computeMetrics(diagram),
+		Metrics:     computeMetrics(diagram, len(warnings)),
+		Warnings:    warnings,
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
 // computeMetrics derives aggregate metrics from the diagram.
-func computeMetrics(d *model.Diagram) *metricsResponse {
+func computeMetrics(d *model.Diagram, unknownRuleConfigCount int) *metricsResponse {
 	fanout := make(map[string]int)
 	for _, e := range d.Edges {
 		fanout[e.From]++
@@ -175,9 +211,10 @@ func computeMetrics(d *model.Diagram) *metricsResponse {
 		}
 	}
 	return &metricsResponse{
-		NodeCount: len(d.Nodes),
-		EdgeCount: len(d.Edges),
-		MaxFanout: maxFanout,
+		NodeCount:              len(d.Nodes),
+		EdgeCount:              len(d.Edges),
+		MaxFanout:              maxFanout,
+		UnknownRuleConfigCount: unknownRuleConfigCount,
 	}
 }
 
