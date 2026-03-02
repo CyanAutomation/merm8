@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -92,6 +94,32 @@ func TestAnalyze_ParserFails_Returns500(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 when parser fails, got %d", w.Code)
+	}
+}
+
+func TestAnalyze_ParserSubprocessInternalError_Returns500(t *testing.T) {
+	tempDir := t.TempDir()
+	script := filepath.Join(tempDir, "parse.mjs")
+	scriptBody := `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({
+  valid: false,
+  error: { message: "internal parser error: exploded", line: 0, column: 0 }
+}) + "\n");
+process.exit(1);
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write test parser script: %v", err)
+	}
+
+	mux := newTestMuxWithRealParser(script)
+	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when parser subprocess exits non-zero with internal error payload, got %d", w.Code)
 	}
 }
 
