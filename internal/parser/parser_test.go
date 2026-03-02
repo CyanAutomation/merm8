@@ -187,8 +187,6 @@ func TestParser_WithDirection(t *testing.T) {
 	}
 }
 
-
-
 // TestParser_MultipleEdges tests parsing diagrams with multiple edges from one node.
 func TestParser_MultipleEdges(t *testing.T) {
 	script := getParserScript(t)
@@ -264,7 +262,6 @@ func TestParser_ASTExtractionFailure(t *testing.T) {
 		t.Fatalf("expected message mentioning AST extraction failure, got %q", syntaxErr.Message)
 	}
 }
-
 
 // TestParser_LargeGraph tests parsing a reasonably large diagram.
 func TestParser_LargeGraph(t *testing.T) {
