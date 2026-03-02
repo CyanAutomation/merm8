@@ -11,6 +11,12 @@ import (
 	"github.com/CyanAutomation/merm8/internal/rules"
 )
 
+// ParserInterface defines the contract for parsing Mermaid code.
+// It allows dependency injection of mock parsers in tests.
+type ParserInterface interface {
+	Parse(code string) (*model.Diagram, *parser.SyntaxError, error)
+}
+
 // analyzeRequest is the JSON body accepted by POST /analyze.
 type analyzeRequest struct {
 	Code   string          `json:"code"`
@@ -64,16 +70,26 @@ type analyzeResponse struct {
 
 // Handler holds the dependencies needed to serve HTTP requests.
 type Handler struct {
-	parser *parser.Parser
+	parser ParserInterface
 	engine *engine.Engine
 }
 
-// NewHandler creates a Handler wired with the given parser script path.
-func NewHandler(scriptPath string) *Handler {
+// NewHandler creates a Handler with the given parser and engine.
+// This constructor allows dependency injection for testing.
+func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
 	return &Handler{
-		parser: parser.New(scriptPath),
-		engine: engine.New(),
+		parser: p,
+		engine: e,
 	}
+}
+
+// NewHandlerWithScript creates a Handler wired with a real parser using the given script path.
+// This is the typical constructor for production use.
+func NewHandlerWithScript(scriptPath string) *Handler {
+	return NewHandler(
+		parser.New(scriptPath),
+		engine.New(),
+	)
 }
 
 // RegisterRoutes attaches all routes to mux.

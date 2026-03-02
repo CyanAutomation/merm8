@@ -3,26 +3,57 @@ package api_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/CyanAutomation/merm8/internal/api"
+	"github.com/CyanAutomation/merm8/internal/engine"
+	"github.com/CyanAutomation/merm8/internal/model"
+	"github.com/CyanAutomation/merm8/internal/parser"
 )
 
-// newTestMux creates a test HTTP server backed by a handler that uses the
-// given parser script path (may not exist; tests that hit the parser will fail
-// gracefully).
-func newTestMux(scriptPath string) *http.ServeMux {
+// mockParser is a test double for ParserInterface.
+type mockParser struct {
+	diagram    *model.Diagram
+	syntaxErr  *parser.SyntaxError
+	parseError error
+}
+
+func (m *mockParser) Parse(code string) (*model.Diagram, *parser.SyntaxError, error) {
+	return m.diagram, m.syntaxErr, m.parseError
+}
+
+// newTestMux creates a test HTTP server backed by a handler using a mock parser.
+func newTestMux(mockParseFn func(string) (*model.Diagram, *parser.SyntaxError, error)) *http.ServeMux {
 	mux := http.NewServeMux()
-	h := api.NewHandler(scriptPath)
+	mockP := &mockParser{}
+	if mockParseFn != nil {
+		// For tests that need specific behavior, wrap the function
+		originalParse := mockP.Parse
+		mockP.Parse = mockParseFn
+		_ = originalParse // suppress unused warning
+	}
+	h := api.NewHandler(mockP, engine.New())
+	h.RegisterRoutes(mux)
+	return mux
+}
+
+// newTestMuxWithRealParser creates a test mux that uses the real parser subprocess.
+// Used for integration tests. Returns nil mux if parser script doesn't exist.
+func newTestMuxWithRealParser(scriptPath string) *http.ServeMux {
+	mux := http.NewServeMux()
+	h := api.NewHandler(parser.New(scriptPath), engine.New())
 	h.RegisterRoutes(mux)
 	return mux
 }
 
 func TestAnalyze_MissingCode(t *testing.T) {
-	mux := newTestMux("/nonexistent/parse.mjs")
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
 	body := `{}`
 	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -35,7 +66,9 @@ func TestAnalyze_MissingCode(t *testing.T) {
 }
 
 func TestAnalyze_InvalidJSON(t *testing.T) {
-	mux := newTestMux("/nonexistent/parse.mjs")
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
 	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader("not json"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -47,7 +80,9 @@ func TestAnalyze_InvalidJSON(t *testing.T) {
 }
 
 func TestAnalyze_ParserFails_Returns500(t *testing.T) {
-	mux := newTestMux("/nonexistent/parse.mjs") // script doesn't exist
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, errors.New("mock parser error")
+	})
 	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
 	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -55,13 +90,186 @@ func TestAnalyze_ParserFails_Returns500(t *testing.T) {
 	mux.ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 when parser script missing, got %d", w.Code)
+		t.Fatalf("expected 500 when parser fails, got %d", w.Code)
+	}
+}
+
+// TestAnalyze_ValidDiagram_SuccessPath tests a valid diagram end-to-end.
+func TestAnalyze_ValidDiagram_SuccessPath(t *testing.T) {
+	validDiagram := &model.Diagram{
+		Direction: "TD",
+		Nodes: []model.Node{
+			{ID: "A", Label: "Start"},
+			{ID: "B", Label: "Process"},
+			{ID: "C", Label: "End"},
+		},
+		Edges: []model.Edge{
+			{From: "A", To: "B", Type: "arrow"},
+			{From: "B", To: "C", Type: "arrow"},
+		},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return validDiagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B\n  B-->C"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	// Verify response structure
+	if valid, ok := resp["valid"].(bool); !ok || !valid {
+		t.Error("expected valid=true")
+	}
+	if syntaxErr := resp["syntax_error"]; syntaxErr != nil {
+		t.Error("expected syntax_error=null")
+	}
+	if issues, ok := resp["issues"].([]interface{}); !ok {
+		t.Error("expected issues array")
+	} else if len(issues) != 0 {
+		t.Errorf("expected 0 issues for clean diagram, got %d", len(issues))
+	}
+	if metrics, ok := resp["metrics"].(map[string]interface{}); !ok {
+		t.Error("expected metrics object")
+	} else {
+		if nodeCount, ok := metrics["node_count"].(float64); !ok || nodeCount != 3 {
+			t.Errorf("expected node_count=3, got %v", metrics["node_count"])
+		}
+		if edgeCount, ok := metrics["edge_count"].(float64); !ok || edgeCount != 2 {
+			t.Errorf("expected edge_count=2, got %v", metrics["edge_count"])
+		}
+	}
+}
+
+// TestAnalyze_SyntaxError_Returns200 tests that syntax errors return 200 with error details.
+func TestAnalyze_SyntaxError_Returns200(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{
+		Message: "No diagram type detected",
+		Line:    0,
+		Column:  0,
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+
+	body, _ := json.Marshal(map[string]string{"code": "invalid code"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for syntax error, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	if valid, ok := resp["valid"].(bool); !ok || valid {
+		t.Error("expected valid=false")
+	}
+	if syntaxErrResp, ok := resp["syntax_error"].(map[string]interface{}); !ok {
+		t.Error("expected syntax_error object")
+	} else {
+		if msg, ok := syntaxErrResp["message"].(string); !ok || msg != "No diagram type detected" {
+			t.Errorf("expected error message, got %v", syntaxErrResp["message"])
+		}
+	}
+}
+
+// TestAnalyze_ConfigApplied_MaxFanout tests that custom rule config is applied.
+func TestAnalyze_ConfigApplied_MaxFanout(t *testing.T) {
+	// Diagram with node A having 3 outgoing edges (violates limit of 2)
+	diagram := &model.Diagram{
+		Direction: "TD",
+		Nodes: []model.Node{
+			{ID: "A", Label: "A"},
+			{ID: "B", Label: "B"},
+			{ID: "C", Label: "C"},
+			{ID: "D", Label: "D"},
+		},
+		Edges: []model.Edge{
+			{From: "A", To: "B", Type: "arrow"},
+			{From: "A", To: "C", Type: "arrow"},
+			{From: "A", To: "D", Type: "arrow"},
+		},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	// Config with max-fanout limit of 2
+	config := map[string]interface{}{
+		"rules": map[string]interface{}{
+			"max-fanout": map[string]interface{}{
+				"limit": 2,
+			},
+		},
+	}
+	body, _ := json.Marshal(map[string]interface{}{
+		"code":   "graph TD\n  A-->B\n  A-->C\n  A-->D",
+		"config": config,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	// Should have at least one max-fanout issue
+	issues, ok := resp["issues"].([]interface{})
+	if !ok {
+		t.Fatal("expected issues array")
+	}
+	if len(issues) == 0 {
+		t.Fatal("expected at least one issue for fanout violation")
+	}
+
+	found := false
+	for _, issue := range issues {
+		if issueMap, ok := issue.(map[string]interface{}); ok {
+			if ruleID, ok := issueMap["rule_id"].(string); ok && ruleID == "max-fanout" {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Error("expected max-fanout issue not found")
 	}
 }
 
 // TestAnalyze_ConfigParsing_FlatFormat tests that flat config format is accepted.
 func TestAnalyze_ConfigParsing_FlatFormat(t *testing.T) {
-	mux := newTestMux("/nonexistent/parse.mjs")
+	diagram := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
+		Edges: []model.Edge{{From: "A", To: "B"}},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
 	// Flat config format: {"max-fanout": {...}}
 	bodyStr := `{
 		"code": "graph TD; A-->B",
@@ -74,15 +282,22 @@ func TestAnalyze_ConfigParsing_FlatFormat(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	// Should fail at parser level (nonexistent script), not config parsing
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 when parser script missing, got %d", w.Code)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with flat config, got %d", w.Code)
 	}
 }
 
 // TestAnalyze_ConfigParsing_NestedFormat tests that nested config format is accepted.
 func TestAnalyze_ConfigParsing_NestedFormat(t *testing.T) {
-	mux := newTestMux("/nonexistent/parse.mjs")
+	diagram := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
+		Edges: []model.Edge{{From: "A", To: "B"}},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
 	// Nested config format: {"rules": {"max-fanout": {...}}}
 	bodyStr := `{
 		"code": "graph TD; A-->B",
@@ -97,8 +312,7 @@ func TestAnalyze_ConfigParsing_NestedFormat(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	// Should fail at parser level (nonexistent script), not config parsing
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 when parser script missing, got %d", w.Code)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with nested config, got %d", w.Code)
 	}
 }
