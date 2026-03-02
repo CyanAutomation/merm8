@@ -30,13 +30,15 @@ func (rc RuleConfig) EnabledOrDefault() bool {
 }
 
 // SeverityOrDefault returns a validated severity, falling back to defaultSeverity.
-func (rc RuleConfig) SeverityOrDefault(defaultSeverity string) string {
+func (rc RuleConfig) SeverityOrDefault(defaultSeverity string) (string, bool) {
 	s := strings.ToLower(strings.TrimSpace(rc.Severity))
 	switch s {
 	case SeverityError, SeverityWarn, SeverityInfo:
-		return s
+		return s, true
+	case "":
+		return defaultSeverity, true
 	default:
-		return defaultSeverity
+		return defaultSeverity, false
 	}
 }
 
