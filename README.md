@@ -94,6 +94,8 @@ The service listens on **port 8080**.
 
 > `config` is optional. Both flat `{"max-fanout": {...}}` and nested `{"rules": {"max-fanout": {...}}}` formats are accepted.
 
+> Request body size limit: **1 MiB**. Oversized payloads return `413` with JSON: `{"error":"request body exceeds 1 MiB limit"}`.
+
 **Response — valid diagram**
 
 ```json

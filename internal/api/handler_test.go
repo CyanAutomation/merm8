@@ -102,6 +102,37 @@ func TestAnalyze_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestAnalyze_RequestBodyTooLarge(t *testing.T) {
+	parserCalled := false
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		parserCalled = true
+		return nil, nil, nil
+	})
+
+	largeCode := strings.Repeat("A", (1<<20)+1024)
+	body, _ := json.Marshal(map[string]string{"code": largeCode})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413 for oversized request body, got %d", w.Code)
+	}
+	if parserCalled {
+		t.Fatal("expected parser not to be called for oversized request body")
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("expected JSON error response, got decode error: %v", err)
+	}
+	if resp["error"] != "request body exceeds 1 MiB limit" {
+		t.Fatalf("expected oversized body error message, got %q", resp["error"])
+	}
+}
+
 func TestAnalyze_ParserFails_Returns500(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, errors.New("mock parser error")

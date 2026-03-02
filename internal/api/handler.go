@@ -4,6 +4,7 @@ package api
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
@@ -11,6 +12,8 @@ import (
 	"github.com/CyanAutomation/merm8/internal/parser"
 	"github.com/CyanAutomation/merm8/internal/rules"
 )
+
+const maxAnalyzeBodyBytes int64 = 1 << 20 // 1 MiB
 
 //go:embed swagger.html
 var swaggerHTML []byte
@@ -105,8 +108,15 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 // Analyze handles POST /analyze.
 func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxAnalyzeBodyBytes)
+
 	var req analyzeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "request body exceeds 1 MiB limit"})
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
