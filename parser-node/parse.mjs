@@ -103,9 +103,7 @@ async function extractAST(mermaidAPI, source) {
   try {
     const diagram = await mermaidAPI.getDiagramFromText(source);
     db = diagram?.db ?? null;
-    if (process.env.MERM8_FORCE_AST_DB_NULL === '1') {
-      db = null;
-    }
+    // Test hook removed - use dependency injection or test-specific build for testing
   } catch (_) {
     // getDiagramFromText can fail in parser runtime under Node.js.
   }
