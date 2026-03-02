@@ -1,6 +1,7 @@
 package rules_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -76,7 +77,6 @@ func TestNoDisconnectedNodes_NoEdgesExempt(t *testing.T) {
 	}
 }
 
-
 func TestNoDisconnectedNodes_NoEdgesMultipleNodes(t *testing.T) {
 	d := &model.Diagram{
 		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
@@ -126,5 +126,37 @@ func TestMaxFanout_CustomLimit(t *testing.T) {
 	issues := rules.MaxFanout{}.Run(d, cfg)
 	if len(issues) != 1 {
 		t.Fatalf("expected 1 issue with custom limit 2, got %d", len(issues))
+	}
+}
+
+func TestMaxFanout_InvalidLimitsFallbackToDefault(t *testing.T) {
+	edges := make([]model.Edge, 6)
+	for i := range edges {
+		edges[i] = model.Edge{From: "A", To: string(rune('B' + i))}
+	}
+	d := &model.Diagram{Edges: edges}
+
+	tests := []struct {
+		name  string
+		limit interface{}
+	}{
+		{name: "zero", limit: 0},
+		{name: "negative", limit: -1},
+		{name: "fractional float", limit: 2.5},
+		{name: "string", limit: "3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := rules.Config{"max-fanout": {"limit": tt.limit}}
+			issues := rules.MaxFanout{}.Run(d, cfg)
+			if len(issues) != 1 {
+				t.Fatalf("expected 1 issue using default limit fallback, got %d", len(issues))
+			}
+			want := "exceeding limit of 5"
+			if !strings.Contains(issues[0].Message, want) {
+				t.Fatalf("expected message to contain %q, got %q", want, issues[0].Message)
+			}
+		})
 	}
 }
