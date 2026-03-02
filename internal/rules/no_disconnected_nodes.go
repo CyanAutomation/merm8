@@ -9,7 +9,7 @@ type NoDisconnectedNodes struct{}
 func (r NoDisconnectedNodes) ID() string { return "no-disconnected-nodes" }
 
 func (r NoDisconnectedNodes) Run(d *model.Diagram, _ Config) []model.Issue {
-	if len(d.Edges) == 0 {
+	if len(d.Edges) == 0 && len(d.Nodes) <= 1 {
 		return nil
 	}
 	connected := make(map[string]bool, len(d.Nodes))
