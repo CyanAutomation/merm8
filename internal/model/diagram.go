@@ -33,6 +33,6 @@ type Issue struct {
 	RuleID   string `json:"rule_id"`
 	Severity string `json:"severity"`
 	Message  string `json:"message"`
-	Line     int    `json:"line"`
-	Column   int    `json:"column"`
+	Line     *int   `json:"line,omitempty"`
+	Column   *int   `json:"column,omitempty"`
 }

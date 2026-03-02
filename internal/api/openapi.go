@@ -123,8 +123,13 @@ var openapi = map[string]interface{}{
 													"rule_id":  "no-disconnected-nodes",
 													"severity": "error",
 													"message":  "Node 'D' is not connected to the graph",
-													"line":     5,
-													"column":   0,
+												},
+												map[string]interface{}{
+													"rule_id":  "max-fanout",
+													"severity": "warn",
+													"message":  "Node 'A' has fanout 6, exceeding limit of 5",
+													"line":     2,
+													"column":   2,
 												},
 											},
 											"metrics": map[string]interface{}{
@@ -339,14 +344,14 @@ var openapi = map[string]interface{}{
 					},
 					"line": map[string]interface{}{
 						"type":        "integer",
-						"description": "1-based line number where issue is located (if applicable)",
+						"description": "1-based line number where issue is located when known. Omitted when unknown.",
 						"example":     5,
 						"nullable":    true,
 					},
 					"column": map[string]interface{}{
 						"type":        "integer",
-						"description": "0-based column number where issue is located (if applicable)",
-						"example":     0,
+						"description": "0-based column number where issue is located when known. Omitted when unknown.",
+						"example":     2,
 						"nullable":    true,
 					},
 				},

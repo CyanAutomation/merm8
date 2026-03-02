@@ -133,9 +133,7 @@ Add a `config` field to customize rule behavior:
     {
       "rule_id": "no-disconnected-nodes",
       "severity": "error",
-      "message": "Node 'Isolated' is not connected to the graph",
-      "line": 3,
-      "column": 0
+      "message": "Node 'Isolated' is not connected to the graph"
     }
   ],
   "metrics": {
@@ -170,7 +168,8 @@ Add a `config` field to customize rule behavior:
   - `rule_id` — The lint rule that triggered
   - `severity` — One of: `error`, `warn`, `info`
   - `message` — Description of the issue
-  - `line` / `column` — Location in the diagram code
+  - `line` / `column` — Optional location in the diagram code (omitted when unknown)
+- **`issues`** can include findings both with source locations (`line`/`column`) and without them when exact positions are unavailable.
 - **`metrics`** — Statistics about the diagram structure
   - `node_count` — Total nodes in the diagram
   - `edge_count` — Total connections/edges
@@ -459,8 +458,8 @@ curl -X POST http://localhost:8080/analyze \
       "rule_id": "max-fanout",
       "severity": "warn",
       "message": "Node 'A' has fanout of 6, exceeds limit of 4",
-      "line": 1,
-      "column": 0
+      "line": 2,
+      "column": 2
     }
   ],
   "metrics": {
@@ -491,9 +490,7 @@ curl -X POST http://localhost:8080/analyze \
     {
       "rule_id": "no-disconnected-nodes",
       "severity": "error",
-      "message": "Node 'D' is not connected to the graph",
-      "line": 4,
-      "column": 0
+      "message": "Node 'D' is not connected to the graph"
     }
   ],
   "metrics": {
