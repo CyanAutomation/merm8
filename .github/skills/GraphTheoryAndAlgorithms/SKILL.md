@@ -1,3 +1,50 @@
+
+---
+name: GraphTheoryAndAlgorithms
+description: Analyze and implement graph-based validation rules for Mermaid diagrams in Go.
+---
+
+# Skill Instructions
+
+## Inputs / Outputs / Non-goals
+
+- Inputs: Go source files for rules, engine, and model; test files; Mermaid diagram ASTs.
+- Outputs: Efficient, correct rule implementations for graph validation; test coverage for new rules.
+- Non-goals: Do not change diagram parsing logic or API handler code unless required for rule integration.
+
+## Trigger conditions
+
+Use this skill when prompts include or imply:
+
+- "Add/modify a lint rule for diagrams"
+- "Implement graph validation logic"
+- "Optimize or test rule performance"
+
+## Mandatory rules
+
+- Follow domain constraints and avoid silent public API/schema changes.
+- Keep changes scoped and deterministic.
+- Record assumptions and unresolved ambiguities.
+
+## Validation checklist
+
+- [ ] Required commands/checks were run (go test, go build).
+- [ ] Relevant tests were updated/executed.
+- [ ] Risk/impact was documented.
+
+## Expected output format
+
+- Summary: What changed in rule logic and why.
+- Evidence: Test results, code diffs, performance notes.
+- Risks: Known risks and mitigations (e.g., missed edge cases, performance regressions).
+
+## Failure/stop conditions
+
+- Stop if requirements are ambiguous in a way that can cause breaking changes.
+- Stop if required validation cannot be performed and report the blocker.
+
+---
+
 # Graph Theory & Algorithms
 
 ## Overview

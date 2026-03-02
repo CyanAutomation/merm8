@@ -1,3 +1,52 @@
+global.document = dom.window.document;
+global.window = dom.window;
+
+---
+name: NodeJsAndJavaScript
+description: Build and maintain the Node.js parser bridge for Mermaid diagram validation and Go integration.
+---
+
+# Skill Instructions
+
+## Inputs / Outputs / Non-goals
+
+- Inputs: Node.js parser script (parse.mjs), package.json, Mermaid diagram code via stdin, Go subprocess wrapper.
+- Outputs: Valid JSON AST or error output to stdout; robust, testable parser script.
+- Non-goals: Do not implement Go backend logic; do not change Mermaid library internals.
+
+## Trigger conditions
+
+Use this skill when prompts include or imply:
+
+- "Update Node.js parser for Mermaid"
+- "Change how diagrams are parsed or errors are handled in Node.js"
+- "Integrate Node.js parser with Go backend"
+
+## Mandatory rules
+
+- Follow domain constraints and avoid silent public API/schema changes.
+- Keep changes scoped and deterministic.
+- Record assumptions and unresolved ambiguities.
+
+## Validation checklist
+
+- [ ] Required commands/checks were run (node parse.mjs, npm test, integration with Go).
+- [ ] Relevant tests were updated/executed.
+- [ ] Risk/impact was documented.
+
+## Expected output format
+
+- Summary: What changed in the Node.js parser and why.
+- Evidence: Test results, sample input/output, integration logs.
+- Risks: Known risks and mitigations (e.g., parser crashes, malformed output).
+
+## Failure/stop conditions
+
+- Stop if requirements are ambiguous in a way that can cause breaking changes.
+- Stop if required validation cannot be performed and report the blocker.
+
+---
+
 # Node.js & JavaScript
 
 ## Overview
