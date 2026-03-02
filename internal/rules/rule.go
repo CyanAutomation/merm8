@@ -27,7 +27,9 @@ func (rc *RuleConfig) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	rc.Options = make(map[string]interface{})
+	if rc.Options == nil {
+		rc.Options = make(map[string]interface{})
+	}
 	for key, value := range raw {
 		switch key {
 		case "enabled":
