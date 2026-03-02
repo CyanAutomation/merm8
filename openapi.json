@@ -1,381 +1,399 @@
 {
-  "openapi": "3.0.0",
-  "info": {
-    "title": "merm8 - Mermaid Lint API",
-    "description": "A deterministic Mermaid static analysis engine that validates and lints Mermaid diagrams.\n\n- Accepts Mermaid code via HTTP POST\n- Validates syntax using the official Mermaid parser\n- Returns structured syntax errors if invalid\n- Runs deterministic lint rules on valid diagrams\n- Returns structured lint results with metrics\n",
-    "version": "1.0.0",
-    "contact": {
-      "name": "merm8 Project",
-      "url": "https://github.com/CyanAutomation/merm8"
-    },
-    "license": {
-      "name": "License",
-      "url": "https://github.com/CyanAutomation/merm8/blob/main/LICENSE"
-    }
-  },
-  "servers": [
-    {
-      "url": "http://localhost:8080",
-      "description": "Local development server"
-    },
-    {
-      "url": "https://api.example.com",
-      "description": "Production server (replace with actual URL)"
-    }
-  ],
-  "tags": [
-    {
-      "name": "Linting",
-      "description": "Mermaid diagram analysis and linting"
-    },
-    {
-      "name": "Documentation",
-      "description": "API documentation and specification"
-    }
-  ],
-  "paths": {
-    "/analyze": {
-      "post": {
-        "tags": [
-          "Linting"
-        ],
-        "summary": "Analyze and lint a Mermaid diagram",
-        "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nReturns syntax errors if parsing fails, or lint results if parsing succeeds.\n",
-        "operationId": "analyzeCode",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AnalyzeRequest"
-              },
-              "examples": {
-                "simple": {
-                  "summary": "Simple graph",
-                  "value": {
-                    "code": "graph TD\n  A[Start] --> B[End]\n"
-                  }
-                },
-                "withConfig": {
-                  "summary": "With lint configuration",
-                  "value": {
-                    "code": "graph LR\n  A --> B\n  B --> C\n",
-                    "config": {
-                      "max_fanout": {
-                        "max": 2
-                      }
-                    }
-                  }
-                },
-                "syntaxError": {
-                  "summary": "Invalid Mermaid syntax",
-                  "value": {
-                    "code": "graph TD\n  A --> B -->"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Analysis completed (valid or syntax error)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AnalyzeResponse"
-                },
-                "examples": {
-                  "validDiagram": {
-                    "summary": "Valid diagram with no issues",
-                    "value": {
-                      "valid": true,
-                      "syntax_error": null,
-                      "issues": [],
-                      "metrics": {
-                        "node_count": 2,
-                        "edge_count": 1,
-                        "max_fanout": 1
-                      }
-                    }
-                  },
-                  "syntaxError": {
-                    "summary": "Syntax error response",
-                    "value": {
-                      "valid": false,
-                      "syntax_error": {
-                        "message": "Unexpected token '>'",
-                        "line": 2,
-                        "column": 12
-                      },
-                      "issues": []
-                    }
-                  },
-                  "withIssues": {
-                    "summary": "Valid diagram with lint issues",
-                    "value": {
-                      "valid": true,
-                      "syntax_error": null,
-                      "issues": [
-                        {
-                          "rule_id": "no_disconnected_nodes",
-                          "severity": "warning",
-                          "message": "Node 'D' is not connected to the graph",
-                          "line": 5,
-                          "column": 0
-                        }
-                      ],
-                      "metrics": {
-                        "node_count": 4,
-                        "edge_count": 2,
-                        "max_fanout": 2
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request (invalid JSON or missing required field)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "examples": {
-                  "missingCode": {
-                    "summary": "Missing 'code' field",
-                    "value": {
-                      "error": "field 'code' is required"
-                    }
-                  },
-                  "invalidJSON": {
-                    "summary": "Invalid JSON body",
-                    "value": {
-                      "error": "invalid JSON body"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/spec": {
-      "get": {
-        "tags": [
-          "Documentation"
-        ],
-        "summary": "Get OpenAPI specification",
-        "description": "Returns the OpenAPI 3.0 specification for this API in JSON format",
-        "operationId": "getSpec",
-        "responses": {
-          "200": {
-            "description": "OpenAPI specification",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/docs": {
-      "get": {
-        "tags": [
-          "Documentation"
-        ],
-        "summary": "Interactive API documentation",
-        "description": "Serve Swagger UI for interactive API exploration and testing",
-        "operationId": "getDocs",
-        "responses": {
-          "200": {
-            "description": "Swagger UI HTML page",
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  },
   "components": {
     "schemas": {
       "AnalyzeRequest": {
-        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Mermaid diagram code to analyze. Total request body must be 1 MiB or smaller.",
+            "example": "graph TD\n  A[Start] --\u003e B[Process]\n  B --\u003e C[End]",
+            "type": "string"
+          },
+          "config": {
+            "description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`",
+            "example": {
+              "max-fanout": {
+                "limit": 3
+              },
+              "no-disconnected-nodes": {
+                "enabled": true
+              }
+            },
+            "type": "object"
+          }
+        },
         "required": [
           "code"
         ],
-        "properties": {
-          "code": {
-            "type": "string",
-            "description": "Mermaid diagram code to analyze",
-            "example": "graph TD\n  A[Start] --> B[Process]\n  B --> C[End]\n"
-          },
-          "config": {
-            "type": "object",
-            "description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`\n",
-            "example": {
-              "max_fanout": {
-                "max": 3
-              },
-              "no_disconnected_nodes": {
-                "enabled": true
-              }
-            }
-          }
-        }
+        "type": "object"
       },
       "AnalyzeResponse": {
-        "type": "object",
-        "required": [
-          "valid",
-          "issues"
-        ],
         "properties": {
-          "valid": {
-            "type": "boolean",
-            "description": "Whether the Mermaid code is syntactically valid"
+          "issues": {
+            "description": "Lint rule violations found in the diagram",
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/Metrics",
+            "description": "Aggregate statistics about the diagram. Present if valid.",
+            "nullable": true
           },
           "syntax_error": {
             "$ref": "#/components/schemas/SyntaxError",
             "description": "Syntax error details if `valid` is false. Null if valid.",
             "nullable": true
           },
-          "issues": {
-            "type": "array",
-            "description": "Lint rule violations found in the diagram",
-            "items": {
-              "$ref": "#/components/schemas/Issue"
-            }
-          },
-          "metrics": {
-            "$ref": "#/components/schemas/Metrics",
-            "description": "Aggregate statistics about the diagram. Present if valid.",
-            "nullable": true
+          "valid": {
+            "description": "Whether the Mermaid code is syntactically valid",
+            "type": "boolean"
           }
-        }
-      },
-      "SyntaxError": {
-        "type": "object",
+        },
         "required": [
-          "message",
-          "line",
-          "column"
+          "valid",
+          "issues"
         ],
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "Error message from the Mermaid parser",
-            "example": "Unexpected token '>'"
-          },
-          "line": {
-            "type": "integer",
-            "description": "1-based line number where the error occurred",
-            "example": 2
-          },
-          "column": {
-            "type": "integer",
-            "description": "0-based column number where the error occurred",
-            "example": 12
-          }
-        }
+        "type": "object"
       },
       "Issue": {
-        "type": "object",
+        "properties": {
+          "column": {
+            "description": "0-based column number where issue is located (if applicable)",
+            "example": 0,
+            "nullable": true,
+            "type": "integer"
+          },
+          "line": {
+            "description": "1-based line number where issue is located (if applicable)",
+            "example": 5,
+            "nullable": true,
+            "type": "integer"
+          },
+          "message": {
+            "description": "Human-readable description of the issue",
+            "example": "Node 'isolated' is not connected to the graph",
+            "type": "string"
+          },
+          "rule_id": {
+            "description": "Identifier of the lint rule that triggered",
+            "example": "no-disconnected-nodes",
+            "type": "string"
+          },
+          "severity": {
+            "description": "Severity level of the issue",
+            "enum": [
+              "error",
+              "warn",
+              "info"
+            ],
+            "type": "string"
+          }
+        },
         "required": [
           "rule_id",
           "severity",
           "message"
         ],
-        "properties": {
-          "rule_id": {
-            "type": "string",
-            "description": "Identifier of the lint rule that triggered",
-            "example": "no_disconnected_nodes"
-          },
-          "severity": {
-            "type": "string",
-            "enum": [
-              "error",
-              "warning",
-              "info"
-            ],
-            "description": "Severity level of the issue"
-          },
-          "message": {
-            "type": "string",
-            "description": "Human-readable description of the issue",
-            "example": "Node 'isolated' is not connected to the graph"
-          },
-          "line": {
-            "type": "integer",
-            "description": "1-based line number where issue is located (if applicable)",
-            "example": 5,
-            "nullable": true
-          },
-          "column": {
-            "type": "integer",
-            "description": "0-based column number where issue is located (if applicable)",
-            "example": 0,
-            "nullable": true
-          }
-        }
+        "type": "object"
       },
       "Metrics": {
-        "type": "object",
+        "properties": {
+          "edge_count": {
+            "description": "Total number of edges (connections) in the diagram",
+            "example": 4,
+            "type": "integer"
+          },
+          "max_fanout": {
+            "description": "Maximum number of outgoing edges from any single node",
+            "example": 2,
+            "type": "integer"
+          },
+          "node_count": {
+            "description": "Total number of nodes in the diagram",
+            "example": 5,
+            "type": "integer"
+          }
+        },
         "required": [
           "node_count",
           "edge_count",
           "max_fanout"
         ],
+        "type": "object"
+      },
+      "SyntaxError": {
         "properties": {
-          "node_count": {
-            "type": "integer",
-            "description": "Total number of nodes in the diagram",
-            "example": 5
+          "column": {
+            "description": "0-based column number where the error occurred",
+            "example": 12,
+            "type": "integer"
           },
-          "edge_count": {
-            "type": "integer",
-            "description": "Total number of edges (connections) in the diagram",
-            "example": 4
+          "line": {
+            "description": "1-based line number where the error occurred",
+            "example": 2,
+            "type": "integer"
           },
-          "max_fanout": {
-            "type": "integer",
-            "description": "Maximum number of outgoing edges from any single node",
-            "example": 2
+          "message": {
+            "description": "Error message from the Mermaid parser",
+            "example": "Unexpected token '\u003e'",
+            "type": "string"
           }
-        }
+        },
+        "required": [
+          "message",
+          "line",
+          "column"
+        ],
+        "type": "object"
       }
     }
-  }
+  },
+  "info": {
+    "contact": {
+      "name": "merm8 Project",
+      "url": "https://github.com/CyanAutomation/merm8"
+    },
+    "description": "A deterministic Mermaid static analysis engine that validates and lints Mermaid diagrams.\n\n- Accepts Mermaid code via HTTP POST\n- Validates syntax using the official Mermaid parser\n- Returns structured syntax errors if invalid\n- Runs deterministic lint rules on valid diagrams\n- Returns structured lint results with metrics",
+    "license": {
+      "name": "License",
+      "url": "https://github.com/CyanAutomation/merm8/blob/main/LICENSE"
+    },
+    "title": "merm8 - Mermaid Lint API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/analyze": {
+      "post": {
+        "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nReturns syntax errors if parsing fails, or lint results if parsing succeeds.",
+        "operationId": "analyzeCode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "simple": {
+                  "summary": "Simple graph",
+                  "value": {
+                    "code": "graph TD\n  A[Start] --\u003e B[End]"
+                  }
+                },
+                "syntaxError": {
+                  "summary": "Invalid Mermaid syntax",
+                  "value": {
+                    "code": "graph TD\n  A --\u003e B --\u003e"
+                  }
+                },
+                "withConfig": {
+                  "summary": "With lint configuration",
+                  "value": {
+                    "code": "graph LR\n  A --\u003e B\n  B --\u003e C",
+                    "config": {
+                      "max-fanout": {
+                        "limit": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "syntaxError": {
+                    "summary": "Syntax error response",
+                    "value": {
+                      "issues": [],
+                      "syntax_error": {
+                        "column": 12,
+                        "line": 2,
+                        "message": "Unexpected token '\u003e'"
+                      },
+                      "valid": false
+                    }
+                  },
+                  "validDiagram": {
+                    "summary": "Valid diagram with no issues",
+                    "value": {
+                      "issues": [],
+                      "metrics": {
+                        "edge_count": 1,
+                        "max_fanout": 1,
+                        "node_count": 2
+                      },
+                      "syntax_error": null,
+                      "valid": true
+                    }
+                  },
+                  "withIssues": {
+                    "summary": "Valid diagram with lint issues",
+                    "value": {
+                      "issues": [
+                        {
+                          "column": 0,
+                          "line": 5,
+                          "message": "Node 'D' is not connected to the graph",
+                          "rule_id": "no-disconnected-nodes",
+                          "severity": "error"
+                        }
+                      ],
+                      "metrics": {
+                        "edge_count": 2,
+                        "max_fanout": 2,
+                        "node_count": 4
+                      },
+                      "syntax_error": null,
+                      "valid": true
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Analysis completed (valid or syntax error)"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "invalidJSON": {
+                    "summary": "Invalid JSON body",
+                    "value": {
+                      "error": "invalid JSON body"
+                    }
+                  },
+                  "missingCode": {
+                    "summary": "Missing 'code' field",
+                    "value": {
+                      "error": "field 'code' is required"
+                    }
+                  }
+                },
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad request (invalid JSON or missing required field)"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "request body exceeds 1 MiB limit"
+                },
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Request entity too large (body exceeds 1 MiB)"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Analyze and lint a Mermaid diagram",
+        "tags": [
+          "Linting"
+        ]
+      }
+    },
+    "/docs": {
+      "get": {
+        "description": "Serve Swagger UI for interactive API exploration and testing",
+        "operationId": "getDocs",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Swagger UI HTML page"
+          }
+        },
+        "summary": "Interactive API documentation",
+        "tags": [
+          "Documentation"
+        ]
+      }
+    },
+    "/spec": {
+      "get": {
+        "description": "Returns the OpenAPI 3.0 specification for this API in JSON format",
+        "operationId": "getSpec",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OpenAPI specification"
+          }
+        },
+        "summary": "Get OpenAPI specification",
+        "tags": [
+          "Documentation"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Local development server",
+      "url": "http://localhost:8080"
+    },
+    {
+      "description": "Production server (replace with actual URL)",
+      "url": "https://api.example.com"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Mermaid diagram analysis and linting",
+      "name": "Linting"
+    },
+    {
+      "description": "API documentation and specification",
+      "name": "Documentation"
+    }
+  ]
 }
