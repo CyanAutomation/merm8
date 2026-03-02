@@ -7,7 +7,7 @@ var openapi = map[string]interface{}{
 	"info": map[string]interface{}{
 		"title":       "merm8 - Mermaid Lint API",
 		"description": "A deterministic Mermaid static analysis engine that validates and lints Mermaid diagrams.\n\n- Accepts Mermaid code via HTTP POST\n- Validates syntax using the official Mermaid parser\n- Returns structured syntax errors if invalid\n- Runs deterministic lint rules on valid diagrams\n- Returns structured lint results with metrics",
-		"version": "1.0.0",
+		"version":     "1.0.0",
 		"contact": map[string]interface{}{
 			"name": "merm8 Project",
 			"url":  "https://github.com/CyanAutomation/merm8",
@@ -120,11 +120,11 @@ var openapi = map[string]interface{}{
 											"syntax_error": nil,
 											"issues": []interface{}{
 												map[string]interface{}{
-													"rule_id":   "no_disconnected_nodes",
-													"severity":  "warning",
-													"message":   "Node 'D' is not connected to the graph",
-													"line":      5,
-													"column":    0,
+													"rule_id":  "no_disconnected_nodes",
+													"severity": "warning",
+													"message":  "Node 'D' is not connected to the graph",
+													"line":     5,
+													"column":   0,
 												},
 											},
 											"metrics": map[string]interface{}{
@@ -238,7 +238,7 @@ var openapi = map[string]interface{}{
 						"example":     "graph TD\n  A[Start] --> B[Process]\n  B --> C[End]",
 					},
 					"config": map[string]interface{}{
-						"type": "object",
+						"type":        "object",
 						"description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`",
 						"example": map[string]interface{}{
 							"max_fanout": map[string]interface{}{
