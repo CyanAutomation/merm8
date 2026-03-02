@@ -51,20 +51,24 @@ func sortIssues(issues []model.Issue) {
 		if severityPriority(left.Severity) != severityPriority(right.Severity) {
 			return severityPriority(left.Severity) < severityPriority(right.Severity)
 		}
-	if left.RuleID != right.RuleID {
-		return left.RuleID < right.RuleID
-	}
 		if left.RuleID != right.RuleID {
 			return left.RuleID < right.RuleID
 		}
-		if left.Line != right.Line {
-			return left.Line < right.Line
+		if ptrIntValue(left.Line) != ptrIntValue(right.Line) {
+			return ptrIntValue(left.Line) < ptrIntValue(right.Line)
 		}
-		if left.Column != right.Column {
-			return left.Column < right.Column
+		if ptrIntValue(left.Column) != ptrIntValue(right.Column) {
+			return ptrIntValue(left.Column) < ptrIntValue(right.Column)
 		}
 		return left.Message < right.Message
 	})
+}
+
+func ptrIntValue(v *int) int {
+	if v == nil {
+		return -1
+	}
+	return *v
 }
 
 func dedupeIssues(issues []model.Issue) []model.Issue {

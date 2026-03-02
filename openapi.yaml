@@ -158,7 +158,7 @@ paths:
                         severity: error
                         message: Node 'D' is not connected to the graph
                       - rule_id: max-fanout
-                        severity: warning
+                        severity: warn
                         message: Node 'A' has fanout 6, exceeding limit of 5
                         line: 2
                         column: 2
