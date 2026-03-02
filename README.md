@@ -42,7 +42,7 @@ A **deterministic Mermaid static analysis engine** — no AI, no LLMs, pure stat
 
 ## Quick Start
 
-### Local (requires Go 1.22+ and Node 20+)
+### Local (requires Go 1.24+ and Node 20+)
 
 ```bash
 # Install Node parser dependencies
