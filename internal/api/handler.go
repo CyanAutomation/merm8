@@ -55,9 +55,9 @@ type syntaxErrorResponse struct {
 
 // metricsResponse holds aggregate statistics about the diagram.
 type metricsResponse struct {
-	NodeCount  int `json:"node_count"`
-	EdgeCount  int `json:"edge_count"`
-	MaxFanout  int `json:"max_fanout"`
+	NodeCount int `json:"node_count"`
+	EdgeCount int `json:"edge_count"`
+	MaxFanout int `json:"max_fanout"`
 }
 
 // analyzeResponse is returned by POST /analyze.
