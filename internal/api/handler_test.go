@@ -673,7 +673,7 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if testing.Short() && strings.Contains(tt.name, "10000") {
+			if testing.Short() && chainNodes == 10000 {
 				t.Skip("skipping longest topology case in short mode")
 			}
 
