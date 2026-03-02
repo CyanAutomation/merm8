@@ -63,8 +63,8 @@ var openapi = map[string]interface{}{
 									"value": map[string]interface{}{
 										"code": "graph LR\n  A --> B\n  B --> C",
 										"config": map[string]interface{}{
-											"max_fanout": map[string]interface{}{
-												"max": 2,
+											"max-fanout": map[string]interface{}{
+												"limit": 2,
 											},
 										},
 									},
@@ -120,8 +120,8 @@ var openapi = map[string]interface{}{
 											"syntax_error": nil,
 											"issues": []interface{}{
 												map[string]interface{}{
-													"rule_id":  "no_disconnected_nodes",
-													"severity": "warning",
+													"rule_id":  "no-disconnected-nodes",
+													"severity": "warn",
 													"message":  "Node 'D' is not connected to the graph",
 													"line":     5,
 													"column":   0,
@@ -241,10 +241,10 @@ var openapi = map[string]interface{}{
 						"type":        "object",
 						"description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`",
 						"example": map[string]interface{}{
-							"max_fanout": map[string]interface{}{
-								"max": 3,
+							"max-fanout": map[string]interface{}{
+								"limit": 3,
 							},
-							"no_disconnected_nodes": map[string]interface{}{
+							"no-disconnected-nodes": map[string]interface{}{
 								"enabled": true,
 							},
 						},
@@ -306,11 +306,11 @@ var openapi = map[string]interface{}{
 					"rule_id": map[string]interface{}{
 						"type":        "string",
 						"description": "Identifier of the lint rule that triggered",
-						"example":     "no_disconnected_nodes",
+						"example":     "no-disconnected-nodes",
 					},
 					"severity": map[string]interface{}{
 						"type":        "string",
-						"enum":        []string{"error", "warning", "info"},
+						"enum":        []string{"error", "warn", "info"},
 						"description": "Severity level of the issue",
 					},
 					"message": map[string]interface{}{
