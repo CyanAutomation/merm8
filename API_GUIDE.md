@@ -69,7 +69,7 @@ The request body editor will appear. Enter your Mermaid code:
 }
 ```
 
-**Diagram with high fan-out (warning):**
+**Diagram with high fan-out (warn severity):**
 ```json
 {
   "code": "graph TD\n  A --> B\n  A --> C\n  A --> D\n  A --> E\n  A --> F\n  A --> G"
@@ -119,7 +119,7 @@ Add a `config` field to customize rule behavior:
   "metrics": {
     "node_count": 3,
     "edge_count": 2,
-    "max_fanout": 1
+    "max-fanout": 1
   }
 }
 ```
@@ -141,7 +141,7 @@ Add a `config` field to customize rule behavior:
   "metrics": {
     "node_count": 3,
     "edge_count": 2,
-    "max_fanout": 1
+    "max-fanout": 1
   }
 }
 ```
@@ -174,7 +174,7 @@ Add a `config` field to customize rule behavior:
 - **`metrics`** — Statistics about the diagram structure
   - `node_count` — Total nodes in the diagram
   - `edge_count` — Total connections/edges
-  - `max_fanout` — Maximum outgoing edges from any single node
+  - `max-fanout` — Maximum outgoing edges from any single node
 
 ---
 
@@ -432,7 +432,7 @@ curl -X POST http://localhost:8080/analyze \
   "metrics": {
     "node_count": 3,
     "edge_count": 2,
-    "max_fanout": 1
+    "max-fanout": 1
   }
 }
 ```
@@ -466,7 +466,7 @@ curl -X POST http://localhost:8080/analyze \
   "metrics": {
     "node_count": 7,
     "edge_count": 6,
-    "max_fanout": 6
+    "max-fanout": 6
   }
 }
 ```
@@ -499,7 +499,7 @@ curl -X POST http://localhost:8080/analyze \
   "metrics": {
     "node_count": 4,
     "edge_count": 2,
-    "max_fanout": 1
+    "max-fanout": 1
   }
 }
 ```

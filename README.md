@@ -44,7 +44,7 @@ This is intended to be a Mermaid linting service that:
 │          internal/rules/                        │
 │            no_duplicate_node_ids.go             │
 │            no_disconnected_nodes.go             │
-│            max_fanout.go                        │
+│            max-fanout.go                        │
 │                                                 │
 │  internal/model ── diagram.go (shared types)   │
 └─────────────────────────────────────────────────┘
@@ -106,7 +106,7 @@ The service listens on **port 8080**.
   "metrics": {
     "node_count": 3,
     "edge_count": 2,
-    "max_fanout": 1
+    "max-fanout": 1
   }
 }
 ```
@@ -138,7 +138,7 @@ curl -s -X POST http://localhost:8080/analyze \
   -H "Content-Type: application/json" \
   -d '{"code": "this is not valid mermaid"}'
 
-# Fan-out warning with custom limit
+# Fan-out check with custom limit (warn severity)
 curl -s -X POST http://localhost:8080/analyze \
   -H "Content-Type: application/json" \
   -d '{
