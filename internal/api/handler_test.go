@@ -112,6 +112,10 @@ process.exit(1);
 	}
 
 	mux := newTestMuxWithRealParser(script)
+func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
 	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
 	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -120,6 +124,18 @@ process.exit(1);
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 when parser subprocess exits non-zero with internal error payload, got %d", w.Code)
+
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("Analyze panicked for nil diagram: %v", r)
+			}
+		}()
+		mux.ServeHTTP(w, req)
+	}()
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when parser returns nil diagram, got %d", w.Code)
 	}
 }
 
