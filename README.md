@@ -2,6 +2,16 @@
 
 A **deterministic Mermaid static analysis engine** — no AI, no LLMs, pure static analysis.
 
+This is intended to be a Mermaid linting service that:
+
+1. Accepts Mermaid code via HTTP POST
+2. Uses official Mermaid parser (Node) to validate syntax
+3. Returns structured syntax errors if invalid
+4. If valid:
+   - Convert parsed AST into internal Go diagram model
+   - Run deterministic rule engine
+   - Return structured lint results
+
 ---
 
 ## Architecture
