@@ -7,7 +7,10 @@ import (
 	"github.com/CyanAutomation/merm8/internal/model"
 )
 
-const defaultMaxFanout = 5
+const (
+	defaultMaxFanout         = 5
+	defaultMaxFanoutSeverity = "warn"
+)
 
 // MaxFanout warns when any node has more outgoing edges than the configured
 // limit (default 5).
@@ -18,7 +21,7 @@ func (r MaxFanout) ID() string { return "max-fanout" }
 func (r MaxFanout) Run(d *model.Diagram, cfg Config) []model.Issue {
 	limit := defaultMaxFanout
 	if rc, ok := cfg[r.ID()]; ok {
-		if v, ok := rc["limit"]; ok {
+		if v, ok := rc.Option("limit"); ok {
 			switch n := v.(type) {
 			case int:
 				if n >= 1 {
@@ -32,6 +35,7 @@ func (r MaxFanout) Run(d *model.Diagram, cfg Config) []model.Issue {
 		}
 	}
 
+	severity := SeverityOrDefault(cfg, r.ID(), defaultMaxFanoutSeverity)
 	fanout := make(map[string]int, len(d.Nodes))
 	for _, e := range d.Edges {
 		fanout[e.From]++
@@ -42,7 +46,7 @@ func (r MaxFanout) Run(d *model.Diagram, cfg Config) []model.Issue {
 		if count > limit {
 			issues = append(issues, model.Issue{
 				RuleID:   r.ID(),
-				Severity: "warn",
+				Severity: severity,
 				Message:  fmt.Sprintf("node %q has fanout %d, exceeding limit of %d", nodeID, count, limit),
 			})
 		}

@@ -85,7 +85,12 @@ Add a `config` field to customize rule behavior:
   "code": "graph TD\n  A --> B\n  A --> C\n  A --> D",
   "config": {
     "rules": {
+      "no-duplicate-node-ids": {
+        "enabled": false
+      },
       "max-fanout": {
+        "enabled": true,
+        "severity": "info",
         "limit": 2
       }
     }
@@ -94,6 +99,8 @@ Add a `config` field to customize rule behavior:
 ```
 
 **Supported rule configurations:**
+
+Unknown rule IDs return HTTP 400 with `error.code = "invalid_rule_config"`.
 
 - `max-fanout` — Set maximum outgoing edges per node
   ```json
@@ -375,7 +382,7 @@ curl http://localhost:8080/spec | jq .
 The merm8 engine includes three built-in lint rules:
 
 #### `no-duplicate-node-ids`
-- **Severity:** error
+- **Severity:** error (default, overridable with `severity`)
 - **Purpose:** Ensures each node ID is unique
 - **Configuration:** No options
 - **Example response:**
@@ -388,7 +395,7 @@ The merm8 engine includes three built-in lint rules:
   ```
 
 #### `no-disconnected-nodes`
-- **Severity:** error
+- **Severity:** error (default, overridable with `severity`)
 - **Purpose:** Ensures all nodes are connected to the graph
 - **Configuration:** No options
 - **Example response:**
@@ -401,7 +408,7 @@ The merm8 engine includes three built-in lint rules:
   ```
 
 #### `max-fanout`
-- **Severity:** warn
+- **Severity:** warn (default, overridable with `severity`)
 - **Purpose:** Limits maximum outgoing edges from a single node
 - **Configuration:** `limit` (integer, default: 5)
 - **Example:**

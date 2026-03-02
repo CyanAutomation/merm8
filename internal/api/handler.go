@@ -194,7 +194,12 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg := parseConfig(req.Config)
-	issues := h.engine.Run(diagram, cfg)
+	normalizedCfg, err := h.engine.NormalizeConfig(cfg)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_rule_config", err.Error())
+		return
+	}
+	issues := h.engine.Run(diagram, normalizedCfg)
 
 	resp := analyzeResponse{
 		Valid:       true,

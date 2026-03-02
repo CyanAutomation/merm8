@@ -653,3 +653,122 @@ func TestReady_ReturnsUnavailableWhenDependencyUnhealthy(t *testing.T) {
 		t.Fatal("expected non-empty error message")
 	}
 }
+
+func TestAnalyze_DisabledRule(t *testing.T) {
+	diagram := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "A"}},
+	}
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A; A",
+		"config": map[string]interface{}{
+			"rules": map[string]interface{}{
+				"no-duplicate-node-ids": map[string]interface{}{"enabled": false},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	issues, _ := resp["issues"].([]interface{})
+	for _, issue := range issues {
+		issueMap := issue.(map[string]interface{})
+		if issueMap["rule_id"] == "no-duplicate-node-ids" {
+			t.Fatal("expected no-duplicate-node-ids to be disabled")
+		}
+	}
+}
+
+func TestAnalyze_SeverityOverride(t *testing.T) {
+	diagram := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "A"}},
+	}
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A; A",
+		"config": map[string]interface{}{
+			"rules": map[string]interface{}{
+				"no-duplicate-node-ids": map[string]interface{}{"severity": "info"},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	issues, _ := resp["issues"].([]interface{})
+	if len(issues) == 0 {
+		t.Fatal("expected at least one issue")
+	}
+	found := false
+	for _, issue := range issues {
+		issueMap := issue.(map[string]interface{})
+		if issueMap["rule_id"] == "no-duplicate-node-ids" {
+			found = true
+			if issueMap["severity"] != "info" {
+				t.Fatalf("expected severity override info, got %v", issueMap["severity"])
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected no-duplicate-node-ids issue")
+	}
+}
+
+func TestAnalyze_UnknownRuleKeyReturnsValidationError(t *testing.T) {
+	diagram := &model.Diagram{Nodes: []model.Node{{ID: "A"}}}
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A",
+		"config": map[string]interface{}{
+			"rules": map[string]interface{}{
+				"unknown-rule": map[string]interface{}{"enabled": true},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unknown rule ID, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	errObj, ok := resp["error"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected error object")
+	}
+	if errObj["code"] != "invalid_rule_config" {
+		t.Fatalf("expected invalid_rule_config error code, got %v", errObj["code"])
+	}
+}
