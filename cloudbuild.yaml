@@ -43,7 +43,9 @@ steps:
     entrypoint: bash
     args:
       - -c
-      - ./scripts/check-doc-identifiers.sh
+      - |
+        apt-get update && apt-get install -y ripgrep
+        ./scripts/check-doc-identifiers.sh
 
   # ---- Step 1: Build image ----
   # Plain docker build with BuildKit enabled — no Buildx or QEMU needed.
