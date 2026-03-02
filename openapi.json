@@ -159,6 +159,15 @@
       "name": "License",
       "url": "https://github.com/CyanAutomation/merm8/blob/main/LICENSE"
     },
+    {
+      "name": "Documentation",
+      "description": "API documentation and specification"
+    },
+    {
+      "name": "Probes",
+      "description": "Liveness and readiness probe endpoints"
+    }
+  ],
     "title": "merm8 - Mermaid Lint API",
     "version": "1.0.0"
   },
@@ -353,6 +362,104 @@
         ]
       }
     },
+    "/healthz": {
+      "get": {
+        "tags": [
+          "Probes"
+        ],
+        "summary": "Liveness probe",
+        "description": "Returns process liveness status.",
+        "operationId": "getHealthz",
+        "responses": {
+          "200": {
+            "description": "Process is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": [
+          "Probes"
+        ],
+        "summary": "Readiness probe",
+        "description": "Returns readiness status, including parser dependency checks when available.",
+        "operationId": "getReady",
+        "responses": {
+          "200": {
+            "description": "Service is ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ready"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "not_ready"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnalyzeRequest": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Mermaid diagram code to analyze",
+            "example": "graph TD\n  A[Start] --> B[Process]\n  B --> C[End]\n"
+          },
+          "config": {
+            "type": "object",
+            "description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`\n",
+            "example": {
+              "max_fanout": {
+                "max": 3
+              },
+              "no_disconnected_nodes": {
+                "enabled": true
     "/spec": {
       "get": {
         "description": "Returns the OpenAPI 3.0 specification for this API in JSON format",

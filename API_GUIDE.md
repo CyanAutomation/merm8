@@ -31,7 +31,7 @@ You should see a professional API documentation page with all available endpoint
 
 The Swagger UI provides:
 
-- **Left sidebar** — List of all available endpoints (currently `/analyze`, `/spec`, `/docs`)
+- **Left sidebar** — List of all available endpoints (currently `/healthz`, `/ready`, `/analyze`, `/spec`, `/docs`)
 - **Main panel** — Detailed endpoint documentation with parameters and response schemas
 - **Try it out button** — Execute requests directly from the browser
 - **Example requests** — Pre-filled request templates for common scenarios
@@ -313,6 +313,29 @@ fetch('http://localhost:8080/analyze', {
 ---
 
 ## API Endpoints Reference
+
+### GET `/healthz`
+
+**Description:** Liveness endpoint for process-up probes  
+**Response:** JSON status payload (`{"status":"ok"}`)  
+**Usage:**
+
+```bash
+curl http://localhost:8080/healthz
+```
+
+### GET `/ready`
+
+**Description:** Readiness endpoint for critical dependencies (parser runtime/script checks when available)  
+**Response:**
+- `200` with `{"status":"ready"}` when ready
+- `503` with `{"status":"not_ready","error":"..."}` when not ready
+
+**Usage:**
+
+```bash
+curl -i http://localhost:8080/ready
+```
 
 ### GET `/docs`
 

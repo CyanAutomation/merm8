@@ -67,6 +67,24 @@ func New(scriptPath string) *Parser {
 	return &Parser{scriptPath: scriptPath, timeout: defaultTimeout}
 }
 
+// Ready performs lightweight dependency checks used by readiness probes.
+func (p *Parser) Ready() error {
+	if p.scriptPath == "" {
+		return fmt.Errorf("parser script path is empty")
+	}
+
+	if _, err := exec.LookPath("node"); err != nil {
+		return fmt.Errorf("node runtime not found: %w", err)
+	}
+
+	cmd := exec.Command("node", "--check", p.scriptPath) //nolint:gosec
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("parser script check failed: %w (%s)", err, strings.TrimSpace(string(out)))
+	}
+
+	return nil
+}
+
 // Parse sends mermaidCode to the Node parser and returns either a Diagram or a
 // SyntaxError. A non-nil error means an unexpected failure (e.g. timeout).
 func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error) {
