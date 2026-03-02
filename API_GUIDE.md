@@ -190,6 +190,7 @@ Add a `config` field to customize rule behavior:
   - `severity` — One of: `error`, `warn`, `info`
   - `message` — Description of the issue
   - `line` / `column` — Location in the diagram code
+  - **Ordering guarantee** — Issues are deterministically sorted before returning: by severity priority (`error` → `warn` → `info`), then `rule_id`, then `line`, then `column`, then `message`. If two rules produce the exact same issue signature, duplicates are removed.
 - **`metrics`** — Statistics about the diagram structure
   - `node_count` — Total nodes in the diagram
   - `edge_count` — Total connections/edges
