@@ -20,7 +20,7 @@ func getParserScript(t *testing.T) string {
 		if _, err := os.Stat(script); err == nil {
 			return script
 		}
-		t.Warnf("PARSER_SCRIPT=%s does not exist, will try default", script)
+		t.Logf("PARSER_SCRIPT=%s does not exist, will try default", script)
 	}
 
 	// Look for the script relative to repo root

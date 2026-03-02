@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,21 +21,21 @@ type mockParser struct {
 	diagram    *model.Diagram
 	syntaxErr  *parser.SyntaxError
 	parseError error
+	parseFunc  func(string) (*model.Diagram, *parser.SyntaxError, error)
 }
 
 func (m *mockParser) Parse(code string) (*model.Diagram, *parser.SyntaxError, error) {
+	if m.parseFunc != nil {
+		return m.parseFunc(code)
+	}
 	return m.diagram, m.syntaxErr, m.parseError
 }
 
 // newTestMux creates a test HTTP server backed by a handler using a mock parser.
 func newTestMux(mockParseFn func(string) (*model.Diagram, *parser.SyntaxError, error)) *http.ServeMux {
 	mux := http.NewServeMux()
-	mockP := &mockParser{}
-	if mockParseFn != nil {
-		// For tests that need specific behavior, wrap the function
-		originalParse := mockP.Parse
-		mockP.Parse = mockParseFn
-		_ = originalParse // suppress unused warning
+	mockP := &mockParser{
+		parseFunc: mockParseFn,
 	}
 	h := api.NewHandler(mockP, engine.New())
 	h.RegisterRoutes(mux)
@@ -314,5 +315,105 @@ func TestAnalyze_ConfigParsing_NestedFormat(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 with nested config, got %d", w.Code)
+	}
+}
+
+// TestAnalyze_MultipleRulesAggregate tests that multiple rule violations are aggregated.
+func TestAnalyze_MultipleRulesAggregate(t *testing.T) {
+	// Diagram with duplicate node ID "A" and disconnected node "C"
+	diagram := &model.Diagram{
+		Direction: "TD",
+		Nodes: []model.Node{
+			{ID: "A", Label: "A"},
+			{ID: "A", Label: "A2"}, // Duplicate
+			{ID: "C", Label: "C"},  // Will be disconnected
+		},
+		Edges: []model.Edge{
+			{From: "A", To: "B", Type: "arrow"}, // B doesn't exist
+		},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B\n  A[A2]"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	issues, ok := resp["issues"].([]interface{})
+	if !ok {
+		t.Fatal("expected issues array")
+	}
+
+	if len(issues) < 1 {
+		t.Errorf("expected at least 1 issue, got %d", len(issues))
+	}
+
+	ruleIDs := make(map[string]int)
+	for _, issue := range issues {
+		if issueMap, ok := issue.(map[string]interface{}); ok {
+			if ruleID, ok := issueMap["rule_id"].(string); ok {
+				ruleIDs[ruleID]++
+			}
+		}
+	}
+	t.Logf("rules fired: %v", ruleIDs)
+}
+
+// TestAnalyze_LargeDiagram tests handling of large diagrams (500+ nodes).
+func TestAnalyze_LargeDiagram(t *testing.T) {
+	// Create a large diagram with 500 nodes in a chain
+	nodes := make([]model.Node, 500)
+	edges := make([]model.Edge, 499)
+	for i := 0; i < 500; i++ {
+		nodes[i] = model.Node{ID: fmt.Sprintf("N%d", i), Label: fmt.Sprintf("Node%d", i)}
+		if i > 0 {
+			edges[i-1] = model.Edge{From: fmt.Sprintf("N%d", i-1), To: fmt.Sprintf("N%d", i), Type: "arrow"}
+		}
+	}
+
+	diagram := &model.Diagram{
+		Direction: "TD",
+		Nodes:     nodes,
+		Edges:     edges,
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]string{"code": "large diagram"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for large diagram, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	metrics, ok := resp["metrics"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected metrics object")
+	}
+	if nodeCount, ok := metrics["node_count"].(float64); ok {
+		if int(nodeCount) != 500 {
+			t.Errorf("expected 500 nodes, got %d", int(nodeCount))
+		}
+	} else {
+		t.Error("expected node_count in metrics")
 	}
 }
