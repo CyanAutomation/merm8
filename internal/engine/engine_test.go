@@ -18,12 +18,7 @@ func TestEngine_CleanDiagram(t *testing.T) {
 	if len(issues) != 0 {
 		t.Fatalf("expected no issues for clean diagram, got %v", issues)
 	}
-}
-
-func TestEngine_ReturnsNonNilSlice(t *testing.T) {
-	d := &model.Diagram{}
-	e := engine.New()
-	issues := e.Run(d, rules.Config{})
+	// Verify the engine never returns a nil slice (defensive guarantee)
 	if issues == nil {
 		t.Fatal("Run should never return a nil slice")
 	}

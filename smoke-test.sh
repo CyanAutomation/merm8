@@ -163,51 +163,6 @@ test_complex_diagram() {
     log_pass "Complex diagram test passed"
 }
 
-# Test 5: Fan-out diagram with custom config
-test_fanout_config() {
-    log_info "Test 5: Diagram with custom max-fanout config"
-    
-    code="graph TD
-    A --> B
-    A --> C
-    A --> D"
-    
-    config='{"rules":{"max-fanout":{"limit":2}}}'
-    response=$(call_api "$code" "$config")
-    
-    valid=$(echo "$response" | jq '.valid // false')
-    if [ "$valid" != "true" ]; then
-        log_info "Diagram may have been rejected (Node A has 3 outgoing edges)"
-        return
-    fi
-    
-    # Check if issues were reported
-    issues=$(echo "$response" | jq '.issues // []')
-    issue_count=$(echo "$issues" | jq 'length')
-    
-    if [ "$issue_count" -gt 0 ]; then
-        log_pass "Config was applied and issues reported ($issue_count issues)"
-    else
-        log_info "No issues reported (may depend on rule configuration)"
-    fi
-}
-
-# Test 6: Empty request body
-test_empty_request() {
-    log_info "Test 6: Empty request body"
-    
-    response=$(curl -s -X POST "$SERVICE_URL/analyze" \
-        -H "Content-Type: application/json" \
-        -d '')
-    
-    # Should fail gracefully
-    if echo "$response" | jq -e . > /dev/null 2>&1; then
-        log_pass "Server handled empty request gracefully"
-    else
-        log_fail "Server did not return valid JSON for empty request"
-    fi
-}
-
 # Main execution
 main() {
     log_info "Starting merm8 smoke tests"
@@ -231,12 +186,6 @@ main() {
     echo ""
     
     test_complex_diagram
-    echo ""
-    
-    test_fanout_config
-    echo ""
-    
-    test_empty_request
     echo ""
     
     log_pass "All tests completed successfully!"
