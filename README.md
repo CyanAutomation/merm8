@@ -1,3 +1,5 @@
+Docs available at: https://merm8-api-482194634678.europe-west1.run.app/docs
+
 # merm8 — mermaid-lint
 
 A **deterministic Mermaid static analysis engine** — no AI, no LLMs, pure static analysis.
