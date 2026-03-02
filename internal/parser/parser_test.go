@@ -283,7 +283,7 @@ process.exit(0);
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tempDir := t.TempDir()
+			tempDir := repoTempDir(t)
 			script := filepath.Join(tempDir, "parse.mjs")
 			if err := os.WriteFile(script, []byte(tt.scriptBody), 0o700); err != nil {
 				t.Fatalf("failed to write test parser script: %v", err)
@@ -369,7 +369,7 @@ func TestParser_LargeGraph(t *testing.T) {
 }
 
 func TestParser_ValidWithoutASTReturnsInternalError(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	script := filepath.Join(tempDir, "parse.mjs")
 	scriptBody := `#!/usr/bin/env node
 process.stdout.write(JSON.stringify({ valid: true }) + "\n");
@@ -396,7 +396,7 @@ process.stdout.write(JSON.stringify({ valid: true }) + "\n");
 }
 
 func TestParser_SubprocessInternalError(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir := repoTempDir(t)
 	script := filepath.Join(tempDir, "parse.mjs")
 	scriptBody := `#!/usr/bin/env node
 process.stdout.write(JSON.stringify({
@@ -431,6 +431,20 @@ func contains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func repoTempDir(t *testing.T) string {
+	t.Helper()
+
+	tempDir, err := os.MkdirTemp(".", "parser-test-")
+	if err != nil {
+		t.Fatalf("failed to create repo temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(tempDir)
+	})
+
+	return tempDir
 }
 
 // TestParser_ConcurrentParsing tests that the parser handles concurrent requests.
@@ -486,8 +500,58 @@ func TestParser_ReadyRejectsTraversalPath(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for traversal path, got nil")
 	}
-	if !contains(err.Error(), "traversal") {
-		t.Fatalf("expected traversal error, got %v", err)
+	if !contains(err.Error(), "failed to resolve symlinks") {
+		t.Fatalf("expected symlink resolution error, got %v", err)
+	}
+}
+
+func TestParser_ReadyRejectsSymlinkPathOutsideWorkingDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	target := filepath.Join(tempDir, "parse.mjs")
+	if err := os.WriteFile(target, []byte("#!/usr/bin/env node\n"), 0o700); err != nil {
+		t.Fatalf("failed to write parser script: %v", err)
+	}
+
+	linkDir, err := os.MkdirTemp(".", "parser-link-test-")
+	if err != nil {
+		t.Fatalf("failed to create local symlink dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(linkDir)
+	})
+
+	linkPath := filepath.Join(linkDir, "parse.mjs")
+	if err := os.Symlink(target, linkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	p := parser.New(linkPath)
+	err = p.Ready()
+	if err == nil {
+		t.Fatal("expected error for symlink resolving outside working directory, got nil")
+	}
+	if !contains(err.Error(), "outside allowed repository root") {
+		t.Fatalf("expected outside repository root error, got %v", err)
+	}
+}
+
+func TestParser_ParseRejectsPathOutsideWorkingDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	script := filepath.Join(tempDir, "parse.mjs")
+	if err := os.WriteFile(script, []byte("#!/usr/bin/env node\n"), 0o700); err != nil {
+		t.Fatalf("failed to write parser script: %v", err)
+	}
+
+	p := parser.New(script)
+	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
+	if err == nil {
+		t.Fatal("expected validation error for script path outside working directory, got nil")
+	}
+	if !contains(err.Error(), "outside allowed repository root") {
+		t.Fatalf("expected outside repository root error, got %v", err)
+	}
+	if diagram != nil || syntaxErr != nil {
+		t.Fatalf("expected nil diagram and syntaxErr, got diagram=%v syntaxErr=%v", diagram, syntaxErr)
 	}
 }
 
@@ -503,8 +567,8 @@ func TestParser_ReadyRejectsPathOutsideWorkingDirectory(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for script path outside working directory, got nil")
 	}
-	if !contains(err.Error(), "outside allowed working directory") {
-		t.Fatalf("expected outside working directory error, got %v", err)
+	if !contains(err.Error(), "outside allowed repository root") {
+		t.Fatalf("expected outside repository root error, got %v", err)
 	}
 }
 
