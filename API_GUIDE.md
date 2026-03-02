@@ -85,8 +85,8 @@ Add a `config` field to customize rule behavior:
   "code": "graph TD\n  A --> B\n  A --> C\n  A --> D",
   "config": {
     "rules": {
-      "max_fanout": {
-        "max": 2
+      "max-fanout": {
+        "limit": 2
       }
     }
   }
@@ -95,9 +95,9 @@ Add a `config` field to customize rule behavior:
 
 **Supported rule configurations:**
 
-- `max_fanout` — Set maximum outgoing edges per node
+- `max-fanout` — Set maximum outgoing edges per node
   ```json
-  "max_fanout": { "max": 3 }
+  "max-fanout": { "limit": 3 }
   ```
 
 #### Step 4: Execute and View Results
@@ -131,7 +131,7 @@ Add a `config` field to customize rule behavior:
   "syntax_error": null,
   "issues": [
     {
-      "rule_id": "no_disconnected_nodes",
+      "rule_id": "no-disconnected-nodes",
       "severity": "error",
       "message": "Node 'Isolated' is not connected to the graph",
       "line": 3,
@@ -168,7 +168,7 @@ Add a `config` field to customize rule behavior:
   - `column` — 0-based column number where error occurred
 - **`issues`** — Array of lint rule violations found (empty if no issues)
   - `rule_id` — The lint rule that triggered
-  - `severity` — One of: `error`, `warning`, `info`
+  - `severity` — One of: `error`, `warn`, `info`
   - `message` — Description of the issue
   - `line` / `column` — Location in the diagram code
 - **`metrics`** — Statistics about the diagram structure
@@ -203,8 +203,8 @@ curl -X POST http://localhost:8080/analyze \
     "code": "graph TD\n  A --> B\n  A --> C\n  A --> D",
     "config": {
       "rules": {
-        "max_fanout": {
-          "max": 2
+        "max-fanout": {
+          "limit": 2
         }
       }
     }
@@ -231,7 +231,7 @@ curl -X POST http://localhost:8080/analyze \
    ```json
    {
      "code": "graph TD\n  A --> B",
-     "config": { "rules": { "max_fanout": { "max": 3 } } }
+     "config": { "rules": { "max-fanout": { "limit": 3 } } }
    }
    ```
 6. Click "Send"
@@ -247,7 +247,7 @@ payload = {
     "code": "graph TD\n  A[Start] --> B[Process]\n  B --> C[End]",
     "config": {
         "rules": {
-            "max_fanout": {"max": 3}
+            "max-fanout": {"limit": 3}
         }
     }
 }
@@ -270,7 +270,7 @@ const payload = {
   code: "graph TD\n  A --> B\n  A --> C\n  A --> D",
   config: {
     rules: {
-      max_fanout: { max: 2 }
+      "max-fanout": { limit: 2 }
     }
   }
 };
@@ -331,42 +331,42 @@ curl http://localhost:8080/spec | jq .
 
 The merm8 engine includes three built-in lint rules:
 
-#### `no_duplicate_node_ids`
+#### `no-duplicate-node-ids`
 - **Severity:** error
 - **Purpose:** Ensures each node ID is unique
 - **Configuration:** No options
 - **Example response:**
   ```json
   {
-    "rule_id": "no_duplicate_node_ids",
+    "rule_id": "no-duplicate-node-ids",
     "severity": "error",
     "message": "Duplicate node ID 'A'"
   }
   ```
 
-#### `no_disconnected_nodes`
+#### `no-disconnected-nodes`
 - **Severity:** error
 - **Purpose:** Ensures all nodes are connected to the graph
 - **Configuration:** No options
 - **Example response:**
   ```json
   {
-    "rule_id": "no_disconnected_nodes",
+    "rule_id": "no-disconnected-nodes",
     "severity": "error",
     "message": "Node 'isolated' is not connected"
   }
   ```
 
-#### `max_fanout`
-- **Severity:** warning
+#### `max-fanout`
+- **Severity:** warn
 - **Purpose:** Limits maximum outgoing edges from a single node
-- **Configuration:** `max` (integer, default: 5)
+- **Configuration:** `limit` (integer, default: 5)
 - **Example:**
   ```json
   {
     "config": {
       "rules": {
-        "max_fanout": { "max": 3 }
+        "max-fanout": { "limit": 3 }
       }
     }
   }
@@ -374,8 +374,8 @@ The merm8 engine includes three built-in lint rules:
 - **Example response:**
   ```json
   {
-    "rule_id": "max_fanout",
-    "severity": "warning",
+    "rule_id": "max-fanout",
+    "severity": "warn",
     "message": "Node 'A' has fanout of 6, exceeds limit of 5"
   }
   ```
@@ -389,7 +389,7 @@ Both flat and nested configuration formats are accepted:
 {
   "code": "...",
   "config": {
-    "max_fanout": { "max": 3 }
+    "max-fanout": { "limit": 3 }
   }
 }
 ```
@@ -400,7 +400,7 @@ Both flat and nested configuration formats are accepted:
   "code": "...",
   "config": {
     "rules": {
-      "max_fanout": { "max": 3 }
+      "max-fanout": { "limit": 3 }
     }
   }
 }
@@ -445,7 +445,7 @@ curl -X POST http://localhost:8080/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "code": "graph TD\n  A --> B\n  A --> C\n  A --> D\n  A --> E\n  A --> F\n  A --> G",
-    "config": {"rules": {"max_fanout": {"max": 4}}}
+    "config": {"rules": {"max-fanout": {"limit": 4}}}
   }'
 ```
 
@@ -456,8 +456,8 @@ curl -X POST http://localhost:8080/analyze \
   "syntax_error": null,
   "issues": [
     {
-      "rule_id": "max_fanout",
-      "severity": "warning",
+      "rule_id": "max-fanout",
+      "severity": "warn",
       "message": "Node 'A' has fanout of 6, exceeds limit of 4",
       "line": 1,
       "column": 0
@@ -489,7 +489,7 @@ curl -X POST http://localhost:8080/analyze \
   "syntax_error": null,
   "issues": [
     {
-      "rule_id": "no_disconnected_nodes",
+      "rule_id": "no-disconnected-nodes",
       "severity": "error",
       "message": "Node 'D' is not connected to the graph",
       "line": 4,
