@@ -312,6 +312,33 @@ func TestParser_LargeGraph(t *testing.T) {
 	t.Logf("parsed %d nodes, %d edges in %v", len(diagram.Nodes), len(diagram.Edges), elapsed)
 }
 
+func TestParser_ValidWithoutASTReturnsInternalError(t *testing.T) {
+	tempDir := t.TempDir()
+	script := filepath.Join(tempDir, "parse.mjs")
+	scriptBody := `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({ valid: true }) + "\n");
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write test parser script: %v", err)
+	}
+
+	p := parser.New(script)
+	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
+
+	if err == nil {
+		t.Fatal("expected internal error, got nil")
+	}
+	if syntaxErr != nil {
+		t.Fatalf("expected nil syntaxErr, got %+v", syntaxErr)
+	}
+	if diagram != nil {
+		t.Fatalf("expected nil diagram, got %+v", diagram)
+	}
+	if err.Error() != "parser contract violation: valid result missing AST" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestParser_SubprocessInternalError(t *testing.T) {
 	tempDir := t.TempDir()
 	script := filepath.Join(tempDir, "parse.mjs")
