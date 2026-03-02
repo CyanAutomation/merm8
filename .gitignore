@@ -1,0 +1,20 @@
+# Binaries
+/mermaid-lint
+/cmd/server/mermaid-lint
+
+# Go build artifacts
+*.test
+*.out
+dist/
+
+# Node modules
+node_modules/
+parser-node/node_modules/
+
+# Environment files
+.env
+*.env
+
+# OS files
+.DS_Store
+Thumbs.db
