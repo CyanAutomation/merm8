@@ -76,6 +76,17 @@ func TestNoDisconnectedNodes_NoEdgesExempt(t *testing.T) {
 	}
 }
 
+
+func TestNoDisconnectedNodes_NoEdgesMultipleNodes(t *testing.T) {
+	d := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+	}
+	issues := rules.NoDisconnectedNodes{}.Run(d, nil)
+	if len(issues) != 3 {
+		t.Fatalf("expected 3 issues for three disconnected nodes, got %d", len(issues))
+	}
+}
+
 func TestMaxFanout_UnderLimit(t *testing.T) {
 	d := &model.Diagram{
 		Edges: []model.Edge{
