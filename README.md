@@ -216,6 +216,85 @@ That's it — no registration maps, no config files.
 
 ---
 
+## Testing
+
+### Prerequisites
+
+- **Go** 1.24+
+- **Node.js** 20+ and npm
+- **curl** (for smoke tests)
+
+### Running Unit Tests
+
+```bash
+# Run all tests
+go test ./...
+
+# Run tests with coverage
+go test -cover ./...
+
+# Run tests for a specific package
+go test ./internal/api/...
+go test ./internal/rules/...
+go test ./internal/engine/...
+```
+
+### Running Parser Integration Tests
+
+The parser integration tests require Node.js dependencies. Install them first:
+
+```bash
+cd parser-node && npm install && cd ..
+```
+
+Then run the parser tests:
+
+```bash
+# Run parser subprocess integration tests (requires parser-node npm install)
+PARSER_SCRIPT=./parser-node/parse.mjs go test ./internal/parser/...
+```
+
+Or use the environment variable to point to the parser script:
+
+```bash
+export PARSER_SCRIPT=./parser-node/parse.mjs
+go test ./internal/parser/...
+```
+
+### Smoke Tests
+
+After building and starting the service, run the smoke test script:
+
+```bash
+# Start the service first:
+go build -o mermaid-lint ./cmd/server
+PARSER_SCRIPT=./parser-node/parse.mjs ./mermaid-lint
+
+# In another terminal, run smoke tests:
+bash smoke-test.sh
+```
+
+The smoke test validates:
+- ✅ Valid diagram parsing with correct response structure
+- ✅ Syntax error handling (200 response with error details)
+- ✅ Missing 'code' field rejection
+- ✅ Complex diagrams with multiple nodes/edges
+- ✅ Custom rule configuration application
+- ✅ Graceful handling of edge cases
+
+### Test Coverage Summary
+
+| Component | Tests | Status |
+|-----------|-------|--------|
+| Rules (no-duplicate-node-ids) | ✅ | Complete |
+| Rules (no-disconnected-nodes) | ✅ | Complete |
+| Rules (max-fanout) | ✅ | Complete |
+| Engine | ✅ | Complete |
+| Handler (API) | ✅ | Enhanced |
+| Parser (subprocess) | ✅ | Comprehensive |
+
+---
+
 ## Environment Variables
 
 | Variable        | Default                          | Description                         |
