@@ -96,6 +96,7 @@ async function extractAST(mermaidAPI, source) {
     nodes: [],
     edges: [],
     subgraphs: [],
+    suppressions: extractSuppressions(source),
   };
 
   let db = null;
@@ -150,6 +151,40 @@ async function extractAST(mermaidAPI, source) {
   }
 
   return ast;
+}
+
+
+function extractSuppressions(source) {
+  const suppressions = [];
+  const lines = source.split(/\r?\n/);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    const disableNextLineMatch = line.match(/^%%\s*merm8-disable-next-line\s+(all|[a-z0-9-]+)\s*$/i);
+    if (disableNextLineMatch) {
+      const rule = disableNextLineMatch[1].toLowerCase();
+      suppressions.push({
+        ruleId: rule,
+        scope: 'next-line',
+        line: i + 1,
+        targetLine: i + 2,
+      });
+      continue;
+    }
+
+    const disableMatch = line.match(/^%%\s*merm8-disable\s+(all|[a-z0-9-]+)\s*$/i);
+    if (disableMatch) {
+      suppressions.push({
+        ruleId: disableMatch[1].toLowerCase(),
+        scope: 'file',
+        line: i + 1,
+        targetLine: i + 1,
+      });
+    }
+  }
+
+  return suppressions;
 }
 
 function extractLabel(vertex) {
