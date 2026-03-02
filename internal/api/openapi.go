@@ -36,8 +36,72 @@ var openapi = map[string]interface{}{
 			"name":        "Documentation",
 			"description": "API documentation and specification",
 		},
+		{
+			"name":        "Probes",
+			"description": "Liveness and readiness probe endpoints",
+		},
 	},
 	"paths": map[string]interface{}{
+		"/healthz": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Liveness probe",
+				"description": "Returns process liveness status.",
+				"operationId": "getHealthz",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Process is healthy",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"status": map[string]interface{}{"type": "string", "example": "ok"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"/ready": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Readiness probe",
+				"description": "Returns readiness status, including parser dependency checks when available.",
+				"operationId": "getReady",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Service is ready",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"status": map[string]interface{}{"type": "string", "example": "ready"},
+									},
+								},
+							},
+						},
+					},
+					"503": map[string]interface{}{
+						"description": "Service is not ready",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"status": map[string]interface{}{"type": "string", "example": "not_ready"},
+										"error":  map[string]interface{}{"type": "string"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"/analyze": map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},

@@ -24,6 +24,12 @@ type ParserInterface interface {
 	Parse(code string) (*model.Diagram, *parser.SyntaxError, error)
 }
 
+// ReadinessChecker can be implemented by parser dependencies that support
+// lightweight readiness validation (e.g., binary/script availability checks).
+type ReadinessChecker interface {
+	Ready() error
+}
+
 // analyzeRequest is the JSON body accepted by POST /analyze.
 type analyzeRequest struct {
 	Code   string          `json:"code"`
@@ -101,9 +107,31 @@ func NewHandlerWithScript(scriptPath string) *Handler {
 
 // RegisterRoutes attaches all routes to mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /healthz", h.Healthz)
+	mux.HandleFunc("GET /ready", h.Ready)
 	mux.HandleFunc("POST /analyze", h.Analyze)
 	mux.HandleFunc("GET /spec", h.ServeSpec)
 	mux.HandleFunc("GET /docs", h.ServeSwagger)
+}
+
+// Healthz handles GET /healthz and reports process liveness.
+func (h *Handler) Healthz(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// Ready handles GET /ready and reports dependency readiness.
+func (h *Handler) Ready(w http.ResponseWriter, _ *http.Request) {
+	if checker, ok := h.parser.(ReadinessChecker); ok {
+		if err := checker.Ready(); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"status": "not_ready",
+				"error":  err.Error(),
+			})
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }
 
 // Analyze handles POST /analyze.

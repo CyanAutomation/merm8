@@ -31,6 +31,10 @@
     {
       "name": "Documentation",
       "description": "API documentation and specification"
+    },
+    {
+      "name": "Probes",
+      "description": "Liveness and readiness probe endpoints"
     }
   ],
   "paths": {
@@ -220,6 +224,81 @@
               "text/html": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": [
+          "Probes"
+        ],
+        "summary": "Liveness probe",
+        "description": "Returns process liveness status.",
+        "operationId": "getHealthz",
+        "responses": {
+          "200": {
+            "description": "Process is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": [
+          "Probes"
+        ],
+        "summary": "Readiness probe",
+        "description": "Returns readiness status, including parser dependency checks when available.",
+        "operationId": "getReady",
+        "responses": {
+          "200": {
+            "description": "Service is ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ready"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "not_ready"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }

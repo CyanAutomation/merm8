@@ -77,6 +77,32 @@ The service listens on **port 8080**.
 
 ## API
 
+### `GET /healthz`
+
+Liveness endpoint for process-up checks.
+
+**Response**
+
+```json
+{"status":"ok"}
+```
+
+### `GET /ready`
+
+Readiness endpoint for dependency checks (including parser runtime/script availability when supported).
+
+**Response (ready)**
+
+```json
+{"status":"ready"}
+```
+
+**Response (not ready)**
+
+```json
+{"status":"not_ready","error":"..."}
+```
+
 ### `POST /analyze`
 
 **Request body**
