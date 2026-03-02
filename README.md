@@ -284,6 +284,30 @@ The smoke test validates:
 
 ### Test Coverage Summary
 
+### Testing Architecture
+
+The test suite uses two complementary approaches:
+
+1. **Mock-based Handler Tests**: Fast, deterministic via `ParserInterface` dependency injection
+   - Mock parser returns predefined diagrams without subprocess overhead
+   - Tests handler business logic in isolation
+   - Implementation: `ParserInterface` interface + `mockParser` type in handler_test.go
+   - Examples: `TestAnalyze_ValidDiagram_SuccessPath`, `TestAnalyze_ConfigApplied_MaxFanout`, `TestAnalyze_MultipleRulesAggregate`
+
+2. **Integration Parser Tests**: Test real Node.js subprocess
+   - Require `PARSER_SCRIPT` env var to point to parse.mjs
+   - Exercise actual Mermaid parsing with official parser
+   - Some tests explicitly skip if Mermaid version lacks features (e.g., subgraphs, special characters)
+   - Run with `-v` flag to see which tests were skipped and why
+   - Examples: `TestParser_ValidFlowchart`, `TestParser_InvalidMermaid`, `TestParser_MultipleEdges`
+
+**Skipped Tests (Expected Behavior):**
+- `TestParser_WithSubgraphs` — Skips if Mermaid doesn't extract subgraphs from AST
+- `TestParser_SpecialCharacters` — Skips if special character parsing isn't supported
+- `TestParser_Timeout` — Skips with documentation: direct timeout testing isn't feasible; verified via code review
+
+See test comments for rationale behind each skipped test.
+
 | Component | Tests | Status |
 |-----------|-------|--------|
 | Rules (no-duplicate-node-ids) | ✅ | Complete |
