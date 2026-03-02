@@ -394,4 +394,3 @@ func TestParser_ConcurrentParsing(t *testing.T) {
 	}
 	t.Logf("all %d goroutines completed successfully", numGoroutines)
 }
-
