@@ -159,6 +159,25 @@ Add a `config` field to customize rule behavior:
 }
 ```
 
+**Request error response (HTTP 400/413/500):**
+```json
+{
+  "valid": false,
+  "issues": [],
+  "error": {
+    "code": "invalid_json",
+    "message": "invalid JSON body"
+  }
+}
+```
+
+**Common API error codes:**
+- `missing_code` — `code` field is missing or empty (HTTP 400)
+- `invalid_json` — body is not valid JSON (HTTP 400)
+- `request_too_large` — request body exceeds 1 MiB (HTTP 413)
+- `parser_timeout` — parser timed out (HTTP 500)
+- `internal_error` — unexpected internal parser/service failure (HTTP 500)
+
 ### Response Fields Explained
 
 - **`valid`** — Boolean indicating if the Mermaid syntax is syntactically correct

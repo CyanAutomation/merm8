@@ -143,24 +143,29 @@ var openapi = map[string]interface{}{
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
-									"type": "object",
-									"properties": map[string]interface{}{
-										"error": map[string]interface{}{
-											"type": "string",
-										},
-									},
+									"$ref": "#/components/schemas/ErrorResponse",
 								},
 								"examples": map[string]interface{}{
 									"missingCode": map[string]interface{}{
 										"summary": "Missing 'code' field",
 										"value": map[string]interface{}{
-											"error": "field 'code' is required",
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":    "missing_code",
+												"message": "field 'code' is required",
+											},
 										},
 									},
 									"invalidJSON": map[string]interface{}{
 										"summary": "Invalid JSON body",
 										"value": map[string]interface{}{
-											"error": "invalid JSON body",
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":    "invalid_json",
+												"message": "invalid JSON body",
+											},
 										},
 									},
 								},
@@ -172,15 +177,15 @@ var openapi = map[string]interface{}{
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
-									"type": "object",
-									"properties": map[string]interface{}{
-										"error": map[string]interface{}{
-											"type": "string",
-										},
-									},
+									"$ref": "#/components/schemas/ErrorResponse",
 								},
 								"example": map[string]interface{}{
-									"error": "request body exceeds 1 MiB limit",
+									"valid":  false,
+									"issues": []interface{}{},
+									"error": map[string]interface{}{
+										"code":    "request_too_large",
+										"message": "request body exceeds 1 MiB limit",
+									},
 								},
 							},
 						},
@@ -191,10 +196,29 @@ var openapi = map[string]interface{}{
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
-									"type": "object",
-									"properties": map[string]interface{}{
-										"error": map[string]interface{}{
-											"type": "string",
+									"$ref": "#/components/schemas/ErrorResponse",
+								},
+								"examples": map[string]interface{}{
+									"parserTimeout": map[string]interface{}{
+										"summary": "Parser timeout",
+										"value": map[string]interface{}{
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":    "parser_timeout",
+												"message": "parser timed out",
+											},
+										},
+									},
+									"internal": map[string]interface{}{
+										"summary": "Generic internal failure",
+										"value": map[string]interface{}{
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":    "internal_error",
+												"message": "internal server error",
+											},
 										},
 									},
 								},
@@ -267,6 +291,43 @@ var openapi = map[string]interface{}{
 								"enabled": true,
 							},
 						},
+					},
+				},
+			},
+
+			"ErrorResponse": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"valid", "issues", "error"},
+				"properties": map[string]interface{}{
+					"valid": map[string]interface{}{
+						"type":        "boolean",
+						"description": "Always false for non-200 responses",
+					},
+					"issues": map[string]interface{}{
+						"type":        "array",
+						"description": "Always empty for API-level errors",
+						"items": map[string]interface{}{
+							"$ref": "#/components/schemas/Issue",
+						},
+					},
+					"error": map[string]interface{}{
+						"$ref": "#/components/schemas/ErrorDetail",
+					},
+				},
+			},
+			"ErrorDetail": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"code", "message"},
+				"properties": map[string]interface{}{
+					"code": map[string]interface{}{
+						"type":        "string",
+						"description": "Machine-readable error code",
+						"example":     "invalid_json",
+					},
+					"message": map[string]interface{}{
+						"type":        "string",
+						"description": "Human-readable error message",
+						"example":     "invalid JSON body",
 					},
 				},
 			},
