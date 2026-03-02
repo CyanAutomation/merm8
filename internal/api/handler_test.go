@@ -95,6 +95,29 @@ func TestAnalyze_ParserFails_Returns500(t *testing.T) {
 	}
 }
 
+func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
+	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("Analyze panicked for nil diagram: %v", r)
+			}
+		}()
+		mux.ServeHTTP(w, req)
+	}()
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when parser returns nil diagram, got %d", w.Code)
+	}
+}
+
 // TestAnalyze_ValidDiagram_SuccessPath tests a valid diagram end-to-end.
 func TestAnalyze_ValidDiagram_SuccessPath(t *testing.T) {
 	validDiagram := &model.Diagram{
