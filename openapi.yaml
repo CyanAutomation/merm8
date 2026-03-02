@@ -37,8 +37,9 @@ paths:
       summary: Analyze and lint a Mermaid diagram
       description: |
         Validates Mermaid code syntax and runs deterministic lint rules.
-        
-        Returns syntax errors if parsing fails, or lint results if parsing succeeds.
+
+        Syntax errors are returned as HTTP 200 with `valid=false`.
+        Parser/runtime failures return APIError payloads with machine-readable `code` values.
       operationId: analyzeCode
       requestBody:
         required: true
@@ -128,14 +129,33 @@ paths:
                   value:
                     error: "invalid JSON body"
         '500':
-          description: Internal server error
+          description: Parser/internal infrastructure failure
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+                $ref: '#/components/schemas/APIError'
+              examples:
+                subprocess:
+                  value:
+                    code: PARSER_SUBPROCESS
+                    message: parser subprocess error (stderr: module not found)
+                decode:
+                  value:
+                    code: PARSER_DECODE
+                    message: failed to decode parser output
+                contract:
+                  value:
+                    code: PARSER_CONTRACT_VIOLATION
+                    message: parser contract violation: valid result missing AST
+        '504':
+          description: Parser timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIError'
+              example:
+                code: PARSER_TIMEOUT
+                message: parser timed out before completion
 
   /spec:
     get:
@@ -288,3 +308,23 @@ components:
           type: integer
           description: Maximum number of outgoing edges from any single node
           example: 2
+
+
+    APIError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          enum:
+            - PARSER_TIMEOUT
+            - PARSER_SUBPROCESS
+            - PARSER_DECODE
+            - PARSER_CONTRACT_VIOLATION
+            - PARSER_INTERNAL
+        message:
+          type: string
+          description: Human-readable error message

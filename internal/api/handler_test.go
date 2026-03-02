@@ -135,7 +135,7 @@ func TestAnalyze_RequestBodyTooLarge(t *testing.T) {
 
 func TestAnalyze_ParserFails_Returns500(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return nil, nil, errors.New("mock parser error")
+		return nil, nil, errors.Join(parser.ErrSubprocess, errors.New("mock parser error"))
 	})
 	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
 	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
@@ -145,6 +145,56 @@ func TestAnalyze_ParserFails_Returns500(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 when parser fails, got %d", w.Code)
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["code"] != "PARSER_SUBPROCESS" {
+		t.Fatalf("expected PARSER_SUBPROCESS code, got %v", resp["code"])
+	}
+}
+
+func TestAnalyze_ParserTimeout_Returns504(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, errors.Join(parser.ErrTimeout, errors.New("parser timeout after 2s"))
+	})
+	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusGatewayTimeout {
+		t.Fatalf("expected 504 when parser times out, got %d", w.Code)
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["code"] != "PARSER_TIMEOUT" {
+		t.Fatalf("expected PARSER_TIMEOUT code, got %v", resp["code"])
+	}
+}
+
+func TestAnalyze_SyntaxError_DetectTypeHint(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{Message: "No diagram type detected", Line: 0, Column: 0}
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+	body, _ := json.Marshal(map[string]string{"code": "A-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for syntax error, got %d", w.Code)
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	serr := resp["syntax_error"].(map[string]interface{})
+	msg := serr["message"].(string)
+	if !strings.Contains(msg, "Hint:") {
+		t.Fatalf("expected actionable hint in detectType message, got %q", msg)
 	}
 }
 
@@ -271,7 +321,7 @@ func TestAnalyze_SyntaxError_Returns200(t *testing.T) {
 	if syntaxErrResp, ok := resp["syntax_error"].(map[string]interface{}); !ok {
 		t.Error("expected syntax_error object")
 	} else {
-		if msg, ok := syntaxErrResp["message"].(string); !ok || msg != "No diagram type detected" {
+		if msg, ok := syntaxErrResp["message"].(string); !ok || !strings.HasPrefix(msg, "No diagram type detected") {
 			t.Errorf("expected error message, got %v", syntaxErrResp["message"])
 		}
 	}

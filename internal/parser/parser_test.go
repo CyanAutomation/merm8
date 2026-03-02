@@ -2,6 +2,7 @@
 package parser_test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -296,6 +297,9 @@ process.exit(0);
 				if err == nil {
 					t.Fatalf("expected error containing %q, got nil", tt.wantErrSubstr)
 				}
+				if tt.name == "malformed json payload" && !errors.Is(err, parser.ErrDecode) {
+					t.Fatalf("expected ErrDecode category, got %v", err)
+				}
 				if !contains(err.Error(), tt.wantErrSubstr) {
 					t.Fatalf("expected error containing %q, got %q", tt.wantErrSubstr, err.Error())
 				}
@@ -384,6 +388,9 @@ process.stdout.write(JSON.stringify({ valid: true }) + "\n");
 	if err == nil {
 		t.Fatal("expected internal error, got nil")
 	}
+	if !errors.Is(err, parser.ErrContractViolation) {
+		t.Fatalf("expected ErrContractViolation, got %v", err)
+	}
 	if syntaxErr != nil {
 		t.Fatalf("expected nil syntaxErr, got %+v", syntaxErr)
 	}
@@ -415,11 +422,38 @@ process.exit(1);
 	if err == nil {
 		t.Fatal("expected parser subprocess error, got nil")
 	}
+	if !errors.Is(err, parser.ErrSubprocess) {
+		t.Fatalf("expected ErrSubprocess, got %v", err)
+	}
 	if syntaxErr != nil {
 		t.Fatalf("expected nil syntaxErr, got %+v", syntaxErr)
 	}
 	if diagram != nil {
 		t.Fatalf("expected nil diagram, got %+v", diagram)
+	}
+}
+
+func TestParser_TimeoutCategory(t *testing.T) {
+	tempDir := t.TempDir()
+	script := filepath.Join(tempDir, "parse.mjs")
+	scriptBody := `#!/usr/bin/env node
+setTimeout(() => {
+  process.stdout.write(JSON.stringify({ valid: true, ast: { direction: "TD", nodes: [], edges: [], subgraphs: [] } }) + "\\n");
+}, 200);
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write test parser script: %v", err)
+	}
+
+	p := parser.New(script)
+	p.SetTimeout(10 * time.Millisecond)
+
+	_, _, err := p.Parse("graph TD; A-->B")
+	if err == nil {
+		t.Fatal("expected timeout error, got nil")
+	}
+	if !errors.Is(err, parser.ErrTimeout) {
+		t.Fatalf("expected ErrTimeout category, got %v", err)
 	}
 }
 

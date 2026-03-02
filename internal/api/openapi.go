@@ -42,7 +42,7 @@ var openapi = map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Analyze and lint a Mermaid diagram",
-				"description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nReturns syntax errors if parsing fails, or lint results if parsing succeeds.",
+				"description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nSyntax errors are returned as HTTP 200 with `valid=false`. Infrastructure/parser runtime failures use machine-readable API error codes.",
 				"operationId": "analyzeCode",
 				"requestBody": map[string]interface{}{
 					"required": true,
@@ -187,17 +187,35 @@ var openapi = map[string]interface{}{
 					},
 
 					"500": map[string]interface{}{
-						"description": "Internal server error",
+						"description": "Parser/internal infrastructure failure",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
-									"type": "object",
-									"properties": map[string]interface{}{
-										"error": map[string]interface{}{
-											"type": "string",
-										},
+									"$ref": "#/components/schemas/APIError",
+								},
+								"examples": map[string]interface{}{
+									"subprocess": map[string]interface{}{
+										"summary": "Node parser subprocess failure",
+										"value":   map[string]interface{}{"code": "PARSER_SUBPROCESS", "message": "parser subprocess error (stderr: module not found)"},
+									},
+									"decode": map[string]interface{}{
+										"summary": "Parser produced invalid JSON",
+										"value":   map[string]interface{}{"code": "PARSER_DECODE", "message": "failed to decode parser output"},
+									},
+									"contract": map[string]interface{}{
+										"summary": "Parser contract violation",
+										"value":   map[string]interface{}{"code": "PARSER_CONTRACT_VIOLATION", "message": "parser contract violation: valid result missing AST"},
 									},
 								},
+							},
+						},
+					},
+					"504": map[string]interface{}{
+						"description": "Parser timeout",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema":  map[string]interface{}{"$ref": "#/components/schemas/APIError"},
+								"example": map[string]interface{}{"code": "PARSER_TIMEOUT", "message": "parser timed out before completion"},
 							},
 						},
 					},
@@ -369,6 +387,21 @@ var openapi = map[string]interface{}{
 						"type":        "integer",
 						"description": "Maximum number of outgoing edges from any single node",
 						"example":     2,
+					},
+				},
+			},
+			"APIError": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"code", "message"},
+				"properties": map[string]interface{}{
+					"code": map[string]interface{}{
+						"type":        "string",
+						"description": "Machine-readable error code",
+						"enum":        []string{"PARSER_TIMEOUT", "PARSER_SUBPROCESS", "PARSER_DECODE", "PARSER_CONTRACT_VIOLATION", "PARSER_INTERNAL"},
+					},
+					"message": map[string]interface{}{
+						"type":        "string",
+						"description": "Human-readable error message",
 					},
 				},
 			},
