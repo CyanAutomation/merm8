@@ -103,8 +103,11 @@ paths:
                       - rule_id: no_disconnected_nodes
                         severity: warning
                         message: Node 'D' is not connected to the graph
-                        line: 5
-                        column: 0
+                      - rule_id: max-fanout
+                        severity: warning
+                        message: Node 'A' has fanout 6, exceeding limit of 5
+                        line: 2
+                        column: 2
                     metrics:
                       node_count: 4
                       edge_count: 2
@@ -260,13 +263,13 @@ components:
           example: Node 'isolated' is not connected to the graph
         line:
           type: integer
-          description: 1-based line number where issue is located (if applicable)
+          description: 1-based line number where issue is located when known. Omitted when unknown.
           example: 5
           nullable: true
         column:
           type: integer
-          description: 0-based column number where issue is located (if applicable)
-          example: 0
+          description: 0-based column number where issue is located when known. Omitted when unknown.
+          example: 2
           nullable: true
 
     Metrics:
