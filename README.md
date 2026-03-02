@@ -143,6 +143,17 @@ curl -s -X POST http://localhost:8080/analyze \
   }'
 ```
 
+### Interactive API Documentation
+
+**Swagger UI** is available at `http://localhost:8080/docs` when the server is running. This provides:
+
+- Interactive API explorer with schema documentation
+- "Try it out" feature to test endpoints directly
+- Request/response examples for each operation
+- Full OpenAPI specification browsing
+
+**OpenAPI Specification** is available at `http://localhost:8080/spec` in JSON format, useful for code generation and API tooling integration.
+
 ---
 
 ## Rule System

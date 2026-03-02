@@ -2,6 +2,7 @@
 package api
 
 import (
+	_ "embed"
 	"encoding/json"
 	"net/http"
 
@@ -10,6 +11,9 @@ import (
 	"github.com/CyanAutomation/merm8/internal/parser"
 	"github.com/CyanAutomation/merm8/internal/rules"
 )
+
+//go:embed swagger.html
+var swaggerHTML []byte
 
 // ParserInterface defines the contract for parsing Mermaid code.
 // It allows dependency injection of mock parsers in tests.
@@ -95,6 +99,8 @@ func NewHandlerWithScript(scriptPath string) *Handler {
 // RegisterRoutes attaches all routes to mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /analyze", h.Analyze)
+	mux.HandleFunc("GET /spec", h.ServeSpec)
+	mux.HandleFunc("GET /docs", h.ServeSwagger)
 }
 
 // Analyze handles POST /analyze.
@@ -158,6 +164,22 @@ func computeMetrics(d *model.Diagram) *metricsResponse {
 		EdgeCount: len(d.Edges),
 		MaxFanout: maxFanout,
 	}
+}
+
+// ServeSpec serves the OpenAPI specification as JSON.
+func (h *Handler) ServeSpec(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+
+	data, _ := json.MarshalIndent(openapi, "", "  ")
+	w.Write(data)
+}
+
+// ServeSwagger serves the Swagger UI HTML page.
+func (h *Handler) ServeSwagger(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Write(swaggerHTML)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
