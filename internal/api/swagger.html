@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>merm8 API Documentation</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+        }
+        .topbar {
+            background-color: #1f5385;
+            padding: 10px 20px;
+            color: white;
+            border-bottom: 1px solid #2c5282;
+        }
+        .topbar h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .topbar p {
+            margin: 5px 0 0 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        #swagger-ui {
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <h1>merm8 - Mermaid Lint API</h1>
+        <p>Interactive API documentation and testing interface</p>
+    </div>
+    <div id="swagger-ui"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui-bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui-standalone-preset.js"></script>
+    <script>
+        const ui = SwaggerUIBundle({
+            url: "/spec",
+            dom_id: '#swagger-ui',
+            presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIStandalonePreset
+            ],
+            layout: "StandaloneLayout",
+            requestInterceptor: (request) => {
+                request.headers['Content-Type'] = 'application/json';
+                return request;
+            },
+            responseInterceptor: (response) => {
+                return response;
+            }
+        });
+        window.ui = ui;
+    </script>
+</body>
+</html>
