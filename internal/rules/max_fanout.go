@@ -17,8 +17,10 @@ func (r MaxFanout) ID() string { return "max-fanout" }
 
 func (r MaxFanout) Run(d *model.Diagram, cfg Config) []model.Issue {
 	limit := defaultMaxFanout
+	severity := SeverityWarn
 	if rc, ok := cfg[r.ID()]; ok {
-		if v, ok := rc["limit"]; ok {
+		severity = rc.SeverityOrDefault(SeverityWarn)
+		if v, ok := rc.Option("limit"); ok {
 			switch n := v.(type) {
 			case int:
 				if n >= 1 {
@@ -42,7 +44,7 @@ func (r MaxFanout) Run(d *model.Diagram, cfg Config) []model.Issue {
 		if count > limit {
 			issues = append(issues, model.Issue{
 				RuleID:   r.ID(),
-				Severity: "warn",
+				Severity: severity,
 				Message:  fmt.Sprintf("node %q has fanout %d, exceeding limit of %d", nodeID, count, limit),
 			})
 		}

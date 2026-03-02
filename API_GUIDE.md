@@ -86,19 +86,30 @@ Add a `config` field to customize rule behavior:
   "config": {
     "rules": {
       "max-fanout": {
+        "enabled": true,
+        "severity": "error",
         "limit": 2
+      },
+      "no-disconnected-nodes": {
+        "enabled": false,
+        "suppress": ["node:temp*"]
       }
     }
   }
 }
 ```
 
-**Supported rule configurations:**
+**Supported shared rule keys:**
 
-- `max-fanout` — Set maximum outgoing edges per node
-  ```json
-  "max-fanout": { "limit": 3 }
-  ```
+- `enabled` (boolean, default `true`)
+- `severity` (`error` | `warn` | `info`)
+- `suppress` (optional list of selectors; reserved for suppression-aware tooling)
+
+**Rule-specific options:**
+
+- `max-fanout.limit` — maximum outgoing edges per node (default `5`)
+
+Unknown rule IDs are ignored (non-fatal) and reported in the response `warnings` plus `metrics.unknown_rule_config_count`.
 
 #### Step 4: Execute and View Results
 
@@ -332,7 +343,7 @@ curl http://localhost:8080/spec | jq .
 The merm8 engine includes three built-in lint rules:
 
 #### `no-duplicate-node-ids`
-- **Severity:** error
+- **Severity:** error (default, overridable via config)
 - **Purpose:** Ensures each node ID is unique
 - **Configuration:** No options
 - **Example response:**
@@ -345,7 +356,7 @@ The merm8 engine includes three built-in lint rules:
   ```
 
 #### `no-disconnected-nodes`
-- **Severity:** error
+- **Severity:** error (default, overridable via config)
 - **Purpose:** Ensures all nodes are connected to the graph
 - **Configuration:** No options
 - **Example response:**
@@ -358,7 +369,7 @@ The merm8 engine includes three built-in lint rules:
   ```
 
 #### `max-fanout`
-- **Severity:** warn
+- **Severity:** warn (default, overridable via config)
 - **Purpose:** Limits maximum outgoing edges from a single node
 - **Configuration:** `limit` (integer, default: 5)
 - **Example:**
@@ -366,7 +377,8 @@ The merm8 engine includes three built-in lint rules:
   {
     "config": {
       "rules": {
-        "max-fanout": { "limit": 3 }
+        "max-fanout": { "enabled": true, "severity": "error", "limit": 3 },
+        "no-disconnected-nodes": { "enabled": false }
       }
     }
   }
@@ -400,7 +412,8 @@ Both flat and nested configuration formats are accepted:
   "code": "...",
   "config": {
     "rules": {
-      "max-fanout": { "limit": 3 }
+      "max-fanout": { "enabled": true, "severity": "error", "limit": 3 },
+      "no-disconnected-nodes": { "enabled": false }
     }
   }
 }

@@ -8,7 +8,11 @@ type NoDuplicateNodeIDs struct{}
 
 func (r NoDuplicateNodeIDs) ID() string { return "no-duplicate-node-ids" }
 
-func (r NoDuplicateNodeIDs) Run(d *model.Diagram, _ Config) []model.Issue {
+func (r NoDuplicateNodeIDs) Run(d *model.Diagram, cfg Config) []model.Issue {
+	severity := SeverityError
+	if rc, ok := cfg[r.ID()]; ok {
+		severity = rc.SeverityOrDefault(SeverityError)
+	}
 	seen := make(map[string]bool, len(d.Nodes))
 	reported := make(map[string]bool)
 	var issues []model.Issue
@@ -16,7 +20,7 @@ func (r NoDuplicateNodeIDs) Run(d *model.Diagram, _ Config) []model.Issue {
 		if seen[n.ID] && !reported[n.ID] {
 			issues = append(issues, model.Issue{
 				RuleID:   r.ID(),
-				Severity: "error",
+				Severity: severity,
 				Message:  "duplicate node ID: " + n.ID,
 			})
 			reported[n.ID] = true

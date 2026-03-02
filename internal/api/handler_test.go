@@ -544,3 +544,95 @@ func TestAnalyze_LargeDiagram(t *testing.T) {
 		t.Fatalf("PERFORMANCE SLA EXCEEDED: Large diagram analysis took %v (max 1s)", elapsed)
 	}
 }
+
+func TestAnalyze_DisableRule(t *testing.T) {
+	diagram := &model.Diagram{Nodes: []model.Node{{ID: "A"}, {ID: "A"}}}
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) { return diagram, nil, nil })
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A; A",
+		"config": map[string]interface{}{
+			"rules": map[string]interface{}{
+				"no-duplicate-node-ids": map[string]interface{}{"enabled": false},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	issues := resp["issues"].([]interface{})
+	for _, issue := range issues {
+		if ruleID := issue.(map[string]interface{})["rule_id"]; ruleID == "no-duplicate-node-ids" {
+			t.Fatalf("expected no-duplicate-node-ids to be disabled, issues=%v", issues)
+		}
+	}
+}
+
+func TestAnalyze_SeverityOverride(t *testing.T) {
+	diagram := &model.Diagram{Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}}}
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) { return diagram, nil, nil })
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A-->B; A-->C; A-->D",
+		"config": map[string]interface{}{
+			"max-fanout": map[string]interface{}{"limit": 2, "severity": "error"},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	issues := resp["issues"].([]interface{})
+	found := false
+	for _, raw := range issues {
+		issue := raw.(map[string]interface{})
+		if issue["rule_id"] == "max-fanout" {
+			found = true
+			if issue["severity"] != "error" {
+				t.Fatalf("expected severity override to error, got %v", issue["severity"])
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected max-fanout issue")
+	}
+}
+
+func TestAnalyze_UnknownRuleKeyIgnoredWithWarningMetric(t *testing.T) {
+	diagram := &model.Diagram{Nodes: []model.Node{{ID: "A"}, {ID: "A"}}}
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) { return diagram, nil, nil })
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A; A",
+		"config": map[string]interface{}{
+			"not-a-rule": map[string]interface{}{"enabled": false},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	warnings := resp["warnings"].([]interface{})
+	if len(warnings) != 1 {
+		t.Fatalf("expected one warning, got %v", warnings)
+	}
+	metrics := resp["metrics"].(map[string]interface{})
+	if metrics["unknown_rule_config_count"].(float64) != 1 {
+		t.Fatalf("expected unknown_rule_config_count=1, got %v", metrics["unknown_rule_config_count"])
+	}
+}

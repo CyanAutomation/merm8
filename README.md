@@ -86,13 +86,16 @@ The service listens on **port 8080**.
   "code": "graph TD\n  A-->B\n  B-->C",
   "config": {
     "rules": {
-      "max-fanout": { "limit": 3 }
+      "max-fanout": { "enabled": true, "severity": "error", "limit": 3 },
+      "no-disconnected-nodes": { "enabled": false, "suppress": ["node:temp*"] }
     }
   }
 }
 ```
 
 > `config` is optional. Both flat `{"max-fanout": {...}}` and nested `{"rules": {"max-fanout": {...}}}` formats are accepted.
+
+> Unknown rule IDs in `config` are **ignored** (non-fatal). The API reports these in `warnings` and increments `metrics.unknown_rule_config_count`.
 
 > Request body size limit: **1 MiB**. Oversized payloads return `413` with JSON: `{"error":"request body exceeds 1 MiB limit"}`.
 
@@ -106,8 +109,10 @@ The service listens on **port 8080**.
   "metrics": {
     "node_count": 3,
     "edge_count": 2,
-    "max_fanout": 1
-  }
+    "max_fanout": 1,
+    "unknown_rule_config_count": 0
+  },
+  "warnings": []
 }
 ```
 
@@ -181,11 +186,13 @@ type Rule interface {
 
 | Rule ID                  | Severity | Description                                          |
 |--------------------------|----------|------------------------------------------------------|
-| `no-duplicate-node-ids`  | error    | Each node ID must be unique within the diagram.      |
-| `no-disconnected-nodes`  | error    | Every node must participate in at least one edge.    |
-| `max-fanout`             | warn     | No node may have more outgoing edges than the limit. |
+| `no-duplicate-node-ids`  | error\*  | Each node ID must be unique within the diagram.      |
+| `no-disconnected-nodes`  | error\*  | Every node must participate in at least one edge.    |
+| `max-fanout`             | warn\*   | No node may have more outgoing edges than the limit. |
 
 Default `max-fanout` limit: **5**.
+
+\* `severity` can be overridden per rule via config (`error`, `warn`, `info`). Rules can also be disabled with `enabled: false`.
 
 ### Adding a New Rule
 

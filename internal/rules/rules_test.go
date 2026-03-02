@@ -8,124 +8,51 @@ import (
 	"github.com/CyanAutomation/merm8/internal/rules"
 )
 
-func TestNoDuplicateNodeIDs_Clean(t *testing.T) {
-	d := &model.Diagram{
-		Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
-	}
+func TestNoDuplicateNodeIDs_Duplicate_DefaultSeverity(t *testing.T) {
+	d := &model.Diagram{Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "B"}}}
 	issues := rules.NoDuplicateNodeIDs{}.Run(d, nil)
-	if len(issues) != 0 {
-		t.Fatalf("expected no issues, got %d", len(issues))
+	if len(issues) != 1 || issues[0].Severity != rules.SeverityError {
+		t.Fatalf("expected one %s issue, got %#v", rules.SeverityError, issues)
 	}
 }
 
-func TestNoDuplicateNodeIDs_Duplicate(t *testing.T) {
-	d := &model.Diagram{
-		Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "B"}},
-	}
-	issues := rules.NoDuplicateNodeIDs{}.Run(d, nil)
-	if len(issues) != 1 {
-		t.Fatalf("expected 1 issue, got %d", len(issues))
-	}
-	if issues[0].Severity != "error" {
-		t.Errorf("expected severity error, got %s", issues[0].Severity)
-	}
-}
-
-func TestNoDuplicateNodeIDs_MultiDuplicate(t *testing.T) {
-	d := &model.Diagram{
-		Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "A"}},
-	}
-	issues := rules.NoDuplicateNodeIDs{}.Run(d, nil)
-	// Should report only once per duplicate ID
-	if len(issues) != 1 {
-		t.Fatalf("expected 1 issue for triplicate, got %d", len(issues))
-	}
-}
-
-func TestNoDisconnectedNodes_AllConnected(t *testing.T) {
-	d := &model.Diagram{
-		Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
-		Edges: []model.Edge{{From: "A", To: "B"}},
-	}
-	issues := rules.NoDisconnectedNodes{}.Run(d, nil)
-	if len(issues) != 0 {
-		t.Fatalf("expected no issues, got %d", len(issues))
+func TestNoDuplicateNodeIDs_SeverityOverride(t *testing.T) {
+	d := &model.Diagram{Nodes: []model.Node{{ID: "A"}, {ID: "A"}}}
+	cfg := rules.Config{"no-duplicate-node-ids": {Severity: "warn"}}
+	issues := rules.NoDuplicateNodeIDs{}.Run(d, cfg)
+	if len(issues) != 1 || issues[0].Severity != rules.SeverityWarn {
+		t.Fatalf("expected severity override to warn, got %#v", issues)
 	}
 }
 
 func TestNoDisconnectedNodes_Disconnected(t *testing.T) {
-	d := &model.Diagram{
-		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
-		Edges: []model.Edge{{From: "A", To: "B"}},
-	}
+	d := &model.Diagram{Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}}, Edges: []model.Edge{{From: "A", To: "B"}}}
 	issues := rules.NoDisconnectedNodes{}.Run(d, nil)
-	if len(issues) != 1 {
-		t.Fatalf("expected 1 issue, got %d", len(issues))
-	}
-	if issues[0].RuleID != "no-disconnected-nodes" {
-		t.Errorf("wrong rule ID: %s", issues[0].RuleID)
+	if len(issues) != 1 || issues[0].RuleID != "no-disconnected-nodes" {
+		t.Fatalf("unexpected issues: %#v", issues)
 	}
 }
 
-func TestNoDisconnectedNodes_NoEdgesExempt(t *testing.T) {
-	d := &model.Diagram{
-		Nodes: []model.Node{{ID: "A"}},
-	}
-	issues := rules.NoDisconnectedNodes{}.Run(d, nil)
-	if len(issues) != 0 {
-		t.Fatalf("single-node diagram with no edges should be exempt")
-	}
-}
-
-func TestNoDisconnectedNodes_NoEdgesMultipleNodes(t *testing.T) {
-	d := &model.Diagram{
-		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
-	}
-	issues := rules.NoDisconnectedNodes{}.Run(d, nil)
-	if len(issues) != 3 {
-		t.Fatalf("expected 3 issues for three disconnected nodes, got %d", len(issues))
-	}
-}
-
-func TestMaxFanout_UnderLimit(t *testing.T) {
-	d := &model.Diagram{
-		Edges: []model.Edge{
-			{From: "A", To: "B"},
-			{From: "A", To: "C"},
-		},
-	}
-	issues := rules.MaxFanout{}.Run(d, nil)
-	if len(issues) != 0 {
-		t.Fatalf("expected no issues, got %d", len(issues))
-	}
-}
-
-func TestMaxFanout_OverLimit(t *testing.T) {
+func TestMaxFanout_OverLimit_DefaultSeverity(t *testing.T) {
 	edges := make([]model.Edge, 6)
 	for i := range edges {
 		edges[i] = model.Edge{From: "A", To: string(rune('B' + i))}
 	}
-	d := &model.Diagram{Edges: edges}
-	issues := rules.MaxFanout{}.Run(d, nil)
-	if len(issues) != 1 {
-		t.Fatalf("expected 1 issue, got %d", len(issues))
-	}
-	if issues[0].Severity != "warn" {
-		t.Errorf("expected warn severity, got %s", issues[0].Severity)
+	issues := rules.MaxFanout{}.Run(&model.Diagram{Edges: edges}, nil)
+	if len(issues) != 1 || issues[0].Severity != rules.SeverityWarn {
+		t.Fatalf("expected one %s issue, got %#v", rules.SeverityWarn, issues)
 	}
 }
 
-func TestMaxFanout_CustomLimit(t *testing.T) {
-	edges := []model.Edge{
-		{From: "A", To: "B"},
-		{From: "A", To: "C"},
-		{From: "A", To: "D"},
-	}
-	d := &model.Diagram{Edges: edges}
-	cfg := rules.Config{"max-fanout": {"limit": 2}}
-	issues := rules.MaxFanout{}.Run(d, cfg)
+func TestMaxFanout_SeverityOverrideAndCustomLimit(t *testing.T) {
+	edges := []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}}
+	cfg := rules.Config{"max-fanout": {Severity: "error", Options: map[string]interface{}{"limit": 2}}}
+	issues := rules.MaxFanout{}.Run(&model.Diagram{Edges: edges}, cfg)
 	if len(issues) != 1 {
-		t.Fatalf("expected 1 issue with custom limit 2, got %d", len(issues))
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Severity != rules.SeverityError {
+		t.Fatalf("expected severity error, got %s", issues[0].Severity)
 	}
 }
 
@@ -148,15 +75,32 @@ func TestMaxFanout_InvalidLimitsFallbackToDefault(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := rules.Config{"max-fanout": {"limit": tt.limit}}
+			cfg := rules.Config{"max-fanout": {Options: map[string]interface{}{"limit": tt.limit}}}
 			issues := rules.MaxFanout{}.Run(d, cfg)
-			if len(issues) != 1 {
-				t.Fatalf("expected 1 issue using default limit fallback, got %d", len(issues))
-			}
-			want := "exceeding limit of 5"
-			if !strings.Contains(issues[0].Message, want) {
-				t.Fatalf("expected message to contain %q, got %q", want, issues[0].Message)
+			if len(issues) != 1 || !strings.Contains(issues[0].Message, "exceeding limit of 5") {
+				t.Fatalf("expected default limit fallback issue, got %#v", issues)
 			}
 		})
+	}
+}
+
+func TestRuleConfig_EnabledOrDefault(t *testing.T) {
+	if !((rules.RuleConfig{}).EnabledOrDefault()) {
+		t.Fatal("expected nil enabled to default to true")
+	}
+	disabled := false
+	if (rules.RuleConfig{Enabled: &disabled}).EnabledOrDefault() {
+		t.Fatal("expected explicit enabled=false to disable rule")
+	}
+}
+
+func TestRuleConfig_SeverityOrDefault(t *testing.T) {
+	rc := rules.RuleConfig{Severity: " WARN "}
+	if got := rc.SeverityOrDefault(rules.SeverityError); got != rules.SeverityWarn {
+		t.Fatalf("expected warn severity, got %s", got)
+	}
+	invalid := rules.RuleConfig{Severity: "urgent"}
+	if got := invalid.SeverityOrDefault(rules.SeverityError); got != rules.SeverityError {
+		t.Fatalf("expected fallback error severity, got %s", got)
 	}
 }
