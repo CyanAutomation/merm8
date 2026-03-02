@@ -1,3 +1,50 @@
+
+---
+name: GoBackendDevelopment
+description: Develop and maintain the Go HTTP API backend for Mermaid diagram validation.
+---
+
+# Skill Instructions
+
+## Inputs / Outputs / Non-goals
+
+- Inputs: Go source files for API handlers, engine, parser, and model; test files; environment variables (PORT, PARSER_SCRIPT); JSON request payloads.
+- Outputs: Working HTTP API server that validates Mermaid diagrams, returns JSON responses, and passes all relevant tests.
+- Non-goals: Do not implement diagram parsing logic in Go (handled by Node.js parser); do not change public API schemas without review.
+
+## Trigger conditions
+
+Use this skill when prompts include or imply:
+
+- "Add/modify an HTTP endpoint in Go"
+- "Change API handler logic"
+- "Update Go server for Mermaid validation"
+
+## Mandatory rules
+
+- Follow domain constraints and avoid silent public API/schema changes.
+- Keep changes scoped and deterministic.
+- Record assumptions and unresolved ambiguities.
+
+## Validation checklist
+
+- [ ] Required commands/checks were run (go build, go test, curl endpoint).
+- [ ] Relevant tests were updated/executed.
+- [ ] Risk/impact was documented.
+
+## Expected output format
+
+- Summary: What changed in the Go backend and why.
+- Evidence: Test results, build output, curl/API responses.
+- Risks: Known risks and mitigations (e.g., breaking API, unhandled errors).
+
+## Failure/stop conditions
+
+- Stop if requirements are ambiguous in a way that can cause breaking changes.
+- Stop if required validation cannot be performed and report the blocker.
+
+---
+
 # Go Backend Development
 
 ## Overview
