@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,14 +53,39 @@ func newTestMuxWithRealParser(scriptPath string) *http.ServeMux {
 	return mux
 }
 
-// contains checks if str contains any of the given substrings.
-func contains(str string, substrings ...string) bool {
-	for _, sub := range substrings {
-		if strings.Contains(str, sub) {
-			return true
-		}
+func assertExactErrorResponse(t *testing.T, body []byte, wantCode, wantMessage string) {
+	t.Helper()
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
 	}
-	return false
+	if len(resp) != 3 {
+		t.Fatalf("expected exactly 3 top-level fields, got %d: %v", len(resp), resp)
+	}
+	if valid, ok := resp["valid"].(bool); !ok || valid {
+		t.Fatalf("expected valid=false, got %#v", resp["valid"])
+	}
+	issues, ok := resp["issues"].([]interface{})
+	if !ok {
+		t.Fatalf("expected issues array, got %#v", resp["issues"])
+	}
+	if len(issues) != 0 {
+		t.Fatalf("expected empty issues array, got %#v", issues)
+	}
+	errObj, ok := resp["error"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected error object, got %#v", resp["error"])
+	}
+	if len(errObj) != 2 {
+		t.Fatalf("expected exactly code/message in error object, got %#v", errObj)
+	}
+	if code, ok := errObj["code"].(string); !ok || code != wantCode {
+		t.Fatalf("expected error.code=%q, got %#v", wantCode, errObj["code"])
+	}
+	if msg, ok := errObj["message"].(string); !ok || msg != wantMessage {
+		t.Fatalf("expected error.message=%q, got %#v", wantMessage, errObj["message"])
+	}
 }
 
 func TestAnalyze_MissingCode(t *testing.T) {
@@ -75,6 +101,7 @@ func TestAnalyze_MissingCode(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "missing_code", "field 'code' is required")
 }
 
 func TestAnalyze_InvalidJSON(t *testing.T) {
@@ -89,17 +116,7 @@ func TestAnalyze_InvalidJSON(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
-
-	// Verify error response contains meaningful message
-	var resp map[string]interface{}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err == nil {
-		if errMsg, ok := resp["error"].(string); ok && errMsg != "" {
-			// Good: error response with message
-			if !contains(errMsg, "json") && !contains(errMsg, "code") && !contains(errMsg, "parse") {
-				t.Logf("warning: error message unclear: %q", errMsg)
-			}
-		}
-	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_json", "invalid JSON body")
 }
 
 func TestAnalyze_RequestBodyTooLarge(t *testing.T) {
@@ -124,13 +141,7 @@ func TestAnalyze_RequestBodyTooLarge(t *testing.T) {
 		t.Fatal("expected parser not to be called for oversized request body")
 	}
 
-	var resp map[string]string
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("expected JSON error response, got decode error: %v", err)
-	}
-	if resp["error"] != "request body exceeds 1 MiB limit" {
-		t.Fatalf("expected oversized body error message, got %q", resp["error"])
-	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "request_too_large", "request body exceeds 1 MiB limit")
 }
 
 func TestAnalyze_ParserFails_Returns500(t *testing.T) {
@@ -146,6 +157,23 @@ func TestAnalyze_ParserFails_Returns500(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 when parser fails, got %d", w.Code)
 	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "internal_error", "internal server error")
+}
+
+func TestAnalyze_ParserTimeout_Returns500(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, context.DeadlineExceeded
+	})
+	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when parser times out, got %d", w.Code)
+	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "parser_timeout", "parser timed out")
 }
 
 func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
@@ -161,6 +189,7 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 when parser returns nil diagram, got %d", w.Code)
 	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "internal_error", "parser returned nil diagram")
 }
 
 // TestAnalyze_NoPanicOnNilDiagram tests that nil diagram from parser doesn't cause panic.

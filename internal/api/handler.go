@@ -2,10 +2,12 @@
 package api
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -75,6 +77,19 @@ type analyzeResponse struct {
 	Metrics     *metricsResponse     `json:"metrics,omitempty"`
 }
 
+// apiErrorDetails holds machine-readable and human-readable error information.
+type apiErrorDetails struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// errorResponse is returned for non-200 responses.
+type errorResponse struct {
+	Valid  bool            `json:"valid"`
+	Issues []model.Issue   `json:"issues"`
+	Error  apiErrorDetails `json:"error"`
+}
+
 // Handler holds the dependencies needed to serve HTTP requests.
 type Handler struct {
 	parser ParserInterface
@@ -114,20 +129,20 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
-			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "request body exceeds 1 MiB limit"})
+			writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "request body exceeds 1 MiB limit")
 			return
 		}
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON body")
 		return
 	}
 	if req.Code == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "field 'code' is required"})
+		writeError(w, http.StatusBadRequest, "missing_code", "field 'code' is required")
 		return
 	}
 
 	diagram, syntaxErr, err := h.parser.Parse(req.Code)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeParserFailure(w, err)
 		return
 	}
 
@@ -146,7 +161,7 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if diagram == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "parser returned nil diagram"})
+		writeError(w, http.StatusInternalServerError, "internal_error", "parser returned nil diagram")
 		return
 	}
 
@@ -201,4 +216,23 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeError(w http.ResponseWriter, status int, code, message string) {
+	writeJSON(w, status, errorResponse{
+		Valid:  false,
+		Issues: []model.Issue{},
+		Error: apiErrorDetails{
+			Code:    code,
+			Message: message,
+		},
+	})
+}
+
+func writeParserFailure(w http.ResponseWriter, err error) {
+	if errors.Is(err, context.DeadlineExceeded) || strings.Contains(strings.ToLower(err.Error()), "timeout") {
+		writeError(w, http.StatusInternalServerError, "parser_timeout", "parser timed out")
+		return
+	}
+	writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
 }
