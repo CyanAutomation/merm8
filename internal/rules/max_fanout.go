@@ -2,6 +2,7 @@ package rules
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/CyanAutomation/merm8/internal/model"
 )
@@ -20,9 +21,13 @@ func (r MaxFanout) Run(d *model.Diagram, cfg Config) []model.Issue {
 		if v, ok := rc["limit"]; ok {
 			switch n := v.(type) {
 			case int:
-				limit = n
+				if n >= 1 {
+					limit = n
+				}
 			case float64:
-				limit = int(n)
+				if n >= 1 && n == math.Trunc(n) {
+					limit = int(n)
+				}
 			}
 		}
 	}
