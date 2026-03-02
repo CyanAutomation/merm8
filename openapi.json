@@ -40,7 +40,7 @@
           "Linting"
         ],
         "summary": "Analyze and lint a Mermaid diagram",
-        "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nReturns syntax errors if parsing fails, or lint results if parsing succeeds.\n",
+        "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nSyntax errors are returned as HTTP 200 with `valid=false`. Infrastructure/parser runtime failures use machine-readable API error codes.",
         "operationId": "analyzeCode",
         "requestBody": {
           "required": true,
@@ -166,16 +166,48 @@
             }
           },
           "500": {
-            "description": "Internal server error",
+            "description": "Parser/internal infrastructure failure",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
+                  "$ref": "#/components/schemas/APIError"
+                },
+                "examples": {
+                  "subprocess": {
+                    "summary": "Node parser subprocess failure",
+                    "value": {
+                      "code": "PARSER_SUBPROCESS",
+                      "message": "parser subprocess error (stderr: module not found)"
+                    }
+                  },
+                  "decode": {
+                    "summary": "Parser produced invalid JSON",
+                    "value": {
+                      "code": "PARSER_DECODE",
+                      "message": "failed to decode parser output"
+                    }
+                  },
+                  "contract": {
+                    "summary": "Parser contract violation",
+                    "value": {
+                      "code": "PARSER_CONTRACT_VIOLATION",
+                      "message": "parser contract violation: valid result missing AST"
                     }
                   }
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Parser timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                },
+                "example": {
+                  "code": "PARSER_TIMEOUT",
+                  "message": "parser timed out before completion"
                 }
               }
             }
@@ -373,6 +405,30 @@
             "type": "integer",
             "description": "Maximum number of outgoing edges from any single node",
             "example": 2
+          }
+        }
+      },
+      "APIError": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Machine-readable error code",
+            "enum": [
+              "PARSER_TIMEOUT",
+              "PARSER_SUBPROCESS",
+              "PARSER_DECODE",
+              "PARSER_CONTRACT_VIOLATION",
+              "PARSER_INTERNAL"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message"
           }
         }
       }

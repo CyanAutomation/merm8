@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -75,6 +76,11 @@ type analyzeResponse struct {
 	Metrics     *metricsResponse     `json:"metrics,omitempty"`
 }
 
+type apiErrorResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 // Handler holds the dependencies needed to serve HTTP requests.
 type Handler struct {
 	parser ParserInterface
@@ -127,11 +133,13 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 
 	diagram, syntaxErr, err := h.parser.Parse(req.Code)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		status, code, msg := mapParserError(err)
+		writeJSON(w, status, apiErrorResponse{Code: code, Message: msg})
 		return
 	}
 
 	if syntaxErr != nil {
+		enrichSyntaxError(syntaxErr)
 		resp := analyzeResponse{
 			Valid: false,
 			SyntaxError: &syntaxErrorResponse{
@@ -146,7 +154,7 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if diagram == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "parser returned nil diagram"})
+		writeJSON(w, http.StatusInternalServerError, apiErrorResponse{Code: "PARSER_CONTRACT_VIOLATION", Message: "parser returned nil diagram"})
 		return
 	}
 
@@ -160,6 +168,32 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		Metrics:     computeMetrics(diagram),
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func mapParserError(err error) (status int, code, message string) {
+	message = err.Error()
+	switch {
+	case errors.Is(err, parser.ErrTimeout):
+		return http.StatusGatewayTimeout, "PARSER_TIMEOUT", "parser timed out before completion"
+	case errors.Is(err, parser.ErrSubprocess):
+		return http.StatusInternalServerError, "PARSER_SUBPROCESS", message
+	case errors.Is(err, parser.ErrDecode):
+		return http.StatusInternalServerError, "PARSER_DECODE", "failed to decode parser output"
+	case errors.Is(err, parser.ErrContractViolation):
+		return http.StatusInternalServerError, "PARSER_CONTRACT_VIOLATION", message
+	default:
+		return http.StatusInternalServerError, "PARSER_INTERNAL", message
+	}
+}
+
+func enrichSyntaxError(s *parser.SyntaxError) {
+	if s == nil {
+		return
+	}
+	msg := strings.TrimSpace(strings.ToLower(s.Message))
+	if strings.Contains(msg, "no diagram type detected") || strings.Contains(msg, "detecttype") {
+		s.Message = s.Message + ". Hint: start your diagram with a Mermaid type declaration like 'graph TD', 'sequenceDiagram', or 'classDiagram'."
+	}
 }
 
 // computeMetrics derives aggregate metrics from the diagram.

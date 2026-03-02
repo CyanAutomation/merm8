@@ -125,6 +125,22 @@ The service listens on **port 8080**.
 }
 ```
 
+Syntax errors remain semantic `200 OK` responses with `valid=false`. For parser runtime failures, the API returns machine-readable error payloads:
+
+```json
+{
+  "code": "PARSER_TIMEOUT",
+  "message": "parser timed out before completion"
+}
+```
+
+Common error codes:
+- `PARSER_TIMEOUT` (`504`)
+- `PARSER_SUBPROCESS` (`500`)
+- `PARSER_DECODE` (`500`)
+- `PARSER_CONTRACT_VIOLATION` (`500`)
+- `PARSER_INTERNAL` (`500`)
+
 ### Example `curl` calls
 
 ```bash

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -16,6 +17,49 @@ import (
 )
 
 const defaultTimeout = 2 * time.Second
+
+var (
+	// ErrTimeout indicates parser execution exceeded the configured timeout.
+	ErrTimeout = errors.New("parser timeout")
+	// ErrSubprocess indicates a non-zero Node parser exit or spawn failure.
+	ErrSubprocess = errors.New("parser subprocess failure")
+	// ErrDecode indicates parser JSON output could not be decoded.
+	ErrDecode = errors.New("parser output decode failure")
+	// ErrContractViolation indicates parser output violated the Go/Node contract.
+	ErrContractViolation = errors.New("parser contract violation")
+)
+
+// Error wraps parser failures with stable machine-readable categories.
+type Error struct {
+	Category error
+	Message  string
+	Cause    error
+}
+
+func (e *Error) Error() string {
+	if e.Message != "" {
+		return e.Message
+	}
+	if e.Cause != nil {
+		return e.Cause.Error()
+	}
+	if e.Category != nil {
+		return e.Category.Error()
+	}
+	return "parser error"
+}
+
+func (e *Error) Unwrap() error {
+	return e.Cause
+}
+
+func (e *Error) Is(target error) bool {
+	return target != nil && e.Category == target
+}
+
+func wrap(category error, cause error, format string, args ...interface{}) error {
+	return &Error{Category: category, Message: fmt.Sprintf(format, args...), Cause: cause}
+}
 
 // SyntaxError describes a parse failure reported by the Node.js parser.
 type SyntaxError struct {
@@ -67,6 +111,11 @@ func New(scriptPath string) *Parser {
 	return &Parser{scriptPath: scriptPath, timeout: defaultTimeout}
 }
 
+// SetTimeout overrides the parser subprocess timeout. Intended for tests.
+func (p *Parser) SetTimeout(timeout time.Duration) {
+	p.timeout = timeout
+}
+
 // Parse sends mermaidCode to the Node parser and returns either a Diagram or a
 // SyntaxError. A non-nil error means an unexpected failure (e.g. timeout).
 func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error) {
@@ -83,21 +132,21 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 	runErr := cmd.Run()
 	if runErr != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, nil, fmt.Errorf("parser timeout after %s", p.timeout)
+			return nil, nil, wrap(ErrTimeout, ctx.Err(), "parser timeout after %s", p.timeout)
 		}
 	}
 
 	var result ParseResult
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		if runErr != nil {
-			return nil, nil, fmt.Errorf("parser subprocess error: %w (stderr: %s)", runErr, stderr.String())
+			return nil, nil, wrap(ErrSubprocess, runErr, "parser subprocess error (stderr: %s)", stderr.String())
 		}
-		return nil, nil, fmt.Errorf("failed to decode parser output: %w", err)
+		return nil, nil, wrap(ErrDecode, err, "failed to decode parser output")
 	}
 
 	if runErr != nil {
 		if result.Error == nil || strings.HasPrefix(strings.ToLower(strings.TrimSpace(result.Error.Message)), "internal parser error:") {
-			return nil, nil, fmt.Errorf("parser subprocess error: %w (stderr: %s)", runErr, stderr.String())
+			return nil, nil, wrap(ErrSubprocess, runErr, "parser subprocess error (stderr: %s)", stderr.String())
 		}
 	}
 
@@ -106,7 +155,7 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 	}
 
 	if result.AST == nil {
-		return nil, nil, fmt.Errorf("parser contract violation: valid result missing AST")
+		return nil, nil, wrap(ErrContractViolation, nil, "parser contract violation: valid result missing AST")
 	}
 
 	diagram := toDiagram(result.AST)
