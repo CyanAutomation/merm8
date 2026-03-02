@@ -34,11 +34,11 @@ func (e *Engine) NormalizeConfig(cfg rules.Config) (rules.Config, []string) {
 		return normalized, nil
 	}
 
-	known := make(map[string]struct{}, len(e.rules))
 	canonical := make(map[string]string, len(e.rules))
 	for _, r := range e.rules {
 		id := r.ID()
-		known[id] = struct{}{}
+		canonical[strings.ToLower(id)] = id
+	}
 		canonical[strings.ToLower(id)] = id
 	}
 
