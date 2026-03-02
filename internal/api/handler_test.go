@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -56,6 +58,36 @@ func newTestMuxWithRealParser(scriptPath string) *http.ServeMux {
 	h := api.NewHandler(parser.New(scriptPath), engine.New())
 	h.RegisterRoutes(mux)
 	return mux
+}
+
+func getParserScriptPath(t *testing.T) string {
+	t.Helper()
+
+	if script := os.Getenv("PARSER_SCRIPT"); script != "" {
+		if _, err := os.Stat(script); err == nil {
+			return script
+		}
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+
+	for {
+		candidate := filepath.Join(cwd, "parser-node", "parse.mjs")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+		parent := filepath.Dir(cwd)
+		if parent == cwd {
+			break
+		}
+		cwd = parent
+	}
+
+	t.Skip("real parser script not found")
+	return ""
 }
 
 func assertExactErrorResponse(t *testing.T, body []byte, wantCode, wantMessage string) {
@@ -651,5 +683,99 @@ func TestReady_ReturnsUnavailableWhenDependencyUnhealthy(t *testing.T) {
 	}
 	if resp["error"] == "" {
 		t.Fatal("expected non-empty error message")
+	}
+}
+
+func TestAnalyze_Integration_SingleRuleSuppression(t *testing.T) {
+	scriptPath := getParserScriptPath(t)
+	mux := newTestMuxWithRealParser(scriptPath)
+
+	body := `{
+		"code": "graph TD\n%% merm8-disable max-fanout\nA-->B\nA-->C\nA-->D",
+		"config": {"rules": {"max-fanout": {"limit": 1}}}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Valid  bool          `json:"valid"`
+		Issues []model.Issue `json:"issues"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if !resp.Valid {
+		t.Fatalf("expected valid=true response, got body=%s", w.Body.String())
+	}
+	if len(resp.Issues) != 0 {
+		t.Fatalf("expected max-fanout issue to be suppressed, got %#v", resp.Issues)
+	}
+}
+
+func TestAnalyze_Integration_GlobalSuppression(t *testing.T) {
+	scriptPath := getParserScriptPath(t)
+	mux := newTestMuxWithRealParser(scriptPath)
+
+	body := `{
+		"code": "graph TD\n%% merm8-disable all\nA-->B\nA-->C\nA-->D\nE",
+		"config": {"rules": {"max-fanout": {"limit": 1}}}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Issues []model.Issue `json:"issues"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Issues) != 0 {
+		t.Fatalf("expected all issues to be suppressed, got %#v", resp.Issues)
+	}
+}
+
+func TestAnalyze_Integration_NonMatchingSuppressionDoesNotHideIssue(t *testing.T) {
+	scriptPath := getParserScriptPath(t)
+	mux := newTestMuxWithRealParser(scriptPath)
+
+	body := `{
+		"code": "graph TD\n%% merm8-disable no-duplicate-node-ids\nA-->B\nA-->C\nA-->D",
+		"config": {"rules": {"max-fanout": {"limit": 1}}}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Issues []model.Issue `json:"issues"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Issues) == 0 {
+		t.Fatalf("expected non-matching suppression to keep max-fanout issue")
+	}
+	if resp.Issues[0].RuleID != "max-fanout" {
+		t.Fatalf("expected max-fanout issue, got %#v", resp.Issues)
 	}
 }
