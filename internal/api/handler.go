@@ -59,7 +59,8 @@ func toRuleConfig(raw map[string]map[string]interface{}) rules.Config {
 	for id, values := range raw {
 		rc := rules.RuleConfig{Options: map[string]interface{}{}}
 		for k, v := range values {
-			switch strings.ToLower(k) {
+			lowerKey := strings.ToLower(k)
+			switch lowerKey {
 			case "enabled":
 				if b, ok := v.(bool); ok {
 					rc.Enabled = &b
@@ -77,7 +78,7 @@ func toRuleConfig(raw map[string]map[string]interface{}) rules.Config {
 					}
 				}
 			default:
-				rc.Options[k] = v
+				rc.Options[lowerKey] = v
 			}
 		}
 		cfg[id] = rc
