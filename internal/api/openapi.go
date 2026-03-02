@@ -121,7 +121,7 @@ var openapi = map[string]interface{}{
 											"issues": []interface{}{
 												map[string]interface{}{
 													"rule_id":  "no-disconnected-nodes",
-													"severity": "warn",
+									"severity": "error",
 													"message":  "Node 'D' is not connected to the graph",
 													"line":     5,
 													"column":   0,
