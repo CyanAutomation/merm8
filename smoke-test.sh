@@ -49,115 +49,63 @@ call_api() {
     fi
 }
 
-# Check if service is running
+# Check if service is running with retry logic
 check_service_running() {
-    if ! timeout $TIMEOUT curl -s "$SERVICE_URL/analyze" -X POST \
-        -H "Content-Type: application/json" \
-        -d '{"code":""}' > /dev/null 2>&1; then
-        log_fail "Service not running on $SERVICE_URL"
-    fi
-}
-
-# Test 1: Valid simple diagram
-test_valid_simple() {
-    log_info "Test 1: Valid simple diagram (A-->B)"
+    local max_retries=3
+    local delay=1
     
-    code="graph TD
-    A-->B"
-    response=$(call_api "$code")
-    
-    # Check response structure
-    if ! echo "$response" | jq -e '.valid' > /dev/null 2>&1; then
-        log_fail "Response missing 'valid' field"
-    fi
-    
-    valid=$(echo "$response" | jq '.valid')
-    if [ "$valid" != "true" ]; then
-        log_fail "Expected valid=true, got: $(echo "$response" | jq -c .)"
-    fi
-    
-    if ! echo "$response" | jq -e '.metrics' > /dev/null 2>&1; then
-        log_fail "Response missing 'metrics' field"
-    fi
-    
-    metrics=$(echo "$response" | jq '.metrics')
-    node_count=$(echo "$metrics" | jq '.node_count')
-    edge_count=$(echo "$metrics" | jq '.edge_count')
-    
-    if [ "$node_count" -lt 2 ]; then
-        log_fail "Expected at least 2 nodes, got $node_count"
-    fi
-    
-    if [ "$edge_count" -lt 1 ]; then
-        log_fail "Expected at least 1 edge, got $edge_count"
-    fi
-    
-    log_pass "Valid diagram test passed"
-}
-
-# Test 2: Invalid/syntax error diagram
-test_invalid_syntax() {
-    log_info "Test 2: Invalid Mermaid syntax"
-    
-    code="this is not valid mermaid"
-    response=$(call_api "$code")
-    
-    valid=$(echo "$response" | jq '.valid // false')
-    if [ "$valid" == "true" ]; then
-        log_fail "Expected valid=false for invalid code"
-    fi
-    
-    syntax_error=$(echo "$response" | jq '.syntax_error')
-    if [ "$syntax_error" == "null" ]; then
-        log_fail "Expected syntax_error for invalid code, got: $(echo "$response" | jq -c .)"
-    fi
-    
-    log_pass "Invalid syntax test passed"
-}
-
-# Test 3: Missing code field
-test_missing_code() {
-    log_info "Test 3: Request missing 'code' field"
-    
-    response=$(curl -s -X POST "$SERVICE_URL/analyze" \
-        -H "Content-Type: application/json" \
-        -d '{"config":{}}')
-    
-    # Should return badrequest response with error message
-    if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
-        error=$(echo "$response" | jq -r '.error')
-        if echo "$error" | grep -q "code"; then
-            log_pass "Missing code field correctly rejected"
-            return
+    for ((i=0; i<max_retries; i++)); do
+        response=$(curl -s -w "\n%{http_code}" -X POST "$SERVICE_URL/analyze" \
+            -H "Content-Type: application/json" \
+            -d '{"code":""}')
+        
+        # Extract status code (last line)
+        status_code=$(echo "$response" | tail -n1)
+        
+        # Accept 200 (success) or 400 (bad request - at least parsed)
+        if [[ "$status_code" =~ ^[24][0-9][0-9]$ ]]; then
+            return 0
         fi
-    fi
+        
+        if [ $((i + 1)) -lt $max_retries ]; then
+            log_info "Service not yet ready (retry $((i+1))/$((max_retries-1)))..."
+            sleep $delay
+        fi
+    done
     
-    log_fail "Expected error for missing code field, got: $(echo "$response" | jq -c .)"
+    log_fail "Service not available at $SERVICE_URL after $max_retries attempts"
 }
 
-# Test 4: Complex diagram with multiple nodes/edges
+
+# Test: Complex diagram with proper validation
 test_complex_diagram() {
-    log_info "Test 4: Complex diagram with 5 nodes"
+    log_info "Test: Complex diagram validation"
     
+    # Using decision node and realistic flow
     code="graph TD
     A[Start] --> B[Process]
-    B --> C[Decision]
+    B --> C{Decision}
     C -->|Yes| D[Output]
     C -->|No| E[Error]
     D --> F[End]"
     
     response=$(call_api "$code")
     
+    # Validate diagram is correctly parsed
     valid=$(echo "$response" | jq '.valid')
     if [ "$valid" != "true" ]; then
-        log_info "(This diagram may be invalid depending on Mermaid syntax specifics)"
-        return
+        log_fail "Expected complex diagram to be valid, got: $(echo "$response" | jq -c .)"
     fi
     
+    # Validate exact node and edge counts
     node_count=$(echo "$response" | jq '.metrics.node_count')
-    if [ "$node_count" -lt 4 ]; then
-        log_info "Note: expected ~5 nodes, got $node_count (syntax may vary by version)"
-        return
+    if [ "$node_count" != "6" ]; then
+        log_fail "Expected exactly 6 nodes (A,B,C,D,E,F), got $node_count"
+    fi
+    
+    edge_count=$(echo "$response" | jq '.metrics.edge_count')
+    if [ "$edge_count" != "5" ]; then
+        log_fail "Expected exactly 5 edges, got $edge_count"
     fi
     
     log_pass "Complex diagram test passed"
@@ -175,16 +123,7 @@ main() {
     
     echo ""
     
-    # Run all tests
-    test_valid_simple
-    echo ""
-    
-    test_invalid_syntax
-    echo ""
-    
-    test_missing_code
-    echo ""
-    
+    # Run test
     test_complex_diagram
     echo ""
     

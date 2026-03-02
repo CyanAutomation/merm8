@@ -236,6 +236,11 @@ func TestParser_MultipleEdges(t *testing.T) {
 
 // TestParser_ASTExtractionFailure verifies parser-runtime AST extraction failures
 // are returned as syntax errors instead of silently succeeding with empty metrics.
+//
+// NOTE: This test requires the parser-node subprocess to support the MERM8_FORCE_AST_DB_NULL
+// environment variable, which is used to simulate AST extraction failure without needing
+// to actually break the parser. If this env var is not supported in future versions,
+// the test will fail and should be removed or refactored to mock at the API layer.
 func TestParser_ASTExtractionFailure(t *testing.T) {
 	script := getParserScript(t)
 	p := parser.New(script)
