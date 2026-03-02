@@ -37,6 +37,8 @@ paths:
       summary: Analyze and lint a Mermaid diagram
       description: |
         Validates Mermaid code syntax and runs deterministic lint rules.
+
+        Maximum request body size is 1 MiB. Oversized payloads return HTTP 413.
         
         Returns syntax errors if parsing fails, or lint results if parsing succeeds.
       operationId: analyzeCode
@@ -61,8 +63,8 @@ paths:
                       A --> B
                       B --> C
                   config:
-                    max_fanout:
-                      max: 2
+                    max-fanout:
+                      limit: 2
               syntaxError:
                 summary: Invalid Mermaid syntax
                 value:
@@ -100,8 +102,8 @@ paths:
                     valid: true
                     syntax_error: null
                     issues:
-                      - rule_id: no_disconnected_nodes
-                        severity: warning
+                      - rule_id: no-disconnected-nodes
+                        severity: error
                         message: Node 'D' is not connected to the graph
                         line: 5
                         column: 0
@@ -127,6 +129,17 @@ paths:
                   summary: Invalid JSON body
                   value:
                     error: "invalid JSON body"
+        '413':
+          description: Request entity too large (body exceeds 1 MiB)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              example:
+                error: request body exceeds 1 MiB limit
         '500':
           description: Internal server error
           content:
@@ -176,7 +189,7 @@ components:
       properties:
         code:
           type: string
-          description: Mermaid diagram code to analyze
+          description: Mermaid diagram code to analyze. Total request body must be 1 MiB or smaller.
           example: |
             graph TD
               A[Start] --> B[Process]
@@ -188,9 +201,9 @@ components:
             - Flat format: `{"rule-id": {"option": "value"}}`
             - Nested format: `{"rules": {"rule-id": {"option": "value"}}}`
           example:
-            max_fanout:
-              max: 3
-            no_disconnected_nodes:
+            max-fanout:
+              limit: 3
+            no-disconnected-nodes:
               enabled: true
 
     AnalyzeResponse:
@@ -246,12 +259,12 @@ components:
         rule_id:
           type: string
           description: Identifier of the lint rule that triggered
-          example: no_disconnected_nodes
+          example: no-disconnected-nodes
         severity:
           type: string
           enum:
             - error
-            - warning
+            - warn
             - info
           description: Severity level of the issue
         message:
