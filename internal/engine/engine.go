@@ -51,9 +51,9 @@ func sortIssues(issues []model.Issue) {
 		if severityPriority(left.Severity) != severityPriority(right.Severity) {
 			return severityPriority(left.Severity) < severityPriority(right.Severity)
 		}
-		if left.Severity != right.Severity {
-			return left.Severity < right.Severity
-		}
+	if left.RuleID != right.RuleID {
+		return left.RuleID < right.RuleID
+	}
 		if left.RuleID != right.RuleID {
 			return left.RuleID < right.RuleID
 		}
