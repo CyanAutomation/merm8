@@ -168,6 +168,12 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cfg := parseConfig(req.Config)
+	if err := rules.ValidateConfig(cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+		return
+	}
+
 	diagram, syntaxErr, err := h.parser.Parse(req.Code)
 	if err != nil {
 		writeParserFailure(w, err)
@@ -193,7 +199,6 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := parseConfig(req.Config)
 	issues := h.engine.Run(diagram, cfg)
 
 	resp := analyzeResponse{
