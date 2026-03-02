@@ -100,6 +100,12 @@ func validateScriptPath(scriptPath string) (string, error) {
 		return "", fmt.Errorf("failed to resolve parser script path: %w", err)
 	}
 
+	// Resolve any symbolic links before validation
+	absPath, err = filepath.EvalSymlinks(absPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve symlinks in parser script path: %w", err)
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve working directory: %w", err)
