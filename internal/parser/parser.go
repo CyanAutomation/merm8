@@ -105,6 +105,10 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 		return nil, result.Error, nil
 	}
 
+	if result.AST == nil {
+		return nil, nil, fmt.Errorf("parser contract violation: valid result missing AST")
+	}
+
 	diagram := toDiagram(result.AST)
 	return diagram, nil, nil
 }
