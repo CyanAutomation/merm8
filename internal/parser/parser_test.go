@@ -282,6 +282,35 @@ func TestParser_MultipleEdges(t *testing.T) {
 	}
 }
 
+// TestParser_ASTExtractionFailure verifies parser-runtime AST extraction failures
+// are returned as syntax errors instead of silently succeeding with empty metrics.
+func TestParser_ASTExtractionFailure(t *testing.T) {
+	script := getParserScript(t)
+	p := parser.New(script)
+
+	t.Setenv("MERM8_FORCE_AST_DB_NULL", "1")
+
+	mermaidCode := `graph TD
+    A[Start]
+    B[End]
+    A --> B`
+
+	diagram, syntaxErr, err := p.Parse(mermaidCode)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if syntaxErr == nil {
+		t.Fatal("expected syntax error when AST extraction fails, got nil")
+	}
+	if diagram != nil {
+		t.Fatal("expected nil diagram on AST extraction failure")
+	}
+	if syntaxErr.Message != "AST extraction failed in parser runtime" {
+		t.Fatalf("expected AST extraction failure message, got %q", syntaxErr.Message)
+	}
+}
+
 // TestParser_SpecialCharacters tests parsing diagrams with special characters in labels.
 func TestParser_SpecialCharacters(t *testing.T) {
 	script := getParserScript(t)
