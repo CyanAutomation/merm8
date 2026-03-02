@@ -66,10 +66,10 @@ try {
   let ast;
   try {
     ast = await extractAST(mermaidAPI, input);
-  } catch (_) {
+  } catch (err) {
     writeResult({
       valid: false,
-      error: { message: 'AST extraction failed in parser runtime', line: 0, column: 0 },
+      error: { message: 'AST extraction failed in parser runtime: ' + String(err?.message || err), line: 0, column: 0 },
     });
     process.exit(0);
   }
