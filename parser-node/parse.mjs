@@ -168,8 +168,10 @@ function extractSuppressions(source) {
         ruleId: rule,
         scope: 'next-line',
         line: i + 1,
-        targetLine: i + 2,
+        targetLine: i + 1,
       });
+      continue;
+    }
       continue;
     }
 
