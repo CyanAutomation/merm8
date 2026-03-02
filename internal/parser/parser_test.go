@@ -153,7 +153,7 @@ func TestParser_EmptyCode(t *testing.T) {
 	}
 }
 
-// TestParser_WithDirection tests parsing diagrams with different directions.
+// TestParser_WithDirection tests parsing diagrams with all supported directions.
 func TestParser_WithDirection(t *testing.T) {
 	script := getParserScript(t)
 	p := parser.New(script)
@@ -163,9 +163,10 @@ func TestParser_WithDirection(t *testing.T) {
 		code      string
 		direction string
 	}{
-		{"Top-Down", "graph TD\n  A-->B", "TD"},
-		{"Left-Right", "graph LR\n  A-->B", "LR"},
-		// Note: Different direction formats may vary based on Mermaid version
+		{"Top-Down (TD)", "graph TD\n  A-->B", "TD"},
+		{"Left-Right (LR)", "graph LR\n  A-->B", "LR"},
+		{"Bottom-Up (BT)", "graph BT\n  A-->B", "BT"},
+		{"Right-Left (RL)", "graph RL\n  A-->B", "RL"},
 	}
 
 	for _, tt := range tests {
@@ -182,6 +183,13 @@ func TestParser_WithDirection(t *testing.T) {
 			}
 			if diagram.Direction != tt.direction {
 				t.Errorf("expected direction=%s, got %s", tt.direction, diagram.Direction)
+			}
+			// Verify diagram structure is preserved regardless of direction
+			if len(diagram.Nodes) != 2 {
+				t.Errorf("expected 2 nodes, got %d", len(diagram.Nodes))
+			}
+			if len(diagram.Edges) != 1 {
+				t.Errorf("expected 1 edge, got %d", len(diagram.Edges))
 			}
 		})
 	}

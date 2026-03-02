@@ -79,6 +79,17 @@ func TestAnalyze_InvalidJSON(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
+
+	// Verify error response contains meaningful message
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err == nil {
+		if errMsg, ok := resp["error"].(string); ok && errMsg != "" {
+			// Good: error response with message
+			if !contains(errMsg, "json") && !contains(errMsg, "code") && !contains(errMsg, "parse") {
+				t.Logf("warning: error message unclear: %q", errMsg)
+			}
+		}
+	}
 }
 
 func TestAnalyze_ParserFails_Returns500(t *testing.T) {
@@ -489,6 +500,6 @@ func TestAnalyze_LargeDiagram(t *testing.T) {
 	// Log timing for performance tracking (SLA: should complete in <1 second)
 	t.Logf("Large diagram analysis completed in %v (nodes: 500, edges: 499)", elapsed)
 	if elapsed > 1*time.Second {
-		t.Logf("WARNING: Large diagram analysis took longer than 1 second (%v)", elapsed)
+		t.Fatalf("PERFORMANCE SLA EXCEEDED: Large diagram analysis took %v (max 1s)", elapsed)
 	}
 }
