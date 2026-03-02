@@ -54,7 +54,7 @@ func (e *Error) Unwrap() error {
 }
 
 func (e *Error) Is(target error) bool {
-	return target != nil && e.Category == target
+	return e.Category != nil && errors.Is(e.Category, target)
 }
 
 func wrap(category error, cause error, format string, args ...interface{}) error {
