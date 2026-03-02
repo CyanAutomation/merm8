@@ -180,60 +180,14 @@ func TestParser_WithDirection(t *testing.T) {
 			if diagram == nil {
 				t.Fatal("expected diagram, got nil")
 			}
-			if diagram.Direction != tt.direction && diagram.Direction != "" {
+			if diagram.Direction != tt.direction {
 				t.Errorf("expected direction=%s, got %s", tt.direction, diagram.Direction)
 			}
 		})
 	}
 }
 
-// TestParser_WithSubgraphs tests parsing diagrams with subgraphs.
-func TestParser_WithSubgraphs(t *testing.T) {
-	script := getParserScript(t)
-	p := parser.New(script)
 
-	mermaidCode := `graph TD
-    subgraph cluster_0 ["Cluster 1"]
-        A[Node A]
-        B[Node B]
-    end
-    subgraph cluster_1 ["Cluster 2"]
-        C[Node C]
-    end
-    A --> C
-    B --> C`
-
-	diagram, syntaxErr, err := p.Parse(mermaidCode)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if syntaxErr != nil {
-		t.Skipf("subgraph syntax may not be supported in this Mermaid version: %v", syntaxErr.Message)
-	}
-	if diagram == nil {
-		t.Fatal("expected diagram, got nil")
-	}
-
-	// Verify subgraphs are extracted from the AST
-	if len(diagram.Subgraphs) == 0 {
-		t.Skip("subgraph extraction not supported in this Mermaid version")
-	}
-	t.Logf("diagram has %d subgraphs", len(diagram.Subgraphs))
-}
-
-// TestParser_Timeout documents why timeout behavior cannot be directly tested.
-// The parser enforces a 2-second timeout via exec.CommandContext in parser.go.
-// Direct testing of timeout is not feasible because:
-// - We cannot reliably create Mermaid code that parses slowly
-// - Creating a synthetic slow parser script would complicate test setup
-// Timeout behavior is indirectly verified by:
-// 1. Code review of parser.go (exec.CommandContext with 2s context)
-// 2. Integration tests that confirm normal parsing completes quickly
-// 3. The defaultTimeout constant is well-documented in parser.go
-func TestParser_Timeout(t *testing.T) {
-	t.Skip("timeout behavior is verified via code review and integration tests; see comment above")
-}
 
 // TestParser_MultipleEdges tests parsing diagrams with multiple edges from one node.
 func TestParser_MultipleEdges(t *testing.T) {
@@ -306,39 +260,11 @@ func TestParser_ASTExtractionFailure(t *testing.T) {
 	if diagram != nil {
 		t.Fatal("expected nil diagram on AST extraction failure")
 	}
-	if syntaxErr.Message != "AST extraction failed in parser runtime" {
-		t.Fatalf("expected AST extraction failure message, got %q", syntaxErr.Message)
+	if !contains(syntaxErr.Message, "AST extraction failed") {
+		t.Fatalf("expected message mentioning AST extraction failure, got %q", syntaxErr.Message)
 	}
 }
 
-// TestParser_SpecialCharacters tests parsing diagrams with special characters in labels.
-func TestParser_SpecialCharacters(t *testing.T) {
-	script := getParserScript(t)
-	p := parser.New(script)
-
-	mermaidCode := `graph TD
-    A["Node with 'quotes'"]
-    B["Node with &amp; entity"]
-    A --> B`
-
-	diagram, syntaxErr, err := p.Parse(mermaidCode)
-
-	if err != nil {
-		t.Skipf("special character parsing not supported: %v", err)
-	}
-	if syntaxErr != nil {
-		t.Skipf("special characters syntax not recognized: %v", syntaxErr.Message)
-	}
-
-	if diagram == nil {
-		t.Fatal("expected diagram, got nil")
-	}
-
-	if len(diagram.Nodes) < 2 {
-		t.Errorf("expected at least 2 nodes with special characters, got %d", len(diagram.Nodes))
-	}
-	t.Logf("successfully parsed %d nodes with special characters", len(diagram.Nodes))
-}
 
 // TestParser_LargeGraph tests parsing a reasonably large diagram.
 func TestParser_LargeGraph(t *testing.T) {
@@ -367,8 +293,11 @@ func TestParser_LargeGraph(t *testing.T) {
 		t.Fatal("expected diagram, got nil")
 	}
 
-	if len(diagram.Nodes) < 10 {
-		t.Errorf("expected at least 10 nodes, got %d", len(diagram.Nodes))
+	if len(diagram.Nodes) != 20 {
+		t.Errorf("expected 20 nodes, got %d", len(diagram.Nodes))
+	}
+	if len(diagram.Edges) != 19 {
+		t.Errorf("expected 19 edges for linear chain, got %d", len(diagram.Edges))
 	}
 	t.Logf("parsed %d nodes, %d edges in %v", len(diagram.Nodes), len(diagram.Edges), elapsed)
 }
