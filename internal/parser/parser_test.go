@@ -242,37 +242,93 @@ func TestParser_MultipleEdges(t *testing.T) {
 	}
 }
 
-// TestParser_ASTExtractionFailure verifies parser-runtime AST extraction failures
-// are returned as syntax errors instead of silently succeeding with empty metrics.
-//
-// NOTE: This test requires the parser-node subprocess to support the MERM8_FORCE_AST_DB_NULL
-// environment variable, which is used to simulate AST extraction failure without needing
-// to actually break the parser. If this env var is not supported in future versions,
-// the test will fail and should be removed or refactored to mock at the API layer.
-func TestParser_ASTExtractionFailure(t *testing.T) {
-	script := getParserScript(t)
-	p := parser.New(script)
-
-	t.Setenv("MERM8_FORCE_AST_DB_NULL", "1")
-
-	mermaidCode := `graph TD
-    A[Start]
-    B[End]
-    A --> B`
-
-	diagram, syntaxErr, err := p.Parse(mermaidCode)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+// TestParser_ASTExtractionFailureAndContractMapping verifies deterministic parser
+// output mapping for AST extraction-style failures and contract-breaking payloads.
+func TestParser_ASTExtractionFailureAndContractMapping(t *testing.T) {
+	tests := []struct {
+		name             string
+		scriptBody       string
+		wantErrSubstr    string
+		wantSyntaxSubstr string
+		wantSyntaxNil    bool
+	}{
+		{
+			name: "ast extraction style syntax failure",
+			scriptBody: `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({
+  valid: false,
+  error: { message: "AST extraction failed in parser runtime: synthetic fixture", line: 0, column: 0 }
+}) + "\n");
+process.exit(0);
+`,
+			wantSyntaxSubstr: "AST extraction failed",
+		},
+		{
+			name: "malformed json payload",
+			scriptBody: `#!/usr/bin/env node
+process.stdout.write("{\"valid\":false");
+process.exit(0);
+`,
+			wantErrSubstr: "failed to decode parser output",
+		},
+		{
+			name: "valid false without error object",
+			scriptBody: `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({ valid: false }) + "\n");
+process.exit(0);
+`,
+			wantSyntaxNil: true,
+		},
 	}
-	if syntaxErr == nil {
-		t.Fatal("expected syntax error when AST extraction fails, got nil")
-	}
-	if diagram != nil {
-		t.Fatal("expected nil diagram on AST extraction failure")
-	}
-	if !contains(syntaxErr.Message, "AST extraction failed") {
-		t.Fatalf("expected message mentioning AST extraction failure, got %q", syntaxErr.Message)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			script := filepath.Join(tempDir, "parse.mjs")
+			if err := os.WriteFile(script, []byte(tt.scriptBody), 0o700); err != nil {
+				t.Fatalf("failed to write test parser script: %v", err)
+			}
+
+			p := parser.New(script)
+			diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
+
+			if tt.wantErrSubstr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErrSubstr)
+				}
+				if !contains(err.Error(), tt.wantErrSubstr) {
+					t.Fatalf("expected error containing %q, got %q", tt.wantErrSubstr, err.Error())
+				}
+				if syntaxErr != nil {
+					t.Fatalf("expected nil syntaxErr when err is returned, got %+v", syntaxErr)
+				}
+				if diagram != nil {
+					t.Fatalf("expected nil diagram when err is returned, got %+v", diagram)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if diagram != nil {
+				t.Fatalf("expected nil diagram, got %+v", diagram)
+			}
+
+			if tt.wantSyntaxNil {
+				if syntaxErr != nil {
+					t.Fatalf("expected nil syntaxErr for missing error payload, got %+v", syntaxErr)
+				}
+				return
+			}
+
+			if syntaxErr == nil {
+				t.Fatal("expected syntaxErr, got nil")
+			}
+			if tt.wantSyntaxSubstr != "" && !contains(syntaxErr.Message, tt.wantSyntaxSubstr) {
+				t.Fatalf("expected syntaxErr containing %q, got %q", tt.wantSyntaxSubstr, syntaxErr.Message)
+			}
+		})
 	}
 }
 

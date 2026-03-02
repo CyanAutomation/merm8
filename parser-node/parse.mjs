@@ -88,8 +88,7 @@ try {
 
 /**
  * Extracts a simplified AST by calling getDiagramFromText.
- * Falls back to deriving nodes from edges if vertex extraction fails
- * (e.g. due to missing DOM/DOMPurify in Node.js environment).
+ * Falls back to deriving nodes from edges when vertices are unavailable.
  */
 async function extractAST(mermaidAPI, source) {
   const ast = {
@@ -103,7 +102,6 @@ async function extractAST(mermaidAPI, source) {
   try {
     const diagram = await mermaidAPI.getDiagramFromText(source);
     db = diagram?.db ?? null;
-    // Test hook removed - use dependency injection or test-specific build for testing
   } catch (_) {
     // getDiagramFromText can fail in parser runtime under Node.js.
   }
