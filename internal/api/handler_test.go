@@ -52,6 +52,16 @@ func newTestMuxWithRealParser(scriptPath string) *http.ServeMux {
 	return mux
 }
 
+// contains checks if str contains any of the given substrings.
+func contains(str string, substrings ...string) bool {
+	for _, sub := range substrings {
+		if strings.Contains(str, sub) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestAnalyze_MissingCode(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, nil

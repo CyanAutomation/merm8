@@ -351,6 +351,11 @@ func contains(s, substr string) bool {
 }
 
 // TestParser_ConcurrentParsing tests that the parser handles concurrent requests.
+// Run with race detector to ensure thread-safety: go test -race ./internal/parser
+// The race detector verifies that:
+//   - Parser state is not modified concurrently
+//   - Subprocess communication is properly synchronized
+//   - No data races in AST extraction or error handling
 func TestParser_ConcurrentParsing(t *testing.T) {
 	script := getParserScript(t)
 	p := parser.New(script)
