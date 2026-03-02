@@ -154,6 +154,12 @@ curl -s -X POST http://localhost:8080/analyze \
 
 **OpenAPI Specification** is available at `http://localhost:8080/spec` in JSON format, useful for code generation and API tooling integration.
 
+**For detailed usage instructions**, see [API_GUIDE.md](API_GUIDE.md) which covers:
+- How to use the Swagger UI dashboard
+- Direct HTTP request examples (curl, Python, JavaScript)
+- Rule configuration guide
+- Integration tips and troubleshooting
+
 ---
 
 ## Rule System
