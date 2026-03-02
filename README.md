@@ -1,285 +1,227 @@
-A deterministic static analysis engine for Mermaid diagrams.
+# merm8 — mermaid-lint
 
-mermaid-lint validates Mermaid syntax using the official parser and applies rule-based structural analysis to enforce diagram quality and governance standards.
+A **deterministic Mermaid static analysis engine** — no AI, no LLMs, pure static analysis.
 
-This project follows a hybrid architecture:
-	•	Go HTTP API (primary service)
-	•	Node.js subprocess for official Mermaid parsing
-	•	Go-based rule engine
-	•	Deterministic JSON responses
-	•	No AI / no heuristics
+---
 
-⸻
+## Architecture
 
-✨ Why This Exists
+```
+┌─────────────────────────────────────────────────┐
+│                  HTTP Client                    │
+│          POST /analyze  (JSON body)             │
+└───────────────────┬─────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────────┐
+│              Go HTTP API  (:8080)               │
+│                                                 │
+│  internal/api  ── handler.go                    │
+│      │                                          │
+│      ├─► internal/parser  ── parser.go          │
+│      │       │  exec.CommandContext (timeout 2s)│
+│      │       │  stdin ──► node parse.mjs        │
+│      │       │  stdout ◄── JSON AST / error     │
+│      │       ▼                                  │
+│      │   parser-node/parse.mjs  (Node.js)       │
+│      │   [official mermaid.parse()]              │
+│      │                                          │
+│      └─► internal/engine ── engine.go           │
+│               │  Runs all Rule implementations  │
+│               ▼                                 │
+│          internal/rules/                        │
+│            no_duplicate_node_ids.go             │
+│            no_disconnected_nodes.go             │
+│            max_fanout.go                        │
+│                                                 │
+│  internal/model ── diagram.go (shared types)   │
+└─────────────────────────────────────────────────┘
+```
 
-Mermaid detects syntax errors, but it does not:
-	•	Detect disconnected nodes
-	•	Enforce naming conventions
-	•	Flag architectural layering violations
-	•	Detect excessive complexity
-	•	Provide governance-level checks
+---
 
-mermaid-lint fills that gap.
+## Quick Start
 
-Think of it as:
+### Local (requires Go 1.24+ and Node 20+)
 
-ESLint for Mermaid diagrams.
+```bash
+# Install Node parser dependencies
+cd parser-node && npm install && cd ..
 
-⸻
+# Build and run the Go server
+go build -o mermaid-lint ./cmd/server
+PARSER_SCRIPT=./parser-node/parse.mjs ./mermaid-lint
+```
 
-🏗 Architecture
+### Docker
 
-This project uses Option B architecture:
+```bash
+docker compose up --build
+```
 
-Client
-   ↓
-Go HTTP API
-   ↓
-Node Mermaid Parser (subprocess)
-   ↓
-Structured Diagram Model (Go)
-   ↓
-Rule Engine
-   ↓
-JSON Response
+The service listens on **port 8080**.
 
-Separation of Concerns
-	•	Node → Syntax validation (official Mermaid parser)
-	•	Go → Structural analysis and rule engine
-	•	No rendering
-	•	No AI
+---
 
-This keeps parsing authoritative while making linting fully owned and extensible.
+## API
 
-⸻
+### `POST /analyze`
 
-📦 Project Structure
+**Request body**
 
-/cmd/server           → HTTP server entrypoint
-/internal/api         → Request/response handling
-/internal/parser      → Node subprocess bridge
-/internal/model       → Internal diagram model
-/internal/rules       → Rule definitions
-/internal/engine      → Rule execution engine
-/parser-node          → Node Mermaid parsing script
-/Dockerfile
-/docker-compose.yml
-/README.md
-
-
-⸻
-
-🚀 MVP Scope
-
-Supported:
-	•	flowchart
-	•	graph
-
-Not supported (yet):
-	•	sequenceDiagram
-	•	classDiagram
-	•	stateDiagram
-	•	ER
-	•	gantt
-	•	journey
-	•	pie
-	•	etc.
-
-⸻
-
-📡 API
-
-POST /analyze
-
-Request
-
+```json
 {
-  "code": "graph TD\nA --> B\nC",
+  "code": "graph TD\n  A-->B\n  B-->C",
   "config": {
     "rules": {
-      "max-fanout": { "level": "warn", "limit": 5 }
+      "max-fanout": { "limit": 3 }
     }
   }
 }
+```
 
-Successful Response
+> `config` is optional. Both flat `{"max-fanout": {...}}` and nested `{"rules": {"max-fanout": {...}}}` formats are accepted.
 
+**Response — valid diagram**
+
+```json
 {
   "valid": true,
   "syntax_error": null,
-  "issues": [
-    {
-      "rule": "no-disconnected-nodes",
-      "severity": "error",
-      "message": "Node C is declared but not connected",
-      "line": 3,
-      "column": 1
-    }
-  ],
+  "issues": [],
   "metrics": {
     "node_count": 3,
-    "edge_count": 1,
+    "edge_count": 2,
     "max_fanout": 1
   }
 }
+```
 
-Syntax Error Response
+**Response — syntax error**
 
+```json
 {
   "valid": false,
   "syntax_error": {
-    "message": "Parse error on line 2",
-    "line": 2,
-    "column": 8
-  }
+    "message": "No diagram type detected...",
+    "line": 0,
+    "column": 0
+  },
+  "issues": []
 }
+```
 
+### Example `curl` calls
 
-⸻
+```bash
+# Valid flowchart
+curl -s -X POST http://localhost:8080/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"code": "graph TD\n  A-->B\n  B-->C"}'
 
-🧠 Rule Engine
+# Invalid diagram
+curl -s -X POST http://localhost:8080/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"code": "this is not valid mermaid"}'
 
-Rules are deterministic and pluggable.
-
-Each rule implements:
-
-type Rule interface {
-    ID() string
-    Description() string
-    Check(diagram Diagram, config RuleConfig) []Issue
-}
-
-Built-in Rules (MVP)
-	•	no-disconnected-nodes (error)
-	•	no-duplicate-node-ids (error)
-	•	max-fanout (warn, configurable limit)
-
-⸻
-
-📊 Metrics
-
-The engine also calculates:
-	•	node_count
-	•	edge_count
-	•	max_fanout
-	•	(future) depth
-	•	(future) subgraph size
-	•	(future) complexity score
-
-⸻
-
-🛡 Security Model
-
-The Node parser:
-	•	Runs as a subprocess
-	•	Receives input via stdin
-	•	Returns JSON via stdout
-	•	Has a 2-second execution timeout
-	•	Cannot write to disk
-	•	Is stateless per request
-
-The Go server:
-	•	Uses exec.CommandContext with timeout
-	•	Fails safely if parser crashes
-	•	Returns HTTP 500 on unexpected parser failure
-
-⸻
-
-🐳 Docker
-
-Build and run:
-
-docker build -t mermaid-lint .
-docker run -p 8080:8080 mermaid-lint
-
-The Dockerfile:
-	•	Builds Go binary (multi-stage)
-	•	Installs Node runtime
-	•	Installs Mermaid npm package
-	•	Includes parser-node script
-	•	Produces a lightweight runtime image
-
-⸻
-
-🧪 Example
-
-curl -X POST http://localhost:8080/analyze \
+# Fan-out warning with custom limit
+curl -s -X POST http://localhost:8080/analyze \
   -H "Content-Type: application/json" \
   -d '{
-        "code": "graph TD\nA --> B\nC"
-      }'
+    "code": "graph TD\n  A-->B\n  A-->C\n  A-->D",
+    "config": {"rules": {"max-fanout": {"limit": 2}}}
+  }'
+```
 
+---
 
-⸻
+## Rule System
 
-🔌 Extending With New Rules
+Rules live in `internal/rules/` and implement the `Rule` interface:
 
-To add a rule:
-	1.	Create file in /internal/rules
-	2.	Implement the Rule interface
-	3.	Register rule in the engine
-	4.	Add config parsing support if needed
+```go
+type Rule interface {
+    ID()  string
+    Run(d *model.Diagram, cfg Config) []model.Issue
+}
+```
 
-Example rule registration:
+### Built-in Rules
 
-engine.RegisterRule(rules.NewNoDisconnectedNodes())
+| Rule ID                  | Severity | Description                                          |
+|--------------------------|----------|------------------------------------------------------|
+| `no-duplicate-node-ids`  | error    | Each node ID must be unique within the diagram.      |
+| `no-disconnected-nodes`  | error    | Every node must participate in at least one edge.    |
+| `max-fanout`             | warn     | No node may have more outgoing edges than the limit. |
 
-Rules should:
-	•	Be deterministic
-	•	Avoid side effects
-	•	Return structured Issue objects
-	•	Not modify diagram model
+Default `max-fanout` limit: **5**.
 
-⸻
+### Adding a New Rule
 
-🧭 Roadmap
+1. Create `internal/rules/my_rule.go`:
 
-Phase 1 (MVP)
-	•	Flowchart support
-	•	Core rule engine
-	•	Deterministic API
-	•	Docker support
+```go
+package rules
 
-Phase 2
-	•	Layering rules (architecture governance)
-	•	Naming convention enforcement
-	•	Complexity scoring
-	•	CLI binary (mermaidlint)
+import "github.com/CyanAutomation/merm8/internal/model"
 
-Phase 3
-	•	GitHub Action
-	•	VSCode extension
-	•	Rule packs
-	•	Config file (.mermaidlintrc)
+type MyRule struct{}
 
-⸻
+func (r MyRule) ID() string { return "my-rule" }
 
-🎯 Design Principles
-	•	Deterministic over intelligent
-	•	Static analysis over suggestions
-	•	Extensible rule system
-	•	Clean separation of syntax and semantics
-	•	CI-ready JSON outputs
-	•	Zero AI dependencies
+func (r MyRule) Run(d *model.Diagram, cfg Config) []model.Issue {
+    // your logic here
+    return nil
+}
+```
 
-⸻
+2. Register it in `internal/engine/engine.go`:
 
-⚖ License
+```go
+rules: []rules.Rule{
+    rules.NoDuplicateNodeIDs{},
+    rules.NoDisconnectedNodes{},
+    rules.MaxFanout{},
+    rules.MyRule{},    // ← add here
+},
+```
 
-MIT
+That's it — no registration maps, no config files.
 
-⸻
+---
 
-🧩 Future Vision
+## Project Structure
 
-mermaid-lint is designed as the foundation for:
-	•	Diagram governance
-	•	Architecture validation
-	•	CI enforcement
-	•	Documentation quality control
-	•	Mermaid-as-code standards
+```
+/cmd/server          Go entry point (main.go)
+/internal/api        HTTP handler (POST /analyze)
+/internal/parser     Go ↔ Node subprocess bridge
+/internal/model      Shared diagram types (Diagram, Node, Edge, Issue)
+/internal/rules      Rule interface + built-in rule implementations
+/internal/engine     Runs all registered rules against a Diagram
+/parser-node         Node.js Mermaid parser script + package.json
+/Dockerfile          Multi-stage Docker build
+/docker-compose.yml  Local development compose file
+```
 
-This is not a diagram renderer.
+---
 
-This is diagram static analysis tooling.
+## Environment Variables
+
+| Variable        | Default                          | Description                         |
+|-----------------|----------------------------------|-------------------------------------|
+| `PORT`          | `8080`                           | TCP port the HTTP server listens on |
+| `PARSER_SCRIPT` | `/app/parser-node/parse.mjs`     | Path to the Node.js parser script   |
+
+---
+
+## Future Roadmap
+
+- [ ] Support additional diagram types (sequence, class, ER, state)
+- [ ] `no-cycles` rule for flowcharts
+- [ ] `max-depth` rule
+- [ ] Per-rule suppression comments in diagram source
+- [ ] Configurable rule severity overrides
+- [ ] SARIF output format for CI integration
+- [ ] Health-check endpoint (`GET /healthz`)
+- [ ] Metrics endpoint (Prometheus-compatible)
