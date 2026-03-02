@@ -23,6 +23,7 @@ type mockParser struct {
 	syntaxErr  *parser.SyntaxError
 	parseError error
 	parseFunc  func(string) (*model.Diagram, *parser.SyntaxError, error)
+	readyError error
 }
 
 func (m *mockParser) Parse(code string) (*model.Diagram, *parser.SyntaxError, error) {
@@ -30,6 +31,10 @@ func (m *mockParser) Parse(code string) (*model.Diagram, *parser.SyntaxError, er
 		return m.parseFunc(code)
 	}
 	return m.diagram, m.syntaxErr, m.parseError
+}
+
+func (m *mockParser) Ready() error {
+	return m.readyError
 }
 
 // newTestMux creates a test HTTP server backed by a handler using a mock parser.
@@ -542,5 +547,74 @@ func TestAnalyze_LargeDiagram(t *testing.T) {
 	t.Logf("Large diagram analysis completed in %v (nodes: 500, edges: 499)", elapsed)
 	if elapsed > 1*time.Second {
 		t.Fatalf("PERFORMANCE SLA EXCEEDED: Large diagram analysis took %v (max 1s)", elapsed)
+	}
+}
+
+func TestHealthz_ReturnsOK(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["status"] != "ok" {
+		t.Fatalf("expected status=ok, got %q", resp["status"])
+	}
+}
+
+func TestReady_ReturnsReadyWhenDependencyHealthy(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{}, engine.New())
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["status"] != "ready" {
+		t.Fatalf("expected status=ready, got %q", resp["status"])
+	}
+}
+
+func TestReady_ReturnsUnavailableWhenDependencyUnhealthy(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{readyError: errors.New("parser script not found")}, engine.New())
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["status"] != "not_ready" {
+		t.Fatalf("expected status=not_ready, got %q", resp["status"])
+	}
+	if resp["error"] == "" {
+		t.Fatal("expected non-empty error message")
 	}
 }
