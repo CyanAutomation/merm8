@@ -119,39 +119,59 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+                $ref: '#/components/schemas/ErrorResponse'
               examples:
                 missingCode:
                   summary: Missing 'code' field
                   value:
-                    error: "field 'code' is required"
+                    valid: false
+                    issues: []
+                    error:
+                      code: missing_code
+                      message: "field 'code' is required"
                 invalidJSON:
                   summary: Invalid JSON body
                   value:
-                    error: "invalid JSON body"
+                    valid: false
+                    issues: []
+                    error:
+                      code: invalid_json
+                      message: "invalid JSON body"
         '413':
           description: Request entity too large (body exceeds 1 MiB)
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+                $ref: '#/components/schemas/ErrorResponse'
               example:
-                error: request body exceeds 1 MiB limit
+                valid: false
+                issues: []
+                error:
+                  code: request_too_large
+                  message: request body exceeds 1 MiB limit
         '500':
           description: Internal server error
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                parserTimeout:
+                  summary: Parser timeout
+                  value:
+                    valid: false
+                    issues: []
+                    error:
+                      code: parser_timeout
+                      message: parser timed out
+                internal:
+                  summary: Generic internal failure
+                  value:
+                    valid: false
+                    issues: []
+                    error:
+                      code: internal_error
+                      message: internal server error
 
   /spec:
     get:
@@ -208,6 +228,39 @@ components:
               limit: 3
             no-disconnected-nodes:
               enabled: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - valid
+        - issues
+        - error
+      properties:
+        valid:
+          type: boolean
+          description: Always false for non-200 responses
+        issues:
+          type: array
+          description: Always empty for API-level errors
+          items:
+            $ref: '#/components/schemas/Issue'
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+
+    ErrorDetail:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: invalid_json
+        message:
+          type: string
+          description: Human-readable error message
+          example: invalid JSON body
 
     AnalyzeResponse:
       type: object
