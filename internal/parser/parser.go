@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -32,9 +33,9 @@ type ParseResult struct {
 
 // parsedAST mirrors the simplified AST returned by parser-node/parse.mjs.
 type parsedAST struct {
-	Direction string          `json:"direction"`
-	Nodes     []parsedNode    `json:"nodes"`
-	Edges     []parsedEdge    `json:"edges"`
+	Direction string           `json:"direction"`
+	Nodes     []parsedNode     `json:"nodes"`
+	Edges     []parsedEdge     `json:"edges"`
 	Subgraphs []parsedSubgraph `json:"subgraphs"`
 }
 
@@ -79,20 +80,25 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
+	runErr := cmd.Run()
+	if runErr != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, nil, fmt.Errorf("parser timeout after %s", p.timeout)
-		}
-		// The script itself may write a JSON error to stdout before exiting
-		// non-zero; attempt to decode it anyway.
-		if stdout.Len() == 0 {
-			return nil, nil, fmt.Errorf("parser subprocess error: %w (stderr: %s)", err, stderr.String())
 		}
 	}
 
 	var result ParseResult
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		if runErr != nil {
+			return nil, nil, fmt.Errorf("parser subprocess error: %w (stderr: %s)", runErr, stderr.String())
+		}
 		return nil, nil, fmt.Errorf("failed to decode parser output: %w", err)
+	}
+
+	if runErr != nil {
+		if result.Error == nil || strings.HasPrefix(strings.ToLower(strings.TrimSpace(result.Error.Message)), "internal parser error:") {
+			return nil, nil, fmt.Errorf("parser subprocess error: %w (stderr: %s)", runErr, stderr.String())
+		}
 	}
 
 	if !result.Valid {
