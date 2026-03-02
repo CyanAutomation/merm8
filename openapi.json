@@ -61,8 +61,8 @@
                   "value": {
                     "code": "graph LR\n  A --> B\n  B --> C\n",
                     "config": {
-                      "max_fanout": {
-                        "max": 2
+                      "max-fanout": {
+                        "limit": 2
                       }
                     }
                   }
@@ -95,7 +95,7 @@
                       "metrics": {
                         "node_count": 2,
                         "edge_count": 1,
-                        "max_fanout": 1
+                        "max-fanout": 1
                       }
                     }
                   },
@@ -118,8 +118,8 @@
                       "syntax_error": null,
                       "issues": [
                         {
-                          "rule_id": "no_disconnected_nodes",
-                          "severity": "warning",
+                          "rule_id": "no-disconnected-nodes",
+                          "severity": "warn",
                           "message": "Node 'D' is not connected to the graph",
                           "line": 5,
                           "column": 0
@@ -128,7 +128,7 @@
                       "metrics": {
                         "node_count": 4,
                         "edge_count": 2,
-                        "max_fanout": 2
+                        "max-fanout": 2
                       }
                     }
                   }
@@ -245,10 +245,10 @@
             "type": "object",
             "description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`\n",
             "example": {
-              "max_fanout": {
-                "max": 3
+              "max-fanout": {
+                "limit": 3
               },
-              "no_disconnected_nodes": {
+              "no-disconnected-nodes": {
                 "enabled": true
               }
             }
@@ -321,13 +321,13 @@
           "rule_id": {
             "type": "string",
             "description": "Identifier of the lint rule that triggered",
-            "example": "no_disconnected_nodes"
+            "example": "no-disconnected-nodes"
           },
           "severity": {
             "type": "string",
             "enum": [
               "error",
-              "warning",
+              "warn",
               "info"
             ],
             "description": "Severity level of the issue"
@@ -356,7 +356,7 @@
         "required": [
           "node_count",
           "edge_count",
-          "max_fanout"
+          "max-fanout"
         ],
         "properties": {
           "node_count": {
@@ -369,7 +369,7 @@
             "description": "Total number of edges (connections) in the diagram",
             "example": 4
           },
-          "max_fanout": {
+          "max-fanout": {
             "type": "integer",
             "description": "Maximum number of outgoing edges from any single node",
             "example": 2

@@ -97,7 +97,7 @@ var openapi = map[string]interface{}{
 											"metrics": map[string]interface{}{
 												"node_count": 2,
 												"edge_count": 1,
-												"max_fanout": 1,
+												"max-fanout": 1,
 											},
 										},
 									},
@@ -130,7 +130,7 @@ var openapi = map[string]interface{}{
 											"metrics": map[string]interface{}{
 												"node_count": 4,
 												"edge_count": 2,
-												"max_fanout": 2,
+												"max-fanout": 2,
 											},
 										},
 									},
@@ -353,7 +353,7 @@ var openapi = map[string]interface{}{
 			},
 			"Metrics": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"node_count", "edge_count", "max_fanout"},
+				"required": []string{"node_count", "edge_count", "max-fanout"},
 				"properties": map[string]interface{}{
 					"node_count": map[string]interface{}{
 						"type":        "integer",
@@ -365,7 +365,7 @@ var openapi = map[string]interface{}{
 						"description": "Total number of edges (connections) in the diagram",
 						"example":     4,
 					},
-					"max_fanout": map[string]interface{}{
+					"max-fanout": map[string]interface{}{
 						"type":        "integer",
 						"description": "Maximum number of outgoing edges from any single node",
 						"example":     2,
