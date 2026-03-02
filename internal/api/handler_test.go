@@ -337,6 +337,12 @@ func TestAnalyze_ConfigApplied_MaxFanout(t *testing.T) {
 	for _, issue := range issues {
 		if issueMap, ok := issue.(map[string]interface{}); ok {
 			if ruleID, ok := issueMap["rule_id"].(string); ok && ruleID == "max-fanout" {
+				if _, hasLine := issueMap["line"]; hasLine {
+					t.Fatal("expected max-fanout issue line to be omitted when unknown")
+				}
+				if _, hasColumn := issueMap["column"]; hasColumn {
+					t.Fatal("expected max-fanout issue column to be omitted when unknown")
+				}
 				found = true
 				break
 			}
