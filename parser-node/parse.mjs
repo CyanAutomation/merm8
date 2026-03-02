@@ -63,7 +63,16 @@ try {
   }
 
   // Extract the structural AST after successful parse
-  const ast = await extractAST(mermaidAPI, input);
+  let ast;
+  try {
+    ast = await extractAST(mermaidAPI, input);
+  } catch (err) {
+    writeResult({
+      valid: false,
+      error: { message: 'AST extraction failed in parser runtime: ' + String(err?.message || err), line: 0, column: 0 },
+    });
+    process.exit(0);
+  }
   writeResult({ valid: true, ast });
 } catch (err) {
   writeResult({
@@ -94,51 +103,52 @@ async function extractAST(mermaidAPI, source) {
   try {
     const diagram = await mermaidAPI.getDiagramFromText(source);
     db = diagram?.db ?? null;
+    // Test hook removed - use dependency injection or test-specific build for testing
   } catch (_) {
-    // getDiagramFromText can fail when node labels trigger DOMPurify in a
-    // non-browser environment. We still return a best-effort AST derived
-    // from the edge list extracted before the failure.
+    // getDiagramFromText can fail in parser runtime under Node.js.
   }
 
-  if (db) {
-    // Direction
-    ast.direction = db.direction ?? 'TD';
+  if (!db) {
+    throw new Error('AST extraction failed in parser runtime');
+  }
 
-    // Edges (reliably populated even without a DOM)
-    const rawEdges = Array.isArray(db.edges) ? db.edges : [];
-    for (const e of rawEdges) {
-      ast.edges.push({
-        from: String(e.start ?? e.from ?? ''),
-        to:   String(e.end   ?? e.to   ?? ''),
-        type: String(e.type  ?? 'arrow'),
-      });
-    }
+  // Direction
+  ast.direction = db.direction ?? 'TD';
 
-    // Vertices (may be empty when labels use DOMPurify; fall back to edge IDs)
-    const rawVertices = db.vertices ?? {};
-    const explicitNodes = Object.entries(rawVertices);
-    if (explicitNodes.length > 0) {
-      for (const [id, v] of explicitNodes) {
-        ast.nodes.push({ id, label: extractLabel(v) });
-      }
-    } else {
-      // Derive unique node IDs from edge endpoints
-      const seen = new Set();
-      for (const e of ast.edges) {
-        if (e.from && !seen.has(e.from)) { seen.add(e.from); ast.nodes.push({ id: e.from, label: '' }); }
-        if (e.to   && !seen.has(e.to))   { seen.add(e.to);   ast.nodes.push({ id: e.to,   label: '' }); }
-      }
-    }
+  // Edges (reliably populated even without a DOM)
+  const rawEdges = Array.isArray(db.edges) ? db.edges : [];
+  for (const e of rawEdges) {
+    ast.edges.push({
+      from: String(e.start ?? e.from ?? ''),
+      to:   String(e.end   ?? e.to   ?? ''),
+      type: String(e.type  ?? 'arrow'),
+    });
+  }
 
-    // Subgraphs
-    const rawSubs = Array.isArray(db.subGraphs) ? db.subGraphs : [];
-    for (const s of rawSubs) {
-      ast.subgraphs.push({
-        id:    String(s.id    ?? s.title ?? ''),
-        label: String(s.title ?? s.id    ?? ''),
-        nodes: Array.isArray(s.nodes) ? s.nodes.map(String) : [],
-      });
+  // Vertices (may be empty when labels use DOMPurify; fall back to edge IDs)
+  const rawVertices = db.vertices ?? {};
+  const explicitNodes = Object.entries(rawVertices);
+  if (explicitNodes.length > 0) {
+    for (const [id, v] of explicitNodes) {
+      ast.nodes.push({ id, label: extractLabel(v) });
     }
+  } else {
+    // Derive unique node IDs from edge endpoints
+    const seen = new Set();
+    for (const e of ast.edges) {
+      if (e.from && !seen.has(e.from)) { seen.add(e.from); ast.nodes.push({ id: e.from, label: '' }); }
+      if (e.to   && !seen.has(e.to))   { seen.add(e.to);   ast.nodes.push({ id: e.to,   label: '' }); }
+    }
+  }
+
+  // Subgraphs
+  const rawSubs = Array.isArray(db.subGraphs) ? db.subGraphs : [];
+  for (const s of rawSubs) {
+    ast.subgraphs.push({
+      id:    String(s.id    ?? s.title ?? ''),
+      label: String(s.title ?? s.id    ?? ''),
+      nodes: Array.isArray(s.nodes) ? s.nodes.map(String) : [],
+    });
   }
 
   return ast;
