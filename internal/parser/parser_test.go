@@ -478,3 +478,56 @@ func TestParser_ConcurrentParsing(t *testing.T) {
 	}
 	t.Logf("all %d goroutines completed successfully", numGoroutines)
 }
+
+func TestParser_ReadyRejectsTraversalPath(t *testing.T) {
+	p := parser.New("parser-node/../secrets/parse.mjs")
+
+	err := p.Ready()
+	if err == nil {
+		t.Fatal("expected error for traversal path, got nil")
+	}
+	if !contains(err.Error(), "traversal") {
+		t.Fatalf("expected traversal error, got %v", err)
+	}
+}
+
+func TestParser_ReadyRejectsPathOutsideWorkingDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	script := filepath.Join(tempDir, "parse.mjs")
+	if err := os.WriteFile(script, []byte("#!/usr/bin/env node\n"), 0o700); err != nil {
+		t.Fatalf("failed to write parser script: %v", err)
+	}
+
+	p := parser.New(script)
+	err := p.Ready()
+	if err == nil {
+		t.Fatal("expected error for script path outside working directory, got nil")
+	}
+	if !contains(err.Error(), "outside allowed working directory") {
+		t.Fatalf("expected outside working directory error, got %v", err)
+	}
+}
+
+func TestParser_ReadyAcceptsPathInsideWorkingDirectory(t *testing.T) {
+	repoTempDir, err := os.MkdirTemp(".", "parser-ready-test-")
+	if err != nil {
+		t.Fatalf("failed to create repo temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(repoTempDir)
+	})
+
+	script := filepath.Join(repoTempDir, "parse.mjs")
+	scriptBody := `#!/usr/bin/env node
+process.exit(0);
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write parser script: %v", err)
+	}
+
+	p := parser.New(script)
+	err = p.Ready()
+	if err != nil {
+		t.Fatalf("expected ready check to pass for local script path, got %v", err)
+	}
+}

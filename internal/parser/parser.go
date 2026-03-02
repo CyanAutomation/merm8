@@ -8,7 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -69,20 +71,63 @@ func New(scriptPath string) *Parser {
 
 // Ready performs lightweight dependency checks used by readiness probes.
 func (p *Parser) Ready() error {
-	if p.scriptPath == "" {
-		return fmt.Errorf("parser script path is empty")
+	scriptPath, err := validateScriptPath(p.scriptPath)
+	if err != nil {
+		return err
 	}
 
 	if _, err := exec.LookPath("node"); err != nil {
 		return fmt.Errorf("node runtime not found: %w", err)
 	}
 
-	cmd := exec.Command("node", "--check", p.scriptPath) //nolint:gosec
+	cmd := exec.Command("node", "--check", scriptPath) //nolint:gosec
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("parser script check failed: %w (%s)", err, strings.TrimSpace(string(out)))
 	}
 
 	return nil
+}
+
+func validateScriptPath(scriptPath string) (string, error) {
+	if scriptPath == "" {
+		return "", fmt.Errorf("parser script path is empty")
+	}
+
+	// filepath.Clean and filepath.Rel checks below handle traversal validation
+
+	absPath, err := filepath.Abs(filepath.Clean(scriptPath))
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve parser script path: %w", err)
+	}
+
+	// Resolve any symbolic links before validation
+	absPath, err = filepath.EvalSymlinks(absPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve symlinks in parser script path: %w", err)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve working directory: %w", err)
+	}
+
+	rel, err := filepath.Rel(cwd, absPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to validate parser script path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("parser script path is outside allowed working directory")
+	}
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return "", fmt.Errorf("parser script path is not accessible: %w", err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("parser script path points to a directory")
+	}
+
+	return absPath, nil
 }
 
 // Parse sends mermaidCode to the Node parser and returns either a Diagram or a
