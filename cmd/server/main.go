@@ -21,7 +21,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	handler := api.NewHandler(scriptPath)
+	handler := api.NewHandlerWithScript(scriptPath)
 	handler.RegisterRoutes(mux)
 
 	addr := fmt.Sprintf(":%s", port)
