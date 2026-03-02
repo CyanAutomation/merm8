@@ -12,10 +12,12 @@
             "description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`",
             "example": {
               "max-fanout": {
-                "limit": 3
+                "limit": 3,
+                "severity": "error"
               },
               "no-disconnected-nodes": {
-                "enabled": true
+                "enabled": true,
+                "severity": "warn"
               }
             },
             "type": "object"
@@ -56,16 +58,59 @@
         ],
         "type": "object"
       },
+      "ErrorDetail": {
+        "properties": {
+          "code": {
+            "description": "Machine-readable error code",
+            "example": "invalid_json",
+            "type": "string"
+          },
+          "message": {
+            "description": "Human-readable error message",
+            "example": "invalid JSON body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          },
+          "issues": {
+            "description": "Always empty for API-level errors",
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array"
+          },
+          "valid": {
+            "description": "Always false for non-200 responses",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "valid",
+          "issues",
+          "error"
+        ],
+        "type": "object"
+      },
       "Issue": {
         "properties": {
           "column": {
-            "description": "0-based column number where issue is located (if applicable)",
-            "example": 0,
+            "description": "0-based column number where issue is located when known. Omitted when unknown.",
+            "example": 2,
             "nullable": true,
             "type": "integer"
           },
           "line": {
-            "description": "1-based line number where issue is located (if applicable)",
+            "description": "1-based line number where issue is located when known. Omitted when unknown.",
             "example": 5,
             "nullable": true,
             "type": "integer"
@@ -159,15 +204,6 @@
       "name": "License",
       "url": "https://github.com/CyanAutomation/merm8/blob/main/LICENSE"
     },
-    {
-      "name": "Documentation",
-      "description": "API documentation and specification"
-    },
-    {
-      "name": "Probes",
-      "description": "Liveness and readiness probe endpoints"
-    }
-  ],
     "title": "merm8 - Mermaid Lint API",
     "version": "1.0.0"
   },
@@ -199,7 +235,8 @@
                     "code": "graph LR\n  A --\u003e B\n  B --\u003e C",
                     "config": {
                       "max-fanout": {
-                        "limit": 2
+                        "limit": 2,
+                        "severity": "error"
                       }
                     }
                   }
@@ -247,11 +284,16 @@
                     "value": {
                       "issues": [
                         {
-                          "column": 0,
-                          "line": 5,
                           "message": "Node 'D' is not connected to the graph",
                           "rule_id": "no-disconnected-nodes",
                           "severity": "error"
+                        },
+                        {
+                          "column": 2,
+                          "line": 2,
+                          "message": "Node 'A' has fanout 6, exceeding limit of 5",
+                          "rule_id": "max-fanout",
+                          "severity": "warn"
                         }
                       ],
                       "metrics": {
@@ -275,44 +317,60 @@
             "content": {
               "application/json": {
                 "examples": {
+                  "invalidConfig": {
+                    "summary": "Invalid lint configuration",
+                    "value": {
+                      "error": {
+                        "code": "invalid_config",
+                        "message": "invalid severity for rule \"max-fanout\": \"warning\" (allowed: error, warn, info)"
+                      },
+                      "issues": [],
+                      "valid": false
+                    }
+                  },
                   "invalidJSON": {
                     "summary": "Invalid JSON body",
                     "value": {
-                      "error": "invalid JSON body"
+                      "error": {
+                        "code": "invalid_json",
+                        "message": "invalid JSON body"
+                      },
+                      "issues": [],
+                      "valid": false
                     }
                   },
                   "missingCode": {
                     "summary": "Missing 'code' field",
                     "value": {
-                      "error": "field 'code' is required"
+                      "error": {
+                        "code": "missing_code",
+                        "message": "field 'code' is required"
+                      },
+                      "issues": [],
+                      "valid": false
                     }
                   }
                 },
                 "schema": {
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             },
-            "description": "Bad request (invalid JSON or missing required field)"
+            "description": "Bad request (invalid JSON, missing required field, or invalid config)"
           },
           "413": {
             "content": {
               "application/json": {
                 "example": {
-                  "error": "request body exceeds 1 MiB limit"
+                  "error": {
+                    "code": "request_too_large",
+                    "message": "request body exceeds 1 MiB limit"
+                  },
+                  "issues": [],
+                  "valid": false
                 },
                 "schema": {
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             },
@@ -321,13 +379,32 @@
           "500": {
             "content": {
               "application/json": {
-                "schema": {
-                  "properties": {
-                    "error": {
-                      "type": "string"
+                "examples": {
+                  "internal": {
+                    "summary": "Generic internal failure",
+                    "value": {
+                      "error": {
+                        "code": "internal_error",
+                        "message": "internal server error"
+                      },
+                      "issues": [],
+                      "valid": false
                     }
                   },
-                  "type": "object"
+                  "parserTimeout": {
+                    "summary": "Parser timeout",
+                    "value": {
+                      "error": {
+                        "code": "parser_timeout",
+                        "message": "parser timed out"
+                      },
+                      "issues": [],
+                      "valid": false
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             },
@@ -364,102 +441,79 @@
     },
     "/healthz": {
       "get": {
-        "tags": [
-          "Probes"
-        ],
-        "summary": "Liveness probe",
         "description": "Returns process liveness status.",
         "operationId": "getHealthz",
         "responses": {
           "200": {
-            "description": "Process is healthy",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "properties": {
                     "status": {
-                      "type": "string",
-                      "example": "ok"
+                      "example": "ok",
+                      "type": "string"
                     }
-                  }
+                  },
+                  "type": "object"
                 }
               }
-            }
+            },
+            "description": "Process is healthy"
           }
-        }
+        },
+        "summary": "Liveness probe",
+        "tags": [
+          "Probes"
+        ]
       }
     },
     "/ready": {
       "get": {
-        "tags": [
-          "Probes"
-        ],
-        "summary": "Readiness probe",
         "description": "Returns readiness status, including parser dependency checks when available.",
         "operationId": "getReady",
         "responses": {
           "200": {
-            "description": "Service is ready",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "properties": {
                     "status": {
-                      "type": "string",
-                      "example": "ready"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service is not ready",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "not_ready"
-                    },
-                    "error": {
+                      "example": "ready",
                       "type": "string"
                     }
-                  }
+                  },
+                  "type": "object"
                 }
               }
-            }
-          }
-        }
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "AnalyzeRequest": {
-        "type": "object",
-        "required": [
-          "code"
-        ],
-        "properties": {
-          "code": {
-            "type": "string",
-            "description": "Mermaid diagram code to analyze",
-            "example": "graph TD\n  A[Start] --> B[Process]\n  B --> C[End]\n"
+            },
+            "description": "Service is ready"
           },
-          "config": {
-            "type": "object",
-            "description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`\n",
-            "example": {
-              "max_fanout": {
-                "max": 3
-              },
-              "no_disconnected_nodes": {
-                "enabled": true
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "example": "not_ready",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Service is not ready"
+          }
+        },
+        "summary": "Readiness probe",
+        "tags": [
+          "Probes"
+        ]
+      }
+    },
     "/spec": {
       "get": {
         "description": "Returns the OpenAPI 3.0 specification for this API in JSON format",
@@ -501,6 +555,10 @@
     {
       "description": "API documentation and specification",
       "name": "Documentation"
+    },
+    {
+      "description": "Liveness and readiness probe endpoints",
+      "name": "Probes"
     }
   ]
 }
