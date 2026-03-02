@@ -93,11 +93,7 @@ func validateScriptPath(scriptPath string) (string, error) {
 		return "", fmt.Errorf("parser script path is empty")
 	}
 
-	for _, part := range strings.Split(filepath.ToSlash(scriptPath), "/") {
-		if part == ".." {
-			return "", fmt.Errorf("parser script path contains traversal segment")
-		}
-	}
+	// filepath.Clean and filepath.Rel checks below handle traversal validation
 
 	absPath, err := filepath.Abs(filepath.Clean(scriptPath))
 	if err != nil {
