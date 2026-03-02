@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/CyanAutomation/merm8/internal/api"
 	"github.com/CyanAutomation/merm8/internal/engine"
@@ -103,20 +104,30 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-
-	// Verify no panic on nil diagram
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Fatalf("Analyze panicked for nil diagram: %v", r)
-			}
-		}()
-		mux.ServeHTTP(w, req)
-	}()
+	mux.ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 when parser returns nil diagram, got %d", w.Code)
 	}
+}
+
+// TestAnalyze_NoPanicOnNilDiagram tests that nil diagram from parser doesn't cause panic.
+func TestAnalyze_NoPanicOnNilDiagram(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
+	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	// Verify no panic on nil diagram
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Analyze panicked for nil diagram: %v", r)
+		}
+	}()
+	mux.ServeHTTP(w, req)
 }
 
 // TestAnalyze_ValidDiagram_SuccessPath tests a valid diagram end-to-end.
@@ -284,7 +295,7 @@ func TestAnalyze_ConfigApplied_MaxFanout(t *testing.T) {
 	}
 }
 
-// TestAnalyze_ConfigParsing tests that both flat and nested config formats are accepted.
+// TestAnalyze_ConfigParsing tests that both flat and nested config formats are accepted and applied.
 func TestAnalyze_ConfigParsing(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -292,19 +303,29 @@ func TestAnalyze_ConfigParsing(t *testing.T) {
 	}{
 		{
 			name:   "flat format",
-			config: map[string]interface{}{"max-fanout": map[string]interface{}{"limit": 3}},
+			config: map[string]interface{}{"max-fanout": map[string]interface{}{"limit": 2}},
 		},
 		{
 			name:   "nested format",
-			config: map[string]interface{}{"rules": map[string]interface{}{"max-fanout": map[string]interface{}{"limit": 3}}},
+			config: map[string]interface{}{"rules": map[string]interface{}{"max-fanout": map[string]interface{}{"limit": 2}}},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Diagram with node A having 3 outgoing edges (violates custom limit of 2)
 			diagram := &model.Diagram{
-				Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
-				Edges: []model.Edge{{From: "A", To: "B"}},
+				Nodes: []model.Node{
+					{ID: "A"},
+					{ID: "B"},
+					{ID: "C"},
+					{ID: "D"},
+				},
+				Edges: []model.Edge{
+					{From: "A", To: "B"},
+					{From: "A", To: "C"},
+					{From: "A", To: "D"},
+				},
 			}
 
 			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
@@ -312,7 +333,7 @@ func TestAnalyze_ConfigParsing(t *testing.T) {
 			})
 
 			body, _ := json.Marshal(map[string]interface{}{
-				"code":   "graph TD; A-->B",
+				"code":   "graph TD; A-->B; A-->C; A-->D",
 				"config": tt.config,
 			})
 
@@ -323,6 +344,29 @@ func TestAnalyze_ConfigParsing(t *testing.T) {
 
 			if w.Code != http.StatusOK {
 				t.Fatalf("expected 200 with %s config, got %d", tt.name, w.Code)
+			}
+
+			// Verify config was actually applied: should have max-fanout issue
+			var resp map[string]interface{}
+			json.Unmarshal(w.Body.Bytes(), &resp)
+
+			issues, ok := resp["issues"].([]interface{})
+			if !ok {
+				t.Fatalf("expected issues array in response, got %T", resp["issues"])
+			}
+
+			// Verify max-fanout issue is present (config must have been applied)
+			found := false
+			for _, issue := range issues {
+				if issueMap, ok := issue.(map[string]interface{}); ok {
+					if ruleID, ok := issueMap["rule_id"].(string); ok && ruleID == "max-fanout" {
+						found = true
+						break
+					}
+				}
+			}
+			if !found {
+				t.Errorf("expected max-fanout issue not found; config may not have been applied to %s", tt.name)
 			}
 		})
 	}
@@ -380,7 +424,7 @@ func TestAnalyze_MultipleRulesAggregate(t *testing.T) {
 	t.Logf("rules fired: %v", ruleIDs)
 }
 
-// TestAnalyze_LargeDiagram tests handling of large diagrams (500+ nodes).
+// TestAnalyze_LargeDiagram tests handling of large diagrams (500+ nodes) with timing and detailed metrics.
 func TestAnalyze_LargeDiagram(t *testing.T) {
 	// Create a large diagram with 500 nodes in a chain
 	nodes := make([]model.Node, 500)
@@ -406,7 +450,11 @@ func TestAnalyze_LargeDiagram(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
+
+	// Time the analysis
+	start := time.Now()
 	mux.ServeHTTP(w, req)
+	elapsed := time.Since(start)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for large diagram, got %d", w.Code)
@@ -419,11 +467,28 @@ func TestAnalyze_LargeDiagram(t *testing.T) {
 	if !ok {
 		t.Fatal("expected metrics object")
 	}
+
+	// Verify exact node count
 	if nodeCount, ok := metrics["node_count"].(float64); ok {
 		if int(nodeCount) != 500 {
 			t.Errorf("expected 500 nodes, got %d", int(nodeCount))
 		}
 	} else {
 		t.Error("expected node_count in metrics")
+	}
+
+	// Verify exact edge count (chain should have exactly 499 edges)
+	if edgeCount, ok := metrics["edge_count"].(float64); ok {
+		if int(edgeCount) != 499 {
+			t.Errorf("expected 499 edges in linear chain, got %d", int(edgeCount))
+		}
+	} else {
+		t.Error("expected edge_count in metrics")
+	}
+
+	// Log timing for performance tracking (SLA: should complete in <1 second)
+	t.Logf("Large diagram analysis completed in %v (nodes: 500, edges: 499)", elapsed)
+	if elapsed > 1*time.Second {
+		t.Logf("WARNING: Large diagram analysis took longer than 1 second (%v)", elapsed)
 	}
 }
