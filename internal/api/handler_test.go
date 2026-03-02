@@ -103,7 +103,7 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	
+
 	// Verify no panic on nil diagram
 	func() {
 		defer func() {
