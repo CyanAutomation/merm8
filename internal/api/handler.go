@@ -135,6 +135,11 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if diagram == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "parser returned nil diagram"})
+		return
+	}
+
 	cfg := parseConfig(req.Config)
 	issues := h.engine.Run(diagram, cfg)
 
