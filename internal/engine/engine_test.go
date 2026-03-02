@@ -41,7 +41,7 @@ func TestEngine_StableOrderingAcrossRuns(t *testing.T) {
 		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}, {ID: "D"}},
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}},
 	}
-	cfg := rules.Config{"max-fanout": map[string]any{"limit": 1}}
+	cfg := rules.Config{"max-fanout": {Options: map[string]interface{}{"limit": 1}}}
 	e := engine.New()
 
 	first := e.Run(d, cfg)
@@ -58,7 +58,7 @@ func TestEngine_StableOrderingAcrossRuleRegistrationOrder(t *testing.T) {
 		Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "C"}, {ID: "D"}},
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}},
 	}
-	cfg := rules.Config{"max-fanout": map[string]any{"limit": 1}}
+	cfg := rules.Config{"max-fanout": {Options: map[string]interface{}{"limit": 1}}}
 
 	defaultOrder := engine.NewWithRules(
 		rules.NoDuplicateNodeIDs{},
@@ -87,8 +87,8 @@ func (duplicateIssueRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 		RuleID:   "duplicate-issue-rule",
 		Severity: "warn",
 		Message:  "duplicate issue",
-		Line:     2,
-		Column:   4,
+		Line:     intPtr(2),
+		Column:   intPtr(4),
 	}
 	return []model.Issue{issue, issue}
 }
@@ -101,3 +101,27 @@ func TestEngine_DeduplicatesEquivalentIssues(t *testing.T) {
 		t.Fatalf("expected duplicate issues to be deduplicated; got %d issues: %v", len(issues), issues)
 	}
 }
+
+func intPtr(v int) *int { return &v }
+
+func TestEngine_SkipsDisabledRules(t *testing.T) {
+	d := &model.Diagram{Nodes: []model.Node{{ID: "A"}, {ID: "A"}}}
+	e := engine.New()
+	cfg := rules.Config{"no-duplicate-node-ids": {Enabled: boolPtr(false)}}
+	issues := e.Run(d, cfg)
+	for _, issue := range issues {
+		if issue.RuleID == "no-duplicate-node-ids" {
+			t.Fatalf("expected disabled rule to be skipped, got issue: %+v", issue)
+		}
+	}
+}
+
+func TestEngine_NormalizeConfigRejectsUnknownRuleIDs(t *testing.T) {
+	e := engine.New()
+	_, err := e.NormalizeConfig(rules.Config{"unknown-rule": {Enabled: boolPtr(true)}})
+	if err == nil {
+		t.Fatal("expected unknown rule ID validation error")
+	}
+}
+
+func boolPtr(v bool) *bool { return &v }

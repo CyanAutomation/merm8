@@ -128,7 +128,7 @@ func TestMaxFanout_CustomLimit(t *testing.T) {
 		{From: "A", To: "D"},
 	}
 	d := &model.Diagram{Edges: edges}
-	cfg := rules.Config{"max-fanout": {"limit": 2}}
+	cfg := rules.Config{"max-fanout": {Options: map[string]interface{}{"limit": 2}}}
 	issues := rules.MaxFanout{}.Run(d, cfg)
 	if len(issues) != 1 {
 		t.Fatalf("expected 1 issue with custom limit 2, got %d", len(issues))
@@ -154,7 +154,7 @@ func TestMaxFanout_InvalidLimitsFallbackToDefault(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := rules.Config{"max-fanout": {"limit": tt.limit}}
+			cfg := rules.Config{"max-fanout": {Options: map[string]interface{}{"limit": tt.limit}}}
 			issues := rules.MaxFanout{}.Run(d, cfg)
 			if len(issues) != 1 {
 				t.Fatalf("expected 1 issue using default limit fallback, got %d", len(issues))
@@ -164,5 +164,19 @@ func TestMaxFanout_InvalidLimitsFallbackToDefault(t *testing.T) {
 				t.Fatalf("expected message to contain %q, got %q", want, issues[0].Message)
 			}
 		})
+	}
+}
+
+func TestRuleSeverityOverride(t *testing.T) {
+	d := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "A"}},
+	}
+	cfg := rules.Config{"no-duplicate-node-ids": {Severity: "info"}}
+	issues := rules.NoDuplicateNodeIDs{}.Run(d, cfg)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Severity != "info" {
+		t.Fatalf("expected severity override to info, got %s", issues[0].Severity)
 	}
 }

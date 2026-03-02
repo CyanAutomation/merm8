@@ -108,7 +108,7 @@ paths:
                     graph TD
                       A[Start] --> B[End]
               withConfig:
-                summary: With lint configuration
+                summary: With lint configuration (flat format)
                 value:
                   code: |
                     graph LR
@@ -167,7 +167,7 @@ paths:
                       edge_count: 2
                       max_fanout: 2
         '400':
-          description: Bad request (invalid JSON or missing required field)
+          description: Bad request (invalid JSON, missing required field, or invalid rule config)
           content:
             application/json:
               schema:
@@ -275,6 +275,7 @@ components:
             Optional lint rule configuration. Supports both flat and nested formats:
             - Flat format: `{"rule-id": {"option": "value"}}`
             - Nested format: `{"rules": {"rule-id": {"option": "value"}}}`
+            Unknown rule IDs are rejected with `invalid_rule_config`.
           example:
             max-fanout:
               limit: 3

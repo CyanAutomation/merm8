@@ -2,16 +2,19 @@ package rules
 
 import "github.com/CyanAutomation/merm8/internal/model"
 
+const defaultNoDisconnectedNodesSeverity = "error"
+
 // NoDisconnectedNodes flags nodes that have no incoming or outgoing edges.
 // A single-node diagram (no edges at all) is exempt to avoid false positives.
 type NoDisconnectedNodes struct{}
 
 func (r NoDisconnectedNodes) ID() string { return "no-disconnected-nodes" }
 
-func (r NoDisconnectedNodes) Run(d *model.Diagram, _ Config) []model.Issue {
+func (r NoDisconnectedNodes) Run(d *model.Diagram, cfg Config) []model.Issue {
 	if len(d.Edges) == 0 && len(d.Nodes) <= 1 {
 		return nil
 	}
+	severity := SeverityOrDefault(cfg, r.ID(), defaultNoDisconnectedNodesSeverity)
 	connected := make(map[string]bool, len(d.Nodes))
 	for _, e := range d.Edges {
 		connected[e.From] = true
@@ -22,7 +25,7 @@ func (r NoDisconnectedNodes) Run(d *model.Diagram, _ Config) []model.Issue {
 		if !connected[n.ID] {
 			issues = append(issues, model.Issue{
 				RuleID:   r.ID(),
-				Severity: "error",
+				Severity: severity,
 				Message:  "node is disconnected: " + n.ID,
 			})
 		}

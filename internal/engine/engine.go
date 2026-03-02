@@ -3,7 +3,9 @@
 package engine
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/CyanAutomation/merm8/internal/model"
 	"github.com/CyanAutomation/merm8/internal/rules"
@@ -28,10 +30,44 @@ func NewWithRules(registeredRules ...rules.Rule) *Engine {
 	return &Engine{rules: registeredRules}
 }
 
-// Run executes every rule against d and returns all issues found.
+// NormalizeConfig validates and normalizes config keys for known rules.
+// Unknown rule IDs are rejected.
+func (e *Engine) NormalizeConfig(cfg rules.Config) (rules.Config, error) {
+	if cfg == nil {
+		return rules.Config{}, nil
+	}
+
+	known := make(map[string]struct{}, len(e.rules))
+	for _, r := range e.rules {
+		known[r.ID()] = struct{}{}
+	}
+
+	normalized := make(rules.Config, len(cfg))
+	var unknown []string
+	for ruleID, ruleCfg := range cfg {
+		if _, ok := known[ruleID]; !ok {
+			unknown = append(unknown, ruleID)
+			continue
+		}
+		normalized[ruleID] = ruleCfg
+	}
+
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		return nil, fmt.Errorf("unknown rule ids in config: %s", strings.Join(unknown, ", "))
+	}
+
+	return normalized, nil
+}
+
+// Run executes every enabled rule against d and returns all issues found.
 func (e *Engine) Run(d *model.Diagram, cfg rules.Config) []model.Issue {
 	var issues []model.Issue
 	for _, r := range e.rules {
+		ruleCfg, hasCfg := cfg[r.ID()]
+		if hasCfg && !ruleCfg.IsEnabled() {
+			continue
+		}
 		issues = append(issues, r.Run(d, cfg)...)
 	}
 
@@ -51,17 +87,14 @@ func sortIssues(issues []model.Issue) {
 		if severityPriority(left.Severity) != severityPriority(right.Severity) {
 			return severityPriority(left.Severity) < severityPriority(right.Severity)
 		}
-	if left.RuleID != right.RuleID {
-		return left.RuleID < right.RuleID
-	}
 		if left.RuleID != right.RuleID {
 			return left.RuleID < right.RuleID
 		}
-		if left.Line != right.Line {
-			return left.Line < right.Line
+		if compareOptionalInt(left.Line, right.Line) != 0 {
+			return compareOptionalInt(left.Line, right.Line) < 0
 		}
-		if left.Column != right.Column {
-			return left.Column < right.Column
+		if compareOptionalInt(left.Column, right.Column) != 0 {
+			return compareOptionalInt(left.Column, right.Column) < 0
 		}
 		return left.Message < right.Message
 	})
@@ -97,4 +130,23 @@ func severityPriority(severity string) int {
 	default:
 		return 3
 	}
+}
+
+func compareOptionalInt(left, right *int) int {
+	if left == nil && right == nil {
+		return 0
+	}
+	if left == nil {
+		return -1
+	}
+	if right == nil {
+		return 1
+	}
+	if *left < *right {
+		return -1
+	}
+	if *left > *right {
+		return 1
+	}
+	return 0
 }

@@ -123,12 +123,14 @@ var openapi = map[string]interface{}{
 									},
 								},
 								"withConfig": map[string]interface{}{
-									"summary": "With lint configuration",
+									"summary": "With lint configuration (flat format)",
 									"value": map[string]interface{}{
 										"code": "graph LR\n  A --> B\n  B --> C",
 										"config": map[string]interface{}{
 											"max-fanout": map[string]interface{}{
-												"limit": 2,
+												"enabled":  true,
+												"severity": "info",
+												"limit":    2,
 											},
 										},
 									},
@@ -208,7 +210,7 @@ var openapi = map[string]interface{}{
 						},
 					},
 					"400": map[string]interface{}{
-						"description": "Bad request (invalid JSON or missing required field)",
+						"description": "Bad request (invalid JSON, missing required field, or invalid rule config)",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -223,6 +225,18 @@ var openapi = map[string]interface{}{
 											"error": map[string]interface{}{
 												"code":    "missing_code",
 												"message": "field 'code' is required",
+											},
+										},
+									},
+									
+									"invalidRuleConfig": map[string]interface{}{
+										"summary": "Unknown rule ID in config",
+										"value": map[string]interface{}{
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":    "invalid_rule_config",
+												"message": "unknown rule ids in config: typo-rule",
 											},
 										},
 									},

@@ -112,13 +112,16 @@ Readiness endpoint for dependency checks (including parser runtime/script availa
   "code": "graph TD\n  A-->B\n  B-->C",
   "config": {
     "rules": {
-      "max-fanout": { "limit": 3 }
+      "no-duplicate-node-ids": { "enabled": true, "severity": "error" },
+      "max-fanout": { "enabled": true, "severity": "warn", "limit": 3 }
     }
   }
 }
 ```
 
 > `config` is optional. Both flat `{"max-fanout": {...}}` and nested `{"rules": {"max-fanout": {...}}}` formats are accepted.
+>
+> Unknown rule IDs are rejected with HTTP `400` (`error.code = "invalid_rule_config"`).
 
 > Request body size limit: **1 MiB**. Oversized payloads return `413` with JSON: `{"error":"request body exceeds 1 MiB limit"}`.
 
@@ -207,11 +210,13 @@ type Rule interface {
 
 | Rule ID                  | Severity | Description                                          |
 |--------------------------|----------|------------------------------------------------------|
-| `no-duplicate-node-ids`  | error    | Each node ID must be unique within the diagram.      |
-| `no-disconnected-nodes`  | error    | Every node must participate in at least one edge.    |
-| `max-fanout`             | warn     | No node may have more outgoing edges than the limit. |
+| `no-duplicate-node-ids`  | error*   | Each node ID must be unique within the diagram.      |
+| `no-disconnected-nodes`  | error*   | Every node must participate in at least one edge.    |
+| `max-fanout`             | warn*    | No node may have more outgoing edges than the limit. |
 
 Default `max-fanout` limit: **5**.
+
+*Severities can be overridden per rule via config (`severity` key). Rules can also be disabled with `enabled: false`.
 
 ### Adding a New Rule
 
