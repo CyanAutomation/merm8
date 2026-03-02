@@ -42,7 +42,7 @@ var openapi = map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Analyze and lint a Mermaid diagram",
-				"description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nReturns syntax errors if parsing fails, or lint results if parsing succeeds.",
+				"description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nReturns syntax errors if parsing fails, or lint results if parsing succeeds.",
 				"operationId": "analyzeCode",
 				"requestBody": map[string]interface{}{
 					"required": true,
@@ -121,7 +121,7 @@ var openapi = map[string]interface{}{
 											"issues": []interface{}{
 												map[string]interface{}{
 													"rule_id":  "no-disconnected-nodes",
-									"severity": "error",
+													"severity": "error",
 													"message":  "Node 'D' is not connected to the graph",
 													"line":     5,
 													"column":   0,
@@ -167,6 +167,25 @@ var openapi = map[string]interface{}{
 							},
 						},
 					},
+					"413": map[string]interface{}{
+						"description": "Request entity too large (body exceeds 1 MiB)",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"error": map[string]interface{}{
+											"type": "string",
+										},
+									},
+								},
+								"example": map[string]interface{}{
+									"error": "request body exceeds 1 MiB limit",
+								},
+							},
+						},
+					},
+
 					"500": map[string]interface{}{
 						"description": "Internal server error",
 						"content": map[string]interface{}{
@@ -234,7 +253,7 @@ var openapi = map[string]interface{}{
 				"properties": map[string]interface{}{
 					"code": map[string]interface{}{
 						"type":        "string",
-						"description": "Mermaid diagram code to analyze",
+						"description": "Mermaid diagram code to analyze. Total request body must be 1 MiB or smaller.",
 						"example":     "graph TD\n  A[Start] --> B[Process]\n  B --> C[End]",
 					},
 					"config": map[string]interface{}{
