@@ -1,0 +1,127 @@
+// Package parser provides a bridge between Go and the Node.js Mermaid parser.
+// It spawns a stateless Node subprocess, sends Mermaid source on stdin, and
+// reads the structured JSON result from stdout.
+package parser
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os/exec"
+	"time"
+
+	"github.com/CyanAutomation/merm8/internal/model"
+)
+
+const defaultTimeout = 2 * time.Second
+
+// SyntaxError describes a parse failure reported by the Node.js parser.
+type SyntaxError struct {
+	Message string `json:"message"`
+	Line    int    `json:"line"`
+	Column  int    `json:"column"`
+}
+
+// ParseResult is the raw JSON envelope returned by the Node parser script.
+type ParseResult struct {
+	Valid bool         `json:"valid"`
+	AST   *parsedAST   `json:"ast,omitempty"`
+	Error *SyntaxError `json:"error,omitempty"`
+}
+
+// parsedAST mirrors the simplified AST returned by parser-node/parse.mjs.
+type parsedAST struct {
+	Direction string          `json:"direction"`
+	Nodes     []parsedNode    `json:"nodes"`
+	Edges     []parsedEdge    `json:"edges"`
+	Subgraphs []parsedSubgraph `json:"subgraphs"`
+}
+
+type parsedNode struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+type parsedEdge struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Type string `json:"type"`
+}
+
+type parsedSubgraph struct {
+	ID    string   `json:"id"`
+	Label string   `json:"label"`
+	Nodes []string `json:"nodes"`
+}
+
+// Parser wraps the Node subprocess invocation.
+type Parser struct {
+	scriptPath string
+	timeout    time.Duration
+}
+
+// New returns a Parser that will invoke the given Node.js script path.
+func New(scriptPath string) *Parser {
+	return &Parser{scriptPath: scriptPath, timeout: defaultTimeout}
+}
+
+// Parse sends mermaidCode to the Node parser and returns either a Diagram or a
+// SyntaxError. A non-nil error means an unexpected failure (e.g. timeout).
+func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "node", p.scriptPath) //nolint:gosec
+	cmd.Stdin = bytes.NewBufferString(mermaidCode)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, nil, fmt.Errorf("parser timeout after %s", p.timeout)
+		}
+		// The script itself may write a JSON error to stdout before exiting
+		// non-zero; attempt to decode it anyway.
+		if stdout.Len() == 0 {
+			return nil, nil, fmt.Errorf("parser subprocess error: %w (stderr: %s)", err, stderr.String())
+		}
+	}
+
+	var result ParseResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		return nil, nil, fmt.Errorf("failed to decode parser output: %w", err)
+	}
+
+	if !result.Valid {
+		return nil, result.Error, nil
+	}
+
+	diagram := toDiagram(result.AST)
+	return diagram, nil, nil
+}
+
+// toDiagram converts the raw AST into the internal model.
+func toDiagram(ast *parsedAST) *model.Diagram {
+	if ast == nil {
+		return &model.Diagram{}
+	}
+	d := &model.Diagram{Direction: ast.Direction}
+
+	for _, n := range ast.Nodes {
+		d.Nodes = append(d.Nodes, model.Node{ID: n.ID, Label: n.Label})
+	}
+	for _, e := range ast.Edges {
+		d.Edges = append(d.Edges, model.Edge{From: e.From, To: e.To, Type: e.Type})
+	}
+	for _, s := range ast.Subgraphs {
+		d.Subgraphs = append(d.Subgraphs, model.Subgraph{
+			ID:    s.ID,
+			Label: s.Label,
+			Nodes: s.Nodes,
+		})
+	}
+	return d
+}
