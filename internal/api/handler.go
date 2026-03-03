@@ -512,7 +512,9 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		h.mu.RLock()
 		metrics := h.telemetryMetrics
 		h.mu.RUnlock()
-		metrics.ObserveParserDuration(outcome, parseDuration)
+		if metrics != nil {
+			metrics.ObserveParserDuration(outcome, parseDuration)
+		}
 		observeAnalyzeOutcome(outcome)
 		writeParserFailure(w, err)
 		return
