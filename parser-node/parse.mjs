@@ -12,14 +12,15 @@ import parserPkg from './package.json' with { type: 'json' };
 // Set up a minimal DOM environment so that mermaid's DOMPurify dependency
 // initialises correctly in Node.js (it requires a window/document object).
 import { JSDOM } from 'jsdom';
+
 const { window: _win } = new JSDOM('<!DOCTYPE html>');
-global.window           = _win;
-global.document         = _win.document;
-global.Element          = _win.Element;
-global.HTMLElement      = _win.HTMLElement;
+global.window = _win;
+global.document = _win.document;
+global.Element = _win.Element;
+global.HTMLElement = _win.HTMLElement;
 global.DocumentFragment = _win.DocumentFragment;
-global.NodeFilter       = _win.NodeFilter;
-global.Node             = _win.Node;
+global.NodeFilter = _win.NodeFilter;
+global.Node = _win.Node;
 
 const versionInfoMode = process.argv.includes('--version-info');
 
@@ -78,7 +79,7 @@ try {
   } catch (parseErr) {
     const msg = parseErr?.message || String(parseErr);
     const line = parseErr?.hash?.loc?.first_line ?? 0;
-    const col  = parseErr?.hash?.loc?.first_column ?? 0;
+    const col = parseErr?.hash?.loc?.first_column ?? 0;
     writeResult({ valid: false, error: { message: msg, line, column: col } });
     process.exit(0);
   }
@@ -148,7 +149,7 @@ async function extractAST(mermaidAPI, source, diagramType) {
     ast.edges.push({
       from,
       to,
-      type: String(e.type  ?? 'arrow'),
+      type: String(e.type ?? 'arrow'),
       ...(edgeLoc || {}),
     });
   }
@@ -179,8 +180,8 @@ async function extractAST(mermaidAPI, source, diagramType) {
   const rawSubs = Array.isArray(db.subGraphs) ? db.subGraphs : [];
   for (const s of rawSubs) {
     ast.subgraphs.push({
-      id:    String(s.id    ?? s.title ?? ''),
-      label: String(s.title ?? s.id    ?? ''),
+      id: String(s.id ?? s.title ?? ''),
+      label: String(s.title ?? s.id ?? ''),
       nodes: Array.isArray(s.nodes) ? s.nodes.map(String) : [],
     });
   }
