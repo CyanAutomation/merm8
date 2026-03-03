@@ -45,25 +45,46 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.C
 		return rules.Config{}, nil
 	}
 
-	var asMap map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &asMap); err != nil {
+	var configValue any
+	if err := json.Unmarshal(raw, &configValue); err != nil {
 		return rules.Config{}, errors.New("invalid config object")
+	}
+
+	asMap, ok := configValue.(map[string]any)
+	if !ok {
+		return rules.Config{}, errors.New("config must be object")
 	}
 
 	cfgRaw := raw
-	if rulesRaw, ok := asMap["rules"]; ok {
-		cfgRaw = rulesRaw
+	rulePathPrefix := "config"
+	if rulesValue, hasRules := asMap["rules"]; hasRules {
+		rulesMap, ok := rulesValue.(map[string]any)
+		if !ok {
+			return rules.Config{}, errors.New("config.rules must be object")
+		}
+		rulePathPrefix = "config.rules"
+		ruleMapRaw, err := json.Marshal(rulesMap)
+		if err != nil {
+			return rules.Config{}, errors.New("invalid config object")
+		}
+		cfgRaw = ruleMapRaw
+		asMap = rulesMap
 	}
 
-	var ruleMap map[string]json.RawMessage
-	if err := json.Unmarshal(cfgRaw, &ruleMap); err != nil {
-		return rules.Config{}, errors.New("invalid config object")
-	}
-
-	for ruleID := range ruleMap {
+	for ruleID, ruleConfig := range asMap {
+		ruleConfigMap, ok := ruleConfig.(map[string]any)
+		if !ok {
+			return rules.Config{}, errors.New(rulePathPrefix + "." + ruleID + " must be object")
+		}
 		if _, known := knownRuleIDs[ruleID]; !known {
 			return rules.Config{}, errors.New("unknown rule: " + ruleID)
 		}
+
+		ruleConfigRaw, err := json.Marshal(ruleConfigMap)
+		if err != nil {
+			return rules.Config{}, errors.New("invalid config object")
+		}
+		asMap[ruleID] = json.RawMessage(ruleConfigRaw)
 	}
 
 	var cfg rules.Config
