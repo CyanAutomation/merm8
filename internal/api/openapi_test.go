@@ -334,6 +334,8 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 		{"info", "title"},
 		{"paths", "/v1/analyze", "post", "operationId"},
 		{"paths", "/diagram-types", "get", "operationId"},
+		{"paths", "/v1/internal/metrics", "get", "operationId"},
+		{"paths", "/v1/internal/metrics", "get", "responses", "200", "content", "application/json", "schema", "$ref"},
 		{"paths", "/v1/analyze", "post", "responses", "400", "content", "application/json", "schema", "$ref"},
 		{"components", "schemas", "Issue", "properties", "severity", "enum"},
 		{"paths", "/v1/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigVersioned", "value", "config", "rules", "max-fanout", "severity"},
@@ -514,7 +516,7 @@ func TestServeSpec_ExposesRuleConfigSchemaAndEndpoint(t *testing.T) {
 
 func TestServeSpec_LegacyAliasesAreDeprecated(t *testing.T) {
 	spec := loadServedSpec(t)
-	for _, path := range []string{"/analyze", "/rules", "/rules/schema", "/spec", "/docs"} {
+	for _, path := range []string{"/analyze", "/rules", "/rules/schema", "/spec", "/docs", "/internal/metrics"} {
 		methods := lookup(t, spec, "paths", path).(map[string]interface{})
 		for _, methodDef := range methods {
 			operation := methodDef.(map[string]interface{})
@@ -522,5 +524,18 @@ func TestServeSpec_LegacyAliasesAreDeprecated(t *testing.T) {
 				t.Fatalf("expected %s to be marked deprecated", path)
 			}
 		}
+	}
+}
+func TestServeSpec_InternalMetricsEndpointsDocumented(t *testing.T) {
+	spec := loadServedSpec(t)
+
+	if got := lookup(t, spec, "paths", "/v1/internal/metrics", "get", "operationId"); got != "getInternalMetrics" {
+		t.Fatalf("expected /v1/internal/metrics operationId getInternalMetrics, got %#v", got)
+	}
+	if got := lookup(t, spec, "paths", "/v1/internal/metrics", "get", "responses", "200", "content", "application/json", "schema", "$ref"); got != "#/components/schemas/InternalMetricsResponse" {
+		t.Fatalf("expected /v1/internal/metrics to use InternalMetricsResponse schema, got %#v", got)
+	}
+	if deprecated, ok := lookup(t, spec, "paths", "/internal/metrics", "get", "deprecated").(bool); !ok || !deprecated {
+		t.Fatalf("expected /internal/metrics legacy alias to be deprecated")
 	}
 }
