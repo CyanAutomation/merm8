@@ -301,7 +301,7 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 		{"paths", "/diagram-types", "get", "operationId"},
 		{"paths", "/analyze", "post", "responses", "400", "content", "application/json", "schema", "$ref"},
 		{"components", "schemas", "Issue", "properties", "severity", "enum"},
-		{"paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfig", "value", "config", "rules", "max-fanout", "severity"},
+		{"paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigVersioned", "value", "config", "rules", "max-fanout", "severity"},
 		{"paths", "/analyze/sarif", "post", "responses", "200", "content", "application/sarif+json", "schema", "$ref"},
 	}
 
@@ -357,18 +357,47 @@ func TestServeSpec_IssueLocationFieldsAreOptionalAndNullable(t *testing.T) {
 func TestServeSpec_Regression_ConfigValidationAndSeverityExamples(t *testing.T) {
 	spec := loadServedSpec(t)
 
-	withConfig := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfig", "value").(map[string]interface{})
-	severity := lookup(t, withConfig, "config", "rules", "max-fanout", "severity")
+	if got := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigVersioned", "summary"); got != "Preferred versioned config payload (recommended)" {
+		t.Fatalf("expected withConfigVersioned summary to describe preferred payload, got %#v", got)
+	}
+	if got := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigNestedLegacy", "summary"); got != "Legacy nested rules payload (migration support)" {
+		t.Fatalf("expected withConfigNestedLegacy summary to describe legacy migration support, got %#v", got)
+	}
+	if got := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigFlatLegacy", "summary"); got != "Legacy flat rule payload (migration support)" {
+		t.Fatalf("expected withConfigFlatLegacy summary to describe legacy migration support, got %#v", got)
+	}
+
+	withConfigVersioned := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigVersioned", "value").(map[string]interface{})
+	if got := lookup(t, withConfigVersioned, "config", "schema-version"); got != "v1" {
+		t.Fatalf("expected withConfigVersioned schema-version=v1, got %#v", got)
+	}
+	severity := lookup(t, withConfigVersioned, "config", "rules", "max-fanout", "severity")
 	if severity != "error" {
 		t.Fatalf("expected severity override example to be error, got %#v", severity)
 	}
 
-	selectors, ok := lookup(t, withConfig, "config", "rules", "max-fanout", "suppression-selectors").([]interface{})
+	selectors, ok := lookup(t, withConfigVersioned, "config", "rules", "max-fanout", "suppression-selectors").([]interface{})
 	if !ok || len(selectors) == 0 {
-		t.Fatalf("expected suppression-selectors example array, got %#v", lookup(t, withConfig, "config", "rules", "max-fanout", "suppression-selectors"))
+		t.Fatalf("expected suppression-selectors example array, got %#v", lookup(t, withConfigVersioned, "config", "rules", "max-fanout", "suppression-selectors"))
 	}
 	if _, ok := selectors[0].(string); !ok {
 		t.Fatalf("expected suppression-selectors entries to be strings, got %#v", selectors[0])
+	}
+
+	withConfigNestedLegacy := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigNestedLegacy", "value").(map[string]interface{})
+	if _, hasSchemaVersion := lookup(t, withConfigNestedLegacy, "config").(map[string]interface{})["schema-version"]; hasSchemaVersion {
+		t.Fatal("expected withConfigNestedLegacy to omit schema-version")
+	}
+	if got := lookup(t, withConfigNestedLegacy, "config", "rules", "max-fanout", "limit"); got != float64(2) {
+		t.Fatalf("expected withConfigNestedLegacy max-fanout.limit=2, got %#v", got)
+	}
+
+	withConfigFlatLegacy := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigFlatLegacy", "value").(map[string]interface{})
+	if _, hasRules := lookup(t, withConfigFlatLegacy, "config").(map[string]interface{})["rules"]; hasRules {
+		t.Fatal("expected withConfigFlatLegacy to omit nested rules key")
+	}
+	if got := lookup(t, withConfigFlatLegacy, "config", "max-fanout", "limit"); got != float64(2) {
+		t.Fatalf("expected withConfigFlatLegacy max-fanout.limit=2, got %#v", got)
 	}
 
 	unknownOption := lookup(t, spec, "paths", "/analyze", "post", "responses", "400", "content", "application/json", "examples", "unknownOption", "value").(map[string]interface{})
