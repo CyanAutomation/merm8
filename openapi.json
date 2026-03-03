@@ -10,20 +10,23 @@
           },
           "config": {
             "$ref": "#/components/schemas/RuleConfigSchema",
-            "description": "Optional lint rule configuration. Supports both flat and nested formats:",
+            "description": "Optional lint rule configuration. Preferred format is versioned: {\"schema-version\":\"v1\",\"rules\":{...}}. Legacy flat and nested formats remain supported during migration.",
             "example": {
-              "max-fanout": {
-                "enabled": true,
-                "limit": 3,
-                "severity": "error",
-                "suppression-selectors": [
-                  "node:A"
-                ]
+              "rules": {
+                "max-fanout": {
+                  "enabled": true,
+                  "limit": 3,
+                  "severity": "error",
+                  "suppression-selectors": [
+                    "node:A"
+                  ]
+                },
+                "no-disconnected-nodes": {
+                  "enabled": false,
+                  "severity": "info"
+                }
               },
-              "no-disconnected-nodes": {
-                "enabled": false,
-                "severity": "info"
-              }
+              "schema-version": "v1"
             }
           }
         },
@@ -46,6 +49,11 @@
             ],
             "example": "flowchart",
             "type": "string"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail",
+            "description": "API-level error details for non-200 responses.",
+            "nullable": true
           },
           "issues": {
             "description": "Lint rule violations found in the diagram",
@@ -111,30 +119,6 @@
         ],
         "type": "object"
       },
-      "ErrorResponse": {
-        "properties": {
-          "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
-          },
-          "issues": {
-            "description": "Always empty for API-level errors",
-            "items": {
-              "$ref": "#/components/schemas/Issue"
-            },
-            "type": "array"
-          },
-          "valid": {
-            "description": "Always false for non-200 responses",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "valid",
-          "issues",
-          "error"
-        ],
-        "type": "object"
-      },
       "Issue": {
         "properties": {
           "column": {
@@ -142,6 +126,16 @@
             "example": 2,
             "nullable": true,
             "type": "integer"
+          },
+          "context": {
+            "$ref": "#/components/schemas/IssueContext",
+            "description": "Optional grouping context for node-scoped findings.",
+            "nullable": true
+          },
+          "fingerprint": {
+            "description": "Deterministic SHA-256 hash of the normalized issue signature for CI tracking and dedupe.",
+            "example": "b57b8d8ac7c95f6e8f6e30a38ae2e6bcd2c6576d7f20d3155014a4f14f7a8f46",
+            "type": "string"
           },
           "line": {
             "description": "1-based line number where issue is located when known. Omitted when unknown.",
@@ -174,6 +168,21 @@
           "severity",
           "message"
         ],
+        "type": "object"
+      },
+      "IssueContext": {
+        "properties": {
+          "subgraph-id": {
+            "description": "ID of the subgraph containing the affected node.",
+            "example": "cluster-1",
+            "type": "string"
+          },
+          "subgraph-label": {
+            "description": "Human-readable label of the subgraph containing the affected node.",
+            "example": "Core Services",
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "IssueCounts": {
@@ -266,6 +275,113 @@
       "RuleConfigSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "oneOf": [
+          {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "rules": {
+                "additionalProperties": false,
+                "properties": {
+                  "max-fanout": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "description": "Enable or disable this rule.",
+                        "type": "boolean"
+                      },
+                      "limit": {
+                        "description": "Maximum allowed outgoing edges per node.",
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "severity": {
+                        "description": "Severity assigned to emitted issues.",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "type": "string"
+                      },
+                      "suppression-selectors": {
+                        "description": "Selectors that suppress matching issues.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "no-disconnected-nodes": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "description": "Enable or disable this rule.",
+                        "type": "boolean"
+                      },
+                      "severity": {
+                        "description": "Severity assigned to emitted issues.",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "type": "string"
+                      },
+                      "suppression-selectors": {
+                        "description": "Selectors that suppress matching issues.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "no-duplicate-node-ids": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "description": "Enable or disable this rule.",
+                        "type": "boolean"
+                      },
+                      "severity": {
+                        "description": "Severity assigned to emitted issues.",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "type": "string"
+                      },
+                      "suppression-selectors": {
+                        "description": "Selectors that suppress matching issues.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              },
+              "schema-version": {
+                "enum": [
+                  "v1"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema-version",
+              "rules"
+            ],
+            "title": "merm8 Rule Configuration v1",
+            "type": "object"
+          },
           {
             "additionalProperties": false,
             "properties": {
@@ -454,8 +570,7 @@
             "type": "object"
           }
         ],
-        "title": "merm8 Rule Configuration",
-        "type": "object"
+        "title": "merm8 Rule Configuration"
       },
       "RuleMetadata": {
         "properties": {
@@ -746,6 +861,8 @@
                         "message": "invalid JSON body"
                       },
                       "issues": [],
+                      "lint-supported": false,
+                      "syntax-error": null,
                       "valid": false
                     }
                   },
@@ -758,6 +875,8 @@
                         "path": "config.rules.max-fanout.limit"
                       },
                       "issues": [],
+                      "lint-supported": false,
+                      "syntax-error": null,
                       "valid": false
                     }
                   },
@@ -769,6 +888,8 @@
                         "message": "field 'code' is required"
                       },
                       "issues": [],
+                      "lint-supported": false,
+                      "syntax-error": null,
                       "valid": false
                     }
                   },
@@ -787,6 +908,8 @@
                         ]
                       },
                       "issues": [],
+                      "lint-supported": false,
+                      "syntax-error": null,
                       "valid": false
                     }
                   },
@@ -804,12 +927,14 @@
                         ]
                       },
                       "issues": [],
+                      "lint-supported": false,
+                      "syntax-error": null,
                       "valid": false
                     }
                   }
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/AnalyzeResponse"
                 }
               }
             },
@@ -824,14 +949,36 @@
                     "message": "request body exceeds 1 MiB limit"
                   },
                   "issues": [],
+                  "lint-supported": false,
+                  "syntax-error": null,
                   "valid": false
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/AnalyzeResponse"
                 }
               }
             },
             "description": "Request entity too large (body exceeds 1 MiB)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "rate_limited",
+                    "message": "rate limit exceeded"
+                  },
+                  "issues": [],
+                  "lint-supported": false,
+                  "syntax-error": null,
+                  "valid": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
           },
           "500": {
             "content": {
@@ -845,6 +992,8 @@
                         "message": "parser response violated service contract"
                       },
                       "issues": [],
+                      "lint-supported": false,
+                      "syntax-error": null,
                       "valid": false
                     }
                   },
@@ -856,6 +1005,8 @@
                         "message": "parser returned malformed output"
                       },
                       "issues": [],
+                      "lint-supported": false,
+                      "syntax-error": null,
                       "valid": false
                     }
                   },
@@ -867,6 +1018,8 @@
                         "message": "internal server error"
                       },
                       "issues": [],
+                      "lint-supported": false,
+                      "syntax-error": null,
                       "valid": false
                     }
                   },
@@ -878,16 +1031,38 @@
                         "message": "parser subprocess failed"
                       },
                       "issues": [],
+                      "lint-supported": false,
+                      "syntax-error": null,
                       "valid": false
                     }
                   }
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/AnalyzeResponse"
                 }
               }
             },
             "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "server_busy",
+                    "message": "parser concurrency limit reached; try again"
+                  },
+                  "issues": [],
+                  "lint-supported": false,
+                  "syntax-error": null,
+                  "valid": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
           },
           "504": {
             "content": {
@@ -898,10 +1073,12 @@
                     "message": "parser timed out while validating Mermaid code"
                   },
                   "issues": [],
+                  "lint-supported": false,
+                  "syntax-error": null,
                   "valid": false
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/AnalyzeResponse"
                 }
               }
             },

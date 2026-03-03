@@ -143,8 +143,8 @@ func assertExactErrorResponse(t *testing.T, body []byte, wantCode, wantMessage s
 	if err := json.Unmarshal(body, &resp); err != nil {
 		t.Fatalf("failed to decode error response: %v", err)
 	}
-	if len(resp) != 3 {
-		t.Fatalf("expected exactly 3 top-level fields, got %d: %v", len(resp), resp)
+	if len(resp) != 5 {
+		t.Fatalf("expected exactly 5 top-level fields, got %d: %v", len(resp), resp)
 	}
 	if valid, ok := resp["valid"].(bool); !ok || valid {
 		t.Fatalf("expected valid=false, got %#v", resp["valid"])
@@ -155,6 +155,13 @@ func assertExactErrorResponse(t *testing.T, body []byte, wantCode, wantMessage s
 	}
 	if len(issues) != 0 {
 		t.Fatalf("expected empty issues array, got %#v", issues)
+	}
+
+	if lintSupported, ok := resp["lint-supported"].(bool); !ok || lintSupported {
+		t.Fatalf("expected lint-supported=false, got %#v", resp["lint-supported"])
+	}
+	if syntaxErr, exists := resp["syntax-error"]; !exists || syntaxErr != nil {
+		t.Fatalf("expected syntax-error=null, got %#v", resp["syntax-error"])
 	}
 	errObj, ok := resp["error"].(map[string]interface{})
 	if !ok {
@@ -178,9 +185,11 @@ func assertValidationErrorResponse(t *testing.T, body []byte, wantCode, wantMess
 	t.Helper()
 
 	var resp struct {
-		Valid  bool          `json:"valid"`
-		Issues []model.Issue `json:"issues"`
-		Error  struct {
+		Valid         bool          `json:"valid"`
+		LintSupported bool          `json:"lint-supported"`
+		SyntaxError   interface{}   `json:"syntax-error"`
+		Issues        []model.Issue `json:"issues"`
+		Error         struct {
 			Code      string   `json:"code"`
 			Message   string   `json:"message"`
 			Path      string   `json:"path"`
@@ -192,6 +201,12 @@ func assertValidationErrorResponse(t *testing.T, body []byte, wantCode, wantMess
 	}
 	if resp.Valid {
 		t.Fatal("expected valid=false")
+	}
+	if resp.LintSupported {
+		t.Fatal("expected lint-supported=false")
+	}
+	if resp.SyntaxError != nil {
+		t.Fatalf("expected syntax-error=null, got %#v", resp.SyntaxError)
 	}
 	if len(resp.Issues) != 0 {
 		t.Fatalf("expected empty issues array, got %#v", resp.Issues)
@@ -367,9 +382,11 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 	}
 
 	var resp struct {
-		Valid  bool          `json:"valid"`
-		Issues []interface{} `json:"issues"`
-		Error  struct {
+		Valid         bool          `json:"valid"`
+		LintSupported bool          `json:"lint-supported"`
+		SyntaxError   interface{}   `json:"syntax-error"`
+		Issues        []interface{} `json:"issues"`
+		Error         struct {
 			Code    string `json:"code"`
 			Message string `json:"message"`
 		} `json:"error"`
@@ -381,6 +398,12 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 	// Validate complete response structure
 	if resp.Valid {
 		t.Fatalf("expected valid=false, got %v", resp.Valid)
+	}
+	if resp.LintSupported {
+		t.Fatal("expected lint-supported=false")
+	}
+	if resp.SyntaxError != nil {
+		t.Fatalf("expected syntax-error=null, got %#v", resp.SyntaxError)
 	}
 	if len(resp.Issues) != 0 {
 		t.Fatalf("expected empty issues array, got %#v", resp.Issues)
