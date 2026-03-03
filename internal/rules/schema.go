@@ -81,6 +81,8 @@ func optionSchema(name, description string) map[string]any {
 	case "limit":
 		schema["type"] = "integer"
 		schema["minimum"] = 1
+	case "allow-self-loop":
+		schema["type"] = "boolean"
 	default:
 		schema["type"] = "string"
 	}

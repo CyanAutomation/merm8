@@ -1184,7 +1184,7 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 				"edge-count": chainNodes - 1,
 				"max-fanout": 1,
 			},
-			expectedRules: map[string]int{},
+			expectedRules: map[string]int{"max-depth": 1},
 			maxDuration:   8 * time.Second,
 		},
 		{
@@ -1902,7 +1902,7 @@ func TestAnalyze_InvalidUnknownRuleConfigNested_Returns400(t *testing.T) {
 		"config": map[string]interface{}{
 			"schema-version": "v1",
 			"rules": map[string]interface{}{
-				"no-cycles": map[string]interface{}{"enabled": false},
+				"no-cycles-v2": map[string]interface{}{"enabled": false},
 			},
 		},
 	})
@@ -1918,7 +1918,7 @@ func TestAnalyze_InvalidUnknownRuleConfigNested_Returns400(t *testing.T) {
 	if parserCalled {
 		t.Fatal("expected parser not to be called when config validation fails")
 	}
-	assertValidationErrorResponse(t, w.Body.Bytes(), "unknown_rule", "unknown rule: no-cycles", "config.rules.no-cycles", []string{"max-fanout", "no-disconnected-nodes", "no-duplicate-node-ids"})
+	assertValidationErrorResponse(t, w.Body.Bytes(), "unknown_rule", "unknown rule: no-cycles-v2", "config.rules.no-cycles-v2", []string{"max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"})
 }
 
 func TestAnalyze_InvalidUnknownRuleConfigWithoutSchemaVersion_Returns400(t *testing.T) {
@@ -1931,7 +1931,7 @@ func TestAnalyze_InvalidUnknownRuleConfigWithoutSchemaVersion_Returns400(t *test
 	body, _ := json.Marshal(map[string]interface{}{
 		"code": "graph TD; A-->B",
 		"config": map[string]interface{}{
-			"no-cycles": map[string]interface{}{"enabled": false},
+			"no-cycles-v2": map[string]interface{}{"enabled": false},
 		},
 	})
 
@@ -2355,7 +2355,7 @@ func TestListRules_ContainsAllBuiltins(t *testing.T) {
 	for _, rule := range resp.Rules {
 		ids[rule.ID] = struct{}{}
 	}
-	for _, builtin := range []string{"no-duplicate-node-ids", "no-disconnected-nodes", "max-fanout"} {
+	for _, builtin := range []string{"no-duplicate-node-ids", "no-disconnected-nodes", "max-fanout", "no-cycles", "max-depth"} {
 		if _, ok := ids[builtin]; !ok {
 			t.Fatalf("expected builtin rule %q in /rules response", builtin)
 		}
@@ -2423,4 +2423,66 @@ func TestListRules_MetadataConsistencyWithRegistry(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestAnalyze_InvalidMaxDepthLimitConfig_Returns400(t *testing.T) {
+	parserCalled := false
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		parserCalled = true
+		return &model.Diagram{}, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A-->B",
+		"config": map[string]interface{}{
+			"schema-version": "v1",
+			"rules": map[string]interface{}{
+				"max-depth": map[string]interface{}{"limit": 0},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if parserCalled {
+		t.Fatal("expected parser not to be called when config validation fails")
+	}
+	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for limit", "config.rules.max-depth.limit", nil)
+}
+
+func TestAnalyze_InvalidNoCyclesAllowSelfLoopType_Returns400(t *testing.T) {
+	parserCalled := false
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		parserCalled = true
+		return &model.Diagram{}, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A-->A",
+		"config": map[string]interface{}{
+			"schema-version": "v1",
+			"rules": map[string]interface{}{
+				"no-cycles": map[string]interface{}{"allow-self-loop": "yes"},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if parserCalled {
+		t.Fatal("expected parser not to be called when config validation fails")
+	}
+	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for allow-self-loop", "config.rules.no-cycles.allow-self-loop", nil)
 }
