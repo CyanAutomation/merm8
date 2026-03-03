@@ -277,7 +277,7 @@ func TestAnalyzeSARIF_SARIFFormatConsistency(t *testing.T) {
 // TestAnalyzeSARIF_ErrorCodeMapping verifies error codes are properly mapped to SARIF levels
 func TestAnalyzeSARIF_ErrorCodeMapping(t *testing.T) {
 	tests := []struct {
-		code         string
+		code          string
 		expectedLevel string
 	}{
 		{"parser_timeout", sarif.SARIFLevelError},
