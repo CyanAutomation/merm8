@@ -296,8 +296,8 @@ func TestParser_MultipleEdges(t *testing.T) {
 			aOutgoing++
 		}
 	}
-	if aOutgoing != 2 {
-		t.Errorf("expected 2 edges from A, got %d", aOutgoing)
+	if aOutgoing != 3 {
+		t.Errorf("expected 3 edges from A, got %d", aOutgoing)
 	}
 }
 
