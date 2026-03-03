@@ -1,7 +1,10 @@
 package api
 
 import (
+	"context"
+	"crypto/rand"
 	"crypto/subtle"
+	"fmt"
 	"net"
 	"net/http"
 	"net/netip"
@@ -12,6 +15,118 @@ import (
 )
 
 const trustedProxyCIDRsEnv = "ANALYZE_TRUSTED_PROXY_CIDRS"
+
+const requestIDHeader = "X-Request-Id"
+
+type contextKey string
+
+const (
+	requestIDContextKey        contextKey = "request-id"
+	analyzeLogFieldsContextKey contextKey = "analyze-log-fields"
+)
+
+type analyzeLogFields struct {
+	parserOutcome string
+	diagramType   string
+}
+
+// RequestIDMiddleware propagates or generates request IDs for correlation.
+func RequestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := strings.TrimSpace(r.Header.Get(requestIDHeader))
+		if requestID == "" {
+			requestID = generateUUID()
+		}
+
+		w.Header().Set(requestIDHeader, requestID)
+		ctx := context.WithValue(r.Context(), requestIDContextKey, requestID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// AnalyzeLoggingMiddleware emits per-request structured logs for analyze endpoints.
+func AnalyzeLoggingMiddleware(next http.Handler, logger Logger) http.Handler {
+	logger = normalizeLogger(logger)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/analyze" && r.URL.Path != "/analyze/sarif" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		fields := &analyzeLogFields{}
+		ctx := context.WithValue(r.Context(), analyzeLogFieldsContextKey, fields)
+		r = r.WithContext(ctx)
+
+	recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+		start := time.Now()
+		next.ServeHTTP(recorder, r)
+
+		requestID := RequestIDFromContext(ctx)
+		parserOutcome := fields.parserOutcome
+		if parserOutcome == "" {
+			parserOutcome = "unknown"
+		}
+		diagramType := fields.diagramType
+		if diagramType == "" {
+			diagramType = "unknown"
+		}
+
+		logger.Info("analyze request completed",
+			"request_id", requestID,
+			"route", r.URL.Path,
+			"method", r.Method,
+			"status", recorder.status,
+			"duration_ms", time.Since(start).Milliseconds(),
+			"parser_outcome", parserOutcome,
+			"diagram_type", diagramType,
+		)
+	})
+}
+
+// RequestIDFromContext returns the request correlation identifier if present.
+func RequestIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	requestID, _ := ctx.Value(requestIDContextKey).(string)
+	return requestID
+}
+
+func setAnalyzeLogFields(ctx context.Context, parserOutcome string, diagramType string) {
+	fields, _ := ctx.Value(analyzeLogFieldsContextKey).(*analyzeLogFields)
+	if fields == nil {
+		return
+	}
+	if parserOutcome != "" {
+		fields.parserOutcome = parserOutcome
+	}
+	if diagramType != "" {
+		fields.diagramType = diagramType
+	}
+}
+
+func generateUUID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+		b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15],
+	)
+}
 
 // RateLimiter applies a simple per-client fixed-window request limit.
 type RateLimiter struct {
