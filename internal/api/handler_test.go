@@ -1489,7 +1489,7 @@ func TestAnalyze_InvalidSeverityConfig_Returns400(t *testing.T) {
 		"code": "graph TD; A-->B",
 		"config": map[string]interface{}{
 			"max-fanout": map[string]interface{}{
-				"severity": "warning",
+				"severity": "warnx",
 			},
 		},
 	})

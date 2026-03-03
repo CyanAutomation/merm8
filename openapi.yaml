@@ -215,7 +215,7 @@ paths:
                         severity: error
                         message: Node 'D' is not connected to the graph
                       - rule_id: max-fanout
-                        severity: warn
+                        severity: warning
                         message: Node 'A' has fanout 6, exceeding limit of 5
                         line: 2
                         column: 2
@@ -231,7 +231,7 @@ paths:
                       issue_counts:
                         by_severity:
                           error: 1
-                          warn: 1
+                          warning: 1
                         by_rule:
                           no-disconnected-nodes: 1
                           max-fanout: 1
@@ -388,7 +388,7 @@ components:
           type: string
           enum:
             - error
-            - warn
+            - warning
             - info
         description:
           type: string
@@ -570,7 +570,7 @@ components:
           type: string
           enum:
             - error
-            - warn
+            - warning
             - info
           description: Severity level of the issue
         message:

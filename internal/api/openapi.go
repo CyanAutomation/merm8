@@ -253,7 +253,7 @@ var openapi = map[string]interface{}{
 												},
 												map[string]interface{}{
 													"rule_id":  "max-fanout",
-													"severity": "warn",
+													"severity": "warning",
 													"message":  "Node 'A' has fanout 6, exceeding limit of 5",
 													"line":     2,
 													"column":   2,
@@ -269,7 +269,7 @@ var openapi = map[string]interface{}{
 												"diagram_type":            "flowchart",
 												"direction":               "TD",
 												"issue_counts": map[string]interface{}{
-													"by_severity": map[string]interface{}{"error": 1, "warn": 1},
+													"by_severity": map[string]interface{}{"error": 1, "warning": 1},
 													"by_rule":     map[string]interface{}{"no-disconnected-nodes": 1, "max-fanout": 1},
 												},
 											},
@@ -508,7 +508,7 @@ var openapi = map[string]interface{}{
 				"required": []string{"id", "severity", "description", "default_config", "configurable_options"},
 				"properties": map[string]interface{}{
 					"id":             map[string]interface{}{"type": "string", "example": "max-fanout"},
-					"severity":       map[string]interface{}{"type": "string", "enum": []string{"error", "warn", "info"}},
+					"severity":       map[string]interface{}{"type": "string", "enum": []string{"error", "warning", "info"}},
 					"description":    map[string]interface{}{"type": "string"},
 					"default_config": map[string]interface{}{"type": "object", "additionalProperties": true},
 					"configurable_options": map[string]interface{}{
@@ -674,7 +674,7 @@ var openapi = map[string]interface{}{
 					},
 					"severity": map[string]interface{}{
 						"type":        "string",
-						"enum":        []string{"error", "warn", "info"},
+						"enum":        []string{"error", "warning", "info"},
 						"description": "Severity level of the issue",
 					},
 					"message": map[string]interface{}{

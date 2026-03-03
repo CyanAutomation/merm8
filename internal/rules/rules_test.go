@@ -113,8 +113,8 @@ func TestMaxFanout_OverLimit(t *testing.T) {
 	if len(issues) != 1 {
 		t.Fatalf("expected 1 issue, got %d", len(issues))
 	}
-	if issues[0].Severity != "warn" {
-		t.Errorf("expected warn severity, got %s", issues[0].Severity)
+	if issues[0].Severity != "warning" {
+		t.Errorf("expected warning severity, got %s", issues[0].Severity)
 	}
 	if issues[0].Line != nil || issues[0].Column != nil {
 		t.Errorf("expected location to be unset when unknown, got line=%v column=%v", issues[0].Line, issues[0].Column)
