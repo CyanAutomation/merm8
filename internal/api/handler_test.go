@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -205,9 +204,25 @@ func TestAnalyze_ParserFails_Returns500(t *testing.T) {
 	assertExactErrorResponse(t, w.Body.Bytes(), "internal_error", "internal server error")
 }
 
-func TestAnalyze_ParserTimeout_Returns500(t *testing.T) {
+func TestAnalyze_ParserTimeout_Returns504(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return nil, nil, context.DeadlineExceeded
+		return nil, nil, fmt.Errorf("%w: after 2s", parser.ErrTimeout)
+	})
+	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusGatewayTimeout {
+		t.Fatalf("expected 504 when parser times out, got %d", w.Code)
+	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "parser_timeout", "parser timed out while validating Mermaid code")
+}
+
+func TestAnalyze_ParserSubprocessError_Returns500(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, fmt.Errorf("%w: exit status 1", parser.ErrSubprocess)
 	})
 	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
 	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
@@ -216,9 +231,41 @@ func TestAnalyze_ParserTimeout_Returns500(t *testing.T) {
 	mux.ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 when parser times out, got %d", w.Code)
+		t.Fatalf("expected 500 when parser subprocess fails, got %d", w.Code)
 	}
-	assertExactErrorResponse(t, w.Body.Bytes(), "parser_timeout", "parser timed out")
+	assertExactErrorResponse(t, w.Body.Bytes(), "parser_subprocess_error", "parser subprocess failed")
+}
+
+func TestAnalyze_ParserDecodeError_Returns500(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, fmt.Errorf("%w: malformed json", parser.ErrDecode)
+	})
+	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when parser decode fails, got %d", w.Code)
+	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "parser_decode_error", "parser returned malformed output")
+}
+
+func TestAnalyze_ParserContractViolation_Returns500(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, fmt.Errorf("%w: missing ast", parser.ErrContract)
+	})
+	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when parser contract is violated, got %d", w.Code)
+	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "parser_contract_violation", "parser response violated service contract")
 }
 
 func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {

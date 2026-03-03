@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -269,9 +268,16 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 }
 
 func writeParserFailure(w http.ResponseWriter, err error) {
-	if errors.Is(err, context.DeadlineExceeded) || strings.Contains(strings.ToLower(err.Error()), "timeout") {
-		writeError(w, http.StatusInternalServerError, "parser_timeout", "parser timed out")
-		return
+	switch {
+	case errors.Is(err, parser.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
+		writeError(w, http.StatusGatewayTimeout, "parser_timeout", "parser timed out while validating Mermaid code")
+	case errors.Is(err, parser.ErrSubprocess):
+		writeError(w, http.StatusInternalServerError, "parser_subprocess_error", "parser subprocess failed")
+	case errors.Is(err, parser.ErrDecode):
+		writeError(w, http.StatusInternalServerError, "parser_decode_error", "parser returned malformed output")
+	case errors.Is(err, parser.ErrContract):
+		writeError(w, http.StatusInternalServerError, "parser_contract_violation", "parser response violated service contract")
+	default:
+		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
 	}
-	writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
 }

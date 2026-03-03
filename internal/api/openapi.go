@@ -106,7 +106,7 @@ var openapi = map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Analyze and lint a Mermaid diagram",
-				"description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors if parsing fails, or lint results if parsing succeeds.",
+				"description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)",
 				"operationId": "analyzeCode",
 				"requestBody": map[string]interface{}{
 					"required": true,
@@ -284,14 +284,36 @@ var openapi = map[string]interface{}{
 									"$ref": "#/components/schemas/ErrorResponse",
 								},
 								"examples": map[string]interface{}{
-									"parserTimeout": map[string]interface{}{
-										"summary": "Parser timeout",
+									"subprocess": map[string]interface{}{
+										"summary": "Parser subprocess failure",
 										"value": map[string]interface{}{
 											"valid":  false,
 											"issues": []interface{}{},
 											"error": map[string]interface{}{
-												"code":    "parser_timeout",
-												"message": "parser timed out",
+												"code":    "parser_subprocess_error",
+												"message": "parser subprocess failed",
+											},
+										},
+									},
+									"decode": map[string]interface{}{
+										"summary": "Parser malformed output",
+										"value": map[string]interface{}{
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":    "parser_decode_error",
+												"message": "parser returned malformed output",
+											},
+										},
+									},
+									"contract": map[string]interface{}{
+										"summary": "Parser contract violation",
+										"value": map[string]interface{}{
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":    "parser_contract_violation",
+												"message": "parser response violated service contract",
 											},
 										},
 									},
@@ -305,6 +327,24 @@ var openapi = map[string]interface{}{
 												"message": "internal server error",
 											},
 										},
+									},
+								},
+							},
+						},
+					},
+					"504": map[string]interface{}{
+						"description": "Parser timeout",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/ErrorResponse",
+								},
+								"example": map[string]interface{}{
+									"valid":  false,
+									"issues": []interface{}{},
+									"error": map[string]interface{}{
+										"code":    "parser_timeout",
+										"message": "parser timed out while validating Mermaid code",
 									},
 								},
 							},
