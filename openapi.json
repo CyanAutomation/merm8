@@ -51,7 +51,7 @@
             "type": "string"
           },
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail",
+            "$ref": "#/components/schemas/Error",
             "description": "API-level error details for non-200 responses.",
             "nullable": true
           },
@@ -132,29 +132,22 @@
         ],
         "type": "object"
       },
-      "ErrorDetail": {
+      "Error": {
         "properties": {
           "code": {
             "description": "Machine-readable error code",
             "example": "invalid_json",
             "type": "string"
           },
+          "details": {
+            "additionalProperties": true,
+            "description": "Optional context-specific error details object (e.g. path, supported)",
+            "type": "object"
+          },
           "message": {
             "description": "Human-readable error message",
             "example": "invalid JSON body",
             "type": "string"
-          },
-          "path": {
-            "description": "JSON path to the invalid config field when config validation fails",
-            "example": "config.rules.max-fanout.limit",
-            "type": "string"
-          },
-          "supported": {
-            "description": "Supported values for unknown rule/option errors",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
           }
         },
         "required": [
@@ -358,6 +351,22 @@
           "max-fanin",
           "max-fanout",
           "diagram-type"
+        ],
+        "type": "object"
+      },
+      "ReadyErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "status": {
+            "example": "not_ready",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "error"
         ],
         "type": "object"
       },
@@ -1025,7 +1034,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AnalyzeErrorResponse"
+                  "$ref": "#/components/schemas/AnalyzeResponse"
                 }
               }
             },
@@ -1362,8 +1371,10 @@
                     "value": {
                       "error": {
                         "code": "invalid_option",
-                        "message": "invalid option value for limit",
-                        "path": "config.rules.max-fanout.limit"
+                        "details": {
+                          "path": "config.rules.max-fanout.limit"
+                        },
+                        "message": "invalid option value for limit"
                       },
                       "issues": [],
                       "lint-supported": false,
@@ -1415,14 +1426,16 @@
                     "value": {
                       "error": {
                         "code": "unknown_option",
-                        "message": "unknown option: threshold",
-                        "path": "config.rules.max-fanout.threshold",
-                        "supported": [
-                          "enabled",
-                          "limit",
-                          "severity",
-                          "suppression-selectors"
-                        ]
+                        "details": {
+                          "path": "config.rules.max-fanout.threshold",
+                          "supported": [
+                            "enabled",
+                            "limit",
+                            "severity",
+                            "suppression-selectors"
+                          ]
+                        },
+                        "message": "unknown option: threshold"
                       },
                       "issues": [],
                       "lint-supported": false,
@@ -1448,15 +1461,17 @@
                     "value": {
                       "error": {
                         "code": "unknown_rule",
-                        "message": "unknown rule: unknown-rule",
-                        "path": "config.rules.unknown-rule",
-                        "supported": [
-                          "max-depth",
-                          "max-fanout",
-                          "no-cycles",
-                          "no-disconnected-nodes",
-                          "no-duplicate-node-ids"
-                        ]
+                        "details": {
+                          "path": "config.rules.unknown-rule",
+                          "supported": [
+                            "max-depth",
+                            "max-fanout",
+                            "no-cycles",
+                            "no-disconnected-nodes",
+                            "no-duplicate-node-ids"
+                          ]
+                        },
+                        "message": "unknown rule: unknown-rule"
                       },
                       "issues": [],
                       "lint-supported": false,
@@ -2044,17 +2059,15 @@
           "503": {
             "content": {
               "application/json": {
-                "schema": {
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "example": "not_ready",
-                      "type": "string"
-                    }
+                "example": {
+                  "error": {
+                    "code": "not_ready",
+                    "message": "parser script not found"
                   },
-                  "type": "object"
+                  "status": "not_ready"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyErrorResponse"
                 }
               }
             },

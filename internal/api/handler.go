@@ -296,10 +296,9 @@ type diagramTypesResponse struct {
 
 // apiErrorDetails holds machine-readable and human-readable error information.
 type apiErrorDetails struct {
-	Code      string   `json:"code"`
-	Message   string   `json:"message"`
-	Path      string   `json:"path,omitempty"`
-	Supported []string `json:"supported,omitempty"`
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // Handler holds the dependencies needed to serve HTTP requests.
@@ -531,9 +530,12 @@ func (h *Handler) Healthz(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) Ready(w http.ResponseWriter, _ *http.Request) {
 	if checker, ok := h.parser.(ReadinessChecker); ok {
 		if err := checker.Ready(); err != nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 				"status": "not_ready",
-				"error":  err.Error(),
+				"error": &apiErrorDetails{
+					Code:    "not_ready",
+					Message: err.Error(),
+				},
 			})
 			return
 		}
@@ -833,13 +835,23 @@ func defaultMetrics(diagramType model.DiagramType) *metricsResponse {
 }
 
 func writeConfigValidationError(w http.ResponseWriter, configValidationErr *validationError) {
+	details := map[string]any{}
+	if configValidationErr.Path != "" {
+		details["path"] = configValidationErr.Path
+	}
+	if len(configValidationErr.Supported) > 0 {
+		details["supported"] = configValidationErr.Supported
+	}
+	if len(details) == 0 {
+		details = nil
+	}
+
 	writeJSON(w, http.StatusBadRequest, analyzeResponse{
 		Valid: false,
 		Error: &apiErrorDetails{
-			Code:      configValidationErr.Code,
-			Message:   configValidationErr.Message,
-			Path:      configValidationErr.Path,
-			Supported: configValidationErr.Supported,
+			Code:    configValidationErr.Code,
+			Message: configValidationErr.Message,
+			Details: details,
 		},
 		LintSupported: false,
 		SyntaxError:   nil,

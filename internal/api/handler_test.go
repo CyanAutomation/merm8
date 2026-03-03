@@ -202,11 +202,8 @@ func assertExactErrorResponse(t *testing.T, body []byte, wantCode, wantMessage s
 	if msg, ok := errObj["message"].(string); !ok || msg != wantMessage {
 		t.Fatalf("expected error.message=%q, got %#v", wantMessage, errObj["message"])
 	}
-	if _, hasPath := errObj["path"]; hasPath {
-		t.Fatalf("did not expect error.path for generic errors, got %#v", errObj["path"])
-	}
-	if _, hasSupported := errObj["supported"]; hasSupported {
-		t.Fatalf("did not expect error.supported for generic errors, got %#v", errObj["supported"])
+	if _, hasDetails := errObj["details"]; hasDetails {
+		t.Fatalf("did not expect error.details for generic errors, got %#v", errObj["details"])
 	}
 }
 
@@ -220,10 +217,12 @@ func assertValidationErrorResponse(t *testing.T, body []byte, wantCode, wantMess
 		Issues        []model.Issue          `json:"issues"`
 		Metrics       map[string]interface{} `json:"metrics"`
 		Error         struct {
-			Code      string   `json:"code"`
-			Message   string   `json:"message"`
-			Path      string   `json:"path"`
-			Supported []string `json:"supported"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
+			Details struct {
+				Path      string   `json:"path"`
+				Supported []string `json:"supported"`
+			} `json:"details"`
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -253,17 +252,17 @@ func assertValidationErrorResponse(t *testing.T, body []byte, wantCode, wantMess
 	if resp.Error.Message != wantMessage {
 		t.Fatalf("expected error.message=%q, got %q", wantMessage, resp.Error.Message)
 	}
-	if resp.Error.Path != wantPath {
-		t.Fatalf("expected error.path=%q, got %q", wantPath, resp.Error.Path)
+	if resp.Error.Details.Path != wantPath {
+		t.Fatalf("expected error.details.path=%q, got %q", wantPath, resp.Error.Details.Path)
 	}
 	if len(wantSupported) == 0 {
-		if len(resp.Error.Supported) != 0 {
-			t.Fatalf("expected empty supported list, got %#v", resp.Error.Supported)
+		if len(resp.Error.Details.Supported) != 0 {
+			t.Fatalf("expected empty supported list, got %#v", resp.Error.Details.Supported)
 		}
 		return
 	}
-	if strings.Join(resp.Error.Supported, ",") != strings.Join(wantSupported, ",") {
-		t.Fatalf("expected supported=%v, got %v", wantSupported, resp.Error.Supported)
+	if strings.Join(resp.Error.Details.Supported, ",") != strings.Join(wantSupported, ",") {
+		t.Fatalf("expected supported=%v, got %v", wantSupported, resp.Error.Details.Supported)
 	}
 }
 
@@ -1741,7 +1740,7 @@ func TestReady_OptionallyIncludesVersionMetadata(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp map[string]string
+	var resp map[string]interface{}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -1790,15 +1789,22 @@ func TestReady_ReturnsUnavailableWhenDependencyUnhealthy(t *testing.T) {
 		t.Fatalf("expected 503, got %d", w.Code)
 	}
 
-	var resp map[string]string
+	var resp map[string]interface{}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if resp["status"] != "not_ready" {
-		t.Fatalf("expected status=not_ready, got %q", resp["status"])
+		t.Fatalf("expected status=not_ready, got %#v", resp["status"])
 	}
-	if resp["error"] == "" {
-		t.Fatal("expected non-empty error message")
+	errObj, ok := resp["error"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected error object, got %#v", resp["error"])
+	}
+	if errObj["code"] != "not_ready" {
+		t.Fatalf("expected error.code=not_ready, got %#v", errObj["code"])
+	}
+	if msg, _ := errObj["message"].(string); msg == "" {
+		t.Fatal("expected non-empty error.message")
 	}
 }
 

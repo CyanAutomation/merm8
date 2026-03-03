@@ -40,7 +40,7 @@
           "example": "flowchart"
           "type": "string"
         "error":
-          "$ref": "#/components/schemas/ErrorDetail"
+          "$ref": "#/components/schemas/Error"
           "description": "API-level error details for non-200 responses."
           "nullable": true
         "issues":
@@ -100,25 +100,20 @@
         - "parser-recognized"
         - "lint-supported"
       "type": "object"
-    "ErrorDetail":
+    "Error":
       "properties":
         "code":
           "description": "Machine-readable error code"
           "example": "invalid_json"
           "type": "string"
+        "details":
+          "additionalProperties": true
+          "description": "Optional context-specific error details object (e.g. path, supported)"
+          "type": "object"
         "message":
           "description": "Human-readable error message"
           "example": "invalid JSON body"
           "type": "string"
-        "path":
-          "description": "JSON path to the invalid config field when config validation fails"
-          "example": "config.rules.max-fanout.limit"
-          "type": "string"
-        "supported":
-          "description": "Supported values for unknown rule/option errors"
-          "items":
-            "type": "string"
-          "type": "array"
       "required":
         - "code"
         - "message"
@@ -273,6 +268,17 @@
         - "max-fanin"
         - "max-fanout"
         - "diagram-type"
+      "type": "object"
+    "ReadyErrorResponse":
+      "properties":
+        "error":
+          "$ref": "#/components/schemas/Error"
+        "status":
+          "example": "not_ready"
+          "type": "string"
+      "required":
+        - "status"
+        - "error"
       "type": "object"
     "ReadyResponse":
       "properties":
@@ -741,7 +747,7 @@
           "content":
             "application/json":
               "schema":
-                "$ref": "#/components/schemas/AnalyzeErrorResponse"
+                "$ref": "#/components/schemas/AnalyzeResponse"
           "description": "Metrics exporter not configured"
       "summary": "Prometheus metrics"
       "tags":
@@ -987,8 +993,9 @@
                   "value":
                     "error":
                       "code": "invalid_option"
+                      "details":
+                        "path": "config.rules.max-fanout.limit"
                       "message": "invalid option value for limit"
-                      "path": "config.rules.max-fanout.limit"
                     "issues":
                     "lint-supported": false
                     "metrics":
@@ -1030,13 +1037,14 @@
                   "value":
                     "error":
                       "code": "unknown_option"
+                      "details":
+                        "path": "config.rules.max-fanout.threshold"
+                        "supported":
+                          - "enabled"
+                          - "limit"
+                          - "severity"
+                          - "suppression-selectors"
                       "message": "unknown option: threshold"
-                      "path": "config.rules.max-fanout.threshold"
-                      "supported":
-                        - "enabled"
-                        - "limit"
-                        - "severity"
-                        - "suppression-selectors"
                     "issues":
                     "lint-supported": false
                     "metrics":
@@ -1057,14 +1065,15 @@
                   "value":
                     "error":
                       "code": "unknown_rule"
+                      "details":
+                        "path": "config.rules.unknown-rule"
+                        "supported":
+                          - "max-depth"
+                          - "max-fanout"
+                          - "no-cycles"
+                          - "no-disconnected-nodes"
+                          - "no-duplicate-node-ids"
                       "message": "unknown rule: unknown-rule"
-                      "path": "config.rules.unknown-rule"
-                      "supported":
-                        - "max-depth"
-                        - "max-fanout"
-                        - "no-cycles"
-                        - "no-disconnected-nodes"
-                        - "no-duplicate-node-ids"
                     "issues":
                     "lint-supported": false
                     "metrics":
@@ -1478,14 +1487,13 @@
         "503":
           "content":
             "application/json":
+              "example":
+                "error":
+                  "code": "not_ready"
+                  "message": "parser script not found"
+                "status": "not_ready"
               "schema":
-                "properties":
-                  "error":
-                    "type": "string"
-                  "status":
-                    "example": "not_ready"
-                    "type": "string"
-                "type": "object"
+                "$ref": "#/components/schemas/ReadyErrorResponse"
           "description": "Service is not ready"
       "summary": "Readiness probe"
       "tags":
