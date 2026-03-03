@@ -98,11 +98,17 @@ func AnalyzeBearerAuthMiddleware(token string, next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/analyze" {
-			header := r.Header.Get("Authorization")
-			if !strings.HasPrefix(header, "Bearer ") || strings.TrimSpace(strings.TrimPrefix(header, "Bearer ")) != token {
-				writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
-				return
-			}
+		header := r.Header.Get("Authorization")
+		if !strings.HasPrefix(header, "Bearer ") {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
+			return
+		}
+		providedToken := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
+		// Use constant-time comparison to prevent timing attacks
+		if subtle.ConstantTimeCompare([]byte(providedToken), []byte(token)) != 1 {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
+			return
+		}
 		}
 		next.ServeHTTP(w, r)
 	})
