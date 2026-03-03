@@ -18,6 +18,8 @@ const (
 	defaultRateLimitPerMinute     = 120
 )
 
+var appVersion = ""
+
 func main() {
 	scriptPath := os.Getenv("PARSER_SCRIPT")
 	if scriptPath == "" {
@@ -46,6 +48,7 @@ func main() {
 	metrics := telemetry.NewMetrics()
 	handler.SetMetricsHandler(metrics.Handler())
 	handler.SetTelemetryMetrics(metrics)
+	handler.SetServiceVersion(strings.TrimSpace(appVersion))
 
 	handler.RegisterRoutes(mux)
 
@@ -69,6 +72,7 @@ func main() {
 		"GET /health":   "/health",
 		"GET /healthz":  "/healthz",
 		"GET /ready":    "/ready",
+		"GET /info":     "/info",
 		"GET /metrics":  "/metrics",
 		"POST /analyze": "/analyze",
 	}

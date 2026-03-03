@@ -24,11 +24,13 @@ import (
 
 // mockParser is a test double for ParserInterface.
 type mockParser struct {
-	diagram    *model.Diagram
-	syntaxErr  *parser.SyntaxError
-	parseError error
-	parseFunc  func(string) (*model.Diagram, *parser.SyntaxError, error)
-	readyError error
+	diagram     *model.Diagram
+	syntaxErr   *parser.SyntaxError
+	parseError  error
+	parseFunc   func(string) (*model.Diagram, *parser.SyntaxError, error)
+	readyError  error
+	versionInfo *parser.VersionInfo
+	versionErr  error
 }
 
 func (m *mockParser) Parse(code string) (*model.Diagram, *parser.SyntaxError, error) {
@@ -40,6 +42,16 @@ func (m *mockParser) Parse(code string) (*model.Diagram, *parser.SyntaxError, er
 
 func (m *mockParser) Ready() error {
 	return m.readyError
+}
+
+func (m *mockParser) VersionInfo() (*parser.VersionInfo, error) {
+	if m.versionErr != nil {
+		return nil, m.versionErr
+	}
+	if m.versionInfo == nil {
+		return &parser.VersionInfo{}, nil
+	}
+	return m.versionInfo, nil
 }
 
 // newTestMux creates a test HTTP server backed by a handler using a mock parser.
@@ -1649,6 +1661,71 @@ func TestMetrics_ExporterExposesPrometheusText(t *testing.T) {
 	}
 }
 
+func TestInfo_ReturnsServiceAndParserMetadata(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{versionInfo: &parser.VersionInfo{ParserVersion: "1.0.0", MermaidVersion: "11.12.3"}}, engine.New())
+	h.SetServiceVersion("2.3.4")
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/info", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		ServiceVersion   string   `json:"service_version"`
+		ParserVersion    string   `json:"parser_version"`
+		MermaidVersion   string   `json:"mermaid_version"`
+		ParserRecognized []string `json:"parser_recognized"`
+		LintSupported    []string `json:"lint_supported"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode /info response: %v", err)
+	}
+	if resp.ServiceVersion != "2.3.4" {
+		t.Fatalf("expected service_version=2.3.4, got %q", resp.ServiceVersion)
+	}
+	if resp.ParserVersion != "1.0.0" {
+		t.Fatalf("expected parser_version=1.0.0, got %q", resp.ParserVersion)
+	}
+	if resp.MermaidVersion != "11.12.3" {
+		t.Fatalf("expected mermaid_version=11.12.3, got %q", resp.MermaidVersion)
+	}
+	if len(resp.ParserRecognized) == 0 || len(resp.LintSupported) == 0 {
+		t.Fatalf("expected parser and lint capability arrays, got %#v", resp)
+	}
+}
+
+func TestReady_OptionallyIncludesVersionMetadata(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{versionInfo: &parser.VersionInfo{ParserVersion: "1.0.0", MermaidVersion: "11.12.3"}}, engine.New())
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["status"] != "ready" {
+		t.Fatalf("expected status=ready, got %q", resp["status"])
+	}
+	if resp["parser_version"] != "1.0.0" {
+		t.Fatalf("expected parser_version=1.0.0, got %q", resp["parser_version"])
+	}
+	if resp["mermaid_version"] != "11.12.3" {
+		t.Fatalf("expected mermaid_version=11.12.3, got %q", resp["mermaid_version"])
+	}
+}
 func TestReady_ReturnsReadyWhenDependencyHealthy(t *testing.T) {
 	mux := http.NewServeMux()
 	h := api.NewHandler(&mockParser{}, engine.New())
