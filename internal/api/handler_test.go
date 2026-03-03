@@ -1582,6 +1582,93 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 	}
 }
 
+func readInternalAnalyzeMetrics(t *testing.T, mux *http.ServeMux) map[string]map[string]float64 {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/internal/metrics", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected /internal/metrics 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	var got map[string]map[string]float64
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("failed to decode /internal/metrics response: %v", err)
+	}
+	return got
+}
+
+func TestInternalMetrics_AnalyzeOutcomeCounters(t *testing.T) {
+	parseErrByCode := map[string]error{
+		"TIMEOUT":    parser.ErrTimeout,
+		"SUBPROCESS": parser.ErrSubprocess,
+		"DECODE":     parser.ErrDecode,
+		"CONTRACT":   parser.ErrContract,
+		"INTERNAL":   errors.New("unexpected parser crash"),
+	}
+
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		switch code {
+		case "VALID":
+			return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+		case "SYNTAX":
+			return nil, &parser.SyntaxError{Message: "bad syntax", Line: 1, Column: 1}, nil
+		default:
+			if err, ok := parseErrByCode[code]; ok {
+				return nil, nil, err
+			}
+			return nil, nil, errors.New("unmapped parse scenario")
+		}
+	}}, engine.New())
+	h.RegisterRoutes(mux)
+
+	before := readInternalAnalyzeMetrics(t, mux)
+
+	testCases := []struct {
+		code       string
+		wantStatus int
+	}{
+		{code: "VALID", wantStatus: http.StatusOK},
+		{code: "SYNTAX", wantStatus: http.StatusOK},
+		{code: "TIMEOUT", wantStatus: http.StatusGatewayTimeout},
+		{code: "SUBPROCESS", wantStatus: http.StatusInternalServerError},
+		{code: "DECODE", wantStatus: http.StatusInternalServerError},
+		{code: "CONTRACT", wantStatus: http.StatusInternalServerError},
+		{code: "INTERNAL", wantStatus: http.StatusInternalServerError},
+	}
+
+	for _, tc := range testCases {
+		body := []byte(fmt.Sprintf(`{"code":%q}`, tc.code))
+		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		if w.Code != tc.wantStatus {
+			t.Fatalf("code=%s expected status=%d, got %d body=%s", tc.code, tc.wantStatus, w.Code, w.Body.String())
+		}
+	}
+
+	after := readInternalAnalyzeMetrics(t, mux)
+
+	assertDelta := func(section, key string, want float64) {
+		t.Helper()
+		got := after[section][key] - before[section][key]
+		if got != want {
+			t.Fatalf("expected delta %s.%s=%v, got %v (before=%v after=%v)", section, key, want, got, before[section][key], after[section][key])
+		}
+	}
+
+	assertDelta("analyze", "valid_success", 1)
+	assertDelta("analyze", "syntax_error", 1)
+	assertDelta("parser", "timeout", 1)
+	assertDelta("parser", "subprocess", 1)
+	assertDelta("parser", "decode", 1)
+	assertDelta("parser", "contract", 1)
+	assertDelta("parser", "internal", 1)
+}
+
 func TestDiagramTypes_ReturnsParserAndLintSupport(t *testing.T) {
 	mux := http.NewServeMux()
 	h := api.NewHandler(&mockParser{}, engine.New())

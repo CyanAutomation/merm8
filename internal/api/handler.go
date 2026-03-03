@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
@@ -310,8 +311,24 @@ type Handler struct {
 	serviceVersion      string
 	metricsHandler      http.Handler
 	telemetryMetrics    *telemetry.Metrics
+	analyzeCounters     analyzeOutcomeCounters
 	mu                  sync.RWMutex
 	parserConcurrencyCh chan struct{}
+}
+
+type analyzeOutcomeCounters struct {
+	validSuccess        atomic.Uint64
+	syntaxError         atomic.Uint64
+	parserTimeout       atomic.Uint64
+	parserSubprocess    atomic.Uint64
+	parserDecode        atomic.Uint64
+	parserContract      atomic.Uint64
+	parserInternalError atomic.Uint64
+}
+
+type analyzeOutcomeMetricsResponse struct {
+	Analyze map[string]uint64 `json:"analyze"`
+	Parser  map[string]uint64 `json:"parser"`
 }
 
 type requestRuleMetricsSink struct {
@@ -438,6 +455,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/ready", h.Ready)
 	mux.HandleFunc("GET /v1/info", h.Info)
 	mux.HandleFunc("GET /v1/metrics", h.Metrics)
+	mux.HandleFunc("GET /v1/internal/metrics", h.InternalMetrics)
 	mux.HandleFunc("GET /v1/rules", h.ListRules)
 	mux.HandleFunc("GET /v1/rules/schema", h.RuleConfigSchema)
 	mux.HandleFunc("GET /v1/diagram-types", h.DiagramTypes)
@@ -452,6 +470,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ready", h.Ready)
 	mux.HandleFunc("GET /info", h.Info)
 	mux.HandleFunc("GET /metrics", h.Metrics)
+	mux.HandleFunc("GET /internal/metrics", h.InternalMetrics)
 	mux.HandleFunc("GET /rules", h.ListRules)
 	mux.HandleFunc("GET /rules/schema", h.RuleConfigSchema)
 	mux.HandleFunc("GET /diagram-types", h.DiagramTypes)
@@ -459,6 +478,42 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /analyze/sarif", h.AnalyzeSARIF)
 	mux.HandleFunc("GET /spec", h.ServeSpec)
 	mux.HandleFunc("GET /docs", h.ServeSwagger)
+}
+
+// InternalMetrics handles GET /internal/metrics and returns analyze outcome counters.
+func (h *Handler) InternalMetrics(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, analyzeOutcomeMetricsResponse{
+		Analyze: map[string]uint64{
+			"valid_success": h.analyzeCounters.validSuccess.Load(),
+			"syntax_error":  h.analyzeCounters.syntaxError.Load(),
+		},
+		Parser: map[string]uint64{
+			"timeout":    h.analyzeCounters.parserTimeout.Load(),
+			"subprocess": h.analyzeCounters.parserSubprocess.Load(),
+			"decode":     h.analyzeCounters.parserDecode.Load(),
+			"contract":   h.analyzeCounters.parserContract.Load(),
+			"internal":   h.analyzeCounters.parserInternalError.Load(),
+		},
+	})
+}
+
+func (h *Handler) incrementAnalyzeOutcomeCounter(outcome string) {
+	switch outcome {
+	case telemetry.OutcomeLintSuccess:
+		h.analyzeCounters.validSuccess.Add(1)
+	case telemetry.OutcomeSyntaxError:
+		h.analyzeCounters.syntaxError.Add(1)
+	case telemetry.OutcomeParserTimeout:
+		h.analyzeCounters.parserTimeout.Add(1)
+	case telemetry.OutcomeParserSubprocessErr:
+		h.analyzeCounters.parserSubprocess.Add(1)
+	case telemetry.OutcomeParserDecodeErr:
+		h.analyzeCounters.parserDecode.Add(1)
+	case telemetry.OutcomeParserContractErr:
+		h.analyzeCounters.parserContract.Add(1)
+	case telemetry.OutcomeInternalError:
+		h.analyzeCounters.parserInternalError.Add(1)
+	}
 }
 
 // Metrics handles GET /metrics and serves exporter output when configured.
@@ -585,6 +640,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		if metrics != nil {
 			metrics.ObserveAnalyzeOutcome(outcome)
 		}
+		h.incrementAnalyzeOutcomeCounter(outcome)
 	}
 
 	h.mu.RLock()

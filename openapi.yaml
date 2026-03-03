@@ -155,6 +155,48 @@
         - "parser_recognized"
         - "lint_supported"
       "type": "object"
+    "InternalMetricsResponse":
+      "properties":
+        "analyze":
+          "properties":
+            "syntax_error":
+              "format": "int64"
+              "type": "integer"
+            "valid_success":
+              "format": "int64"
+              "type": "integer"
+          "required":
+            - "valid_success"
+            - "syntax_error"
+          "type": "object"
+        "parser":
+          "properties":
+            "contract":
+              "format": "int64"
+              "type": "integer"
+            "decode":
+              "format": "int64"
+              "type": "integer"
+            "internal":
+              "format": "int64"
+              "type": "integer"
+            "subprocess":
+              "format": "int64"
+              "type": "integer"
+            "timeout":
+              "format": "int64"
+              "type": "integer"
+          "required":
+            - "timeout"
+            - "subprocess"
+            - "decode"
+            - "contract"
+            - "internal"
+          "type": "object"
+      "required":
+        - "analyze"
+        - "parser"
+      "type": "object"
     "Issue":
       "properties":
         "column":
@@ -724,6 +766,21 @@
                 "$ref": "#/components/schemas/InfoResponse"
           "description": "Service metadata"
       "summary": "Service and parser runtime metadata"
+      "tags":
+        - "Probes"
+  "/internal/metrics":
+    "get":
+      "deprecated": true
+      "description": "Deprecated compatibility alias for GET /v1/internal/metrics. Scheduled for removal in v1.2.0 (Q2 2026)."
+      "operationId": "getInternalMetricsLegacy"
+      "responses":
+        "200":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/InternalMetricsResponse"
+          "description": "Internal analyze outcome counters"
+      "summary": "Internal analyze outcome counters (legacy alias)"
       "tags":
         - "Probes"
   "/metrics":
@@ -1462,6 +1519,20 @@
                 "type": "object"
           "description": "Process is healthy"
       "summary": "Liveness probe (canonical v1)"
+      "tags":
+        - "Probes"
+  "/v1/internal/metrics":
+    "get":
+      "description": "Returns internal JSON counters for analyze outcomes: valid_success, syntax_error, and parser failure categories timeout/subprocess/decode/contract/internal."
+      "operationId": "getInternalMetrics"
+      "responses":
+        "200":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/InternalMetricsResponse"
+          "description": "Internal analyze outcome counters"
+      "summary": "Internal analyze outcome counters"
       "tags":
         - "Probes"
   "/v1/ready":
