@@ -255,6 +255,25 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 	}
 }
 
+func TestServeSpec_IssueLocationFieldsAreOptionalAndNullable(t *testing.T) {
+	spec := loadServedSpec(t)
+
+	requiredRaw := lookup(t, spec, "components", "schemas", "Issue", "required").([]interface{})
+	required := make([]string, 0, len(requiredRaw))
+	for _, v := range requiredRaw {
+		required = append(required, v.(string))
+	}
+	for _, field := range []string{"line", "column"} {
+		if slices.Contains(required, field) {
+			t.Fatalf("expected %q to be optional in Issue schema, got required=%#v", field, required)
+		}
+		nullable, ok := lookup(t, spec, "components", "schemas", "Issue", "properties", field, "nullable").(bool)
+		if !ok || !nullable {
+			t.Fatalf("expected %q to be nullable=true in Issue schema, got %#v", field, lookup(t, spec, "components", "schemas", "Issue", "properties", field, "nullable"))
+		}
+	}
+}
+
 func TestServeSpec_Regression_ConfigValidationAndSeverityExamples(t *testing.T) {
 	spec := loadServedSpec(t)
 
