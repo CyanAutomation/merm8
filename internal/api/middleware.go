@@ -237,11 +237,11 @@ func AnalyzeRateLimitMiddleware(limiter *RateLimiter, next http.Handler) http.Ha
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/analyze" {
 			clientID := clientIdentifier(r)
-			
+
 			// Calculate current window reset time
 			now := time.Now()
 			reset := now.Add(limiter.window).Unix()
-			
+
 			if !limiter.AllowWithMetrics(clientID) {
 				// Rate limit exceeded
 				w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limiter.limit))
@@ -250,7 +250,7 @@ func AnalyzeRateLimitMiddleware(limiter *RateLimiter, next http.Handler) http.Ha
 				writeError(w, http.StatusTooManyRequests, "rate_limited", "rate limit exceeded")
 				return
 			}
-			
+
 			// Request allowed, set remaining headers
 			remaining := limiter.Remaining(clientID)
 			w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limiter.limit))

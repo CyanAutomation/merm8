@@ -975,7 +975,7 @@ var openapi = map[string]interface{}{
 										"value": map[string]interface{}{
 											"version": "2.1.0",
 											"runs": []interface{}{map[string]interface{}{
-												"tool": map[string]interface{}{"driver": map[string]interface{}{"name": "merm8"}},
+												"tool":    map[string]interface{}{"driver": map[string]interface{}{"name": "merm8"}},
 												"results": []interface{}{},
 											}},
 										},
@@ -1433,7 +1433,7 @@ var openapi = map[string]interface{}{
 // Otherwise, defaults to localhost:8080 for development.
 func getServersFromEnv() []map[string]interface{} {
 	apiURL := strings.TrimSpace(os.Getenv("MERM8_API_URL"))
-	
+
 	if apiURL == "" {
 		// Default development servers
 		return []map[string]interface{}{
@@ -1443,7 +1443,7 @@ func getServersFromEnv() []map[string]interface{} {
 			},
 		}
 	}
-	
+
 	// Production server from environment
 	return []map[string]interface{}{
 		{
@@ -1463,9 +1463,9 @@ func OpenAPISpec() map[string]interface{} {
 	specJSON, _ := json.Marshal(openapi)
 	var spec map[string]interface{}
 	json.Unmarshal(specJSON, &spec)
-	
+
 	// Update servers from environment
 	spec["servers"] = getServersFromEnv()
-	
+
 	return spec
 }
