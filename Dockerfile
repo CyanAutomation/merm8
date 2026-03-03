@@ -28,6 +28,9 @@ COPY parser-node/parse.mjs ./parser-node/
 # Copy compiled Go binary
 COPY --from=go-builder /app/mermaid-lint .
 
+# Copy go.mod so parser can locate repository root
+COPY go.mod .
+
 ENV PARSER_SCRIPT=/app/parser-node/parse.mjs
 ENV PORT=8080
 
