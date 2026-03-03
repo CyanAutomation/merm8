@@ -217,7 +217,7 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 }
 ```
 
-**Request error response (HTTP 400/413/500):**
+**Request error response (HTTP 400/413/429/500/503/504):**
 ```json
 {
   "valid": false,
