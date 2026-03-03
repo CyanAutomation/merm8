@@ -303,7 +303,7 @@ func TestAnalyze_ParserFails_Returns500(t *testing.T) {
 	assertExactErrorResponse(t, w.Body.Bytes(), "internal_error", "internal server error")
 }
 
-func TestAnalyze_ParserTimeout_Returns500(t *testing.T) {
+func TestAnalyze_ParserTimeout_Returns504(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, fmt.Errorf("%w: after 2s", parser.ErrTimeout)
 	})
@@ -313,8 +313,8 @@ func TestAnalyze_ParserTimeout_Returns500(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 when parser times out, got %d", w.Code)
+	if w.Code != http.StatusGatewayTimeout {
+		t.Fatalf("expected 504 when parser times out, got %d", w.Code)
 	}
 	assertExactErrorResponse(t, w.Body.Bytes(), "parser_timeout", "parser timed out while validating Mermaid code")
 }
@@ -1659,7 +1659,7 @@ func TestAnalyze_Integration_IgnoreNextLineSuppressesOnlyTargetLineForMatchingRu
 	}
 }
 
-func TestAnalyze_Integration_ParserTimeout_Returns500AndHandlerStaysResponsive(t *testing.T) {
+func TestAnalyze_Integration_ParserTimeout_Returns504AndHandlerStaysResponsive(t *testing.T) {
 	tempDir, err := os.MkdirTemp(".", "api-timeout-parser-")
 	if err != nil {
 		t.Fatalf("failed to create repo temp dir: %v", err)
@@ -1686,8 +1686,8 @@ setTimeout(() => {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 when parser times out, got %d", w.Code)
+	if w.Code != http.StatusGatewayTimeout {
+		t.Fatalf("expected 504 when parser times out, got %d", w.Code)
 	}
 
 	var resp map[string]any

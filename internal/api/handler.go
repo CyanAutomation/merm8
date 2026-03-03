@@ -608,7 +608,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 func writeParserFailure(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, parser.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
-		writeError(w, http.StatusInternalServerError, "parser_timeout", "parser timed out while validating Mermaid code")
+		writeError(w, http.StatusGatewayTimeout, "parser_timeout", "parser timed out while validating Mermaid code")
 	case errors.Is(err, parser.ErrSubprocess):
 		writeError(w, http.StatusInternalServerError, "parser_subprocess_error", "parser subprocess failed")
 	case errors.Is(err, parser.ErrDecode):
