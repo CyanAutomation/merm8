@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"sort"
 	"strings"
 	"sync"
@@ -443,6 +442,12 @@ func (h *Handler) Ready(w http.ResponseWriter, _ *http.Request) {
 
 // Analyze handles POST /analyze.
 func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
+	h.analyzeWithCallback(w, r, func(resp analyzeResponse) {
+		writeJSON(w, http.StatusOK, resp)
+	})
+}
+
+func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, onValid func(resp analyzeResponse)) {
 	observeAnalyzeOutcome := func(outcome string) {
 		h.mu.RLock()
 		metrics := h.telemetryMetrics
@@ -602,42 +607,22 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		Warnings:      deprecationWarnings,
 		Metrics:       computeMetrics(diagram, issues),
 	}
-	writeJSON(w, http.StatusOK, resp)
+	onValid(resp)
 }
 
 // AnalyzeSARIF handles POST /analyze/sarif.
 func (h *Handler) AnalyzeSARIF(w http.ResponseWriter, r *http.Request) {
-	recorder := httptest.NewRecorder()
-	h.Analyze(recorder, r)
-
-	for key, values := range recorder.Header() {
-		for _, value := range values {
-			w.Header().Add(key, value)
+	h.analyzeWithCallback(w, r, func(resp analyzeResponse) {
+		requestURI := "/analyze/sarif"
+		if r.URL != nil {
+			requestURI = r.URL.Path
 		}
-	}
-
-	if recorder.Code != http.StatusOK {
-		w.WriteHeader(recorder.Code)
-		_, _ = w.Write(recorder.Body.Bytes())
-		return
-	}
-
-	var resp analyzeResponse
-	if err := json.Unmarshal(recorder.Body.Bytes(), &resp); err != nil || !resp.Valid {
-		w.WriteHeader(recorder.Code)
-		_, _ = w.Write(recorder.Body.Bytes())
-		return
-	}
-
-	requestURI := "/analyze/sarif"
-	if r.URL != nil {
-		requestURI = r.URL.Path
-	}
-	report := sarif.Transform(resp.Issues, sarif.RequestMetadata{
-		RequestURI:  requestURI,
-		ArtifactURI: "",
+		report := sarif.Transform(resp.Issues, sarif.RequestMetadata{
+			RequestURI:  requestURI,
+			ArtifactURI: "",
+		})
+		writeSARIF(w, http.StatusOK, report)
 	})
-	writeSARIF(w, http.StatusOK, report)
 }
 
 func uniqueStrings(values []string) []string {
