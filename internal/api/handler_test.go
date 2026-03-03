@@ -617,6 +617,166 @@ func TestAnalyze_LargeDiagram(t *testing.T) {
 	}
 }
 
+func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
+	type testCase struct {
+		name            string
+		diagram         *model.Diagram
+		expectedMetrics map[string]int
+		expectedRules   map[string]int
+		maxDuration     time.Duration
+	}
+
+	buildChainDiagram := func(n int) *model.Diagram {
+		nodes := make([]model.Node, n)
+		edges := make([]model.Edge, 0, n-1)
+		for i := 0; i < n; i++ {
+			nodes[i] = model.Node{ID: fmt.Sprintf("N%d", i), Label: fmt.Sprintf("Node%d", i)}
+			if i > 0 {
+				edges = append(edges, model.Edge{From: fmt.Sprintf("N%d", i-1), To: fmt.Sprintf("N%d", i), Type: "arrow"})
+			}
+		}
+		return &model.Diagram{Direction: "TD", Nodes: nodes, Edges: edges}
+	}
+
+	buildHighFanoutDiagram := func(fanout int) *model.Diagram {
+		nodes := make([]model.Node, 0, fanout+1)
+		nodes = append(nodes, model.Node{ID: "HUB", Label: "Hub"})
+		edges := make([]model.Edge, 0, fanout)
+		for i := 0; i < fanout; i++ {
+			nodeID := fmt.Sprintf("L%d", i)
+			nodes = append(nodes, model.Node{ID: nodeID, Label: nodeID})
+			edges = append(edges, model.Edge{From: "HUB", To: nodeID, Type: "arrow"})
+		}
+		return &model.Diagram{Direction: "TD", Nodes: nodes, Edges: edges}
+	}
+
+	buildHighFaninDiagram := func(sources int) *model.Diagram {
+		nodes := make([]model.Node, 0, sources+1)
+		nodes = append(nodes, model.Node{ID: "TARGET", Label: "Target"})
+		edges := make([]model.Edge, 0, sources)
+		for i := 0; i < sources; i++ {
+			nodeID := fmt.Sprintf("S%d", i)
+			nodes = append(nodes, model.Node{ID: nodeID, Label: nodeID})
+			edges = append(edges, model.Edge{From: nodeID, To: "TARGET", Type: "arrow"})
+		}
+		return &model.Diagram{Direction: "TD", Nodes: nodes, Edges: edges}
+	}
+
+	chainNodes := 10000
+	if testing.Short() {
+		chainNodes = 2000
+	}
+
+	tests := []testCase{
+		{
+			name:    fmt.Sprintf("linear chain (%d nodes)", chainNodes),
+			diagram: buildChainDiagram(chainNodes),
+			expectedMetrics: map[string]int{
+				"node_count": chainNodes,
+				"edge_count": chainNodes - 1,
+				"max_fanout": 1,
+			},
+			expectedRules: map[string]int{},
+			maxDuration:   8 * time.Second,
+		},
+		{
+			name:    "single hub high fan-out",
+			diagram: buildHighFanoutDiagram(6000),
+			expectedMetrics: map[string]int{
+				"node_count": 6001,
+				"edge_count": 6000,
+				"max_fanout": 6000,
+			},
+			expectedRules: map[string]int{"max-fanout": 1},
+			maxDuration:   8 * time.Second,
+		},
+		{
+			name:    "high fan-in target node",
+			diagram: buildHighFaninDiagram(7000),
+			expectedMetrics: map[string]int{
+				"node_count": 7001,
+				"edge_count": 7000,
+				"max_fanout": 1,
+			},
+			expectedRules: map[string]int{},
+			maxDuration:   8 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if testing.Short() && chainNodes == 10000 {
+				t.Skip("skipping longest topology case in short mode")
+			}
+
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				return tt.diagram, nil, nil
+			})
+
+			body, _ := json.Marshal(map[string]string{"code": "large topology"})
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			start := time.Now()
+			mux.ServeHTTP(w, req)
+			elapsed := time.Since(start)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			metrics, ok := resp["metrics"].(map[string]interface{})
+			if !ok {
+				t.Fatalf("expected metrics object, got %T", resp["metrics"])
+			}
+
+			for metricKey, want := range tt.expectedMetrics {
+				got, ok := metrics[metricKey].(float64)
+				if !ok {
+					t.Fatalf("expected numeric metric %q, got %T", metricKey, metrics[metricKey])
+				}
+				if int(got) != want {
+					t.Errorf("expected %s=%d, got %d", metricKey, want, int(got))
+				}
+			}
+
+			issues, ok := resp["issues"].([]interface{})
+			if !ok {
+				t.Fatalf("expected issues array, got %T", resp["issues"])
+			}
+
+			ruleCounts := make(map[string]int)
+			for _, issue := range issues {
+				issueMap, ok := issue.(map[string]interface{})
+				if !ok {
+					t.Fatalf("unexpected issue value type: %T", issue)
+				}
+				ruleID, _ := issueMap["rule_id"].(string)
+				ruleCounts[ruleID]++
+			}
+
+			if len(ruleCounts) != len(tt.expectedRules) {
+				t.Errorf("expected %d distinct rule findings, got %d (%v)", len(tt.expectedRules), len(ruleCounts), ruleCounts)
+			}
+			for ruleID, want := range tt.expectedRules {
+				if got := ruleCounts[ruleID]; got != want {
+					t.Errorf("expected rule %q to report %d findings, got %d", ruleID, want, got)
+				}
+			}
+
+			if elapsed > tt.maxDuration {
+				t.Fatalf("analysis exceeded stable upper bound (%v): %v", tt.maxDuration, elapsed)
+			}
+		})
+	}
+}
+
 func TestHealthz_ReturnsOK(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, nil
@@ -729,6 +889,23 @@ func TestAnalyze_Integration_GlobalSuppression(t *testing.T) {
 	}`
 
 	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+func TestAnalyze_InvalidSeverityConfig_Returns400(t *testing.T) {
+	parserCalled := false
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		parserCalled = true
+		return &model.Diagram{}, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A-->B",
+		"config": map[string]interface{}{
+			"max-fanout": map[string]interface{}{
+				"severity": "warning",
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -778,4 +955,12 @@ func TestAnalyze_Integration_NonMatchingSuppressionDoesNotHideIssue(t *testing.T
 	if resp.Issues[0].RuleID != "max-fanout" {
 		t.Fatalf("expected max-fanout issue, got %#v", resp.Issues)
 	}
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if parserCalled {
+		t.Fatal("expected parser not to be called when config validation fails")
+	}
+
+	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", `invalid severity for rule "max-fanout": "warning" (allowed: error, warn, info)`)
 }

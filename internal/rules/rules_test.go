@@ -166,3 +166,20 @@ func TestMaxFanout_InvalidLimitsFallbackToDefault(t *testing.T) {
 		})
 	}
 }
+
+func TestMaxFanout_SeverityOverride(t *testing.T) {
+	edges := make([]model.Edge, 6)
+	for i := range edges {
+		edges[i] = model.Edge{From: "A", To: string(rune('B' + i))}
+	}
+	d := &model.Diagram{Edges: edges}
+	cfg := rules.Config{"max-fanout": {"severity": "error"}}
+
+	issues := rules.MaxFanout{}.Run(d, cfg)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Severity != "error" {
+		t.Fatalf("expected severity override to error, got %q", issues[0].Severity)
+	}
+}
