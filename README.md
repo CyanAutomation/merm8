@@ -44,7 +44,7 @@ This is intended to be a Mermaid linting service that:
 │          internal/rules/                        │
 │            no_duplicate_node_ids.go             │
 │            no_disconnected_nodes.go             │
-│            max_fanout.go                        │
+│            max-fanout.go                        │
 │                                                 │
 │  internal/model ── diagram.go (shared types)   │
 └─────────────────────────────────────────────────┘
@@ -74,6 +74,14 @@ docker compose up --build
 The service listens on **port 8080**.
 
 ---
+
+## Canonical JSON naming convention
+
+All API JSON field names use **kebab-case** as the canonical contract for request/response payloads and rule option keys (for example: `diagram-type`, `lint-supported`, `rule-id`, `schema-version`, `suppression-selectors`).
+
+### Migration compatibility
+
+During the transition window, legacy snake_case config keys such as `schema_version` and `suppression_selectors` are still accepted for backward compatibility, but are deprecated and should be migrated to kebab-case.
 
 ## API
 
@@ -108,7 +116,7 @@ Readiness endpoint for dependency checks (including parser runtime/script availa
 
 Live discovery endpoint for built-in lint rules and their metadata.
 
-Returns each rule's `id`, default `severity`, description, `default_config`, and documented configurable options.
+Returns each rule's `id`, default `severity`, description, `default-config`, and documented configurable options.
 
 Use this endpoint to power UI/docs so runtime and documentation remain in sync.
 
@@ -118,9 +126,9 @@ Returns a generated JSON Schema for the `config` object accepted by `POST /analy
 
 The schema includes:
 - allowed rule IDs,
-- allowed options per rule (`enabled`, `severity`, `limit`, `suppression_selectors`),
+- allowed options per rule (`enabled`, `severity`, `limit`, `suppression-selectors`),
 - option types/constraints (e.g. `max-fanout.limit` must be an integer `>= 1`), and
-- preferred versioned format (`{"schema_version":"v1","rules": {"rule-id": {...}}}`), and
+- preferred versioned format (`{"schema-version":"v1","rules": {"rule-id": {...}}}`), and
 - legacy accepted formats during migration (`{"rule-id": {...}}` and `{"rules": {"rule-id": {...}}}`).
 
 You can use this endpoint so clients pre-validate config before calling `/analyze`.
@@ -139,20 +147,20 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 {
   "code": "graph TD\n  A-->B\n  B-->C",
   "config": {
-    "schema_version": "v1",
+    "schema-version": "v1",
     "rules": {
       "max-fanout": {
         "enabled": true,
         "severity": "error",
         "limit": 3,
-        "suppression_selectors": ["node:A"]
+        "suppression-selectors": ["node:A"]
       }
     }
   }
 }
 ```
 
-> `config` is optional. Preferred format is versioned: `{"schema_version":"v1","rules":{"max-fanout": {...}}}`.
+> `config` is optional. Preferred format is versioned: `{"schema-version":"v1","rules":{"max-fanout": {...}}}`.
 >
 > Migration window: legacy flat `{"max-fanout": {...}}` and nested `{"rules": {"max-fanout": {...}}}` formats remain accepted for backward compatibility.
 >
@@ -167,14 +175,14 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 ```json
 {
   "valid": true,
-  "diagram_type": "flowchart",
-  "lint_supported": true,
-  "syntax_error": null,
+  "diagram-type": "flowchart",
+  "lint-supported": true,
+  "syntax-error": null,
   "issues": [],
   "metrics": {
-    "node_count": 3,
-    "edge_count": 2,
-    "max_fanout": 1
+    "node-count": 3,
+    "edge-count": 2,
+    "max-fanout": 1
   }
 }
 ```
@@ -184,8 +192,8 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 ```json
 {
   "valid": false,
-  "lint_supported": false,
-  "syntax_error": {
+  "lint-supported": false,
+  "syntax-error": {
     "message": "No diagram type detected...",
     "line": 0,
     "column": 0

@@ -68,34 +68,38 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.C
 	cfgRaw := raw
 	rulePathPrefix := "config"
 
-	if schemaVersionValue, hasSchemaVersion := asMap["schema_version"]; hasSchemaVersion {
+	schemaVersionValue, hasSchemaVersion := asMap["schema-version"]
+	if !hasSchemaVersion {
+		schemaVersionValue, hasSchemaVersion = asMap["schema_version"]
+	}
+	if hasSchemaVersion {
 		schemaVersion, ok := schemaVersionValue.(string)
 		if !ok {
-			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.schema_version", Message: "config.schema_version must be string"}
+			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.schema-version", Message: "config.schema-version must be string"}
 		}
 		if schemaVersion != rules.CurrentConfigSchemaVersion {
 			return rules.Config{}, &validationError{
 				Code:      "unsupported_schema_version",
-				Path:      "config.schema_version",
-				Message:   "unsupported config schema_version: " + schemaVersion,
+				Path:      "config.schema-version",
+				Message:   "unsupported config schema-version: " + schemaVersion,
 				Supported: []string{rules.CurrentConfigSchemaVersion},
 			}
 		}
 		rulesValue, hasRules := asMap["rules"]
 		if !hasRules {
-			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules is required when config.schema_version is set"}
+			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules is required when config.schema-version is set"}
 		}
 		rulesMap, ok := rulesValue.(map[string]any)
 		if !ok {
 			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
 		}
 		for topLevelKey := range asMap {
-			if topLevelKey != "schema_version" && topLevelKey != "rules" {
+			if topLevelKey != "schema-version" && topLevelKey != "schema_version" && topLevelKey != "rules" {
 				return rules.Config{}, &validationError{
 					Code:      "unknown_option",
 					Path:      "config." + topLevelKey,
 					Message:   "unknown option: " + topLevelKey,
-					Supported: []string{"schema_version", "rules"},
+					Supported: []string{"schema-version", "rules"},
 				}
 			}
 		}
@@ -204,29 +208,29 @@ type syntaxErrorResponse struct {
 
 // metricsResponse holds aggregate statistics about the diagram.
 type metricsResponse struct {
-	NodeCount             int                  `json:"node_count"`
-	EdgeCount             int                  `json:"edge_count"`
-	DisconnectedNodeCount int                  `json:"disconnected_node_count"`
-	DuplicateNodeCount    int                  `json:"duplicate_node_count"`
-	MaxFanin              int                  `json:"max_fanin"`
-	MaxFanout             int                  `json:"max_fanout"`
-	DiagramType           model.DiagramType    `json:"diagram_type"`
+	NodeCount             int                  `json:"node-count"`
+	EdgeCount             int                  `json:"edge-count"`
+	DisconnectedNodeCount int                  `json:"disconnected-node-count"`
+	DuplicateNodeCount    int                  `json:"duplicate-node-count"`
+	MaxFanin              int                  `json:"max-fanin"`
+	MaxFanout             int                  `json:"max-fanout"`
+	DiagramType           model.DiagramType    `json:"diagram-type"`
 	Direction             string               `json:"direction,omitempty"`
-	IssueCounts           *issueCountsResponse `json:"issue_counts,omitempty"`
+	IssueCounts           *issueCountsResponse `json:"issue-counts,omitempty"`
 }
 
 // issueCountsResponse summarizes issue distribution from lint results.
 type issueCountsResponse struct {
-	BySeverity map[string]int `json:"by_severity"`
-	ByRule     map[string]int `json:"by_rule"`
+	BySeverity map[string]int `json:"by-severity"`
+	ByRule     map[string]int `json:"by-rule"`
 }
 
 // analyzeResponse is returned by POST /analyze.
 type analyzeResponse struct {
 	Valid         bool                 `json:"valid"`
-	DiagramType   model.DiagramType    `json:"diagram_type,omitempty"`
-	LintSupported bool                 `json:"lint_supported"`
-	SyntaxError   *syntaxErrorResponse `json:"syntax_error"`
+	DiagramType   model.DiagramType    `json:"diagram-type,omitempty"`
+	LintSupported bool                 `json:"lint-supported"`
+	SyntaxError   *syntaxErrorResponse `json:"syntax-error"`
 	Issues        []model.Issue        `json:"issues"`
 	Metrics       *metricsResponse     `json:"metrics,omitempty"`
 }
@@ -244,8 +248,8 @@ type ruleResponse struct {
 	ID                  string                 `json:"id"`
 	Severity            string                 `json:"severity"`
 	Description         string                 `json:"description"`
-	DefaultConfig       map[string]interface{} `json:"default_config"`
-	ConfigurableOptions []ruleOptionResponse   `json:"configurable_options"`
+	DefaultConfig       map[string]interface{} `json:"default-config"`
+	ConfigurableOptions []ruleOptionResponse   `json:"configurable-options"`
 }
 
 // apiErrorDetails holds machine-readable and human-readable error information.

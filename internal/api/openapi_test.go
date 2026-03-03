@@ -154,22 +154,22 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 		t.Fatalf("expected validDiagram.issues array, got %T", validDiagram["issues"])
 	}
 	metrics := lookup(t, validDiagram, "metrics").(map[string]interface{})
-	for _, metric := range []string{"node_count", "edge_count", "disconnected_node_count", "duplicate_node_count", "max_fanin", "max_fanout"} {
+	for _, metric := range []string{"node-count", "edge-count", "disconnected-node-count", "duplicate-node-count", "max-fanin", "max-fanout"} {
 		if _, ok := metrics[metric].(float64); !ok {
 			t.Fatalf("expected validDiagram.metrics.%s number, got %#v", metric, metrics[metric])
 		}
 	}
-	if metrics["diagram_type"] != "flowchart" {
-		t.Fatalf("expected validDiagram.metrics.diagram_type=flowchart, got %#v", metrics["diagram_type"])
+	if metrics["diagram-type"] != "flowchart" {
+		t.Fatalf("expected validDiagram.metrics.diagram-type=flowchart, got %#v", metrics["diagram-type"])
 	}
 	if metrics["direction"] != "TD" {
 		t.Fatalf("expected validDiagram.metrics.direction=TD, got %#v", metrics["direction"])
 	}
-	if _, ok := lookup(t, metrics, "issue_counts", "by_severity").(map[string]interface{}); !ok {
-		t.Fatalf("expected issue_counts.by_severity object, got %T", lookup(t, metrics, "issue_counts", "by_severity"))
+	if _, ok := lookup(t, metrics, "issue-counts", "by-severity").(map[string]interface{}); !ok {
+		t.Fatalf("expected issue-counts.by-severity object, got %T", lookup(t, metrics, "issue-counts", "by-severity"))
 	}
-	if _, ok := lookup(t, metrics, "issue_counts", "by_rule").(map[string]interface{}); !ok {
-		t.Fatalf("expected issue_counts.by_rule object, got %T", lookup(t, metrics, "issue_counts", "by_rule"))
+	if _, ok := lookup(t, metrics, "issue-counts", "by-rule").(map[string]interface{}); !ok {
+		t.Fatalf("expected issue-counts.by-rule object, got %T", lookup(t, metrics, "issue-counts", "by-rule"))
 	}
 
 	examples400 := lookup(t, spec, "paths", "/analyze", "post", "responses", "400", "content", "application/json", "examples").(map[string]interface{})
@@ -283,12 +283,12 @@ func TestServeSpec_Regression_ConfigValidationAndSeverityExamples(t *testing.T) 
 		t.Fatalf("expected severity override example to be error, got %#v", severity)
 	}
 
-	selectors, ok := lookup(t, withConfig, "config", "rules", "max-fanout", "suppression_selectors").([]interface{})
+	selectors, ok := lookup(t, withConfig, "config", "rules", "max-fanout", "suppression-selectors").([]interface{})
 	if !ok || len(selectors) == 0 {
-		t.Fatalf("expected suppression_selectors example array, got %#v", lookup(t, withConfig, "config", "rules", "max-fanout", "suppression_selectors"))
+		t.Fatalf("expected suppression-selectors example array, got %#v", lookup(t, withConfig, "config", "rules", "max-fanout", "suppression-selectors"))
 	}
 	if _, ok := selectors[0].(string); !ok {
-		t.Fatalf("expected suppression_selectors entries to be strings, got %#v", selectors[0])
+		t.Fatalf("expected suppression-selectors entries to be strings, got %#v", selectors[0])
 	}
 
 	unknownOption := lookup(t, spec, "paths", "/analyze", "post", "responses", "400", "content", "application/json", "examples", "unknownOption", "value").(map[string]interface{})

@@ -183,7 +183,7 @@ var openapi = map[string]interface{}{
 													"enabled":               true,
 													"limit":                 2,
 													"severity":              "error",
-													"suppression_selectors": []interface{}{"node:A"},
+													"suppression-selectors": []interface{}{"node:A"},
 												},
 											},
 										},
@@ -212,22 +212,22 @@ var openapi = map[string]interface{}{
 										"summary": "Valid diagram with no issues",
 										"value": map[string]interface{}{
 											"valid":          true,
-											"diagram_type":   "flowchart",
-											"lint_supported": true,
-											"syntax_error":   nil,
+											"diagram-type":   "flowchart",
+											"lint-supported": true,
+											"syntax-error":   nil,
 											"issues":         []interface{}{},
 											"metrics": map[string]interface{}{
-												"node_count":              2,
-												"edge_count":              1,
-												"disconnected_node_count": 0,
-												"duplicate_node_count":    0,
-												"max_fanin":               1,
-												"max_fanout":              1,
-												"diagram_type":            "flowchart",
+												"node-count":              2,
+												"edge-count":              1,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               1,
+												"max-fanout":              1,
+												"diagram-type":            "flowchart",
 												"direction":               "TD",
-												"issue_counts": map[string]interface{}{
-													"by_severity": map[string]interface{}{},
-													"by_rule":     map[string]interface{}{},
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
 												},
 											},
 										},
@@ -236,8 +236,8 @@ var openapi = map[string]interface{}{
 										"summary": "Syntax error response",
 										"value": map[string]interface{}{
 											"valid":          false,
-											"lint_supported": false,
-											"syntax_error": map[string]interface{}{
+											"lint-supported": false,
+											"syntax-error": map[string]interface{}{
 												"message": "Unexpected token '>'",
 												"line":    2,
 												"column":  12,
@@ -249,21 +249,21 @@ var openapi = map[string]interface{}{
 										"summary": "Valid sequence diagram (lint currently unsupported)",
 										"value": map[string]interface{}{
 											"valid":          true,
-											"diagram_type":   "sequence",
-											"lint_supported": false,
-											"syntax_error":   nil,
+											"diagram-type":   "sequence",
+											"lint-supported": false,
+											"syntax-error":   nil,
 											"issues":         []interface{}{},
 											"metrics": map[string]interface{}{
-												"node_count":              0,
-												"edge_count":              0,
-												"disconnected_node_count": 0,
-												"duplicate_node_count":    0,
-												"max_fanin":               0,
-												"max_fanout":              0,
-												"diagram_type":            "sequence",
-												"issue_counts": map[string]interface{}{
-													"by_severity": map[string]interface{}{},
-													"by_rule":     map[string]interface{}{},
+												"node-count":              0,
+												"edge-count":              0,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               0,
+												"max-fanout":              0,
+												"diagram-type":            "sequence",
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
 												},
 											},
 										},
@@ -272,17 +272,17 @@ var openapi = map[string]interface{}{
 										"summary": "Valid diagram with lint issues",
 										"value": map[string]interface{}{
 											"valid":          true,
-											"diagram_type":   "flowchart",
-											"lint_supported": true,
-											"syntax_error":   nil,
+											"diagram-type":   "flowchart",
+											"lint-supported": true,
+											"syntax-error":   nil,
 											"issues": []interface{}{
 												map[string]interface{}{
-													"rule_id":  "no-disconnected-nodes",
+													"rule-id":  "no-disconnected-nodes",
 													"severity": "error",
 													"message":  "Node 'D' is not connected to the graph",
 												},
 												map[string]interface{}{
-													"rule_id":  "max-fanout",
+													"rule-id":  "max-fanout",
 													"severity": "warning",
 													"message":  "Node 'A' has fanout 6, exceeding limit of 5",
 													"line":     2,
@@ -290,17 +290,17 @@ var openapi = map[string]interface{}{
 												},
 											},
 											"metrics": map[string]interface{}{
-												"node_count":              4,
-												"edge_count":              2,
-												"disconnected_node_count": 1,
-												"duplicate_node_count":    0,
-												"max_fanin":               1,
-												"max_fanout":              2,
-												"diagram_type":            "flowchart",
+												"node-count":              4,
+												"edge-count":              2,
+												"disconnected-node-count": 1,
+												"duplicate-node-count":    0,
+												"max-fanin":               1,
+												"max-fanout":              2,
+												"diagram-type":            "flowchart",
 												"direction":               "TD",
-												"issue_counts": map[string]interface{}{
-													"by_severity": map[string]interface{}{"error": 1, "warning": 1},
-													"by_rule":     map[string]interface{}{"no-disconnected-nodes": 1, "max-fanout": 1},
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{"error": 1, "warning": 1},
+													"by-rule":     map[string]interface{}{"no-disconnected-nodes": 1, "max-fanout": 1},
 												},
 											},
 										},
@@ -361,7 +361,7 @@ var openapi = map[string]interface{}{
 												"code":      "unknown_option",
 												"message":   "unknown option: threshold",
 												"path":      "config.rules.max-fanout.threshold",
-												"supported": []interface{}{"enabled", "limit", "severity", "suppression_selectors"},
+												"supported": []interface{}{"enabled", "limit", "severity", "suppression-selectors"},
 											},
 										},
 									},
@@ -535,13 +535,13 @@ var openapi = map[string]interface{}{
 			},
 			"RuleMetadata": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"id", "severity", "description", "default_config", "configurable_options"},
+				"required": []string{"id", "severity", "description", "default-config", "configurable-options"},
 				"properties": map[string]interface{}{
 					"id":             map[string]interface{}{"type": "string", "example": "max-fanout"},
 					"severity":       map[string]interface{}{"type": "string", "enum": []string{"error", "warning", "info"}},
 					"description":    map[string]interface{}{"type": "string"},
-					"default_config": map[string]interface{}{"type": "object", "additionalProperties": true},
-					"configurable_options": map[string]interface{}{
+					"default-config": map[string]interface{}{"type": "object", "additionalProperties": true},
+					"configurable-options": map[string]interface{}{
 						"type": "array",
 						"items": map[string]interface{}{
 							"$ref": "#/components/schemas/RuleOption",
@@ -571,15 +571,15 @@ var openapi = map[string]interface{}{
 					},
 					"config": map[string]interface{}{
 						"$ref":        "#/components/schemas/RuleConfigSchema",
-						"description": "Optional lint rule configuration. Preferred format is versioned: {\"schema_version\":\"v1\",\"rules\":{...}}. Legacy flat and nested formats remain supported during migration.",
+						"description": "Optional lint rule configuration. Preferred format is versioned: {\"schema-version\":\"v1\",\"rules\":{...}}. Legacy flat and nested formats remain supported during migration.",
 						"example": map[string]interface{}{
-							"schema_version": "v1",
+							"schema-version": "v1",
 							"rules": map[string]interface{}{
 								"max-fanout": map[string]interface{}{
 									"enabled":               true,
 									"limit":                 3,
 									"severity":              "error",
-									"suppression_selectors": []interface{}{"node:A"},
+									"suppression-selectors": []interface{}{"node:A"},
 								},
 								"no-disconnected-nodes": map[string]interface{}{
 									"enabled":  false,
@@ -641,23 +641,23 @@ var openapi = map[string]interface{}{
 			},
 			"AnalyzeResponse": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"valid", "lint_supported", "issues"},
+				"required": []string{"valid", "lint-supported", "issues"},
 				"properties": map[string]interface{}{
 					"valid": map[string]interface{}{
 						"type":        "boolean",
 						"description": "Whether the Mermaid code is syntactically valid",
 					},
-					"diagram_type": map[string]interface{}{
+					"diagram-type": map[string]interface{}{
 						"type":        "string",
 						"description": "Normalized Mermaid diagram type (flowchart, sequence, class, er, state, unknown).",
 						"enum":        []string{"flowchart", "sequence", "class", "er", "state", "unknown"},
 						"example":     "flowchart",
 					},
-					"lint_supported": map[string]interface{}{
+					"lint-supported": map[string]interface{}{
 						"type":        "boolean",
 						"description": "Whether lint rules are currently implemented for the parsed diagram type.",
 					},
-					"syntax_error": map[string]interface{}{
+					"syntax-error": map[string]interface{}{
 						"$ref":        "#/components/schemas/SyntaxError",
 						"description": "Syntax error details if `valid` is false. Null if valid.",
 						"nullable":    true,
@@ -699,9 +699,9 @@ var openapi = map[string]interface{}{
 			},
 			"Issue": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"rule_id", "severity", "message"},
+				"required": []string{"rule-id", "severity", "message"},
 				"properties": map[string]interface{}{
-					"rule_id": map[string]interface{}{
+					"rule-id": map[string]interface{}{
 						"type":        "string",
 						"description": "Identifier of the lint rule that triggered",
 						"example":     "no-disconnected-nodes",
@@ -743,12 +743,12 @@ var openapi = map[string]interface{}{
 			"IssueContext": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"subgraph_id": map[string]interface{}{
+					"subgraph-id": map[string]interface{}{
 						"type":        "string",
 						"description": "ID of the subgraph containing the affected node.",
 						"example":     "cluster-1",
 					},
-					"subgraph_label": map[string]interface{}{
+					"subgraph-label": map[string]interface{}{
 						"type":        "string",
 						"description": "Human-readable label of the subgraph containing the affected node.",
 						"example":     "Core Services",
@@ -757,39 +757,39 @@ var openapi = map[string]interface{}{
 			},
 			"Metrics": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"node_count", "edge_count", "disconnected_node_count", "duplicate_node_count", "max_fanin", "max_fanout", "diagram_type"},
+				"required": []string{"node-count", "edge-count", "disconnected-node-count", "duplicate-node-count", "max-fanin", "max-fanout", "diagram-type"},
 				"properties": map[string]interface{}{
-					"node_count": map[string]interface{}{
+					"node-count": map[string]interface{}{
 						"type":        "integer",
 						"description": "Total number of nodes in the diagram",
 						"example":     5,
 					},
-					"edge_count": map[string]interface{}{
+					"edge-count": map[string]interface{}{
 						"type":        "integer",
 						"description": "Total number of edges (connections) in the diagram",
 						"example":     4,
 					},
-					"disconnected_node_count": map[string]interface{}{
+					"disconnected-node-count": map[string]interface{}{
 						"type":        "integer",
 						"description": "Number of nodes with neither incoming nor outgoing edges",
 						"example":     1,
 					},
-					"duplicate_node_count": map[string]interface{}{
+					"duplicate-node-count": map[string]interface{}{
 						"type":        "integer",
 						"description": "Number of duplicate node declarations beyond first occurrences",
 						"example":     0,
 					},
-					"max_fanin": map[string]interface{}{
+					"max-fanin": map[string]interface{}{
 						"type":        "integer",
 						"description": "Maximum number of incoming edges to any single node",
 						"example":     3,
 					},
-					"max_fanout": map[string]interface{}{
+					"max-fanout": map[string]interface{}{
 						"type":        "integer",
 						"description": "Maximum number of outgoing edges from any single node",
 						"example":     2,
 					},
-					"diagram_type": map[string]interface{}{
+					"diagram-type": map[string]interface{}{
 						"type":        "string",
 						"description": "Diagram type copied from parsed metadata",
 						"enum":        []string{"flowchart", "sequence", "class", "er", "state", "unknown"},
@@ -800,7 +800,7 @@ var openapi = map[string]interface{}{
 						"description": "Diagram direction when provided by parser",
 						"example":     "TD",
 					},
-					"issue_counts": map[string]interface{}{
+					"issue-counts": map[string]interface{}{
 						"$ref":        "#/components/schemas/IssueCounts",
 						"description": "Issue count aggregations by severity and rule ID",
 					},
@@ -808,13 +808,13 @@ var openapi = map[string]interface{}{
 			},
 			"IssueCounts": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"by_severity", "by_rule"},
+				"required": []string{"by-severity", "by-rule"},
 				"properties": map[string]interface{}{
-					"by_severity": map[string]interface{}{
+					"by-severity": map[string]interface{}{
 						"type":                 "object",
 						"additionalProperties": map[string]interface{}{"type": "integer"},
 					},
-					"by_rule": map[string]interface{}{
+					"by-rule": map[string]interface{}{
 						"type":                 "object",
 						"additionalProperties": map[string]interface{}{"type": "integer"},
 					},

@@ -20,10 +20,10 @@ func TestConfigJSONSchema_SupportsFlatAndNestedFormats(t *testing.T) {
 	}
 
 	versioned := variants[0].(map[string]any)
-	if got := versioned["required"].([]string); len(got) != 2 || got[0] != "schema_version" || got[1] != "rules" {
+	if got := versioned["required"].([]string); len(got) != 2 || got[0] != "schema-version" || got[1] != "rules" {
 		t.Fatalf("unexpected required keys on versioned schema: %#v", got)
 	}
-	if enumVals := versioned["properties"].(map[string]any)["schema_version"].(map[string]any)["enum"].([]string); len(enumVals) != 1 || enumVals[0] != CurrentConfigSchemaVersion {
+	if enumVals := versioned["properties"].(map[string]any)["schema-version"].(map[string]any)["enum"].([]string); len(enumVals) != 1 || enumVals[0] != CurrentConfigSchemaVersion {
 		t.Fatalf("unexpected schema_version enum: %#v", enumVals)
 	}
 
