@@ -175,6 +175,16 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 
 > Request body size limit: **1 MiB**. Oversized payloads return `413` with the same unified `AnalyzeResponse` shape (`valid=false`, `lint-supported=false`, `syntax-error=null`, `issues=[]`, and populated `error`).
 
+**Response semantics matrix (HTTP 200)**
+
+| Case | `valid` | `lint-supported` | `metrics` | `issues` | Notes |
+|---|---:|---:|---|---|---|
+| Parsed flowchart (lint runs) | `true` | `true` | Present, computed from parsed graph and issue counts | Rule findings (possibly empty) | `syntax-error` is `null`. |
+| Parsed non-flowchart (unsupported lint family) | `false` | `false` | Present, computed from parsed graph with issue counts set to empty maps | Always `[]` | `error.code = "unsupported_diagram_type"`; `syntax-error` is `null`. |
+| Syntax error with detected flowchart prefix (`graph`/`flowchart`) | `false` | `true` | Present, zeroed counters with fallback `diagram-type=flowchart` | Always `[]` | `syntax-error` is populated. |
+| Syntax error with detected non-flowchart prefix (e.g. `sequenceDiagram`) | `false` | `false` | Present, zeroed counters with fallback detected `diagram-type` | Always `[]` | `syntax-error` is populated. |
+| Syntax error with unknown prefix | `false` | `false` | Present, zeroed counters with fallback `diagram-type=unknown` | Always `[]` | `syntax-error` is populated. |
+
 **Response — valid diagram**
 
 ```json
@@ -197,13 +207,82 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 ```json
 {
   "valid": false,
-  "lint-supported": false,
+  "diagram-type": "flowchart",
+  "lint-supported": true,
   "syntax-error": {
-    "message": "No diagram type detected...",
-    "line": 0,
-    "column": 0
+    "message": "Unexpected token '>'",
+    "line": 2,
+    "column": 12
   },
-  "issues": []
+  "issues": [],
+  "metrics": {
+    "node-count": 0,
+    "edge-count": 0,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 0,
+    "diagram-type": "flowchart",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
+  }
+}
+```
+
+**Response — unsupported diagram type (parsed but lint unsupported)**
+
+```json
+{
+  "valid": false,
+  "diagram-type": "sequence",
+  "lint-supported": false,
+  "syntax-error": null,
+  "issues": [],
+  "error": {
+    "code": "unsupported_diagram_type",
+    "message": "diagram type is parsed but linting is not supported"
+  },
+  "metrics": {
+    "node-count": 0,
+    "edge-count": 0,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 0,
+    "diagram-type": "sequence",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
+  }
+}
+```
+
+**Response — successful flowchart lint**
+
+```json
+{
+  "valid": true,
+  "diagram-type": "flowchart",
+  "lint-supported": true,
+  "syntax-error": null,
+  "issues": [],
+  "metrics": {
+    "node-count": 3,
+    "edge-count": 2,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 1,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
+  }
 }
 ```
 
