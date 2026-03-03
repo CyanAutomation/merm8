@@ -705,8 +705,24 @@
                     "code": "graph TD\n  A --\u003e B --\u003e"
                   }
                 },
-                "withConfig": {
-                  "summary": "With lint configuration",
+                "withConfigFlatLegacy": {
+                  "summary": "Legacy flat rule payload (migration support)",
+                  "value": {
+                    "code": "graph LR\n  A --\u003e B\n  B --\u003e C",
+                    "config": {
+                      "max-fanout": {
+                        "enabled": true,
+                        "limit": 2,
+                        "severity": "error",
+                        "suppression-selectors": [
+                          "node:A"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "withConfigNestedLegacy": {
+                  "summary": "Legacy nested rules payload (migration support)",
                   "value": {
                     "code": "graph LR\n  A --\u003e B\n  B --\u003e C",
                     "config": {
@@ -720,6 +736,25 @@
                           ]
                         }
                       }
+                    }
+                  }
+                },
+                "withConfigVersioned": {
+                  "summary": "Preferred versioned config payload (recommended)",
+                  "value": {
+                    "code": "graph LR\n  A --\u003e B\n  B --\u003e C",
+                    "config": {
+                      "rules": {
+                        "max-fanout": {
+                          "enabled": true,
+                          "limit": 2,
+                          "severity": "error",
+                          "suppression-selectors": [
+                            "node:A"
+                          ]
+                        }
+                      },
+                      "schema-version": "v1"
                     }
                   }
                 }
@@ -859,7 +894,7 @@
                 }
               }
             },
-            "description": "Analysis completed (valid or syntax error)"
+            "description": "Analysis completed. For HTTP 200: `error` is always null, `issues` is always present as an array, and `syntax-error` is populated only for parser syntax failures (otherwise null)."
           },
           "400": {
             "content": {
@@ -952,7 +987,7 @@
                 }
               }
             },
-            "description": "Bad request (invalid JSON, missing required field, or invalid config)"
+            "description": "Bad request (invalid JSON, missing required field, or invalid config). For non-200 API failures, `valid=false`, `syntax-error=null`, `issues=[]`, and `error` is populated."
           },
           "413": {
             "content": {
@@ -972,7 +1007,7 @@
                 }
               }
             },
-            "description": "Request entity too large (body exceeds 1 MiB)"
+            "description": "Request entity too large (body exceeds 1 MiB). For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
           },
           "429": {
             "content": {
@@ -992,7 +1027,7 @@
                 }
               }
             },
-            "description": "Rate limited"
+            "description": "Rate limited. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
           },
           "500": {
             "content": {
@@ -1056,7 +1091,7 @@
                 }
               }
             },
-            "description": "Internal server error"
+            "description": "Internal server error. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
           },
           "503": {
             "content": {
@@ -1076,7 +1111,7 @@
                 }
               }
             },
-            "description": "Service unavailable"
+            "description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
           },
           "504": {
             "content": {
@@ -1096,7 +1131,7 @@
                 }
               }
             },
-            "description": "Parser timeout"
+            "description": "Parser timeout. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
           }
         },
         "summary": "Analyze and lint a Mermaid diagram",
