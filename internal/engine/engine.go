@@ -72,12 +72,16 @@ func (e *Engine) Run(d *model.Diagram, cfg rules.Config) []model.Issue {
 // NormalizeConfig normalizes config key aliases and validates rule IDs against
 // this engine's registered rules.
 func (e *Engine) NormalizeConfig(cfg rules.Config) (rules.Config, error) {
+	return rules.NormalizeConfig(cfg, e.KnownRuleIDs())
+}
+
+// KnownRuleIDs returns the set of rule IDs registered on this engine.
+func (e *Engine) KnownRuleIDs() map[string]struct{} {
 	knownRuleIDs := make(map[string]struct{}, len(e.rules))
 	for _, rule := range e.rules {
 		knownRuleIDs[rule.ID()] = struct{}{}
 	}
-
-	return rules.NormalizeConfig(cfg, knownRuleIDs)
+	return knownRuleIDs
 }
 
 func applySuppressions(issues []model.Issue, suppressions []model.SuppressionDirective) []model.Issue {

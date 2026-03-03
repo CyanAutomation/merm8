@@ -1339,8 +1339,10 @@ func TestAnalyze_InvalidSeverityConfig_Returns400(t *testing.T) {
 	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", `invalid severity for rule "max-fanout": "warning" (allowed: error, warn, info)`)
 }
 
-func TestAnalyze_InvalidUnknownRuleConfig_Returns400(t *testing.T) {
+func TestAnalyze_InvalidUnknownRuleConfigNested_Returns400(t *testing.T) {
+	parserCalled := false
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		parserCalled = true
 		return &model.Diagram{}, nil, nil
 	})
 
@@ -1348,7 +1350,7 @@ func TestAnalyze_InvalidUnknownRuleConfig_Returns400(t *testing.T) {
 		"code": "graph TD; A-->B",
 		"config": map[string]interface{}{
 			"rules": map[string]interface{}{
-				"totally-unknown-rule": map[string]interface{}{"enabled": false},
+				"no-cycles": map[string]interface{}{"enabled": false},
 			},
 		},
 	})
@@ -1361,7 +1363,38 @@ func TestAnalyze_InvalidUnknownRuleConfig_Returns400(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
-	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", `unknown rule id "totally-unknown-rule" in config`)
+	if parserCalled {
+		t.Fatal("expected parser not to be called when config validation fails")
+	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", "unknown rule: no-cycles")
+}
+
+func TestAnalyze_InvalidUnknownRuleConfigFlat_Returns400(t *testing.T) {
+	parserCalled := false
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		parserCalled = true
+		return &model.Diagram{}, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A-->B",
+		"config": map[string]interface{}{
+			"no-cycles": map[string]interface{}{"enabled": false},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if parserCalled {
+		t.Fatal("expected parser not to be called when config validation fails")
+	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", "unknown rule: no-cycles")
 }
 
 func TestAnalyze_DisableRuleViaConfig(t *testing.T) {
