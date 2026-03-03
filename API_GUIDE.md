@@ -37,6 +37,24 @@ The Swagger UI provides:
 - **Example requests** — Pre-filled request templates for common scenarios
 
 
+
+### Scraping Service Metrics (`GET /metrics`)
+
+The API exposes Prometheus metrics at `GET /metrics` in text exposition format.
+
+Metric families:
+- `request_total{route,method,status}`
+- `request_duration_seconds{route,method}` histogram
+- `analyze_requests_total{outcome}`
+- `parser_duration_seconds{outcome}` histogram
+
+Common `outcome` values include `syntax_error`, `lint_success`, `parser_timeout`, `parser_subprocess_error`, `parser_decode_error`, `parser_contract_violation`, and `internal_error`.
+
+Example:
+```bash
+curl -s http://localhost:8080/metrics
+```
+
 ### Discovering Rules with `/rules`
 
 Use **`GET /rules`** to discover the live built-in rule catalog at runtime.

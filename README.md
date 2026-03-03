@@ -118,10 +118,13 @@ Dependency/readiness-only endpoint (including parser runtime/script availability
 
 Prometheus-compatible metrics endpoint in text exposition format.
 
-The server exports request count, status code, and latency metrics for key API routes:
-- `POST /analyze`
-- `GET /healthz`
-- `GET /ready`
+The server exports Prometheus metric families:
+- `request_total{route,method,status}`
+- `request_duration_seconds{route,method}` (histogram)
+- `analyze_requests_total{outcome}`
+- `parser_duration_seconds{outcome}` (histogram)
+
+Routes are labeled consistently (for example `/analyze`, `/healthz`, `/ready`, `/metrics`) and include middleware-produced status codes such as auth/rate-limit errors.
 
 Example scrape:
 
