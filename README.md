@@ -481,6 +481,32 @@ See test comments for rationale behind each skipped test.
 
 ---
 
+
+## OpenAPI Spec Regeneration (Contributors)
+
+The canonical OpenAPI source is `internal/api/openapi.go`.
+
+Generated artifacts:
+- `openapi.json`
+- `openapi.yaml` (generated output; do not edit manually)
+
+When you change API routes or schemas, regenerate both artifacts:
+
+```bash
+go run ./scripts/generate_openapi.go
+```
+
+Before opening a PR, run the sync check used by CI:
+
+```bash
+./scripts/check_openapi_generated.sh
+```
+
+Workflow summary:
+1. Update `internal/api/openapi.go`.
+2. Run `go run ./scripts/generate_openapi.go`.
+3. Commit the updated generated files with your API change.
+
 ## Environment Variables
 
 | Variable        | Default                          | Description                         |
