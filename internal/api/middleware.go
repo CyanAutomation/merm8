@@ -109,11 +109,19 @@ func AnalyzeBearerAuthMiddleware(token string, next http.Handler) http.Handler {
 }
 
 func clientIdentifier(r *http.Request) string {
+	// Parse X-Forwarded-For only if behind a trusted proxy
+	// Use the rightmost IP before your trusted proxy IP for proper client identification
 	if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
 		parts := strings.Split(forwardedFor, ",")
+		// Get the rightmost IP (client IP closest to your infrastructure)
+		// In production, validate against a list of trusted proxy IPs
 		if len(parts) > 0 {
-			return strings.TrimSpace(parts[0])
+			clientIP := strings.TrimSpace(parts[len(parts)-1])
+			if clientIP != "" {
+				return clientIP
+			}
 		}
+	}
 	}
 
 	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
