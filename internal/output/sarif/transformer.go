@@ -200,7 +200,6 @@ func Transform(issues []model.Issue, meta RequestMetadata) Report {
 	}
 }
 
-
 // mapErrorCodeToLevel maps API error codes to SARIF result levels.
 func mapErrorCodeToLevel(code string) string {
 	switch code {

@@ -371,12 +371,12 @@ func (s *requestRuleMetricsSink) Snapshot() []engine.RuleMetrics {
 }
 
 type infoResponse struct {
-	ServiceVersion         string                `json:"service_version,omitempty"`
-	ParserVersion          string                `json:"parser_version,omitempty"`
-	MermaidVersion         string                `json:"mermaid_version,omitempty"`
-	ParserTimeoutSeconds   int                   `json:"parser_timeout_seconds,omitempty"`
-	ParserRecognized       []model.DiagramType   `json:"parser_recognized"`
-	LintSupported          []model.DiagramFamily `json:"lint_supported"`
+	ServiceVersion       string                `json:"service_version,omitempty"`
+	ParserVersion        string                `json:"parser_version,omitempty"`
+	MermaidVersion       string                `json:"mermaid_version,omitempty"`
+	ParserTimeoutSeconds int                   `json:"parser_timeout_seconds,omitempty"`
+	ParserRecognized     []model.DiagramType   `json:"parser_recognized"`
+	LintSupported        []model.DiagramFamily `json:"lint_supported"`
 }
 
 // NewHandler creates a Handler with the given parser and engine.
@@ -984,7 +984,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
-		
+
 		// For syntax errors, include the error in SARIF format
 		report := sarif.TransformError(sarif.ErrorInfo{
 			Code:    "syntax_error",
