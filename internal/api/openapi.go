@@ -166,9 +166,18 @@ var openapi = map[string]interface{}{
 											"syntax_error":   nil,
 											"issues":         []interface{}{},
 											"metrics": map[string]interface{}{
-												"node_count": 2,
-												"edge_count": 1,
-												"max_fanout": 1,
+												"node_count":              2,
+												"edge_count":              1,
+												"disconnected_node_count": 0,
+												"duplicate_node_count":    0,
+												"max_fanin":               1,
+												"max_fanout":              1,
+												"diagram_type":            "flowchart",
+												"direction":               "TD",
+												"issue_counts": map[string]interface{}{
+													"by_severity": map[string]interface{}{},
+													"by_rule":     map[string]interface{}{},
+												},
 											},
 										},
 									},
@@ -207,9 +216,18 @@ var openapi = map[string]interface{}{
 												},
 											},
 											"metrics": map[string]interface{}{
-												"node_count": 4,
-												"edge_count": 2,
-												"max_fanout": 2,
+												"node_count":              4,
+												"edge_count":              2,
+												"disconnected_node_count": 1,
+												"duplicate_node_count":    0,
+												"max_fanin":               1,
+												"max_fanout":              2,
+												"diagram_type":            "flowchart",
+												"direction":               "TD",
+												"issue_counts": map[string]interface{}{
+													"by_severity": map[string]interface{}{"error": 1, "warn": 1},
+													"by_rule":     map[string]interface{}{"no-disconnected-nodes": 1, "max-fanout": 1},
+												},
 											},
 										},
 									},
@@ -557,7 +575,7 @@ var openapi = map[string]interface{}{
 			},
 			"Metrics": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"node_count", "edge_count", "max_fanout"},
+				"required": []string{"node_count", "edge_count", "disconnected_node_count", "duplicate_node_count", "max_fanin", "max_fanout", "diagram_type"},
 				"properties": map[string]interface{}{
 					"node_count": map[string]interface{}{
 						"type":        "integer",
@@ -569,10 +587,53 @@ var openapi = map[string]interface{}{
 						"description": "Total number of edges (connections) in the diagram",
 						"example":     4,
 					},
+					"disconnected_node_count": map[string]interface{}{
+						"type":        "integer",
+						"description": "Number of nodes with neither incoming nor outgoing edges",
+						"example":     1,
+					},
+					"duplicate_node_count": map[string]interface{}{
+						"type":        "integer",
+						"description": "Number of duplicate node declarations beyond first occurrences",
+						"example":     0,
+					},
+					"max_fanin": map[string]interface{}{
+						"type":        "integer",
+						"description": "Maximum number of incoming edges to any single node",
+						"example":     3,
+					},
 					"max_fanout": map[string]interface{}{
 						"type":        "integer",
 						"description": "Maximum number of outgoing edges from any single node",
 						"example":     2,
+					},
+					"diagram_type": map[string]interface{}{
+						"type":        "string",
+						"description": "Diagram type copied from parsed metadata",
+						"example":     "flowchart",
+					},
+					"direction": map[string]interface{}{
+						"type":        "string",
+						"description": "Diagram direction when provided by parser",
+						"example":     "TD",
+					},
+					"issue_counts": map[string]interface{}{
+						"$ref":        "#/components/schemas/IssueCounts",
+						"description": "Issue count aggregations by severity and rule ID",
+					},
+				},
+			},
+			"IssueCounts": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"by_severity", "by_rule"},
+				"properties": map[string]interface{}{
+					"by_severity": map[string]interface{}{
+						"type":                 "object",
+						"additionalProperties": map[string]interface{}{"type": "integer"},
+					},
+					"by_rule": map[string]interface{}{
+						"type":                 "object",
+						"additionalProperties": map[string]interface{}{"type": "integer"},
 					},
 				},
 			},
