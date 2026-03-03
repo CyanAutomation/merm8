@@ -4,20 +4,24 @@
       "AnalyzeRequest": {
         "properties": {
           "code": {
-            "description": "Mermaid diagram code to analyze. Total request body must be 1 MiB or smaller.",
+            "description": "Mermaid diagram code to analyze. Total request body must be 1 MiB or smaller. Supports suppression comments like `%% merm8-disable max-fanout` and `%% merm8-disable all`.",
             "example": "graph TD\n  A[Start] --\u003e B[Process]\n  B --\u003e C[End]",
             "type": "string"
           },
           "config": {
-            "description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`",
+            "description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`\nUnknown rule IDs are rejected with `400 invalid_config`.",
             "example": {
               "max-fanout": {
+                "enabled": true,
                 "limit": 3,
-                "severity": "error"
+                "severity": "error",
+                "suppression_selectors": [
+                  "node:A"
+                ]
               },
               "no-disconnected-nodes": {
-                "enabled": true,
-                "severity": "warn"
+                "enabled": false,
+                "severity": "info"
               }
             },
             "type": "object"
@@ -211,7 +215,7 @@
   "paths": {
     "/analyze": {
       "post": {
-        "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nReturns syntax errors if parsing fails, or lint results if parsing succeeds.",
+        "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nSupports source comment suppressions such as `%% merm8-disable \u003crule-id\u003e`, `%% merm8-disable all`, and `%% merm8-disable-next-line \u003crule-id\u003e`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)",
         "operationId": "analyzeCode",
         "requestBody": {
           "content": {
@@ -234,9 +238,15 @@
                   "value": {
                     "code": "graph LR\n  A --\u003e B\n  B --\u003e C",
                     "config": {
-                      "max-fanout": {
-                        "limit": 2,
-                        "severity": "error"
+                      "rules": {
+                        "max-fanout": {
+                          "enabled": true,
+                          "limit": 2,
+                          "severity": "error",
+                          "suppression_selectors": [
+                            "node:A"
+                          ]
+                        }
                       }
                     }
                   }
@@ -380,6 +390,28 @@
             "content": {
               "application/json": {
                 "examples": {
+                  "contract": {
+                    "summary": "Parser contract violation",
+                    "value": {
+                      "error": {
+                        "code": "parser_contract_violation",
+                        "message": "parser response violated service contract"
+                      },
+                      "issues": [],
+                      "valid": false
+                    }
+                  },
+                  "decode": {
+                    "summary": "Parser malformed output",
+                    "value": {
+                      "error": {
+                        "code": "parser_decode_error",
+                        "message": "parser returned malformed output"
+                      },
+                      "issues": [],
+                      "valid": false
+                    }
+                  },
                   "internal": {
                     "summary": "Generic internal failure",
                     "value": {
@@ -391,12 +423,12 @@
                       "valid": false
                     }
                   },
-                  "parserTimeout": {
-                    "summary": "Parser timeout",
+                  "subprocess": {
+                    "summary": "Parser subprocess failure",
                     "value": {
                       "error": {
-                        "code": "parser_timeout",
-                        "message": "parser timed out"
+                        "code": "parser_subprocess_error",
+                        "message": "parser subprocess failed"
                       },
                       "issues": [],
                       "valid": false
@@ -409,6 +441,24 @@
               }
             },
             "description": "Internal server error"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "parser_timeout",
+                    "message": "parser timed out while validating Mermaid code"
+                  },
+                  "issues": [],
+                  "valid": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Parser timeout"
           }
         },
         "summary": "Analyze and lint a Mermaid diagram",
