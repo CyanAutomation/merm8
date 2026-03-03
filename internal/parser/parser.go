@@ -20,6 +20,8 @@ import (
 )
 
 const defaultTimeout = 5 * time.Second
+const minTimeout = 1 * time.Second
+const maxTimeout = 60 * time.Second
 const defaultNodeMaxOldSpaceSizeMB = 512
 const maxNodeMaxOldSpaceSizeMB = 4096
 
@@ -111,10 +113,15 @@ func New(scriptPath string) (*Parser, error) {
 
 	return &Parser{
 		scriptPath:        scriptPath,
-		timeout:           defaultTimeout,
+		timeout:           readTimeoutSeconds(),
 		repoRoot:          root,
 		nodeMaxOldSpaceMB: readMaxOldSpaceMB(),
 	}, nil
+}
+
+// Timeout returns the configured parser timeout duration.
+func (p *Parser) Timeout() time.Duration {
+	return p.timeout
 }
 
 // Ready performs lightweight dependency checks used by readiness probes.
@@ -314,6 +321,25 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 
 func (p *Parser) nodeArgs() []string {
 	return []string{fmt.Sprintf("--max-old-space-size=%d", p.nodeMaxOldSpaceMB)}
+}
+
+func readTimeoutSeconds() time.Duration {
+	raw := strings.TrimSpace(os.Getenv("PARSER_TIMEOUT_SECONDS"))
+	if raw == "" {
+		return defaultTimeout
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return defaultTimeout
+	}
+
+	timeout := time.Duration(value) * time.Second
+	if timeout < minTimeout || timeout > maxTimeout {
+		return defaultTimeout
+	}
+
+	return timeout
 }
 
 func readMaxOldSpaceMB() int {

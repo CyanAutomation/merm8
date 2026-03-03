@@ -717,6 +717,12 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 |-----------------|----------------------------------|-------------------------------------|
 | `PORT`          | `8080`                           | TCP port the HTTP server listens on |
 | `PARSER_SCRIPT` | `/app/parser-node/parse.mjs`     | Path to the Node.js parser script   |
+| `PARSER_TIMEOUT_SECONDS` | `5`                              | Parser timeout in seconds (1–60); configurable for complex diagrams |
+| `PARSER_CONCURRENCY_LIMIT` | `8`                              | Max in-flight parser subprocesses; excess requests get 503 |
+| `PARSER_MAX_OLD_SPACE_MB` | `512`                            | Node.js V8 old-space heap size in MB |
+| `ANALYZE_RATE_LIMIT_PER_MINUTE` | `120`                           | Rate limit for `/analyze` endpoint (0 = unlimited) |
+| `DEPLOYMENT_MODE` | `development`                    | `production` or `development`; controls rate limiting and auth |
+| `ANALYZE_AUTH_ENABLED` | `false`                          | Enable bearer token authentication on `/analyze` |
 
 ---
 

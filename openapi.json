@@ -187,6 +187,13 @@
             },
             "type": "array"
           },
+          "parser_timeout_seconds": {
+            "description": "Parser timeout in seconds (1-60). Configurable via PARSER_TIMEOUT_SECONDS environment variable.",
+            "format": "int32",
+            "maximum": 60,
+            "minimum": 1,
+            "type": "integer"
+          },
           "parser_version": {
             "type": "string"
           },

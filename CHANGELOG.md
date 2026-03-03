@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Configurable parser timeout via `PARSER_TIMEOUT_SECONDS` environment variable (1–60 seconds, default 5s). Exposed in `GET /info` response as `parser_timeout_seconds` field.
+- `POST /analyze/sarif` returns SARIF 2.1.0 format for all error responses (previously returned JSON with 200 OK). **Breaking change**: Clients must expect proper HTTP status codes (400, 413, 504, 503, 500) with SARIF error format.
+- Comprehensive test coverage for timeout configurability, SARIF error response format, and concurrent error handling.
+
 ### Changed
 - Rule severity overrides are now normalized with case-insensitive, trimmed parsing, and only canonical values `error`, `warning`, and `info` are accepted; the legacy `warn` alias is now rejected.
+- `POST /analyze/sarif` error responses now return proper HTTP status codes instead of 200 OK with embedded errors.
+  - Invalid JSON: `400 Bad Request`
+  - Request too large: `413 Payload Too Large`
+  - Parser timeout: `504 Gateway Timeout`
+  - Server busy: `503 Service Unavailable`
+  - Internal errors: `500 Internal Server Error`
 
 
 ## [0.1.0] - 2026-03-03

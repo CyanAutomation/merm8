@@ -83,7 +83,8 @@ func main() {
 	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, logger)
 
 	addr := fmt.Sprintf(":%s", port)
-	logger.Info("server starting", "addr", addr, "parser", scriptPath, "mode", deploymentMode, "parser_concurrency_limit", parserConcurrencyLimit, "analyze_rate_limit_per_minute", rateLimitPerMinute, "analyze_auth_enabled", authToken != "")
+	parserTimeoutSecs := int(getParserTimeout().Seconds())
+	logger.Info("server starting", "addr", addr, "parser", scriptPath, "mode", deploymentMode, "parser_concurrency_limit", parserConcurrencyLimit, "parser_timeout_seconds", parserTimeoutSecs, "analyze_rate_limit_per_minute", rateLimitPerMinute, "analyze_auth_enabled", authToken != "")
 	if err := http.ListenAndServe(addr, rootHandler); err != nil {
 		logger.Error("server error", "error", err.Error())
 		panic(fmt.Sprintf("server error: %v", err))
@@ -102,4 +103,29 @@ func envInt(key string, fallback int) int {
 	}
 
 	return value
+}
+
+func getParserTimeout() time.Duration {
+	const (
+		defaultTimeout = 5 * time.Second
+		minTimeout     = 1 * time.Second
+		maxTimeout     = 60 * time.Second
+	)
+
+	raw := strings.TrimSpace(os.Getenv("PARSER_TIMEOUT_SECONDS"))
+	if raw == "" {
+		return defaultTimeout
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return defaultTimeout
+	}
+
+	timeout := time.Duration(value) * time.Second
+	if timeout < minTimeout || timeout > maxTimeout {
+		return defaultTimeout
+	}
+
+	return timeout
 }
