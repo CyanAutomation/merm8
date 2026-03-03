@@ -21,7 +21,10 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	handler := api.NewHandlerWithScript(scriptPath)
+	handler, err := api.NewHandlerWithScript(scriptPath)
+	if err != nil {
+		log.Fatalf("failed to initialize handler: %v", err)
+	}
 	handler.RegisterRoutes(mux)
 
 	addr := fmt.Sprintf(":%s", port)
