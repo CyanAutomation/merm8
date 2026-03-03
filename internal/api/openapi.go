@@ -134,7 +134,7 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Prometheus metrics",
-				"description": "Returns service metrics in Prometheus text exposition format.",
+				"description": "Returns service metrics in Prometheus text exposition format. Includes request_total, request_duration_seconds, analyze_requests_total, and parser_duration_seconds metric families.",
 				"operationId": "getMetrics",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{

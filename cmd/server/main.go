@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/CyanAutomation/merm8/internal/api"
+	"github.com/CyanAutomation/merm8/internal/telemetry"
 )
 
 const (
@@ -42,8 +43,9 @@ func main() {
 	parserConcurrencyLimit := envInt("PARSER_CONCURRENCY_LIMIT", defaultParserConcurrencyLimit)
 	handler.SetParserConcurrencyLimit(parserConcurrencyLimit)
 
-	metricsExporter := api.NewPrometheusMetricsExporter()
-	handler.SetMetricsHandler(metricsExporter)
+	metrics := telemetry.NewMetrics()
+	handler.SetMetricsHandler(metrics.Handler())
+	handler.SetTelemetryMetrics(metrics)
 
 	handler.RegisterRoutes(mux)
 
@@ -64,11 +66,13 @@ func main() {
 	}
 
 	routePatterns := map[string]string{
+		"GET /health":   "/health",
 		"GET /healthz":  "/healthz",
 		"GET /ready":    "/ready",
+		"GET /metrics":  "/metrics",
 		"POST /analyze": "/analyze",
 	}
-	rootHandler = api.MetricsMiddleware(rootHandler, routePatterns, metricsExporter)
+	rootHandler = api.MetricsMiddleware(rootHandler, routePatterns, metrics)
 
 	addr := fmt.Sprintf(":%s", port)
 	log.Printf("mermaid-lint listening on %s (parser: %s, mode: %s, parser_concurrency_limit: %d, analyze_rate_limit_per_minute: %d, analyze_auth_enabled: %t)", addr, scriptPath, deploymentMode, parserConcurrencyLimit, rateLimitPerMinute, authToken != "")

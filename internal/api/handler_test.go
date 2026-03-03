@@ -1594,7 +1594,7 @@ func TestMetrics_ExporterExposesPrometheusText(t *testing.T) {
 
 	h.SetMetricsHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-		_, _ = w.Write([]byte("# HELP merm8_http_requests_total test\nmerm8_http_requests_total 1\n"))
+		_, _ = w.Write([]byte("# HELP request_total test\nrequest_total 1\n"))
 	}))
 	h.RegisterRoutes(mux)
 
@@ -1611,8 +1611,8 @@ func TestMetrics_ExporterExposesPrometheusText(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	if !strings.Contains(body, "merm8_http_requests_total") {
-		t.Fatalf("expected metrics payload to include merm8_http_requests_total, got %q", body)
+	if !strings.Contains(body, "request_total") {
+		t.Fatalf("expected metrics payload to include request_total, got %q", body)
 	}
 }
 
