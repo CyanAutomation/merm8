@@ -629,9 +629,13 @@ func (h *Handler) AnalyzeSARIF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	requestURI := "/analyze/sarif"
+	if r.URL != nil {
+		requestURI = r.URL.Path
+	}
 	report := sarif.Transform(resp.Issues, sarif.RequestMetadata{
-		RequestURI:  r.URL.Path,
-		ArtifactURI: "request://analyze",
+		RequestURI:  requestURI,
+		ArtifactURI: "",
 	})
 	writeSARIF(w, http.StatusOK, report)
 }
