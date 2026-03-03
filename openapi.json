@@ -10,7 +10,7 @@
           },
           "config": {
             "$ref": "#/components/schemas/RuleConfigSchema",
-            "description": "Optional lint rule configuration. Preferred format is versioned: {\"schema-version\":\"v1\",\"rules\":{...}}. Legacy flat and nested formats remain supported during migration.",
+            "description": "Optional lint rule configuration. Canonical and required format: {\"schema-version\":\"v1\",\"rules\":{...}}. Legacy flat, nested, and snake_case keys are no longer accepted.",
             "example": {
               "rules": {
                 "max-fanout": {
@@ -274,115 +274,9 @@
       },
       "RuleConfigSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "oneOf": [
-          {
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "additionalProperties": false,
-            "properties": {
-              "rules": {
-                "additionalProperties": false,
-                "properties": {
-                  "max-fanout": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "enabled": {
-                        "description": "Enable or disable this rule.",
-                        "type": "boolean"
-                      },
-                      "limit": {
-                        "description": "Maximum allowed outgoing edges per node.",
-                        "minimum": 1,
-                        "type": "integer"
-                      },
-                      "severity": {
-                        "description": "Severity assigned to emitted issues.",
-                        "enum": [
-                          "error",
-                          "warning",
-                          "info"
-                        ],
-                        "type": "string"
-                      },
-                      "suppression-selectors": {
-                        "description": "Selectors that suppress matching issues.",
-                        "items": {
-                          "type": "string"
-                        },
-                        "type": "array"
-                      }
-                    },
-                    "type": "object"
-                  },
-                  "no-disconnected-nodes": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "enabled": {
-                        "description": "Enable or disable this rule.",
-                        "type": "boolean"
-                      },
-                      "severity": {
-                        "description": "Severity assigned to emitted issues.",
-                        "enum": [
-                          "error",
-                          "warning",
-                          "info"
-                        ],
-                        "type": "string"
-                      },
-                      "suppression-selectors": {
-                        "description": "Selectors that suppress matching issues.",
-                        "items": {
-                          "type": "string"
-                        },
-                        "type": "array"
-                      }
-                    },
-                    "type": "object"
-                  },
-                  "no-duplicate-node-ids": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "enabled": {
-                        "description": "Enable or disable this rule.",
-                        "type": "boolean"
-                      },
-                      "severity": {
-                        "description": "Severity assigned to emitted issues.",
-                        "enum": [
-                          "error",
-                          "warning",
-                          "info"
-                        ],
-                        "type": "string"
-                      },
-                      "suppression-selectors": {
-                        "description": "Selectors that suppress matching issues.",
-                        "items": {
-                          "type": "string"
-                        },
-                        "type": "array"
-                      }
-                    },
-                    "type": "object"
-                  }
-                },
-                "type": "object"
-              },
-              "schema-version": {
-                "enum": [
-                  "v1"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "schema-version",
-              "rules"
-            ],
-            "title": "merm8 Rule Configuration v1",
-            "type": "object"
-          },
-          {
+        "additionalProperties": false,
+        "properties": {
+          "rules": {
             "additionalProperties": false,
             "properties": {
               "max-fanout": {
@@ -471,106 +365,19 @@
             },
             "type": "object"
           },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "rules": {
-                "additionalProperties": false,
-                "properties": {
-                  "max-fanout": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "enabled": {
-                        "description": "Enable or disable this rule.",
-                        "type": "boolean"
-                      },
-                      "limit": {
-                        "description": "Maximum allowed outgoing edges per node.",
-                        "minimum": 1,
-                        "type": "integer"
-                      },
-                      "severity": {
-                        "description": "Severity assigned to emitted issues.",
-                        "enum": [
-                          "error",
-                          "warning",
-                          "info"
-                        ],
-                        "type": "string"
-                      },
-                      "suppression-selectors": {
-                        "description": "Selectors that suppress matching issues.",
-                        "items": {
-                          "type": "string"
-                        },
-                        "type": "array"
-                      }
-                    },
-                    "type": "object"
-                  },
-                  "no-disconnected-nodes": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "enabled": {
-                        "description": "Enable or disable this rule.",
-                        "type": "boolean"
-                      },
-                      "severity": {
-                        "description": "Severity assigned to emitted issues.",
-                        "enum": [
-                          "error",
-                          "warning",
-                          "info"
-                        ],
-                        "type": "string"
-                      },
-                      "suppression-selectors": {
-                        "description": "Selectors that suppress matching issues.",
-                        "items": {
-                          "type": "string"
-                        },
-                        "type": "array"
-                      }
-                    },
-                    "type": "object"
-                  },
-                  "no-duplicate-node-ids": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "enabled": {
-                        "description": "Enable or disable this rule.",
-                        "type": "boolean"
-                      },
-                      "severity": {
-                        "description": "Severity assigned to emitted issues.",
-                        "enum": [
-                          "error",
-                          "warning",
-                          "info"
-                        ],
-                        "type": "string"
-                      },
-                      "suppression-selectors": {
-                        "description": "Selectors that suppress matching issues.",
-                        "items": {
-                          "type": "string"
-                        },
-                        "type": "array"
-                      }
-                    },
-                    "type": "object"
-                  }
-                },
-                "type": "object"
-              }
-            },
-            "required": [
-              "rules"
+          "schema-version": {
+            "enum": [
+              "v1"
             ],
-            "type": "object"
+            "type": "string"
           }
+        },
+        "required": [
+          "schema-version",
+          "rules"
         ],
-        "title": "merm8 Rule Configuration"
+        "title": "merm8 Rule Configuration v1",
+        "type": "object"
       },
       "RuleMetadata": {
         "properties": {
@@ -1254,7 +1061,7 @@
     },
     "/rules/schema": {
       "get": {
-        "description": "Returns a JSON Schema generated from the rule config registry. The schema validates both flat and nested config payload formats.",
+        "description": "Returns a JSON Schema generated from the rule config registry. The schema validates only the canonical versioned config payload format.",
         "operationId": "getRuleConfigSchema",
         "responses": {
           "200": {

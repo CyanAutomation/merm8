@@ -154,7 +154,7 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Get JSON Schema for lint rule configuration",
-				"description": "Returns a JSON Schema generated from the rule config registry. The schema validates both flat and nested config payload formats.",
+				"description": "Returns a JSON Schema generated from the rule config registry. The schema validates only the canonical versioned config payload format.",
 				"operationId": "getRuleConfigSchema",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
@@ -670,7 +670,7 @@ var openapi = map[string]interface{}{
 					},
 					"config": map[string]interface{}{
 						"$ref":        "#/components/schemas/RuleConfigSchema",
-						"description": "Optional lint rule configuration. Preferred format is versioned: {\"schema-version\":\"v1\",\"rules\":{...}}. Legacy flat and nested formats remain supported during migration.",
+						"description": "Optional lint rule configuration. Canonical and required format: {\"schema-version\":\"v1\",\"rules\":{...}}. Legacy flat, nested, and snake_case keys are no longer accepted.",
 						"example": map[string]interface{}{
 							"schema-version": "v1",
 							"rules": map[string]interface{}{

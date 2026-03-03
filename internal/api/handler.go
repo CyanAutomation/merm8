@@ -18,6 +18,7 @@ import (
 )
 
 const maxAnalyzeBodyBytes int64 = 1 << 20 // 1 MiB
+const strictConfigSchema = true
 
 //go:embed swagger.html
 var swaggerHTML []byte
@@ -40,8 +41,6 @@ type analyzeRequest struct {
 	Config json.RawMessage `json:"config"`
 }
 
-// parseConfig validates and accepts both flat {"rule-id": {...}} and nested
-// {"rules": {"rule-id": {...}}} config formats.
 type validationError struct {
 	Code      string
 	Path      string
@@ -49,9 +48,10 @@ type validationError struct {
 	Supported []string
 }
 
-// parseConfig validates and accepts both flat {"rule-id": {...}} and nested
-// {"rules": {"rule-id": {...}}} config formats.
-func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.Config, *validationError) {
+// parseConfig validates config payloads.
+// In strict mode, only canonical versioned payloads are accepted:
+// {"schema-version":"v1","rules":{...}}.
+func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict bool) (rules.Config, *validationError) {
 	if len(raw) == 0 {
 		return rules.Config{}, nil
 	}
@@ -70,8 +70,11 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.C
 	rulePathPrefix := "config"
 
 	schemaVersionValue, hasSchemaVersion := asMap["schema-version"]
-	if !hasSchemaVersion {
+	if !hasSchemaVersion && !strict {
 		schemaVersionValue, hasSchemaVersion = asMap["schema_version"]
+	}
+	if strict && !hasSchemaVersion {
+		return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.schema-version", Message: "config.schema-version is required"}
 	}
 	if hasSchemaVersion {
 		schemaVersion, ok := schemaVersionValue.(string)
@@ -95,7 +98,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.C
 			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
 		}
 		for topLevelKey := range asMap {
-			if topLevelKey != "schema-version" && topLevelKey != "schema_version" && topLevelKey != "rules" {
+			if topLevelKey != "schema-version" && topLevelKey != "rules" && !(topLevelKey == "schema_version" && !strict) {
 				return rules.Config{}, &validationError{
 					Code:      "unknown_option",
 					Path:      "config." + topLevelKey,
@@ -112,6 +115,9 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.C
 		asMap = rulesMap
 		rulePathPrefix = "config.rules"
 	} else if rulesValue, hasRules := asMap["rules"]; hasRules {
+		if strict {
+			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.schema-version", Message: "config.schema-version is required"}
+		}
 		rulesMap, ok := rulesValue.(map[string]any)
 		if !ok {
 			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
@@ -123,6 +129,8 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.C
 		}
 		cfgRaw = ruleMapRaw
 		asMap = rulesMap
+	} else if strict {
+		return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.schema-version", Message: "config.schema-version is required"}
 	}
 
 	for ruleID, ruleConfig := range asMap {
@@ -389,7 +397,7 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs())
+	cfg, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchema)
 	if configValidationErr != nil {
 		writeConfigValidationError(w, configValidationErr)
 		return
