@@ -2,6 +2,7 @@
 package parser_test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -310,6 +311,9 @@ process.exit(0);
 				if !contains(err.Error(), tt.wantErrSubstr) {
 					t.Fatalf("expected error containing %q, got %q", tt.wantErrSubstr, err.Error())
 				}
+				if tt.wantErrSubstr == "failed to decode parser output" && !errors.Is(err, parser.ErrDecode) {
+					t.Fatalf("expected decode category error, got %v", err)
+				}
 				if syntaxErr != nil {
 					t.Fatalf("expected nil syntaxErr when err is returned, got %+v", syntaxErr)
 				}
@@ -401,8 +405,8 @@ process.stdout.write(JSON.stringify({ valid: true }) + "\n");
 	if diagram != nil {
 		t.Fatalf("expected nil diagram, got %+v", diagram)
 	}
-	if err.Error() != "parser contract violation: valid result missing AST" {
-		t.Fatalf("unexpected error: %v", err)
+	if !errors.Is(err, parser.ErrContract) {
+		t.Fatalf("expected contract category error, got %v", err)
 	}
 }
 
@@ -431,6 +435,32 @@ process.exit(1);
 	}
 	if diagram != nil {
 		t.Fatalf("expected nil diagram, got %+v", diagram)
+	}
+	if !errors.Is(err, parser.ErrSubprocess) {
+		t.Fatalf("expected subprocess category error, got %v", err)
+	}
+}
+
+func TestParser_TimeoutCategory(t *testing.T) {
+	tempDir := repoTempDir(t)
+	script := filepath.Join(tempDir, "parse.mjs")
+	scriptBody := `#!/usr/bin/env node
+setTimeout(() => {}, 10000);
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write test parser script: %v", err)
+	}
+
+	p := mustNewParser(t, script)
+	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
+	if err == nil {
+		t.Fatal("expected timeout error, got nil")
+	}
+	if diagram != nil || syntaxErr != nil {
+		t.Fatalf("expected nil diagram/syntaxErr on timeout, got diagram=%v syntaxErr=%v", diagram, syntaxErr)
+	}
+	if !errors.Is(err, parser.ErrTimeout) {
+		t.Fatalf("expected timeout category error, got %v", err)
 	}
 }
 
