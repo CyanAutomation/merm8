@@ -571,17 +571,20 @@ var openapi = map[string]interface{}{
 					},
 					"config": map[string]interface{}{
 						"$ref":        "#/components/schemas/RuleConfigSchema",
-						"description": "Optional lint rule configuration. Supports both flat and nested formats:",
+						"description": "Optional lint rule configuration. Preferred format is versioned: {\"schema_version\":\"v1\",\"rules\":{...}}. Legacy flat and nested formats remain supported during migration.",
 						"example": map[string]interface{}{
-							"max-fanout": map[string]interface{}{
-								"enabled":               true,
-								"limit":                 3,
-								"severity":              "error",
-								"suppression_selectors": []interface{}{"node:A"},
-							},
-							"no-disconnected-nodes": map[string]interface{}{
-								"enabled":  false,
-								"severity": "info",
+							"schema_version": "v1",
+							"rules": map[string]interface{}{
+								"max-fanout": map[string]interface{}{
+									"enabled":               true,
+									"limit":                 3,
+									"severity":              "error",
+									"suppression_selectors": []interface{}{"node:A"},
+								},
+								"no-disconnected-nodes": map[string]interface{}{
+									"enabled":  false,
+									"severity": "info",
+								},
 							},
 						},
 					},

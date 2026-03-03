@@ -739,6 +739,83 @@ func TestAnalyze_ConfigParsing(t *testing.T) {
 	}
 }
 
+func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
+	t.Run("accepts versioned config", func(t *testing.T) {
+		mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+			return &model.Diagram{
+				Type:  model.DiagramTypeFlowchart,
+				Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}, {ID: "D"}},
+				Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}},
+			}, nil, nil
+		})
+
+		body, _ := json.Marshal(map[string]any{
+			"code": "graph TD; A-->B; A-->C; A-->D",
+			"config": map[string]any{
+				"schema_version": "v1",
+				"rules": map[string]any{
+					"max-fanout": map[string]any{"limit": 2},
+				},
+			},
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200 for versioned config, got %d", w.Code)
+		}
+	})
+
+	t.Run("rejects unknown schema version", func(t *testing.T) {
+		parserCalled := false
+		mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+			parserCalled = true
+			return &model.Diagram{}, nil, nil
+		})
+
+		body, _ := json.Marshal(map[string]any{
+			"code": "graph TD; A-->B",
+			"config": map[string]any{
+				"schema_version": "v9",
+				"rules":          map[string]any{},
+			},
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for unsupported schema version, got %d", w.Code)
+		}
+		if parserCalled {
+			t.Fatal("expected parser not to be called when schema version is invalid")
+		}
+		assertValidationErrorResponse(t, w.Body.Bytes(), "unsupported_schema_version", "unsupported config schema_version: v9", "config.schema_version", []string{"v1"})
+	})
+
+	t.Run("legacy formats remain supported", func(t *testing.T) {
+		for _, config := range []map[string]any{
+			{"max-fanout": map[string]any{"limit": 2}},
+			{"rules": map[string]any{"max-fanout": map[string]any{"limit": 2}}},
+		} {
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+			})
+			body, _ := json.Marshal(map[string]any{"code": "graph TD; A-->B", "config": config})
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected legacy config to remain supported, got %d", w.Code)
+			}
+		}
+	})
+}
+
 // TestAnalyze_MultipleRulesAggregate tests that multiple rule violations are aggregated.
 func TestAnalyze_MultipleRulesAggregate(t *testing.T) {
 	// Diagram with duplicate node ID "A" and disconnected node "C"
@@ -1998,11 +2075,11 @@ func TestRuleConfigSchema_ResponseShape(t *testing.T) {
 	}
 
 	variants, ok := resp.Schema["oneOf"].([]any)
-	if !ok || len(variants) != 2 {
-		t.Fatalf("expected schema.oneOf with flat+nested variants, got %#v", resp.Schema["oneOf"])
+	if !ok || len(variants) != 3 {
+		t.Fatalf("expected schema.oneOf with versioned+legacy variants, got %#v", resp.Schema["oneOf"])
 	}
 
-	flat := variants[0].(map[string]any)
+	flat := variants[1].(map[string]any)
 	flatProps := flat["properties"].(map[string]any)
 	maxFanout := flatProps["max-fanout"].(map[string]any)
 	maxFanoutProps := maxFanout["properties"].(map[string]any)
