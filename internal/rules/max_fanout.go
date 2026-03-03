@@ -20,7 +20,7 @@ func (r MaxFanout) Families() []model.DiagramFamily {
 }
 
 func (r MaxFanout) Run(d *model.Diagram, cfg Config) []model.Issue {
-	severity := EffectiveSeverity(r.ID(), cfg, "warn")
+	severity := EffectiveSeverity(r.ID(), cfg, "warning")
 
 	limit := defaultMaxFanout
 	if rc, ok := cfg[r.ID()]; ok {

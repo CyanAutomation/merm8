@@ -83,7 +83,7 @@ The request body editor will appear. Enter your Mermaid code:
 }
 ```
 
-**Diagram with high fan-out (warn severity):**
+**Diagram with high fan-out (warning severity):**
 ```json
 {
   "code": "graph TD\n  A --> B\n  A --> C\n  A --> D\n  A --> E\n  A --> F\n  A --> G"
@@ -114,7 +114,7 @@ Add a `config` field to customize rule behavior:
 
 - `max-fanout` — Set maximum outgoing edges per node
   ```json
-  "max-fanout": { "enabled": true, "severity": "warn", "limit": 3 }
+  "max-fanout": { "enabled": true, "severity": "warning", "limit": 3 }
   ```
 
 Unknown rule IDs in config are rejected with `400 invalid_config`.
@@ -213,12 +213,13 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
   - `column` — 0-based column number where error occurred
 - **`issues`** — Array of lint rule violations found (empty if no issues)
   - `rule_id` — The lint rule that triggered
-  - `severity` — One of: `error`, `warn`, `info`
+  - `severity` — One of: `error`, `warning`, `info`
+    - Deprecated alias: `warn` is accepted for backwards compatibility and normalized to `warning`.
   - `message` — Description of the issue
   - `line` / `column` — Optional location in the diagram code (omitted when unknown)
 - **`issues`** can include findings both with source locations (`line`/`column`) and without them when exact positions are unavailable.
   - `line` / `column` — Location in the diagram code
-  - **Ordering guarantee** — Issues are deterministically sorted before returning: by severity priority (`error` → `warn` → `info`), then `rule_id`, then `line`, then `column`, then `message`. If two rules produce the exact same issue signature, duplicates are removed.
+  - **Ordering guarantee** — Issues are deterministically sorted before returning: by severity priority (`error` → `warning` → `info`), then `rule_id`, then `line`, then `column`, then `message`. If two rules produce the exact same issue signature, duplicates are removed.
 - **`metrics`** — Statistics about the diagram structure
   - `node_count` — Total nodes in the diagram
   - `edge_count` — Total connections/edges
@@ -437,7 +438,7 @@ The merm8 engine includes three built-in lint rules:
   ```
 
 #### `max-fanout`
-- **Severity:** warn
+- **Severity:** warning
 - **Purpose:** Limits maximum outgoing edges from a single node
 - **Configuration:** `limit` (integer, default: 5)
 - **Example:**
@@ -454,7 +455,7 @@ The merm8 engine includes three built-in lint rules:
   ```json
   {
     "rule_id": "max-fanout",
-    "severity": "warn",
+    "severity": "warning",
     "message": "Node 'A' has fanout of 6, exceeds limit of 5"
   }
   ```
@@ -538,7 +539,7 @@ curl -X POST http://localhost:8080/analyze \
   "issues": [
     {
       "rule_id": "max-fanout",
-      "severity": "warn",
+      "severity": "warning",
       "message": "Node 'A' has fanout of 6, exceeds limit of 4",
       "line": 2,
       "column": 2

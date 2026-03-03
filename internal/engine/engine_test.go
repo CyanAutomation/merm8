@@ -87,7 +87,7 @@ func (duplicateIssueRule) ID() string { return "duplicate-issue-rule" }
 func (duplicateIssueRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 	issue := model.Issue{
 		RuleID:   "duplicate-issue-rule",
-		Severity: "warn",
+		Severity: "warning",
 		Message:  "duplicate issue",
 		Line:     intPtr(2),
 		Column:   intPtr(4),
