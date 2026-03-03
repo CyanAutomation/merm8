@@ -69,6 +69,43 @@ func newTestMuxWithRealParser(t *testing.T, scriptPath string) *http.ServeMux {
 	return mux
 }
 
+func newTestMuxWithRealParserAndEngine(t *testing.T, scriptPath string, e *engine.Engine) *http.ServeMux {
+	t.Helper()
+	mux := http.NewServeMux()
+	p, err := parser.New(scriptPath)
+	if err != nil {
+		t.Skipf("skipping integration test; parser init failed: %v", err)
+	}
+	if err := p.Ready(); err != nil {
+		t.Skipf("skipping integration test; parser not ready: %v", err)
+	}
+	h := api.NewHandler(p, e)
+	h.RegisterRoutes(mux)
+	return mux
+}
+
+type nextLineProbeRule struct{}
+
+func (nextLineProbeRule) ID() string { return "next-line-probe" }
+
+func (nextLineProbeRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
+	directiveLine := 2
+	targetLine := 3
+	return []model.Issue{
+		{RuleID: "next-line-probe", Severity: "warning", Message: "directive-line issue", Line: &directiveLine},
+		{RuleID: "next-line-probe", Severity: "warning", Message: "target-line issue", Line: &targetLine},
+	}
+}
+
+type otherProbeRule struct{}
+
+func (otherProbeRule) ID() string { return "other-probe" }
+
+func (otherProbeRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
+	line := 3
+	return []model.Issue{{RuleID: "other-probe", Severity: "warning", Message: "other rule issue", Line: &line}}
+}
+
 func getParserScriptPath(t *testing.T) string {
 	t.Helper()
 
@@ -1378,6 +1415,58 @@ func TestAnalyze_Integration_GlobalSuppression(t *testing.T) {
 	}
 	if len(resp.Issues) != 0 {
 		t.Fatalf("expected all issues to be suppressed, got %#v", resp.Issues)
+	}
+}
+
+func TestAnalyze_Integration_IgnoreNextLineSuppressesOnlyTargetLineForMatchingRule(t *testing.T) {
+	scriptPath := getParserScriptPath(t)
+	mux := newTestMuxWithRealParserAndEngine(t, scriptPath, engine.NewWithRules(nextLineProbeRule{}, otherProbeRule{}))
+
+	body := `{
+		"code": "graph TD\n%% merm8-ignore-next-line next-line-probe\nA-->B"
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Valid  bool          `json:"valid"`
+		Issues []model.Issue `json:"issues"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if !resp.Valid {
+		t.Fatalf("expected valid=true response, got body=%s", w.Body.String())
+	}
+	if len(resp.Issues) != 2 {
+		t.Fatalf("expected 2 remaining issues, got %#v", resp.Issues)
+	}
+
+	foundDirectiveLine := false
+	foundOtherRule := false
+	for _, issue := range resp.Issues {
+		if issue.RuleID == "next-line-probe" && issue.Line != nil && *issue.Line == 2 {
+			foundDirectiveLine = true
+		}
+		if issue.RuleID == "other-probe" {
+			foundOtherRule = true
+		}
+		if issue.RuleID == "next-line-probe" && issue.Line != nil && *issue.Line == 3 {
+			t.Fatalf("expected next-line suppression to hide matching target-line issue, got %#v", resp.Issues)
+		}
+	}
+	if !foundDirectiveLine {
+		t.Fatalf("expected directive-line issue to remain; next-line suppression must not apply to directive line")
+	}
+	if !foundOtherRule {
+		t.Fatalf("expected non-matching rule issue to remain, got %#v", resp.Issues)
 	}
 }
 

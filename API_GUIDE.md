@@ -385,10 +385,10 @@ curl http://localhost:8080/spec | jq .
 
 You can suppress lint findings directly in Mermaid source using comment directives:
 
-- `%% merm8-disable <rule-id>`
-- `%% merm8-disable all`
-- `%% merm8-disable-next-line <rule-id>`
-- `%% merm8-disable-next-line all`
+- `%% merm8-disable <rule-id>` or `%% merm8-ignore <rule-id>`
+- `%% merm8-disable all` or `%% merm8-ignore all`
+- `%% merm8-disable-next-line <rule-id>` or `%% merm8-ignore-next-line <rule-id>`
+- `%% merm8-disable-next-line all` or `%% merm8-ignore-next-line all`
 
 `all` suppresses every rule. Rule-specific suppressions only affect matching `rule_id` values.
 
