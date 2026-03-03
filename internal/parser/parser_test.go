@@ -863,3 +863,22 @@ func TestParser_NewFailsWhenRepoRootMissing(t *testing.T) {
 		t.Fatal("expected nil parser when New fails")
 	}
 }
+
+func TestParser_VersionInfo(t *testing.T) {
+	script := getParserScript(t)
+	p := mustNewParser(t, script)
+
+	info, err := p.VersionInfo()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info == nil {
+		t.Fatal("expected non-nil version info")
+	}
+	if info.ParserVersion == "" {
+		t.Fatal("expected parser version to be non-empty")
+	}
+	if info.MermaidVersion == "" {
+		t.Fatal("expected mermaid version to be non-empty")
+	}
+}

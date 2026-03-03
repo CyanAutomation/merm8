@@ -38,6 +38,11 @@ type ParserInterface interface {
 	Parse(code string) (*model.Diagram, *parser.SyntaxError, error)
 }
 
+// VersionInfoProvider can be implemented by parser dependencies that expose runtime versions.
+type VersionInfoProvider interface {
+	VersionInfo() (*parser.VersionInfo, error)
+}
+
 // ReadinessChecker can be implemented by parser dependencies that support
 // lightweight readiness validation (e.g., binary/script availability checks).
 type ReadinessChecker interface {
@@ -301,10 +306,19 @@ type apiErrorDetails struct {
 type Handler struct {
 	parser              ParserInterface
 	engine              *engine.Engine
+	serviceVersion      string
 	metricsHandler      http.Handler
 	telemetryMetrics    *telemetry.Metrics
 	mu                  sync.RWMutex
 	parserConcurrencyCh chan struct{}
+}
+
+type infoResponse struct {
+	ServiceVersion   string                `json:"service_version,omitempty"`
+	ParserVersion    string                `json:"parser_version,omitempty"`
+	MermaidVersion   string                `json:"mermaid_version,omitempty"`
+	ParserRecognized []model.DiagramType   `json:"parser_recognized"`
+	LintSupported    []model.DiagramFamily `json:"lint_supported"`
 }
 
 // NewHandler creates a Handler with the given parser and engine.
@@ -346,6 +360,13 @@ func (h *Handler) SetTelemetryMetrics(metrics *telemetry.Metrics) {
 	h.telemetryMetrics = metrics
 }
 
+// SetServiceVersion configures a service/app version for informational endpoints.
+func (h *Handler) SetServiceVersion(version string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.serviceVersion = strings.TrimSpace(version)
+}
+
 // NewHandlerWithScript creates a Handler wired with a real parser using the given script path.
 // This is the typical constructor for production use.
 func NewHandlerWithScript(scriptPath string) (*Handler, error) {
@@ -371,6 +392,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", h.Healthz)
 	mux.HandleFunc("GET /healthz", h.Healthz)
 	mux.HandleFunc("GET /ready", h.Ready)
+	mux.HandleFunc("GET /info", h.Info)
 	mux.HandleFunc("GET /metrics", h.Metrics)
 	mux.HandleFunc("GET /rules", h.ListRules)
 	mux.HandleFunc("GET /rules/schema", h.RuleConfigSchema)
@@ -459,7 +481,35 @@ func (h *Handler) Ready(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+	resp := map[string]string{"status": "ready"}
+	if provider, ok := h.parser.(VersionInfoProvider); ok {
+		if info, err := provider.VersionInfo(); err == nil {
+			resp["parser_version"] = info.ParserVersion
+			resp["mermaid_version"] = info.MermaidVersion
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// Info handles GET /info and returns service/parser capability metadata.
+func (h *Handler) Info(w http.ResponseWriter, _ *http.Request) {
+	h.mu.RLock()
+	serviceVersion := h.serviceVersion
+	h.mu.RUnlock()
+
+	resp := infoResponse{
+		ServiceVersion:   serviceVersion,
+		ParserRecognized: model.RecognizedDiagramTypes(),
+		LintSupported:    h.lintSupportedFamilies(),
+	}
+	if provider, ok := h.parser.(VersionInfoProvider); ok {
+		if info, err := provider.VersionInfo(); err == nil {
+			resp.ParserVersion = info.ParserVersion
+			resp.MermaidVersion = info.MermaidVersion
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // Analyze handles POST /analyze.

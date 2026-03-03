@@ -105,10 +105,7 @@ var openapi = map[string]interface{}{
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
-									"type": "object",
-									"properties": map[string]interface{}{
-										"status": map[string]interface{}{"type": "string", "example": "ready"},
-									},
+									"$ref": "#/components/schemas/ReadyResponse",
 								},
 							},
 						},
@@ -123,6 +120,27 @@ var openapi = map[string]interface{}{
 										"status": map[string]interface{}{"type": "string", "example": "not_ready"},
 										"error":  map[string]interface{}{"type": "string"},
 									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+
+		"/info": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Service and parser runtime metadata",
+				"description": "Returns service/app version metadata (when configured), parser and Mermaid versions, plus parser-recognized and lint-supported diagram families.",
+				"operationId": "getInfo",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Service metadata",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/InfoResponse",
 								},
 							},
 						},
@@ -737,6 +755,40 @@ var openapi = map[string]interface{}{
 					},
 				},
 				"description": sarif.SeverityMappingDoc,
+			},
+
+			"ReadyResponse": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"status"},
+				"properties": map[string]interface{}{
+					"status":          map[string]interface{}{"type": "string", "example": "ready"},
+					"parser_version":  map[string]interface{}{"type": "string"},
+					"mermaid_version": map[string]interface{}{"type": "string"},
+				},
+			},
+
+			"InfoResponse": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"parser_recognized", "lint_supported"},
+				"properties": map[string]interface{}{
+					"service_version": map[string]interface{}{"type": "string"},
+					"parser_version":  map[string]interface{}{"type": "string"},
+					"mermaid_version": map[string]interface{}{"type": "string"},
+					"parser_recognized": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "string",
+							"enum": []string{"flowchart", "sequence", "class", "er", "state"},
+						},
+					},
+					"lint_supported": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "string",
+							"enum": []string{"flowchart", "sequence", "class", "er", "state"},
+						},
+					},
+				},
 			},
 
 			"DiagramTypesResponse": map[string]interface{}{
