@@ -153,7 +153,7 @@
             "description": "Severity level of the issue",
             "enum": [
               "error",
-              "warn",
+              "warning",
               "info"
             ],
             "type": "string"
@@ -323,7 +323,7 @@
                           "line": 2,
                           "message": "Node 'A' has fanout 6, exceeding limit of 5",
                           "rule_id": "max-fanout",
-                          "severity": "warn"
+                          "severity": "warning"
                         }
                       ],
                       "metrics": {

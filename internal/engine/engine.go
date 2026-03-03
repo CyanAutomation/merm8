@@ -183,7 +183,7 @@ func severityPriority(severity string) int {
 	switch severity {
 	case "error":
 		return 0
-	case "warn":
+	case "warning", "warn":
 		return 1
 	case "info":
 		return 2
