@@ -18,6 +18,7 @@ import (
 	"github.com/CyanAutomation/merm8/internal/engine"
 	"github.com/CyanAutomation/merm8/internal/model"
 	"github.com/CyanAutomation/merm8/internal/parser"
+	"github.com/CyanAutomation/merm8/internal/rules"
 )
 
 // mockParser is a test double for ParserInterface.
@@ -1800,5 +1801,143 @@ func TestAnalyzeAuthMiddleware_PrecedesRateLimitQuotaConsumption(t *testing.T) {
 
 	if authorizedW.Code != http.StatusOK {
 		t.Fatalf("expected first authorized request to succeed, got %d", authorizedW.Code)
+	}
+}
+
+func TestListRules_ResponseShape(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/rules", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Rules []struct {
+			ID                  string                 `json:"id"`
+			Severity            string                 `json:"severity"`
+			Description         string                 `json:"description"`
+			DefaultConfig       map[string]interface{} `json:"default_config"`
+			ConfigurableOptions []struct {
+				Name        string `json:"name"`
+				Type        string `json:"type"`
+				Description string `json:"description"`
+				Constraints string `json:"constraints"`
+			} `json:"configurable_options"`
+		} `json:"rules"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode /rules response: %v", err)
+	}
+	if len(resp.Rules) == 0 {
+		t.Fatal("expected non-empty rules list")
+	}
+	for _, rule := range resp.Rules {
+		if rule.ID == "" || rule.Severity == "" || rule.Description == "" {
+			t.Fatalf("expected id/severity/description for each rule, got %#v", rule)
+		}
+		if rule.DefaultConfig == nil {
+			t.Fatalf("expected default_config object for %s", rule.ID)
+		}
+		if rule.ConfigurableOptions == nil {
+			t.Fatalf("expected configurable_options array for %s", rule.ID)
+		}
+	}
+}
+
+func TestListRules_ContainsAllBuiltins(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/rules", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	var resp struct {
+		Rules []struct {
+			ID string `json:"id"`
+		} `json:"rules"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode /rules response: %v", err)
+	}
+
+	ids := map[string]struct{}{}
+	for _, rule := range resp.Rules {
+		ids[rule.ID] = struct{}{}
+	}
+	for _, builtin := range []string{"no-duplicate-node-ids", "no-disconnected-nodes", "max-fanout"} {
+		if _, ok := ids[builtin]; !ok {
+			t.Fatalf("expected builtin rule %q in /rules response", builtin)
+		}
+	}
+}
+
+func TestListRules_MetadataConsistencyWithRegistry(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/rules", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	var resp struct {
+		Rules []struct {
+			ID                  string                 `json:"id"`
+			Severity            string                 `json:"severity"`
+			DefaultConfig       map[string]interface{} `json:"default_config"`
+			ConfigurableOptions []struct {
+				Name string `json:"name"`
+			} `json:"configurable_options"`
+		} `json:"rules"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode /rules response: %v", err)
+	}
+
+	registry := rules.ConfigRegistry()
+	if len(resp.Rules) != len(registry) {
+		t.Fatalf("expected %d rules from /rules endpoint, got %d", len(registry), len(resp.Rules))
+	}
+	for _, rule := range resp.Rules {
+		meta, ok := registry[rule.ID]
+		if !ok {
+			t.Fatalf("unexpected rule id %q in /rules response", rule.ID)
+		}
+		if rule.Severity != meta.Severity {
+			t.Fatalf("expected severity %q for %s, got %q", meta.Severity, rule.ID, rule.Severity)
+		}
+		for key, value := range meta.DefaultConfig {
+			got, ok := rule.DefaultConfig[key]
+			if !ok {
+				t.Fatalf("missing default_config.%s for %s", key, rule.ID)
+			}
+			if key == "limit" {
+				want, ok := value.(int)
+				if !ok {
+					t.Fatalf("expected int limit default in registry for %s", rule.ID)
+				}
+				gotNum, ok := got.(float64)
+				if !ok || int(gotNum) != want {
+					t.Fatalf("expected limit default %d for %s, got %#v", want, rule.ID, got)
+				}
+			}
+		}
+		optionNames := map[string]struct{}{}
+		for _, option := range rule.ConfigurableOptions {
+			optionNames[option.Name] = struct{}{}
+		}
+		for _, required := range meta.AllowedOptionKeys {
+			if _, ok := optionNames[required]; !ok {
+				t.Fatalf("expected configurable option %q for %s", required, rule.ID)
+			}
+		}
 	}
 }

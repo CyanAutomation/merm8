@@ -192,6 +192,23 @@ type analyzeResponse struct {
 	Metrics       *metricsResponse     `json:"metrics,omitempty"`
 }
 
+// ruleOptionResponse describes a configurable option for a lint rule.
+type ruleOptionResponse struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Description string `json:"description"`
+	Constraints string `json:"constraints,omitempty"`
+}
+
+// ruleResponse describes built-in rule metadata exposed by GET /rules.
+type ruleResponse struct {
+	ID                  string                 `json:"id"`
+	Severity            string                 `json:"severity"`
+	Description         string                 `json:"description"`
+	DefaultConfig       map[string]interface{} `json:"default_config"`
+	ConfigurableOptions []ruleOptionResponse   `json:"configurable_options"`
+}
+
 // apiErrorDetails holds machine-readable and human-readable error information.
 type apiErrorDetails struct {
 	Code      string   `json:"code"`
@@ -256,9 +273,36 @@ func NewHandlerWithScript(scriptPath string) (*Handler, error) {
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", h.Healthz)
 	mux.HandleFunc("GET /ready", h.Ready)
+	mux.HandleFunc("GET /rules", h.ListRules)
 	mux.HandleFunc("POST /analyze", h.Analyze)
 	mux.HandleFunc("GET /spec", h.ServeSpec)
 	mux.HandleFunc("GET /docs", h.ServeSwagger)
+}
+
+// ListRules handles GET /rules.
+func (h *Handler) ListRules(w http.ResponseWriter, _ *http.Request) {
+	metadata := rules.ListRuleMetadata()
+	resp := make([]ruleResponse, 0, len(metadata))
+	for _, rule := range metadata {
+		options := make([]ruleOptionResponse, 0, len(rule.ConfigurableOptions))
+		for _, option := range rule.ConfigurableOptions {
+			options = append(options, ruleOptionResponse{
+				Name:        option.Name,
+				Type:        option.Type,
+				Description: option.Description,
+				Constraints: option.Constraints,
+			})
+		}
+		resp = append(resp, ruleResponse{
+			ID:                  rule.ID,
+			Severity:            rule.Severity,
+			Description:         rule.Description,
+			DefaultConfig:       rule.DefaultConfig,
+			ConfigurableOptions: options,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"rules": resp})
 }
 
 // Healthz handles GET /healthz and reports process liveness.
