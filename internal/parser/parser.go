@@ -43,9 +43,10 @@ type SyntaxError struct {
 
 // ParseResult is the raw JSON envelope returned by the Node parser script.
 type ParseResult struct {
-	Valid bool         `json:"valid"`
-	AST   *parsedAST   `json:"ast,omitempty"`
-	Error *SyntaxError `json:"error,omitempty"`
+	Valid       bool         `json:"valid"`
+	DiagramType string       `json:"diagram_type,omitempty"`
+	AST         *parsedAST   `json:"ast,omitempty"`
+	Error       *SyntaxError `json:"error,omitempty"`
 }
 
 // parsedAST mirrors the simplified AST returned by parser-node/parse.mjs.
@@ -257,7 +258,7 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 		return nil, nil, fmt.Errorf("%w: valid result missing AST", ErrContract)
 	}
 
-	diagram := toDiagram(result.AST)
+	diagram := toDiagram(result)
 	return diagram, nil, nil
 }
 
@@ -301,12 +302,18 @@ func normalizeDiagramType(rawType string) model.DiagramType {
 }
 
 // toDiagram converts the raw AST into the internal model.
-func toDiagram(ast *parsedAST) *model.Diagram {
+func toDiagram(result ParseResult) *model.Diagram {
+	ast := result.AST
 	if ast == nil {
 		return &model.Diagram{}
 	}
+	diagramType := normalizeDiagramType(result.DiagramType)
+	if diagramType == model.DiagramTypeUnknown && ast != nil {
+		diagramType = normalizeDiagramType(ast.Type)
+	}
+
 	d := &model.Diagram{
-		Type:      normalizeDiagramType(ast.Type),
+		Type:      diagramType,
 		Direction: ast.Direction,
 	}
 
