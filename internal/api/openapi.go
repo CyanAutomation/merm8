@@ -127,9 +127,13 @@ var openapi = map[string]interface{}{
 									"value": map[string]interface{}{
 										"code": "graph LR\n  A --> B\n  B --> C",
 										"config": map[string]interface{}{
-											"max-fanout": map[string]interface{}{
-												"limit":    2,
-												"severity": "error",
+											"rules": map[string]interface{}{
+												"max-fanout": map[string]interface{}{
+													"enabled":               true,
+													"limit":                 2,
+													"severity":              "error",
+													"suppression_selectors": []interface{}{"node:A"},
+												},
 											},
 										},
 									},
@@ -245,7 +249,7 @@ var openapi = map[string]interface{}{
 											"issues": []interface{}{},
 											"error": map[string]interface{}{
 												"code":    "invalid_config",
-												"message": `invalid severity for rule "max-fanout": "warning" (allowed: error, warn, info)`,
+												"message": `unknown rule id "unknown-rule" in config`,
 											},
 										},
 									},
@@ -363,15 +367,17 @@ var openapi = map[string]interface{}{
 					},
 					"config": map[string]interface{}{
 						"type":        "object",
-						"description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`",
+						"description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`\nUnknown rule IDs are rejected with `400 invalid_config`.",
 						"example": map[string]interface{}{
 							"max-fanout": map[string]interface{}{
-								"limit":    3,
-								"severity": "error",
+								"enabled":               true,
+								"limit":                 3,
+								"severity":              "error",
+								"suppression_selectors": []interface{}{"node:A"},
 							},
 							"no-disconnected-nodes": map[string]interface{}{
-								"enabled":  true,
-								"severity": "warn",
+								"enabled":  false,
+								"severity": "info",
 							},
 						},
 					},

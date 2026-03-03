@@ -115,9 +115,13 @@ paths:
                       A --> B
                       B --> C
                   config:
-                    max-fanout:
-                      limit: 2
-                      severity: error
+                    rules:
+                      max-fanout:
+                        enabled: true
+                        limit: 2
+                        severity: error
+                        suppression_selectors:
+                          - node:A
               syntaxError:
                 summary: Invalid Mermaid syntax
                 value:
@@ -197,7 +201,7 @@ paths:
                     issues: []
                     error:
                       code: invalid_config
-                      message: "invalid severity for rule \"max-fanout\": \"warning\" (allowed: error, warn, info)"
+                      message: "unknown rule id \"unknown-rule\" in config"
         '413':
           description: Request entity too large (body exceeds 1 MiB)
           content:
@@ -284,13 +288,17 @@ components:
             Optional lint rule configuration. Supports both flat and nested formats:
             - Flat format: `{"rule-id": {"option": "value"}}`
             - Nested format: `{"rules": {"rule-id": {"option": "value"}}}`
+            Unknown rule IDs are rejected with `400 invalid_config`.
           example:
             max-fanout:
+              enabled: true
               limit: 3
               severity: error
+              suppression_selectors:
+                - node:A
             no-disconnected-nodes:
-              enabled: true
-              severity: warn
+              enabled: false
+              severity: info
 
     ErrorResponse:
       type: object

@@ -183,3 +183,50 @@ func TestMaxFanout_SeverityOverride(t *testing.T) {
 		t.Fatalf("expected severity override to error, got %q", issues[0].Severity)
 	}
 }
+
+func TestNoDuplicateNodeIDs_SeverityOverride(t *testing.T) {
+	d := &model.Diagram{Nodes: []model.Node{{ID: "A"}, {ID: "A"}}}
+	issues := rules.NoDuplicateNodeIDs{}.Run(d, rules.Config{"no-duplicate-node-ids": {"severity": "info"}})
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Severity != "info" {
+		t.Fatalf("expected overridden severity info, got %q", issues[0].Severity)
+	}
+}
+
+func TestRuleEnabled_DefaultAndConfigured(t *testing.T) {
+	if !rules.RuleEnabled("max-fanout", rules.Config{}) {
+		t.Fatal("expected rule to be enabled by default")
+	}
+	if rules.RuleEnabled("max-fanout", rules.Config{"max-fanout": {"enabled": false}}) {
+		t.Fatal("expected rule to be disabled when enabled=false")
+	}
+}
+
+func TestNormalizeConfig_KeyAliases(t *testing.T) {
+	cfg := rules.Config{
+		"max-fanout": {
+			"Severity":              "error",
+			"suppression-selectors": []interface{}{"node:A"},
+		},
+	}
+
+	normalized, err := rules.NormalizeConfig(cfg, map[string]struct{}{"max-fanout": {}})
+	if err != nil {
+		t.Fatalf("expected normalization to succeed, got %v", err)
+	}
+	if _, ok := normalized["max-fanout"]["severity"]; !ok {
+		t.Fatal("expected severity key to be normalized to lowercase")
+	}
+	if _, ok := normalized["max-fanout"]["suppression_selectors"]; !ok {
+		t.Fatal("expected suppression selector alias to normalize to suppression_selectors")
+	}
+}
+
+func TestNormalizeConfig_UnknownRuleID(t *testing.T) {
+	_, err := rules.NormalizeConfig(rules.Config{"unknown": {}}, map[string]struct{}{"max-fanout": {}})
+	if err == nil {
+		t.Fatal("expected error for unknown rule id")
+	}
+}

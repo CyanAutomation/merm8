@@ -3,6 +3,7 @@
 package engine
 
 import (
+	"log"
 	"sort"
 
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -30,9 +31,18 @@ func NewWithRules(registeredRules ...rules.Rule) *Engine {
 
 // Run executes every rule against d and returns all issues found.
 func (e *Engine) Run(d *model.Diagram, cfg rules.Config) []model.Issue {
+	normalizedCfg, err := e.NormalizeConfig(cfg)
+	if err != nil {
+		log.Printf("warn: invalid lint config ignored: %v", err)
+		return []model.Issue{}
+	}
+
 	var issues []model.Issue
 	for _, r := range e.rules {
-		issues = append(issues, r.Run(d, cfg)...)
+		if !rules.RuleEnabled(r.ID(), normalizedCfg) {
+			continue
+		}
+		issues = append(issues, r.Run(d, normalizedCfg)...)
 	}
 
 	if len(issues) == 0 {
@@ -47,6 +57,17 @@ func (e *Engine) Run(d *model.Diagram, cfg rules.Config) []model.Issue {
 	sortIssues(issues)
 	issues = dedupeIssues(issues)
 	return issues
+}
+
+// NormalizeConfig normalizes config key aliases and validates rule IDs against
+// this engine's registered rules.
+func (e *Engine) NormalizeConfig(cfg rules.Config) (rules.Config, error) {
+	knownRuleIDs := make(map[string]struct{}, len(e.rules))
+	for _, rule := range e.rules {
+		knownRuleIDs[rule.ID()] = struct{}{}
+	}
+
+	return rules.NormalizeConfig(cfg, knownRuleIDs)
 }
 
 func applySuppressions(issues []model.Issue, suppressions []model.SuppressionDirective) []model.Issue {
@@ -123,11 +144,6 @@ func compareIntPtr(left, right *int) int {
 		return 1
 	}
 	return 0
-func intPtrValue(v *int) int {
-	if v == nil {
-		return -1
-	}
-	return *v
 }
 
 func dedupeIssues(issues []model.Issue) []model.Issue {
