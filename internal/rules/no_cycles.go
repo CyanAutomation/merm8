@@ -72,21 +72,13 @@ func (r NoCycles) Run(d *model.Diagram, cfg Config) []model.Issue {
 					continue
 				}
 
-		cycleNodes := append([]string{}, stack[cycleStart:]...)
-		cycleNodes = append(cycleNodes, next)
-		// Normalize cycle representation to prevent duplicates
-		minIdx := 0
-		for i, node := range cycleNodes {
-			if node < cycleNodes[minIdx] {
-				minIdx = i
-			}
-		}
-		normalized := append(cycleNodes[minIdx:], cycleNodes[:minIdx]...)
-		cycleKey := strings.Join(normalized, "->")
-		if _, exists := seenCycles[cycleKey]; exists {
-			continue
-		}
-		seenCycles[cycleKey] = struct{}{}
+				cycleNodes := append([]string{}, stack[cycleStart:]...)
+				cycleNodes = append(cycleNodes, next)
+				cycleKey := normalizedCycleKey(cycleNodes)
+				if _, exists := seenCycles[cycleKey]; exists {
+					continue
+				}
+				seenCycles[cycleKey] = struct{}{}
 
 				issue := model.Issue{
 					RuleID:   r.ID(),
@@ -121,4 +113,25 @@ func (r NoCycles) Run(d *model.Diagram, cfg Config) []model.Issue {
 	}
 
 	return issues
+}
+
+func normalizedCycleKey(cycleNodes []string) string {
+	if len(cycleNodes) == 0 {
+		return ""
+	}
+
+	ring := append([]string{}, cycleNodes...)
+	if len(ring) > 1 && ring[0] == ring[len(ring)-1] {
+		ring = ring[:len(ring)-1]
+	}
+
+	minIdx := 0
+	for i := 1; i < len(ring); i++ {
+		if ring[i] < ring[minIdx] {
+			minIdx = i
+		}
+	}
+
+	normalized := append(append([]string{}, ring[minIdx:]...), ring[:minIdx]...)
+	return strings.Join(normalized, "->")
 }
