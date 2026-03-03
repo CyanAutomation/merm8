@@ -154,10 +154,22 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 		t.Fatalf("expected validDiagram.issues array, got %T", validDiagram["issues"])
 	}
 	metrics := lookup(t, validDiagram, "metrics").(map[string]interface{})
-	for _, metric := range []string{"node_count", "edge_count", "max_fanout"} {
+	for _, metric := range []string{"node_count", "edge_count", "disconnected_node_count", "duplicate_node_count", "max_fanin", "max_fanout"} {
 		if _, ok := metrics[metric].(float64); !ok {
 			t.Fatalf("expected validDiagram.metrics.%s number, got %#v", metric, metrics[metric])
 		}
+	}
+	if metrics["diagram_type"] != "flowchart" {
+		t.Fatalf("expected validDiagram.metrics.diagram_type=flowchart, got %#v", metrics["diagram_type"])
+	}
+	if metrics["direction"] != "TD" {
+		t.Fatalf("expected validDiagram.metrics.direction=TD, got %#v", metrics["direction"])
+	}
+	if _, ok := lookup(t, metrics, "issue_counts", "by_severity").(map[string]interface{}); !ok {
+		t.Fatalf("expected issue_counts.by_severity object, got %T", lookup(t, metrics, "issue_counts", "by_severity"))
+	}
+	if _, ok := lookup(t, metrics, "issue_counts", "by_rule").(map[string]interface{}); !ok {
+		t.Fatalf("expected issue_counts.by_rule object, got %T", lookup(t, metrics, "issue_counts", "by_rule"))
 	}
 
 	examples400 := lookup(t, spec, "paths", "/analyze", "post", "responses", "400", "content", "application/json", "examples").(map[string]interface{})

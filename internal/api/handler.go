@@ -70,9 +70,21 @@ type syntaxErrorResponse struct {
 
 // metricsResponse holds aggregate statistics about the diagram.
 type metricsResponse struct {
-	NodeCount int `json:"node_count"`
-	EdgeCount int `json:"edge_count"`
-	MaxFanout int `json:"max_fanout"`
+	NodeCount             int                  `json:"node_count"`
+	EdgeCount             int                  `json:"edge_count"`
+	DisconnectedNodeCount int                  `json:"disconnected_node_count"`
+	DuplicateNodeCount    int                  `json:"duplicate_node_count"`
+	MaxFanin              int                  `json:"max_fanin"`
+	MaxFanout             int                  `json:"max_fanout"`
+	DiagramType           model.DiagramType    `json:"diagram_type"`
+	Direction             string               `json:"direction,omitempty"`
+	IssueCounts           *issueCountsResponse `json:"issue_counts,omitempty"`
+}
+
+// issueCountsResponse summarizes issue distribution from lint results.
+type issueCountsResponse struct {
+	BySeverity map[string]int `json:"by_severity"`
+	ByRule     map[string]int `json:"by_rule"`
 }
 
 // analyzeResponse is returned by POST /analyze.
@@ -246,16 +258,18 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		LintSupported: diagram.Type.Family() == model.DiagramFamilyFlowchart,
 		SyntaxError:   nil,
 		Issues:        issues,
-		Metrics:       computeMetrics(diagram),
+		Metrics:       computeMetrics(diagram, issues),
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
 // computeMetrics derives aggregate metrics from the diagram.
-func computeMetrics(d *model.Diagram) *metricsResponse {
+func computeMetrics(d *model.Diagram, issues []model.Issue) *metricsResponse {
 	fanout := make(map[string]int)
+	fanin := make(map[string]int)
 	for _, e := range d.Edges {
 		fanout[e.From]++
+		fanin[e.To]++
 	}
 	maxFanout := 0
 	for _, v := range fanout {
@@ -263,10 +277,53 @@ func computeMetrics(d *model.Diagram) *metricsResponse {
 			maxFanout = v
 		}
 	}
+	maxFanin := 0
+	for _, v := range fanin {
+		if v > maxFanin {
+			maxFanin = v
+		}
+	}
+
+	duplicateNodeCount := 0
+	nodeOccurrences := make(map[string]int, len(d.Nodes))
+	for _, n := range d.Nodes {
+		nodeOccurrences[n.ID]++
+		if nodeOccurrences[n.ID] > 1 {
+			duplicateNodeCount++
+		}
+	}
+
+	connected := make(map[string]bool, len(d.Nodes))
+	for _, e := range d.Edges {
+		connected[e.From] = true
+		connected[e.To] = true
+	}
+	disconnectedNodeCount := 0
+	for _, n := range d.Nodes {
+		if !connected[n.ID] {
+			disconnectedNodeCount++
+		}
+	}
+
+	issueCounts := &issueCountsResponse{
+		BySeverity: map[string]int{},
+		ByRule:     map[string]int{},
+	}
+	for _, issue := range issues {
+		issueCounts.BySeverity[issue.Severity]++
+		issueCounts.ByRule[issue.RuleID]++
+	}
+
 	return &metricsResponse{
-		NodeCount: len(d.Nodes),
-		EdgeCount: len(d.Edges),
-		MaxFanout: maxFanout,
+		NodeCount:             len(d.Nodes),
+		EdgeCount:             len(d.Edges),
+		DisconnectedNodeCount: disconnectedNodeCount,
+		DuplicateNodeCount:    duplicateNodeCount,
+		MaxFanin:              maxFanin,
+		MaxFanout:             maxFanout,
+		DiagramType:           d.Type,
+		Direction:             d.Direction,
+		IssueCounts:           issueCounts,
 	}
 }
 
