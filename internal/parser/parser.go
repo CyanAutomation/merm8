@@ -274,6 +274,12 @@ func readMaxOldSpaceMB() int {
 		return defaultNodeMaxOldSpaceSizeMB
 	}
 
+	// Prevent excessive memory allocation
+	const maxAllowedMB = 4096
+	if value > maxAllowedMB {
+		return defaultNodeMaxOldSpaceSizeMB
+	}
+
 	return value
 }
 
