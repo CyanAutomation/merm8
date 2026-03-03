@@ -2614,6 +2614,27 @@ func TestAnalyzeSARIF_SeverityMapping(t *testing.T) {
 	}
 }
 
+func TestAnalyzeSARIF_NilURLDoesNotPanic(t *testing.T) {
+	h := api.NewHandler(&mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	}}, engine.NewWithRules(sarifProbeRule{}))
+
+	body, _ := json.Marshal(map[string]any{"code": "graph TD\nA-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	req.URL = nil
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.AnalyzeSARIF(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "application/sarif+json") {
+		t.Fatalf("expected SARIF content type, got %q", ct)
+	}
+}
+
 type sarifProbeRule struct{}
 
 func (sarifProbeRule) ID() string { return "sarif-probe" }
