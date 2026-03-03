@@ -9,6 +9,38 @@ import (
 	"github.com/CyanAutomation/merm8/internal/rules"
 )
 
+type capturingSink struct {
+	metrics []engine.RuleMetrics
+}
+
+func (s *capturingSink) RecordRuleMetrics(metrics engine.RuleMetrics) {
+	s.metrics = append(s.metrics, metrics)
+}
+
+type supportedRule struct{}
+
+func (supportedRule) ID() string { return "supported-rule" }
+
+func (supportedRule) Families() []model.DiagramFamily {
+	return []model.DiagramFamily{model.DiagramFamilyFlowchart}
+}
+
+func (supportedRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
+	return []model.Issue{{RuleID: "supported-rule", Severity: "warning", Message: "supported issue"}}
+}
+
+type unsupportedRule struct{}
+
+func (unsupportedRule) ID() string { return "unsupported-rule" }
+
+func (unsupportedRule) Families() []model.DiagramFamily {
+	return []model.DiagramFamily{model.DiagramFamilySequence}
+}
+
+func (unsupportedRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
+	return []model.Issue{{RuleID: "unsupported-rule", Severity: "warning", Message: "unsupported issue"}}
+}
+
 func TestEngine_DiagramFamilies_FromRegisteredRules(t *testing.T) {
 	e := engine.New()
 	got := e.DiagramFamilies()
@@ -252,6 +284,44 @@ func TestEngine_FingerprintDiffersForMateriallyDifferentIssues(t *testing.T) {
 	}
 	if issuesA[0].Fingerprint == issuesB[0].Fingerprint {
 		t.Fatalf("expected fingerprints to differ when severity changes, both=%s", issuesA[0].Fingerprint)
+	}
+}
+
+func TestEngine_RunWithInstrumentation_RecordsEnabledAndSupportedRulesOnly(t *testing.T) {
+	e := engine.NewWithRules(supportedRule{}, unsupportedRule{})
+	d := &model.Diagram{Type: model.DiagramTypeFlowchart}
+	sink := &capturingSink{}
+
+	issues := e.RunWithInstrumentation(d, rules.Config{"supported-rule": {"enabled": true}, "unsupported-rule": {"enabled": true}}, sink)
+	if len(issues) != 1 || issues[0].RuleID != "supported-rule" {
+		t.Fatalf("expected only supported rule issue, got %#v", issues)
+	}
+
+	if len(sink.metrics) != 1 {
+		t.Fatalf("expected one recorded metric, got %#v", sink.metrics)
+	}
+	if sink.metrics[0].RuleID != "supported-rule" {
+		t.Fatalf("expected supported-rule metric, got %#v", sink.metrics[0])
+	}
+	if sink.metrics[0].Executions != 1 || sink.metrics[0].IssuesEmitted != 1 {
+		t.Fatalf("expected execution/issue counts of 1, got %#v", sink.metrics[0])
+	}
+	if sink.metrics[0].TotalDurationNS < 0 {
+		t.Fatalf("expected non-negative duration, got %#v", sink.metrics[0])
+	}
+}
+
+func TestEngine_RunWithInstrumentation_SkipsDisabledRules(t *testing.T) {
+	e := engine.NewWithRules(supportedRule{})
+	d := &model.Diagram{Type: model.DiagramTypeFlowchart}
+	sink := &capturingSink{}
+
+	issues := e.RunWithInstrumentation(d, rules.Config{"supported-rule": {"enabled": false}}, sink)
+	if len(issues) != 0 {
+		t.Fatalf("expected no issues from disabled rule, got %#v", issues)
+	}
+	if len(sink.metrics) != 0 {
+		t.Fatalf("expected no recorded metrics for disabled rule, got %#v", sink.metrics)
 	}
 }
 
