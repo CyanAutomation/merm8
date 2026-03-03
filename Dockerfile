@@ -74,7 +74,8 @@ USER appuser
 
 # Set environment variables with defaults
 ENV PARSER_SCRIPT=/app/parser-node/parse.mjs \
-    PORT=8080
+    PORT=8080 \
+    MERM8_API_URL=http://localhost:8080
 
 # Expose the server port
 EXPOSE 8080
