@@ -181,6 +181,48 @@ var openapi = map[string]interface{}{
 			},
 		},
 
+		"/v1/internal/metrics": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Internal analyze outcome counters",
+				"description": "Returns internal JSON counters for analyze outcomes: valid_success, syntax_error, and parser failure categories timeout/subprocess/decode/contract/internal.",
+				"operationId": "getInternalMetrics",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Internal analyze outcome counters",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/InternalMetricsResponse",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"/internal/metrics": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Internal analyze outcome counters (legacy alias)",
+				"description": "Deprecated compatibility alias for GET /v1/internal/metrics. Scheduled for removal in v1.2.0 (Q2 2026).",
+				"operationId": "getInternalMetricsLegacy",
+				"deprecated":  true,
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Internal analyze outcome counters",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/InternalMetricsResponse",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+
 		"/v1/rules": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Linting"},
@@ -1166,6 +1208,32 @@ var openapi = map[string]interface{}{
 						"items": map[string]interface{}{
 							"type": "string",
 							"enum": []string{"flowchart", "sequence", "class", "er", "state"},
+						},
+					},
+				},
+			},
+
+			"InternalMetricsResponse": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"analyze", "parser"},
+				"properties": map[string]interface{}{
+					"analyze": map[string]interface{}{
+						"type":     "object",
+						"required": []string{"valid_success", "syntax_error"},
+						"properties": map[string]interface{}{
+							"valid_success": map[string]interface{}{"type": "integer", "format": "int64"},
+							"syntax_error":  map[string]interface{}{"type": "integer", "format": "int64"},
+						},
+					},
+					"parser": map[string]interface{}{
+						"type":     "object",
+						"required": []string{"timeout", "subprocess", "decode", "contract", "internal"},
+						"properties": map[string]interface{}{
+							"timeout":    map[string]interface{}{"type": "integer", "format": "int64"},
+							"subprocess": map[string]interface{}{"type": "integer", "format": "int64"},
+							"decode":     map[string]interface{}{"type": "integer", "format": "int64"},
+							"contract":   map[string]interface{}{"type": "integer", "format": "int64"},
+							"internal":   map[string]interface{}{"type": "integer", "format": "int64"},
 						},
 					},
 				},
