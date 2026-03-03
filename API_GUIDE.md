@@ -183,6 +183,8 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 ```json
 {
   "valid": false,
+  "lint-supported": false,
+  "syntax-error": null,
   "issues": [],
   "error": {
     "code": "invalid_json",

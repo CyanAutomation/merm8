@@ -232,6 +232,7 @@ type analyzeResponse struct {
 	LintSupported bool                 `json:"lint-supported"`
 	SyntaxError   *syntaxErrorResponse `json:"syntax-error"`
 	Issues        []model.Issue        `json:"issues"`
+	Error         *apiErrorDetails     `json:"error,omitempty"`
 	Metrics       *metricsResponse     `json:"metrics,omitempty"`
 }
 
@@ -258,13 +259,6 @@ type apiErrorDetails struct {
 	Message   string   `json:"message"`
 	Path      string   `json:"path,omitempty"`
 	Supported []string `json:"supported,omitempty"`
-}
-
-// errorResponse is returned for non-200 responses.
-type errorResponse struct {
-	Valid  bool            `json:"valid"`
-	Issues []model.Issue   `json:"issues"`
-	Error  apiErrorDetails `json:"error"`
 }
 
 // Handler holds the dependencies needed to serve HTTP requests.
@@ -459,15 +453,17 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeConfigValidationError(w http.ResponseWriter, configValidationErr *validationError) {
-	writeJSON(w, http.StatusBadRequest, errorResponse{
-		Valid:  false,
-		Issues: []model.Issue{},
-		Error: apiErrorDetails{
+	writeJSON(w, http.StatusBadRequest, analyzeResponse{
+		Valid: false,
+		Error: &apiErrorDetails{
 			Code:      configValidationErr.Code,
 			Message:   configValidationErr.Message,
 			Path:      configValidationErr.Path,
 			Supported: configValidationErr.Supported,
 		},
+		LintSupported: false,
+		SyntaxError:   nil,
+		Issues:        []model.Issue{},
 	})
 }
 
@@ -558,10 +554,12 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
-	writeJSON(w, status, errorResponse{
-		Valid:  false,
-		Issues: []model.Issue{},
-		Error: apiErrorDetails{
+	writeJSON(w, status, analyzeResponse{
+		Valid:         false,
+		LintSupported: false,
+		SyntaxError:   nil,
+		Issues:        []model.Issue{},
+		Error: &apiErrorDetails{
 			Code:    code,
 			Message: message,
 		},

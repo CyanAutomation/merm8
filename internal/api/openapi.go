@@ -314,14 +314,16 @@ var openapi = map[string]interface{}{
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
-									"$ref": "#/components/schemas/ErrorResponse",
+									"$ref": "#/components/schemas/AnalyzeResponse",
 								},
 								"examples": map[string]interface{}{
 									"missingCode": map[string]interface{}{
 										"summary": "Missing 'code' field",
 										"value": map[string]interface{}{
-											"valid":  false,
-											"issues": []interface{}{},
+											"valid":          false,
+											"lint-supported": false,
+											"syntax-error":   nil,
+											"issues":         []interface{}{},
 											"error": map[string]interface{}{
 												"code":    "missing_code",
 												"message": "field 'code' is required",
@@ -331,8 +333,10 @@ var openapi = map[string]interface{}{
 									"invalidJSON": map[string]interface{}{
 										"summary": "Invalid JSON body",
 										"value": map[string]interface{}{
-											"valid":  false,
-											"issues": []interface{}{},
+											"valid":          false,
+											"lint-supported": false,
+											"syntax-error":   nil,
+											"issues":         []interface{}{},
 											"error": map[string]interface{}{
 												"code":    "invalid_json",
 												"message": "invalid JSON body",
@@ -342,8 +346,10 @@ var openapi = map[string]interface{}{
 									"unknownRule": map[string]interface{}{
 										"summary": "Unknown rule in config",
 										"value": map[string]interface{}{
-											"valid":  false,
-											"issues": []interface{}{},
+											"valid":          false,
+											"lint-supported": false,
+											"syntax-error":   nil,
+											"issues":         []interface{}{},
 											"error": map[string]interface{}{
 												"code":      "unknown_rule",
 												"message":   "unknown rule: unknown-rule",
@@ -355,8 +361,10 @@ var openapi = map[string]interface{}{
 									"unknownOption": map[string]interface{}{
 										"summary": "Unknown option in rule config",
 										"value": map[string]interface{}{
-											"valid":  false,
-											"issues": []interface{}{},
+											"valid":          false,
+											"lint-supported": false,
+											"syntax-error":   nil,
+											"issues":         []interface{}{},
 											"error": map[string]interface{}{
 												"code":      "unknown_option",
 												"message":   "unknown option: threshold",
@@ -368,8 +376,10 @@ var openapi = map[string]interface{}{
 									"invalidOption": map[string]interface{}{
 										"summary": "Invalid option value",
 										"value": map[string]interface{}{
-											"valid":  false,
-											"issues": []interface{}{},
+											"valid":          false,
+											"lint-supported": false,
+											"syntax-error":   nil,
+											"issues":         []interface{}{},
 											"error": map[string]interface{}{
 												"code":    "invalid_option",
 												"message": "invalid option value for limit",
@@ -386,11 +396,13 @@ var openapi = map[string]interface{}{
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
-									"$ref": "#/components/schemas/ErrorResponse",
+									"$ref": "#/components/schemas/AnalyzeResponse",
 								},
 								"example": map[string]interface{}{
-									"valid":  false,
-									"issues": []interface{}{},
+									"valid":          false,
+									"lint-supported": false,
+									"syntax-error":   nil,
+									"issues":         []interface{}{},
 									"error": map[string]interface{}{
 										"code":    "request_too_large",
 										"message": "request body exceeds 1 MiB limit",
@@ -400,19 +412,61 @@ var openapi = map[string]interface{}{
 						},
 					},
 
+					"429": map[string]interface{}{
+						"description": "Rate limited",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/AnalyzeResponse",
+								},
+								"example": map[string]interface{}{
+									"valid":          false,
+									"lint-supported": false,
+									"syntax-error":   nil,
+									"issues":         []interface{}{},
+									"error": map[string]interface{}{
+										"code":    "rate_limited",
+										"message": "rate limit exceeded",
+									},
+								},
+							},
+						},
+					},
+					"503": map[string]interface{}{
+						"description": "Service unavailable",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/AnalyzeResponse",
+								},
+								"example": map[string]interface{}{
+									"valid":          false,
+									"lint-supported": false,
+									"syntax-error":   nil,
+									"issues":         []interface{}{},
+									"error": map[string]interface{}{
+										"code":    "server_busy",
+										"message": "parser concurrency limit reached; try again",
+									},
+								},
+							},
+						},
+					},
 					"500": map[string]interface{}{
 						"description": "Internal server error",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
-									"$ref": "#/components/schemas/ErrorResponse",
+									"$ref": "#/components/schemas/AnalyzeResponse",
 								},
 								"examples": map[string]interface{}{
 									"subprocess": map[string]interface{}{
 										"summary": "Parser subprocess failure",
 										"value": map[string]interface{}{
-											"valid":  false,
-											"issues": []interface{}{},
+											"valid":          false,
+											"lint-supported": false,
+											"syntax-error":   nil,
+											"issues":         []interface{}{},
 											"error": map[string]interface{}{
 												"code":    "parser_subprocess_error",
 												"message": "parser subprocess failed",
@@ -422,8 +476,10 @@ var openapi = map[string]interface{}{
 									"decode": map[string]interface{}{
 										"summary": "Parser malformed output",
 										"value": map[string]interface{}{
-											"valid":  false,
-											"issues": []interface{}{},
+											"valid":          false,
+											"lint-supported": false,
+											"syntax-error":   nil,
+											"issues":         []interface{}{},
 											"error": map[string]interface{}{
 												"code":    "parser_decode_error",
 												"message": "parser returned malformed output",
@@ -433,8 +489,10 @@ var openapi = map[string]interface{}{
 									"contract": map[string]interface{}{
 										"summary": "Parser contract violation",
 										"value": map[string]interface{}{
-											"valid":  false,
-											"issues": []interface{}{},
+											"valid":          false,
+											"lint-supported": false,
+											"syntax-error":   nil,
+											"issues":         []interface{}{},
 											"error": map[string]interface{}{
 												"code":    "parser_contract_violation",
 												"message": "parser response violated service contract",
@@ -444,8 +502,10 @@ var openapi = map[string]interface{}{
 									"internal": map[string]interface{}{
 										"summary": "Generic internal failure",
 										"value": map[string]interface{}{
-											"valid":  false,
-											"issues": []interface{}{},
+											"valid":          false,
+											"lint-supported": false,
+											"syntax-error":   nil,
+											"issues":         []interface{}{},
 											"error": map[string]interface{}{
 												"code":    "internal_error",
 												"message": "internal server error",
@@ -461,11 +521,13 @@ var openapi = map[string]interface{}{
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
-									"$ref": "#/components/schemas/ErrorResponse",
+									"$ref": "#/components/schemas/AnalyzeResponse",
 								},
 								"example": map[string]interface{}{
-									"valid":  false,
-									"issues": []interface{}{},
+									"valid":          false,
+									"lint-supported": false,
+									"syntax-error":   nil,
+									"issues":         []interface{}{},
 									"error": map[string]interface{}{
 										"code":    "parser_timeout",
 										"message": "parser timed out while validating Mermaid code",
@@ -591,26 +653,6 @@ var openapi = map[string]interface{}{
 				},
 			},
 
-			"ErrorResponse": map[string]interface{}{
-				"type":     "object",
-				"required": []string{"valid", "issues", "error"},
-				"properties": map[string]interface{}{
-					"valid": map[string]interface{}{
-						"type":        "boolean",
-						"description": "Always false for non-200 responses",
-					},
-					"issues": map[string]interface{}{
-						"type":        "array",
-						"description": "Always empty for API-level errors",
-						"items": map[string]interface{}{
-							"$ref": "#/components/schemas/Issue",
-						},
-					},
-					"error": map[string]interface{}{
-						"$ref": "#/components/schemas/ErrorDetail",
-					},
-				},
-			},
 			"ErrorDetail": map[string]interface{}{
 				"type":     "object",
 				"required": []string{"code", "message"},
@@ -668,6 +710,11 @@ var openapi = map[string]interface{}{
 						"items": map[string]interface{}{
 							"$ref": "#/components/schemas/Issue",
 						},
+					},
+					"error": map[string]interface{}{
+						"$ref":        "#/components/schemas/ErrorDetail",
+						"description": "API-level error details for non-200 responses.",
+						"nullable":    true,
 					},
 					"metrics": map[string]interface{}{
 						"$ref":        "#/components/schemas/Metrics",

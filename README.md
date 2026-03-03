@@ -168,7 +168,7 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 >
 > Tip: fetch `GET /rules/schema` and validate config client-side before sending requests.
 
-> Request body size limit: **1 MiB**. Oversized payloads return `413` with JSON: `{"error":"request body exceeds 1 MiB limit"}`.
+> Request body size limit: **1 MiB**. Oversized payloads return `413` with the same unified `AnalyzeResponse` shape (`valid=false`, `lint-supported=false`, `syntax-error=null`, `issues=[]`, and populated `error`).
 
 **Response — valid diagram**
 
