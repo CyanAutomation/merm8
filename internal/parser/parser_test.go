@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/CyanAutomation/merm8/internal/model"
 	"github.com/CyanAutomation/merm8/internal/parser"
 )
 
@@ -291,6 +292,45 @@ func TestParser_DiagramTypeMetadata(t *testing.T) {
 
 // TestParser_ASTExtractionFailureAndContractMapping verifies deterministic parser
 // output mapping for AST extraction-style failures and contract-breaking payloads.
+
+func TestParser_ParsePrefersTopLevelDiagramType(t *testing.T) {
+	tempDir := repoTempDir(t)
+	script := filepath.Join(tempDir, "parse.mjs")
+	scriptBody := `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({
+  valid: true,
+  diagram_type: "sequence",
+  ast: {
+    type: "unknown",
+    direction: "TD",
+    nodes: [],
+    edges: [],
+    subgraphs: [],
+    suppressions: []
+  }
+}) + "\n");
+process.exit(0);
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write test parser script: %v", err)
+	}
+
+	p := mustNewParser(t, script)
+	diagram, syntaxErr, err := p.Parse("sequenceDiagram\n  Alice->>Bob: hi")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if syntaxErr != nil {
+		t.Fatalf("unexpected syntax error: %+v", syntaxErr)
+	}
+	if diagram == nil {
+		t.Fatal("expected diagram, got nil")
+	}
+	if diagram.Type != model.DiagramTypeSequence {
+		t.Fatalf("expected diagram type %q, got %q", model.DiagramTypeSequence, diagram.Type)
+	}
+}
+
 func TestParser_ASTExtractionFailureAndContractMapping(t *testing.T) {
 	tests := []struct {
 		name             string

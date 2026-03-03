@@ -215,6 +215,29 @@ var openapi = map[string]interface{}{
 											"issues": []interface{}{},
 										},
 									},
+									"sequenceDiagram": map[string]interface{}{
+										"summary": "Valid sequence diagram (lint currently unsupported)",
+										"value": map[string]interface{}{
+											"valid":          true,
+											"diagram_type":   "sequence",
+											"lint_supported": false,
+											"syntax_error":   nil,
+											"issues":         []interface{}{},
+											"metrics": map[string]interface{}{
+												"node_count":              0,
+												"edge_count":              0,
+												"disconnected_node_count": 0,
+												"duplicate_node_count":    0,
+												"max_fanin":               0,
+												"max_fanout":              0,
+												"diagram_type":            "sequence",
+												"issue_counts": map[string]interface{}{
+													"by_severity": map[string]interface{}{},
+													"by_rule":     map[string]interface{}{},
+												},
+											},
+										},
+									},
 									"withIssues": map[string]interface{}{
 										"summary": "Valid diagram with lint issues",
 										"value": map[string]interface{}{
@@ -286,44 +309,44 @@ var openapi = map[string]interface{}{
 											},
 										},
 									},
-								"unknownRule": map[string]interface{}{
-									"summary": "Unknown rule in config",
-									"value": map[string]interface{}{
-										"valid":  false,
-										"issues": []interface{}{},
-										"error": map[string]interface{}{
-											"code":      "unknown_rule",
-											"message":   "unknown rule: unknown-rule",
-											"path":      "config.rules.unknown-rule",
-											"supported": []interface{}{"max-fanout", "no-disconnected-nodes", "no-duplicate-node-ids"},
+									"unknownRule": map[string]interface{}{
+										"summary": "Unknown rule in config",
+										"value": map[string]interface{}{
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":      "unknown_rule",
+												"message":   "unknown rule: unknown-rule",
+												"path":      "config.rules.unknown-rule",
+												"supported": []interface{}{"max-fanout", "no-disconnected-nodes", "no-duplicate-node-ids"},
+											},
 										},
 									},
-								},
-								"unknownOption": map[string]interface{}{
-									"summary": "Unknown option in rule config",
-									"value": map[string]interface{}{
-										"valid":  false,
-										"issues": []interface{}{},
-										"error": map[string]interface{}{
-											"code":      "unknown_option",
-											"message":   "unknown option: threshold",
-											"path":      "config.rules.max-fanout.threshold",
-											"supported": []interface{}{"enabled", "limit", "severity", "suppression_selectors"},
+									"unknownOption": map[string]interface{}{
+										"summary": "Unknown option in rule config",
+										"value": map[string]interface{}{
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":      "unknown_option",
+												"message":   "unknown option: threshold",
+												"path":      "config.rules.max-fanout.threshold",
+												"supported": []interface{}{"enabled", "limit", "severity", "suppression_selectors"},
+											},
 										},
 									},
-								},
-								"invalidOption": map[string]interface{}{
-									"summary": "Invalid option value",
-									"value": map[string]interface{}{
-										"valid":  false,
-										"issues": []interface{}{},
-										"error": map[string]interface{}{
-											"code":    "invalid_option",
-											"message": "invalid option value for limit",
-											"path":    "config.rules.max-fanout.limit",
+									"invalidOption": map[string]interface{}{
+										"summary": "Invalid option value",
+										"value": map[string]interface{}{
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":    "invalid_option",
+												"message": "invalid option value for limit",
+												"path":    "config.rules.max-fanout.limit",
+											},
 										},
 									},
-								},
 								},
 							},
 						},
@@ -484,9 +507,9 @@ var openapi = map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id", "severity", "description", "default_config", "configurable_options"},
 				"properties": map[string]interface{}{
-					"id": map[string]interface{}{"type": "string", "example": "max-fanout"},
-					"severity": map[string]interface{}{"type": "string", "enum": []string{"error", "warn", "info"}},
-					"description": map[string]interface{}{"type": "string"},
+					"id":             map[string]interface{}{"type": "string", "example": "max-fanout"},
+					"severity":       map[string]interface{}{"type": "string", "enum": []string{"error", "warn", "info"}},
+					"description":    map[string]interface{}{"type": "string"},
 					"default_config": map[string]interface{}{"type": "object", "additionalProperties": true},
 					"configurable_options": map[string]interface{}{
 						"type": "array",
@@ -500,8 +523,8 @@ var openapi = map[string]interface{}{
 				"type":     "object",
 				"required": []string{"name", "type", "description"},
 				"properties": map[string]interface{}{
-					"name": map[string]interface{}{"type": "string"},
-					"type": map[string]interface{}{"type": "string"},
+					"name":        map[string]interface{}{"type": "string"},
+					"type":        map[string]interface{}{"type": "string"},
 					"description": map[string]interface{}{"type": "string"},
 					"constraints": map[string]interface{}{"type": "string"},
 				},
@@ -593,6 +616,7 @@ var openapi = map[string]interface{}{
 					"diagram_type": map[string]interface{}{
 						"type":        "string",
 						"description": "Normalized Mermaid diagram type (flowchart, sequence, class, er, state, unknown).",
+						"enum":        []string{"flowchart", "sequence", "class", "er", "state", "unknown"},
 						"example":     "flowchart",
 					},
 					"lint_supported": map[string]interface{}{
@@ -709,6 +733,7 @@ var openapi = map[string]interface{}{
 					"diagram_type": map[string]interface{}{
 						"type":        "string",
 						"description": "Diagram type copied from parsed metadata",
+						"enum":        []string{"flowchart", "sequence", "class", "er", "state", "unknown"},
 						"example":     "flowchart",
 					},
 					"direction": map[string]interface{}{
