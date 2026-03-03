@@ -79,6 +79,38 @@ func (e *Engine) NormalizeConfig(cfg rules.Config) (rules.Config, error) {
 	return rules.NormalizeConfig(cfg, e.KnownRuleIDs())
 }
 
+// DiagramFamilies returns sorted unique diagram families supported by the
+// currently registered rule set.
+func (e *Engine) DiagramFamilies() []model.DiagramFamily {
+	set := map[model.DiagramFamily]struct{}{}
+	for _, rule := range e.rules {
+		familyRule, ok := rule.(rules.DiagramFamilyRule)
+		if !ok {
+			continue
+		}
+		for _, family := range familyRule.Families() {
+			if family == model.DiagramFamilyUnknown {
+				continue
+			}
+			set[family] = struct{}{}
+		}
+	}
+
+	families := make([]model.DiagramFamily, 0, len(set))
+	for _, candidate := range []model.DiagramFamily{
+		model.DiagramFamilyFlowchart,
+		model.DiagramFamilySequence,
+		model.DiagramFamilyClass,
+		model.DiagramFamilyER,
+		model.DiagramFamilyState,
+	} {
+		if _, ok := set[candidate]; ok {
+			families = append(families, candidate)
+		}
+	}
+	return families
+}
+
 // KnownRuleIDs returns the set of rule IDs registered on this engine.
 func (e *Engine) KnownRuleIDs() map[string]struct{} {
 	knownRuleIDs := make(map[string]struct{}, len(e.rules))

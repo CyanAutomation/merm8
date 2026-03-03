@@ -72,6 +72,32 @@
         - "lint-supported"
         - "issues"
       "type": "object"
+    "DiagramTypesResponse":
+      "properties":
+        "lint-supported":
+          "items":
+            "enum":
+              - "flowchart"
+              - "sequence"
+              - "class"
+              - "er"
+              - "state"
+            "type": "string"
+          "type": "array"
+        "parser-recognized":
+          "items":
+            "enum":
+              - "flowchart"
+              - "sequence"
+              - "class"
+              - "er"
+              - "state"
+            "type": "string"
+          "type": "array"
+      "required":
+        - "parser-recognized"
+        - "lint-supported"
+      "type": "object"
     "ErrorDetail":
       "properties":
         "code":
@@ -629,7 +655,9 @@
                       "message": "unknown rule: unknown-rule"
                       "path": "config.rules.unknown-rule"
                       "supported":
+                        - "max-depth"
                         - "max-fanout"
+                        - "no-cycles"
                         - "no-disconnected-nodes"
                         - "no-duplicate-node-ids"
                     "issues":
@@ -800,6 +828,20 @@
                 "$ref": "#/components/schemas/AnalyzeResponse"
           "description": "Parser timeout"
       "summary": "Analyze and lint a Mermaid diagram (SARIF output)"
+      "tags":
+        - "Linting"
+  "/diagram-types":
+    "get":
+      "description": "Returns diagram families/types recognized by the parser and currently lint-supported by registered rules."
+      "operationId": "listDiagramTypes"
+      "responses":
+        "200":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/DiagramTypesResponse"
+          "description": "Diagram type support matrix"
+      "summary": "List parser-recognized and lint-supported diagram types"
       "tags":
         - "Linting"
   "/docs":

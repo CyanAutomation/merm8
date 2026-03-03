@@ -24,6 +24,36 @@ const (
 	DiagramFamilyState     DiagramFamily = "state"
 )
 
+// RecognizedDiagramTypes returns Mermaid diagram types currently identified by
+// the parser.
+func RecognizedDiagramTypes() []DiagramType {
+	return []DiagramType{
+		DiagramTypeFlowchart,
+		DiagramTypeSequence,
+		DiagramTypeClass,
+		DiagramTypeER,
+		DiagramTypeState,
+	}
+}
+
+// DiagramTypesForFamily returns the parser diagram types belonging to a family.
+func DiagramTypesForFamily(family DiagramFamily) []DiagramType {
+	switch family {
+	case DiagramFamilyFlowchart:
+		return []DiagramType{DiagramTypeFlowchart}
+	case DiagramFamilySequence:
+		return []DiagramType{DiagramTypeSequence}
+	case DiagramFamilyClass:
+		return []DiagramType{DiagramTypeClass}
+	case DiagramFamilyER:
+		return []DiagramType{DiagramTypeER}
+	case DiagramFamilyState:
+		return []DiagramType{DiagramTypeState}
+	default:
+		return nil
+	}
+}
+
 // Family returns the normalized family for the diagram type.
 func (t DiagramType) Family() DiagramFamily {
 	switch t {

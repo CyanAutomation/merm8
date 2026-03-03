@@ -242,6 +242,7 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 		{"openapi"},
 		{"info", "title"},
 		{"paths", "/analyze", "post", "operationId"},
+		{"paths", "/diagram-types", "get", "operationId"},
 		{"paths", "/analyze", "post", "responses", "400", "content", "application/json", "schema", "$ref"},
 		{"components", "schemas", "Issue", "properties", "severity", "enum"},
 		{"paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfig", "value", "config", "rules", "max-fanout", "severity"},
@@ -327,6 +328,17 @@ func TestServeSpec_Regression_ConfigValidationAndSeverityExamples(t *testing.T) 
 			t.Fatalf("expected severity enum to include %q, got %#v", expected, got)
 		}
 	}
+}
+
+func TestServeSpec_ExposesDiagramTypesEndpointAndSchema(t *testing.T) {
+	spec := loadServedSpec(t)
+	if got := lookup(t, spec, "paths", "/diagram-types", "get", "operationId"); got != "listDiagramTypes" {
+		t.Fatalf("expected /diagram-types operationId listDiagramTypes, got %#v", got)
+	}
+	if got := lookup(t, spec, "paths", "/diagram-types", "get", "responses", "200", "content", "application/json", "schema", "$ref"); got != "#/components/schemas/DiagramTypesResponse" {
+		t.Fatalf("expected /diagram-types response schema ref, got %#v", got)
+	}
+	_ = lookup(t, spec, "components", "schemas", "DiagramTypesResponse")
 }
 
 // compile-time guard to ensure local mock parser still satisfies parser contract.
