@@ -2536,3 +2536,99 @@ func TestAnalyze_InvalidNoCyclesAllowSelfLoopType_Returns400(t *testing.T) {
 	}
 	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for allow-self-loop", "config.rules.no-cycles.allow-self-loop", nil)
 }
+
+func TestAnalyzeSARIF_ReturnsSARIFForValidAnalysis(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	}}, engine.NewWithRules(sarifProbeRule{}))
+	h.RegisterRoutes(mux)
+
+	body, _ := json.Marshal(map[string]any{"code": "graph TD\nA-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (%s)", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "application/sarif+json") {
+		t.Fatalf("expected SARIF content type, got %q", ct)
+	}
+
+	var sarifResp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &sarifResp); err != nil {
+		t.Fatalf("decode sarif: %v", err)
+	}
+	if sarifResp["version"] != "2.1.0" {
+		t.Fatalf("unexpected SARIF version: %#v", sarifResp["version"])
+	}
+	runs := sarifResp["runs"].([]any)
+	results := runs[0].(map[string]any)["results"].([]any)
+	if len(results) == 0 {
+		t.Fatal("expected non-empty sarif results")
+	}
+	first := results[0].(map[string]any)
+	if first["ruleId"] == "" {
+		t.Fatalf("expected ruleId propagation in SARIF result: %#v", first)
+	}
+	locs, ok := first["locations"].([]any)
+	if ok && len(locs) > 0 {
+		region := locs[0].(map[string]any)["physicalLocation"].(map[string]any)["region"].(map[string]any)
+		if region["startLine"] == nil {
+			t.Fatalf("expected startLine mapping in SARIF region: %#v", region)
+		}
+	}
+}
+
+func TestAnalyzeSARIF_SeverityMapping(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	}}, engine.NewWithRules(severityProbeRule{}))
+	h.RegisterRoutes(mux)
+
+	body, _ := json.Marshal(map[string]any{"code": "graph TD\nA-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var sarifResp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &sarifResp); err != nil {
+		t.Fatalf("decode sarif: %v", err)
+	}
+	results := sarifResp["runs"].([]any)[0].(map[string]any)["results"].([]any)
+	seen := map[string]struct{}{}
+	for _, item := range results {
+		level := item.(map[string]any)["level"].(string)
+		seen[level] = struct{}{}
+	}
+	for _, want := range []string{"error", "warning", "note"} {
+		if _, ok := seen[want]; !ok {
+			t.Fatalf("expected to see level %q, got %#v", want, seen)
+		}
+	}
+}
+
+type sarifProbeRule struct{}
+
+func (sarifProbeRule) ID() string { return "sarif-probe" }
+func (sarifProbeRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
+	line, col := 4, 9
+	return []model.Issue{{RuleID: "sarif-probe", Severity: "warning", Message: "probe", Line: &line, Column: &col}}
+}
+
+type severityProbeRule struct{}
+
+func (severityProbeRule) ID() string { return "severity-probe" }
+func (severityProbeRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
+	return []model.Issue{
+		{RuleID: "r1", Severity: "error", Message: "e"},
+		{RuleID: "r2", Severity: "warning", Message: "w"},
+		{RuleID: "r3", Severity: "info", Message: "i"},
+	}
+}

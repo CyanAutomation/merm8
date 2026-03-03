@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/CyanAutomation/merm8/internal/output/sarif"
 	"github.com/CyanAutomation/merm8/internal/rules"
 )
 
@@ -607,6 +608,59 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
+		"/analyze/sarif": map[string]interface{}{
+			"post": map[string]interface{}{
+				"tags":        []string{"Linting"},
+				"summary":     "Analyze and lint a Mermaid diagram (SARIF output)",
+				"description": "Runs the same analysis pipeline as POST /analyze, returning SARIF 2.1.0 when analysis is valid.",
+				"operationId": "analyzeCodeSARIF",
+				"requestBody": map[string]interface{}{
+					"required": true,
+					"content": map[string]interface{}{
+						"application/json": map[string]interface{}{
+							"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeRequest"},
+						},
+					},
+				},
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "SARIF 2.1.0 report",
+						"content": map[string]interface{}{
+							"application/sarif+json": map[string]interface{}{
+								"schema": map[string]interface{}{"$ref": "#/components/schemas/SARIFReport"},
+								"example": map[string]interface{}{
+									"version": "2.1.0",
+									"runs": []interface{}{map[string]interface{}{
+										"tool": map[string]interface{}{"driver": map[string]interface{}{"name": "merm8"}},
+										"results": []interface{}{map[string]interface{}{
+											"ruleId":  "no-cycles",
+											"level":   "error",
+											"message": map[string]interface{}{"text": "Cycle detected"},
+										}},
+									}},
+								},
+							},
+						},
+					},
+					"400": map[string]interface{}{
+						"description": "Bad request",
+						"content":     map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}},
+					},
+					"413": map[string]interface{}{
+						"description": "Request too large",
+						"content":     map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}},
+					},
+					"500": map[string]interface{}{
+						"description": "Parser/service internal failure",
+						"content":     map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}},
+					},
+					"504": map[string]interface{}{
+						"description": "Parser timeout",
+						"content":     map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}},
+					},
+				},
+			},
+		},
 		"/spec": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Documentation"},
@@ -650,6 +704,19 @@ var openapi = map[string]interface{}{
 	},
 	"components": map[string]interface{}{
 		"schemas": map[string]interface{}{
+			"SARIFReport": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"version", "runs"},
+				"properties": map[string]interface{}{
+					"$schema": map[string]interface{}{"type": "string", "example": "https://json.schemastore.org/sarif-2.1.0.json"},
+					"version": map[string]interface{}{"type": "string", "enum": []string{"2.1.0"}},
+					"runs": map[string]interface{}{
+						"type":  "array",
+						"items": map[string]interface{}{"type": "object"},
+					},
+				},
+				"description": sarif.SeverityMappingDoc,
+			},
 
 			"RulesResponse": map[string]interface{}{
 				"type":     "object",
