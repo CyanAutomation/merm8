@@ -323,3 +323,28 @@ func TestServeSpec_ExposesRulesEndpointAndSchemas(t *testing.T) {
 	_ = lookup(t, spec, "components", "schemas", "RuleMetadata")
 	_ = lookup(t, spec, "components", "schemas", "RuleOption")
 }
+
+func TestServeSpec_ExposesRuleConfigSchemaAndEndpoint(t *testing.T) {
+	spec := loadServedSpec(t)
+
+	if got := lookup(t, spec, "paths", "/rules/schema", "get", "operationId"); got != "getRuleConfigSchema" {
+		t.Fatalf("expected /rules/schema operationId getRuleConfigSchema, got %#v", got)
+	}
+	if got := lookup(t, spec, "components", "schemas", "AnalyzeRequest", "properties", "config", "$ref"); got != "#/components/schemas/RuleConfigSchema" {
+		t.Fatalf("expected AnalyzeRequest.config to reference RuleConfigSchema, got %#v", got)
+	}
+
+	ruleSchema := lookup(t, spec, "components", "schemas", "RuleConfigSchema").(map[string]interface{})
+	variants := ruleSchema["oneOf"].([]interface{})
+	if len(variants) != 2 {
+		t.Fatalf("expected RuleConfigSchema.oneOf to have two variants, got %d", len(variants))
+	}
+
+	flat := variants[0].(map[string]interface{})
+	flatProps := lookup(t, flat, "properties").(map[string]interface{})
+	maxFanout := flatProps["max-fanout"].(map[string]interface{})
+	limit := lookup(t, maxFanout, "properties", "limit").(map[string]interface{})
+	if limit["type"] != "integer" || limit["minimum"] != float64(1) {
+		t.Fatalf("expected max-fanout.limit integer minimum=1, got %#v", limit)
+	}
+}

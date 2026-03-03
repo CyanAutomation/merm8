@@ -274,6 +274,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", h.Healthz)
 	mux.HandleFunc("GET /ready", h.Ready)
 	mux.HandleFunc("GET /rules", h.ListRules)
+	mux.HandleFunc("GET /rules/schema", h.RuleConfigSchema)
 	mux.HandleFunc("POST /analyze", h.Analyze)
 	mux.HandleFunc("GET /spec", h.ServeSpec)
 	mux.HandleFunc("GET /docs", h.ServeSwagger)
@@ -303,6 +304,11 @@ func (h *Handler) ListRules(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"rules": resp})
+}
+
+// RuleConfigSchema handles GET /rules/schema.
+func (h *Handler) RuleConfigSchema(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"schema": rules.ConfigJSONSchema()})
 }
 
 // Healthz handles GET /healthz and reports process liveness.

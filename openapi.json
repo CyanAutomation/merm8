@@ -5,11 +5,12 @@
         "properties": {
           "code": {
             "description": "Mermaid diagram code to analyze. Total request body must be 1 MiB or smaller. Supports suppression comments like `%% merm8-disable max-fanout` and `%% merm8-disable all`.",
-            "example": "graph TD\n  A[Start] --> B[Process]\n  B --> C[End]",
+            "example": "graph TD\n  A[Start] --\u003e B[Process]\n  B --\u003e C[End]",
             "type": "string"
           },
           "config": {
-            "description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`\n`config` and `config.rules` (when present) must be objects.\nEach per-rule config value must be an object.\nUnknown rule IDs are rejected with `400 invalid_config`.",
+            "$ref": "#/components/schemas/RuleConfigSchema",
+            "description": "Optional lint rule configuration. Supports both flat and nested formats:",
             "example": {
               "max-fanout": {
                 "enabled": true,
@@ -23,28 +24,7 @@
                 "enabled": false,
                 "severity": "info"
               }
-            },
-            "type": "object",
-            "oneOf": [
-              {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "object"
-                }
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "rules": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "object"
-                    }
-                  }
-                },
-                "additionalProperties": true
-              }
-            ]
+            }
           }
         },
         "required": [
@@ -54,12 +34,29 @@
       },
       "AnalyzeResponse": {
         "properties": {
+          "diagram_type": {
+            "description": "Normalized Mermaid diagram type (flowchart, sequence, class, er, state, unknown).",
+            "enum": [
+              "flowchart",
+              "sequence",
+              "class",
+              "er",
+              "state",
+              "unknown"
+            ],
+            "example": "flowchart",
+            "type": "string"
+          },
           "issues": {
             "description": "Lint rule violations found in the diagram",
             "items": {
               "$ref": "#/components/schemas/Issue"
             },
             "type": "array"
+          },
+          "lint_supported": {
+            "description": "Whether lint rules are currently implemented for the parsed diagram type.",
+            "type": "boolean"
           },
           "metrics": {
             "$ref": "#/components/schemas/Metrics",
@@ -78,6 +75,7 @@
         },
         "required": [
           "valid",
+          "lint_supported",
           "issues"
         ],
         "type": "object"
@@ -93,6 +91,18 @@
             "description": "Human-readable error message",
             "example": "invalid JSON body",
             "type": "string"
+          },
+          "path": {
+            "description": "JSON path to the invalid config field when config validation fails",
+            "example": "config.rules.max-fanout.limit",
+            "type": "string"
+          },
+          "supported": {
+            "description": "Supported values for unknown rule/option errors",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -166,11 +176,69 @@
         ],
         "type": "object"
       },
+      "IssueCounts": {
+        "properties": {
+          "by_rule": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "by_severity": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "by_severity",
+          "by_rule"
+        ],
+        "type": "object"
+      },
       "Metrics": {
         "properties": {
+          "diagram_type": {
+            "description": "Diagram type copied from parsed metadata",
+            "enum": [
+              "flowchart",
+              "sequence",
+              "class",
+              "er",
+              "state",
+              "unknown"
+            ],
+            "example": "flowchart",
+            "type": "string"
+          },
+          "direction": {
+            "description": "Diagram direction when provided by parser",
+            "example": "TD",
+            "type": "string"
+          },
+          "disconnected_node_count": {
+            "description": "Number of nodes with neither incoming nor outgoing edges",
+            "example": 1,
+            "type": "integer"
+          },
+          "duplicate_node_count": {
+            "description": "Number of duplicate node declarations beyond first occurrences",
+            "example": 0,
+            "type": "integer"
+          },
           "edge_count": {
             "description": "Total number of edges (connections) in the diagram",
             "example": 4,
+            "type": "integer"
+          },
+          "issue_counts": {
+            "$ref": "#/components/schemas/IssueCounts",
+            "description": "Issue count aggregations by severity and rule ID"
+          },
+          "max_fanin": {
+            "description": "Maximum number of incoming edges to any single node",
+            "example": 3,
             "type": "integer"
           },
           "max_fanout": {
@@ -187,7 +255,278 @@
         "required": [
           "node_count",
           "edge_count",
-          "max_fanout"
+          "disconnected_node_count",
+          "duplicate_node_count",
+          "max_fanin",
+          "max_fanout",
+          "diagram_type"
+        ],
+        "type": "object"
+      },
+      "RuleConfigSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "max-fanout": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "description": "Enable or disable this rule.",
+                    "type": "boolean"
+                  },
+                  "limit": {
+                    "description": "Maximum allowed outgoing edges per node.",
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "severity": {
+                    "description": "Severity assigned to emitted issues.",
+                    "enum": [
+                      "error",
+                      "warning",
+                      "info"
+                    ],
+                    "type": "string"
+                  },
+                  "suppression_selectors": {
+                    "description": "Selectors that suppress matching issues.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              },
+              "no-disconnected-nodes": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "description": "Enable or disable this rule.",
+                    "type": "boolean"
+                  },
+                  "severity": {
+                    "description": "Severity assigned to emitted issues.",
+                    "enum": [
+                      "error",
+                      "warning",
+                      "info"
+                    ],
+                    "type": "string"
+                  },
+                  "suppression_selectors": {
+                    "description": "Selectors that suppress matching issues.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              },
+              "no-duplicate-node-ids": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "description": "Enable or disable this rule.",
+                    "type": "boolean"
+                  },
+                  "severity": {
+                    "description": "Severity assigned to emitted issues.",
+                    "enum": [
+                      "error",
+                      "warning",
+                      "info"
+                    ],
+                    "type": "string"
+                  },
+                  "suppression_selectors": {
+                    "description": "Selectors that suppress matching issues.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "rules": {
+                "additionalProperties": false,
+                "properties": {
+                  "max-fanout": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "description": "Enable or disable this rule.",
+                        "type": "boolean"
+                      },
+                      "limit": {
+                        "description": "Maximum allowed outgoing edges per node.",
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "severity": {
+                        "description": "Severity assigned to emitted issues.",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "type": "string"
+                      },
+                      "suppression_selectors": {
+                        "description": "Selectors that suppress matching issues.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "no-disconnected-nodes": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "description": "Enable or disable this rule.",
+                        "type": "boolean"
+                      },
+                      "severity": {
+                        "description": "Severity assigned to emitted issues.",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "type": "string"
+                      },
+                      "suppression_selectors": {
+                        "description": "Selectors that suppress matching issues.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "no-duplicate-node-ids": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "description": "Enable or disable this rule.",
+                        "type": "boolean"
+                      },
+                      "severity": {
+                        "description": "Severity assigned to emitted issues.",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "type": "string"
+                      },
+                      "suppression_selectors": {
+                        "description": "Selectors that suppress matching issues.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "rules"
+            ],
+            "type": "object"
+          }
+        ],
+        "title": "merm8 Rule Configuration",
+        "type": "object"
+      },
+      "RuleMetadata": {
+        "properties": {
+          "configurable_options": {
+            "items": {
+              "$ref": "#/components/schemas/RuleOption"
+            },
+            "type": "array"
+          },
+          "default_config": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "example": "max-fanout",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "severity",
+          "description",
+          "default_config",
+          "configurable_options"
+        ],
+        "type": "object"
+      },
+      "RuleOption": {
+        "properties": {
+          "constraints": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "description"
+        ],
+        "type": "object"
+      },
+      "RulesResponse": {
+        "properties": {
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/RuleMetadata"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "rules"
         ],
         "type": "object"
       },
@@ -205,7 +544,7 @@
           },
           "message": {
             "description": "Error message from the Mermaid parser",
-            "example": "Unexpected token '>'",
+            "example": "Unexpected token '\u003e'",
             "type": "string"
           }
         },
@@ -235,7 +574,7 @@
   "paths": {
     "/analyze": {
       "post": {
-        "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)",
+        "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nSupports source comment suppressions such as `%% merm8-disable \u003crule-id\u003e`, `%% merm8-disable all`, and `%% merm8-disable-next-line \u003crule-id\u003e`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)",
         "operationId": "analyzeCode",
         "requestBody": {
           "content": {
@@ -244,19 +583,19 @@
                 "simple": {
                   "summary": "Simple graph",
                   "value": {
-                    "code": "graph TD\n  A[Start] --> B[End]"
+                    "code": "graph TD\n  A[Start] --\u003e B[End]"
                   }
                 },
                 "syntaxError": {
                   "summary": "Invalid Mermaid syntax",
                   "value": {
-                    "code": "graph TD\n  A --> B -->"
+                    "code": "graph TD\n  A --\u003e B --\u003e"
                   }
                 },
                 "withConfig": {
                   "summary": "With lint configuration",
                   "value": {
-                    "code": "graph LR\n  A --> B\n  B --> C",
+                    "code": "graph LR\n  A --\u003e B\n  B --\u003e C",
                     "config": {
                       "rules": {
                         "max-fanout": {
@@ -284,14 +623,38 @@
             "content": {
               "application/json": {
                 "examples": {
+                  "sequenceDiagram": {
+                    "summary": "Valid sequence diagram (lint currently unsupported)",
+                    "value": {
+                      "diagram_type": "sequence",
+                      "issues": [],
+                      "lint_supported": false,
+                      "metrics": {
+                        "diagram_type": "sequence",
+                        "disconnected_node_count": 0,
+                        "duplicate_node_count": 0,
+                        "edge_count": 0,
+                        "issue_counts": {
+                          "by_rule": {},
+                          "by_severity": {}
+                        },
+                        "max_fanin": 0,
+                        "max_fanout": 0,
+                        "node_count": 0
+                      },
+                      "syntax_error": null,
+                      "valid": true
+                    }
+                  },
                   "syntaxError": {
                     "summary": "Syntax error response",
                     "value": {
                       "issues": [],
+                      "lint_supported": false,
                       "syntax_error": {
                         "column": 12,
                         "line": 2,
-                        "message": "Unexpected token '>'"
+                        "message": "Unexpected token '\u003e'"
                       },
                       "valid": false
                     }
@@ -299,9 +662,20 @@
                   "validDiagram": {
                     "summary": "Valid diagram with no issues",
                     "value": {
+                      "diagram_type": "flowchart",
                       "issues": [],
+                      "lint_supported": true,
                       "metrics": {
+                        "diagram_type": "flowchart",
+                        "direction": "TD",
+                        "disconnected_node_count": 0,
+                        "duplicate_node_count": 0,
                         "edge_count": 1,
+                        "issue_counts": {
+                          "by_rule": {},
+                          "by_severity": {}
+                        },
+                        "max_fanin": 1,
                         "max_fanout": 1,
                         "node_count": 2
                       },
@@ -312,6 +686,7 @@
                   "withIssues": {
                     "summary": "Valid diagram with lint issues",
                     "value": {
+                      "diagram_type": "flowchart",
                       "issues": [
                         {
                           "message": "Node 'D' is not connected to the graph",
@@ -326,8 +701,24 @@
                           "severity": "warning"
                         }
                       ],
+                      "lint_supported": true,
                       "metrics": {
+                        "diagram_type": "flowchart",
+                        "direction": "TD",
+                        "disconnected_node_count": 1,
+                        "duplicate_node_count": 0,
                         "edge_count": 2,
+                        "issue_counts": {
+                          "by_rule": {
+                            "max-fanout": 1,
+                            "no-disconnected-nodes": 1
+                          },
+                          "by_severity": {
+                            "error": 1,
+                            "warning": 1
+                          }
+                        },
+                        "max_fanin": 1,
                         "max_fanout": 2,
                         "node_count": 4
                       },
@@ -347,17 +738,6 @@
             "content": {
               "application/json": {
                 "examples": {
-                  "invalidConfig": {
-                    "summary": "Invalid lint configuration",
-                    "value": {
-                      "error": {
-                        "code": "invalid_config",
-                        "message": "unknown rule id \"unknown-rule\" in config"
-                      },
-                      "issues": [],
-                      "valid": false
-                    }
-                  },
                   "invalidJSON": {
                     "summary": "Invalid JSON body",
                     "value": {
@@ -369,12 +749,59 @@
                       "valid": false
                     }
                   },
+                  "invalidOption": {
+                    "summary": "Invalid option value",
+                    "value": {
+                      "error": {
+                        "code": "invalid_option",
+                        "message": "invalid option value for limit",
+                        "path": "config.rules.max-fanout.limit"
+                      },
+                      "issues": [],
+                      "valid": false
+                    }
+                  },
                   "missingCode": {
                     "summary": "Missing 'code' field",
                     "value": {
                       "error": {
                         "code": "missing_code",
                         "message": "field 'code' is required"
+                      },
+                      "issues": [],
+                      "valid": false
+                    }
+                  },
+                  "unknownOption": {
+                    "summary": "Unknown option in rule config",
+                    "value": {
+                      "error": {
+                        "code": "unknown_option",
+                        "message": "unknown option: threshold",
+                        "path": "config.rules.max-fanout.threshold",
+                        "supported": [
+                          "enabled",
+                          "limit",
+                          "severity",
+                          "suppression_selectors"
+                        ]
+                      },
+                      "issues": [],
+                      "valid": false
+                    }
+                  },
+                  "unknownRule": {
+                    "summary": "Unknown rule in config",
+                    "value": {
+                      "error": {
+                        "code": "unknown_rule",
+                        "message": "unknown rule: unknown-rule",
+                        "path": "config.rules.unknown-rule",
+                        "supported": [
+                          "max-fanout",
+                          "no-disconnected-nodes",
+                          "no-duplicate-node-ids"
+                        ]
                       },
                       "issues": [],
                       "valid": false
@@ -581,6 +1008,58 @@
         "summary": "Readiness probe",
         "tags": [
           "Probes"
+        ]
+      }
+    },
+    "/rules": {
+      "get": {
+        "description": "Returns centralized metadata for all built-in rules, including defaults and configurable options.",
+        "operationId": "listRules",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RulesResponse"
+                }
+              }
+            },
+            "description": "Built-in rule metadata"
+          }
+        },
+        "summary": "List built-in lint rules",
+        "tags": [
+          "Linting"
+        ]
+      }
+    },
+    "/rules/schema": {
+      "get": {
+        "description": "Returns a JSON Schema generated from the rule config registry. The schema validates both flat and nested config payload formats.",
+        "operationId": "getRuleConfigSchema",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "schema": {
+                      "$ref": "#/components/schemas/RuleConfigSchema"
+                    }
+                  },
+                  "required": [
+                    "schema"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rule configuration schema"
+          }
+        },
+        "summary": "Get JSON Schema for lint rule configuration",
+        "tags": [
+          "Linting"
         ]
       }
     },
