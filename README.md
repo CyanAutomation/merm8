@@ -85,9 +85,9 @@ During the transition window, legacy snake_case config keys such as `schema_vers
 
 ## API
 
-### `GET /healthz`
+### `GET /healthz` (canonical) and `GET /health`
 
-Liveness endpoint for process-up checks.
+Liveness endpoints for process-up checks. `GET /healthz` is the canonical probe path, and `GET /health` is supported as an alias.
 
 **Response**
 
@@ -524,5 +524,5 @@ Workflow summary:
 - [x] Per-rule suppression comments in diagram source
 - [ ] Configurable rule severity overrides
 - [ ] SARIF output format for CI integration
-- [ ] Health-check endpoint (`GET /healthz`)
+- [ ] Health-check endpoints (`GET /healthz` canonical, `GET /health` alias)
 - [ ] Metrics endpoint (Prometheus-compatible)

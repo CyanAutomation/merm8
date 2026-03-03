@@ -1473,20 +1473,28 @@ func TestHealthz_ReturnsOK(t *testing.T) {
 		return nil, nil, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
+	tests := []struct {
+		name string
+		path string
+	}{
+		{name: "healthz", path: "/healthz"},
+		{name: "health", path: "/health"},
 	}
 
-	var resp map[string]string
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if resp["status"] != "ok" {
-		t.Fatalf("expected status=ok, got %q", resp["status"])
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", w.Code)
+			}
+
+			if got := strings.TrimSpace(w.Body.String()); got != `{"status":"ok"}` {
+				t.Fatalf("expected body %q, got %q", `{"status":"ok"}`, got)
+			}
+		})
 	}
 }
 

@@ -1127,9 +1127,37 @@
         ]
       }
     },
+    "/health": {
+      "get": {
+        "description": "Alias for the canonical /healthz liveness probe. Returns process liveness status.",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Process is healthy"
+          }
+        },
+        "summary": "Liveness probe alias",
+        "tags": [
+          "Probes"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
-        "description": "Returns process liveness status.",
+        "description": "Canonical process liveness probe. Returns process liveness status.",
         "operationId": "getHealthz",
         "responses": {
           "200": {
@@ -1149,7 +1177,7 @@
             "description": "Process is healthy"
           }
         },
-        "summary": "Liveness probe",
+        "summary": "Liveness probe (canonical)",
         "tags": [
           "Probes"
         ]
