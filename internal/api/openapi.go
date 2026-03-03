@@ -116,10 +116,13 @@ var openapi = map[string]interface{}{
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
-									"type": "object",
-									"properties": map[string]interface{}{
-										"status": map[string]interface{}{"type": "string", "example": "not_ready"},
-										"error":  map[string]interface{}{"type": "string"},
+									"$ref": "#/components/schemas/ReadyErrorResponse",
+								},
+								"example": map[string]interface{}{
+									"status": "not_ready",
+									"error": map[string]interface{}{
+										"code":    "not_ready",
+										"message": "parser script not found",
 									},
 								},
 							},
@@ -172,7 +175,7 @@ var openapi = map[string]interface{}{
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
-									"$ref": "#/components/schemas/AnalyzeErrorResponse",
+									"$ref": "#/components/schemas/AnalyzeResponse",
 								},
 							},
 						},
@@ -606,10 +609,12 @@ var openapi = map[string]interface{}{
 												},
 											},
 											"error": map[string]interface{}{
-												"code":      "unknown_rule",
-												"message":   "unknown rule: unknown-rule",
-												"path":      "config.rules.unknown-rule",
-												"supported": []interface{}{"max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"},
+												"code":    "unknown_rule",
+												"message": "unknown rule: unknown-rule",
+												"details": map[string]interface{}{
+													"path":      "config.rules.unknown-rule",
+													"supported": []interface{}{"max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"},
+												},
 											},
 										},
 									},
@@ -634,10 +639,12 @@ var openapi = map[string]interface{}{
 												},
 											},
 											"error": map[string]interface{}{
-												"code":      "unknown_option",
-												"message":   "unknown option: threshold",
-												"path":      "config.rules.max-fanout.threshold",
-												"supported": []interface{}{"enabled", "limit", "severity", "suppression-selectors"},
+												"code":    "unknown_option",
+												"message": "unknown option: threshold",
+												"details": map[string]interface{}{
+													"path":      "config.rules.max-fanout.threshold",
+													"supported": []interface{}{"enabled", "limit", "severity", "suppression-selectors"},
+												},
 											},
 										},
 									},
@@ -664,7 +671,7 @@ var openapi = map[string]interface{}{
 											"error": map[string]interface{}{
 												"code":    "invalid_option",
 												"message": "invalid option value for limit",
-												"path":    "config.rules.max-fanout.limit",
+												"details": map[string]interface{}{"path": "config.rules.max-fanout.limit"},
 											},
 										},
 									},
@@ -1189,6 +1196,15 @@ var openapi = map[string]interface{}{
 				},
 			},
 
+			"ReadyErrorResponse": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"status", "error"},
+				"properties": map[string]interface{}{
+					"status": map[string]interface{}{"type": "string", "example": "not_ready"},
+					"error":  map[string]interface{}{"$ref": "#/components/schemas/Error"},
+				},
+			},
+
 			"InfoResponse": map[string]interface{}{
 				"type":     "object",
 				"required": []string{"parser_recognized", "lint_supported"},
@@ -1329,7 +1345,7 @@ var openapi = map[string]interface{}{
 				},
 			},
 
-			"ErrorDetail": map[string]interface{}{
+			"Error": map[string]interface{}{
 				"type":     "object",
 				"required": []string{"code", "message"},
 				"properties": map[string]interface{}{
@@ -1343,17 +1359,10 @@ var openapi = map[string]interface{}{
 						"description": "Human-readable error message",
 						"example":     "invalid JSON body",
 					},
-					"path": map[string]interface{}{
-						"type":        "string",
-						"description": "JSON path to the invalid config field when config validation fails",
-						"example":     "config.rules.max-fanout.limit",
-					},
-					"supported": map[string]interface{}{
-						"type":        "array",
-						"description": "Supported values for unknown rule/option errors",
-						"items": map[string]interface{}{
-							"type": "string",
-						},
+					"details": map[string]interface{}{
+						"type":                 "object",
+						"description":          "Optional context-specific error details object (e.g. path, supported)",
+						"additionalProperties": true,
 					},
 				},
 			},
@@ -1393,7 +1402,7 @@ var openapi = map[string]interface{}{
 						"items":       map[string]interface{}{"type": "string"},
 					},
 					"error": map[string]interface{}{
-						"$ref":        "#/components/schemas/ErrorDetail",
+						"$ref":        "#/components/schemas/Error",
 						"description": "API-level error details for non-200 responses.",
 						"nullable":    true,
 					},
