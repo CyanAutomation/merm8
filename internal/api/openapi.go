@@ -50,7 +50,7 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Liveness probe alias",
-				"description": "Alias for the canonical /healthz liveness probe. Returns process liveness status.",
+				"description": "Alias for the canonical /healthz liveness-only probe. Returns process liveness status (dependency checks are handled by /ready).",
 				"operationId": "getHealth",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
@@ -73,7 +73,7 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Liveness probe (canonical)",
-				"description": "Canonical process liveness probe. Returns process liveness status.",
+				"description": "Canonical process liveness-only probe. Returns process liveness status (dependency checks are handled by /ready).",
 				"operationId": "getHealthz",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
@@ -96,7 +96,7 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Readiness probe",
-				"description": "Returns readiness status, including parser dependency checks when available.",
+				"description": "Dependency/readiness-only probe. Returns readiness status for required dependencies (including parser checks when available) and may return 503 when not ready.",
 				"operationId": "getReady",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{

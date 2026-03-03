@@ -346,7 +346,7 @@ for (const issue of data.issues) {
 
 ### GET `/healthz`
 
-**Description:** Liveness endpoint for process-up probes  
+**Description:** Liveness-only endpoint for process-up probes  
 **Response:** JSON status payload (`{"status":"ok"}`)  
 **Usage:**
 
@@ -356,7 +356,7 @@ curl http://localhost:8080/healthz
 
 ### GET `/ready`
 
-**Description:** Readiness endpoint for critical dependencies (parser runtime/script checks when available)  
+**Description:** Dependency/readiness-only endpoint for critical dependencies (parser runtime/script checks when available). This endpoint may return `503` when dependencies are not ready.  
 **Response:**
 - `200` with `{"status":"ready"}` when ready
 - `503` with `{"status":"not_ready","error":"..."}` when not ready

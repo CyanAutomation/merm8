@@ -215,6 +215,29 @@
         "rules":
           "additionalProperties": false
           "properties":
+            "max-depth":
+              "additionalProperties": false
+              "properties":
+                "enabled":
+                  "description": "Enable or disable this rule."
+                  "type": "boolean"
+                "limit":
+                  "description": "Maximum allowed depth for root-to-leaf traversals."
+                  "minimum": 1
+                  "type": "integer"
+                "severity":
+                  "description": "Severity assigned to emitted issues."
+                  "enum":
+                    - "error"
+                    - "warning"
+                    - "info"
+                  "type": "string"
+                "suppression-selectors":
+                  "description": "Selectors that suppress matching issues."
+                  "items":
+                    "type": "string"
+                  "type": "array"
+              "type": "object"
             "max-fanout":
               "additionalProperties": false
               "properties":
@@ -225,6 +248,28 @@
                   "description": "Maximum allowed outgoing edges per node."
                   "minimum": 1
                   "type": "integer"
+                "severity":
+                  "description": "Severity assigned to emitted issues."
+                  "enum":
+                    - "error"
+                    - "warning"
+                    - "info"
+                  "type": "string"
+                "suppression-selectors":
+                  "description": "Selectors that suppress matching issues."
+                  "items":
+                    "type": "string"
+                  "type": "array"
+              "type": "object"
+            "no-cycles":
+              "additionalProperties": false
+              "properties":
+                "allow-self-loop":
+                  "description": "Allow single-node self-loop cycles without emitting issues."
+                  "type": "boolean"
+                "enabled":
+                  "description": "Enable or disable this rule."
+                  "type": "boolean"
                 "severity":
                   "description": "Severity assigned to emitted issues."
                   "enum":
@@ -693,7 +738,7 @@
         - "Documentation"
   "/health":
     "get":
-      "description": "Alias for the canonical /healthz liveness probe. Returns process liveness status."
+      "description": "Alias for the canonical /healthz liveness-only probe. Returns process liveness status (dependency checks are handled by /ready)."
       "operationId": "getHealth"
       "responses":
         "200":
@@ -711,7 +756,7 @@
         - "Probes"
   "/healthz":
     "get":
-      "description": "Canonical process liveness probe. Returns process liveness status."
+      "description": "Canonical process liveness-only probe. Returns process liveness status (dependency checks are handled by /ready)."
       "operationId": "getHealthz"
       "responses":
         "200":
@@ -749,7 +794,7 @@
         - "Probes"
   "/ready":
     "get":
-      "description": "Returns readiness status, including parser dependency checks when available."
+      "description": "Dependency/readiness-only probe. Returns readiness status for required dependencies (including parser checks when available) and may return 503 when not ready."
       "operationId": "getReady"
       "responses":
         "200":
