@@ -23,6 +23,17 @@ The easiest way to explore and test the API is through the interactive Swagger U
 
 You should see a professional API documentation page with all available endpoints.
 
+### Operational environment variables
+
+For deployment sizing and overload behavior, the parser runtime exposes two key env vars:
+
+| Variable | Default | Behavior |
+|---|---|---|
+| `PARSER_CONCURRENCY_LIMIT` | `8` | Caps in-flight parser subprocesses. When the limit is reached, the server does **not queue indefinitely**; additional `POST /analyze` requests are rejected with `503` and `error.code=server_busy` (`parser concurrency limit reached; try again`). |
+| `PARSER_MAX_OLD_SPACE_MB` | `512` | Sets the Node.js parser subprocess V8 old-space heap cap (`--max-old-space-size=<MB>`), limiting parser memory growth per parse process. |
+
+Use these together with your platform CPU/memory limits to tune throughput versus memory headroom in production.
+
 ---
 
 ## Interactive API Testing with Swagger UI
