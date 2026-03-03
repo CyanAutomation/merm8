@@ -91,6 +91,7 @@ type parsedSuppression struct {
 	Scope      string `json:"scope"`
 	Line       int    `json:"line"`
 	TargetLine int    `json:"targetLine"`
+	SubgraphID string `json:"subgraphId,omitempty"`
 }
 
 // Parser wraps the Node subprocess invocation.
@@ -396,6 +397,7 @@ func toDiagram(result ParseResult) *model.Diagram {
 			Scope:      suppression.Scope,
 			Line:       suppression.Line,
 			TargetLine: suppression.TargetLine,
+			SubgraphID: suppression.SubgraphID,
 		})
 	}
 	return d
