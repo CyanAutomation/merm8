@@ -452,14 +452,14 @@ func TestAnalyze_ValidDiagram_SuccessPath(t *testing.T) {
 	if valid, ok := resp["valid"].(bool); !ok || !valid {
 		t.Error("expected valid=true")
 	}
-	if syntaxErr := resp["syntax_error"]; syntaxErr != nil {
-		t.Error("expected syntax_error=null")
+	if syntaxErr := resp["syntax-error"]; syntaxErr != nil {
+		t.Error("expected syntax-error=null")
 	}
-	if diagramType, ok := resp["diagram_type"].(string); !ok || diagramType != "flowchart" {
-		t.Errorf("expected diagram_type=flowchart, got %v", resp["diagram_type"])
+	if diagramType, ok := resp["diagram-type"].(string); !ok || diagramType != "flowchart" {
+		t.Errorf("expected diagram-type=flowchart, got %v", resp["diagram-type"])
 	}
-	if lintSupported, ok := resp["lint_supported"].(bool); !ok || !lintSupported {
-		t.Errorf("expected lint_supported=true, got %v", resp["lint_supported"])
+	if lintSupported, ok := resp["lint-supported"].(bool); !ok || !lintSupported {
+		t.Errorf("expected lint-supported=true, got %v", resp["lint-supported"])
 	}
 	if issues, ok := resp["issues"].([]interface{}); !ok {
 		t.Error("expected issues array")
@@ -469,39 +469,39 @@ func TestAnalyze_ValidDiagram_SuccessPath(t *testing.T) {
 	if metrics, ok := resp["metrics"].(map[string]interface{}); !ok {
 		t.Error("expected metrics object")
 	} else {
-		if nodeCount, ok := metrics["node_count"].(float64); !ok || nodeCount != 3 {
-			t.Errorf("expected node_count=3, got %v", metrics["node_count"])
+		if nodeCount, ok := metrics["node-count"].(float64); !ok || nodeCount != 3 {
+			t.Errorf("expected node-count=3, got %v", metrics["node-count"])
 		}
-		if edgeCount, ok := metrics["edge_count"].(float64); !ok || edgeCount != 2 {
-			t.Errorf("expected edge_count=2, got %v", metrics["edge_count"])
+		if edgeCount, ok := metrics["edge-count"].(float64); !ok || edgeCount != 2 {
+			t.Errorf("expected edge-count=2, got %v", metrics["edge-count"])
 		}
-		if disconnected, ok := metrics["disconnected_node_count"].(float64); !ok || disconnected != 0 {
-			t.Errorf("expected disconnected_node_count=0, got %v", metrics["disconnected_node_count"])
+		if disconnected, ok := metrics["disconnected-node-count"].(float64); !ok || disconnected != 0 {
+			t.Errorf("expected disconnected-node-count=0, got %v", metrics["disconnected-node-count"])
 		}
-		if duplicate, ok := metrics["duplicate_node_count"].(float64); !ok || duplicate != 0 {
-			t.Errorf("expected duplicate_node_count=0, got %v", metrics["duplicate_node_count"])
+		if duplicate, ok := metrics["duplicate-node-count"].(float64); !ok || duplicate != 0 {
+			t.Errorf("expected duplicate-node-count=0, got %v", metrics["duplicate-node-count"])
 		}
-		if maxFanin, ok := metrics["max_fanin"].(float64); !ok || maxFanin != 1 {
-			t.Errorf("expected max_fanin=1, got %v", metrics["max_fanin"])
+		if maxFanin, ok := metrics["max-fanin"].(float64); !ok || maxFanin != 1 {
+			t.Errorf("expected max-fanin=1, got %v", metrics["max-fanin"])
 		}
-		if maxFanout, ok := metrics["max_fanout"].(float64); !ok || maxFanout != 1 {
-			t.Errorf("expected max_fanout=1, got %v", metrics["max_fanout"])
+		if maxFanout, ok := metrics["max-fanout"].(float64); !ok || maxFanout != 1 {
+			t.Errorf("expected max-fanout=1, got %v", metrics["max-fanout"])
 		}
-		if diagramType, ok := metrics["diagram_type"].(string); !ok || diagramType != "flowchart" {
-			t.Errorf("expected metrics.diagram_type=flowchart, got %v", metrics["diagram_type"])
+		if diagramType, ok := metrics["diagram-type"].(string); !ok || diagramType != "flowchart" {
+			t.Errorf("expected metrics.diagram-type=flowchart, got %v", metrics["diagram-type"])
 		}
 		if direction, ok := metrics["direction"].(string); !ok || direction != "TD" {
 			t.Errorf("expected metrics.direction=TD, got %v", metrics["direction"])
 		}
-		issueCounts, ok := metrics["issue_counts"].(map[string]interface{})
+		issueCounts, ok := metrics["issue-counts"].(map[string]interface{})
 		if !ok {
-			t.Fatalf("expected metrics.issue_counts object, got %T", metrics["issue_counts"])
+			t.Fatalf("expected metrics.issue-counts object, got %T", metrics["issue-counts"])
 		}
-		if bySeverity, ok := issueCounts["by_severity"].(map[string]interface{}); !ok || len(bySeverity) != 0 {
-			t.Errorf("expected empty issue_counts.by_severity, got %v", issueCounts["by_severity"])
+		if bySeverity, ok := issueCounts["by-severity"].(map[string]interface{}); !ok || len(bySeverity) != 0 {
+			t.Errorf("expected empty issue-counts.by-severity, got %v", issueCounts["by-severity"])
 		}
-		if byRule, ok := issueCounts["by_rule"].(map[string]interface{}); !ok || len(byRule) != 0 {
-			t.Errorf("expected empty issue_counts.by_rule, got %v", issueCounts["by_rule"])
+		if byRule, ok := issueCounts["by-rule"].(map[string]interface{}); !ok || len(byRule) != 0 {
+			t.Errorf("expected empty issue-counts.by-rule, got %v", issueCounts["by-rule"])
 		}
 	}
 }
@@ -534,11 +534,11 @@ func TestAnalyze_SyntaxError_Returns200(t *testing.T) {
 	if valid, ok := resp["valid"].(bool); !ok || valid {
 		t.Error("expected valid=false")
 	}
-	if lintSupported, ok := resp["lint_supported"].(bool); !ok || lintSupported {
-		t.Errorf("expected lint_supported=false for syntax error, got %v", resp["lint_supported"])
+	if lintSupported, ok := resp["lint-supported"].(bool); !ok || lintSupported {
+		t.Errorf("expected lint-supported=false for syntax error, got %v", resp["lint-supported"])
 	}
-	if syntaxErrResp, ok := resp["syntax_error"].(map[string]interface{}); !ok {
-		t.Error("expected syntax_error object")
+	if syntaxErrResp, ok := resp["syntax-error"].(map[string]interface{}); !ok {
+		t.Error("expected syntax-error object")
 	} else {
 		if msg, ok := syntaxErrResp["message"].(string); !ok || msg != "No diagram type detected" {
 			t.Errorf("expected error message, got %v", syntaxErrResp["message"])
@@ -568,19 +568,19 @@ func TestAnalyze_UnsupportedDiagramType_ReturnsFallbackIssue(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	if lintSupported, ok := resp["lint_supported"].(bool); !ok || lintSupported {
-		t.Fatalf("expected lint_supported=false, got %v", resp["lint_supported"])
+	if lintSupported, ok := resp["lint-supported"].(bool); !ok || lintSupported {
+		t.Fatalf("expected lint-supported=false, got %v", resp["lint-supported"])
 	}
-	if diagramType, ok := resp["diagram_type"].(string); !ok || diagramType != "sequence" {
-		t.Fatalf("expected diagram_type=sequence, got %v", resp["diagram_type"])
+	if diagramType, ok := resp["diagram-type"].(string); !ok || diagramType != "sequence" {
+		t.Fatalf("expected diagram-type=sequence, got %v", resp["diagram-type"])
 	}
 	issues, ok := resp["issues"].([]interface{})
 	if !ok || len(issues) != 1 {
 		t.Fatalf("expected one fallback issue, got %#v", resp["issues"])
 	}
 	issue, _ := issues[0].(map[string]interface{})
-	if issue["rule_id"] != "unsupported-diagram-type" {
-		t.Fatalf("expected unsupported-diagram-type issue, got %v", issue["rule_id"])
+	if issue["rule-id"] != "unsupported-diagram-type" {
+		t.Fatalf("expected unsupported-diagram-type issue, got %v", issue["rule-id"])
 	}
 }
 
@@ -644,7 +644,7 @@ func TestAnalyze_ConfigApplied_MaxFanout(t *testing.T) {
 	found := false
 	for _, issue := range issues {
 		if issueMap, ok := issue.(map[string]interface{}); ok {
-			if ruleID, ok := issueMap["rule_id"].(string); ok && ruleID == "max-fanout" {
+			if ruleID, ok := issueMap["rule-id"].(string); ok && ruleID == "max-fanout" {
 				if _, hasLine := issueMap["line"]; hasLine {
 					t.Fatal("expected max-fanout issue line to be omitted when unknown")
 				}
@@ -726,7 +726,7 @@ func TestAnalyze_ConfigParsing(t *testing.T) {
 			found := false
 			for _, issue := range issues {
 				if issueMap, ok := issue.(map[string]interface{}); ok {
-					if ruleID, ok := issueMap["rule_id"].(string); ok && ruleID == "max-fanout" {
+					if ruleID, ok := issueMap["rule-id"].(string); ok && ruleID == "max-fanout" {
 						found = true
 						break
 					}
@@ -736,6 +736,33 @@ func TestAnalyze_ConfigParsing(t *testing.T) {
 				t.Errorf("expected max-fanout issue not found; config may not have been applied to %s", tt.name)
 			}
 		})
+	}
+}
+
+func TestAnalyze_ConfigLegacySnakeCaseKeysRemainSupported(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}, {ID: "B"}}, Edges: []model.Edge{{From: "A", To: "B"}}}, nil, nil
+	})
+
+	bodyJSON, _ := json.Marshal(map[string]any{
+		"code": "graph TD\n  A --> B",
+		"config": map[string]any{
+			"schema_version": "v1",
+			"rules": map[string]any{
+				"max-fanout": map[string]any{
+					"suppression_selectors": []string{"node:A"},
+				},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(bodyJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for legacy snake_case config keys, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -752,7 +779,7 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 		body, _ := json.Marshal(map[string]any{
 			"code": "graph TD; A-->B; A-->C; A-->D",
 			"config": map[string]any{
-				"schema_version": "v1",
+				"schema-version": "v1",
 				"rules": map[string]any{
 					"max-fanout": map[string]any{"limit": 2},
 				},
@@ -778,7 +805,7 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 		body, _ := json.Marshal(map[string]any{
 			"code": "graph TD; A-->B",
 			"config": map[string]any{
-				"schema_version": "v9",
+				"schema-version": "v9",
 				"rules":          map[string]any{},
 			},
 		})
@@ -793,7 +820,7 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 		if parserCalled {
 			t.Fatal("expected parser not to be called when schema version is invalid")
 		}
-		assertValidationErrorResponse(t, w.Body.Bytes(), "unsupported_schema_version", "unsupported config schema_version: v9", "config.schema_version", []string{"v1"})
+		assertValidationErrorResponse(t, w.Body.Bytes(), "unsupported_schema_version", "unsupported config schema-version: v9", "config.schema-version", []string{"v1"})
 	})
 
 	t.Run("legacy formats remain supported", func(t *testing.T) {
@@ -861,7 +888,7 @@ func TestAnalyze_MultipleRulesAggregate(t *testing.T) {
 	ruleIDs := make(map[string]int)
 	for _, issue := range issues {
 		if issueMap, ok := issue.(map[string]interface{}); ok {
-			if ruleID, ok := issueMap["rule_id"].(string); ok {
+			if ruleID, ok := issueMap["rule-id"].(string); ok {
 				ruleIDs[ruleID]++
 			}
 		}
@@ -896,12 +923,12 @@ func TestAnalyze_MetricsExtendedFields(t *testing.T) {
 		t.Fatalf("expected metrics object, got %T", resp["metrics"])
 	}
 	expected := map[string]int{
-		"node_count":              5,
-		"edge_count":              2,
-		"disconnected_node_count": 1,
-		"duplicate_node_count":    1,
-		"max_fanin":               2,
-		"max_fanout":              1,
+		"node-count":              5,
+		"edge-count":              2,
+		"disconnected-node-count": 1,
+		"duplicate-node-count":    1,
+		"max-fanin":               2,
+		"max-fanout":              1,
 	}
 	for k, want := range expected {
 		got, ok := metrics[k].(float64)
@@ -909,21 +936,21 @@ func TestAnalyze_MetricsExtendedFields(t *testing.T) {
 			t.Fatalf("expected %s=%d, got %v", k, want, metrics[k])
 		}
 	}
-	if got := metrics["diagram_type"]; got != "flowchart" {
-		t.Fatalf("expected diagram_type=flowchart, got %v", got)
+	if got := metrics["diagram-type"]; got != "flowchart" {
+		t.Fatalf("expected diagram-type=flowchart, got %v", got)
 	}
 	if got := metrics["direction"]; got != "LR" {
 		t.Fatalf("expected direction=LR, got %v", got)
 	}
-	issueCounts, ok := metrics["issue_counts"].(map[string]interface{})
+	issueCounts, ok := metrics["issue-counts"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("expected issue_counts object, got %T", metrics["issue_counts"])
+		t.Fatalf("expected issue-counts object, got %T", metrics["issue-counts"])
 	}
-	bySeverity := issueCounts["by_severity"].(map[string]interface{})
+	bySeverity := issueCounts["by-severity"].(map[string]interface{})
 	if bySeverity["error"] != float64(2) {
-		t.Fatalf("expected by_severity.error=2, got %v", bySeverity["error"])
+		t.Fatalf("expected by-severity.error=2, got %v", bySeverity["error"])
 	}
-	byRule := issueCounts["by_rule"].(map[string]interface{})
+	byRule := issueCounts["by-rule"].(map[string]interface{})
 	if byRule["no-duplicate-node-ids"] != float64(1) {
 		t.Fatalf("expected no-duplicate-node-ids count=1, got %v", byRule["no-duplicate-node-ids"])
 	}
@@ -978,21 +1005,21 @@ func TestAnalyze_LargeDiagram(t *testing.T) {
 	}
 
 	// Verify exact node count
-	if nodeCount, ok := metrics["node_count"].(float64); ok {
+	if nodeCount, ok := metrics["node-count"].(float64); ok {
 		if int(nodeCount) != 500 {
 			t.Errorf("expected 500 nodes, got %d", int(nodeCount))
 		}
 	} else {
-		t.Error("expected node_count in metrics")
+		t.Error("expected node-count in metrics")
 	}
 
 	// Verify exact edge count (chain should have exactly 499 edges)
-	if edgeCount, ok := metrics["edge_count"].(float64); ok {
+	if edgeCount, ok := metrics["edge-count"].(float64); ok {
 		if int(edgeCount) != 499 {
 			t.Errorf("expected 499 edges in linear chain, got %d", int(edgeCount))
 		}
 	} else {
-		t.Error("expected edge_count in metrics")
+		t.Error("expected edge-count in metrics")
 	}
 
 	// Log timing for performance tracking. Keep only a coarse upper bound to reduce CI flakiness.
@@ -1058,9 +1085,9 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 			name:    fmt.Sprintf("linear chain (%d nodes)", chainNodes),
 			diagram: buildChainDiagram(chainNodes),
 			expectedMetrics: map[string]int{
-				"node_count": chainNodes,
-				"edge_count": chainNodes - 1,
-				"max_fanout": 1,
+				"node-count": chainNodes,
+				"edge-count": chainNodes - 1,
+				"max-fanout": 1,
 			},
 			expectedRules: map[string]int{},
 			maxDuration:   8 * time.Second,
@@ -1069,9 +1096,9 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 			name:    "single hub high fan-out",
 			diagram: buildHighFanoutDiagram(6000),
 			expectedMetrics: map[string]int{
-				"node_count": 6001,
-				"edge_count": 6000,
-				"max_fanout": 6000,
+				"node-count": 6001,
+				"edge-count": 6000,
+				"max-fanout": 6000,
 			},
 			expectedRules: map[string]int{"max-fanout": 1},
 			maxDuration:   8 * time.Second,
@@ -1080,9 +1107,9 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 			name:    "high fan-in target node",
 			diagram: buildHighFaninDiagram(7000),
 			expectedMetrics: map[string]int{
-				"node_count": 7001,
-				"edge_count": 7000,
-				"max_fanout": 1,
+				"node-count": 7001,
+				"edge-count": 7000,
+				"max-fanout": 1,
 			},
 			expectedRules: map[string]int{},
 			maxDuration:   8 * time.Second,
@@ -1143,7 +1170,7 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 				if !ok {
 					t.Fatalf("unexpected issue value type: %T", issue)
 				}
-				ruleID, _ := issueMap["rule_id"].(string)
+				ruleID, _ := issueMap["rule-id"].(string)
 				ruleCounts[ruleID]++
 			}
 
@@ -1283,8 +1310,8 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 				if valid, ok := resp["valid"].(bool); !ok || valid {
 					return fmt.Errorf("syntax-error payload expected valid=false, got %v", resp["valid"])
 				}
-				if syntaxErrorResp, ok := resp["syntax_error"].(map[string]interface{}); !ok || syntaxErrorResp["message"] == nil {
-					return fmt.Errorf("syntax-error payload expected syntax_error object with message, got %v", resp["syntax_error"])
+				if syntaxErrorResp, ok := resp["syntax-error"].(map[string]interface{}); !ok || syntaxErrorResp["message"] == nil {
+					return fmt.Errorf("syntax-error payload expected syntax-error object with message, got %v", resp["syntax-error"])
 				}
 				return nil
 			},
@@ -1310,7 +1337,7 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 					if !ok {
 						continue
 					}
-					if issueMap["rule_id"] == "max-fanout" {
+					if issueMap["rule-id"] == "max-fanout" {
 						found = true
 						break
 					}
@@ -1787,7 +1814,7 @@ func TestAnalyze_InvalidUnknownOptionConfig_Returns400(t *testing.T) {
 	if parserCalled {
 		t.Fatal("expected parser not to be called when config validation fails")
 	}
-	assertValidationErrorResponse(t, w.Body.Bytes(), "unknown_option", "unknown option: unknown", "config.rules.max-fanout.unknown", []string{"enabled", "limit", "severity", "suppression_selectors"})
+	assertValidationErrorResponse(t, w.Body.Bytes(), "unknown_option", "unknown option: unknown", "config.rules.max-fanout.unknown", []string{"enabled", "limit", "severity", "suppression-selectors"})
 }
 
 func TestAnalyze_InvalidMaxFanoutLimitConfig_Returns400(t *testing.T) {
@@ -2110,13 +2137,13 @@ func TestListRules_ResponseShape(t *testing.T) {
 			ID                  string                 `json:"id"`
 			Severity            string                 `json:"severity"`
 			Description         string                 `json:"description"`
-			DefaultConfig       map[string]interface{} `json:"default_config"`
+			DefaultConfig       map[string]interface{} `json:"default-config"`
 			ConfigurableOptions []struct {
 				Name        string `json:"name"`
 				Type        string `json:"type"`
 				Description string `json:"description"`
 				Constraints string `json:"constraints"`
-			} `json:"configurable_options"`
+			} `json:"configurable-options"`
 		} `json:"rules"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
@@ -2130,10 +2157,10 @@ func TestListRules_ResponseShape(t *testing.T) {
 			t.Fatalf("expected id/severity/description for each rule, got %#v", rule)
 		}
 		if rule.DefaultConfig == nil {
-			t.Fatalf("expected default_config object for %s", rule.ID)
+			t.Fatalf("expected default-config object for %s", rule.ID)
 		}
 		if rule.ConfigurableOptions == nil {
-			t.Fatalf("expected configurable_options array for %s", rule.ID)
+			t.Fatalf("expected configurable-options array for %s", rule.ID)
 		}
 	}
 }
@@ -2180,10 +2207,10 @@ func TestListRules_MetadataConsistencyWithRegistry(t *testing.T) {
 		Rules []struct {
 			ID                  string                 `json:"id"`
 			Severity            string                 `json:"severity"`
-			DefaultConfig       map[string]interface{} `json:"default_config"`
+			DefaultConfig       map[string]interface{} `json:"default-config"`
 			ConfigurableOptions []struct {
 				Name string `json:"name"`
-			} `json:"configurable_options"`
+			} `json:"configurable-options"`
 		} `json:"rules"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
@@ -2205,7 +2232,7 @@ func TestListRules_MetadataConsistencyWithRegistry(t *testing.T) {
 		for key, value := range meta.DefaultConfig {
 			got, ok := rule.DefaultConfig[key]
 			if !ok {
-				t.Fatalf("missing default_config.%s for %s", key, rule.ID)
+				t.Fatalf("missing default-config.%s for %s", key, rule.ID)
 			}
 			if key == "limit" {
 				want, ok := value.(int)

@@ -26,7 +26,7 @@
               ],
               "type": "string"
             },
-            "suppression_selectors": {
+            "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
                 "type": "string"
@@ -52,7 +52,7 @@
               ],
               "type": "string"
             },
-            "suppression_selectors": {
+            "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
                 "type": "string"
@@ -78,7 +78,7 @@
               ],
               "type": "string"
             },
-            "suppression_selectors": {
+            "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
                 "type": "string"
@@ -91,7 +91,7 @@
       },
       "type": "object"
     },
-    "schema_version": {
+    "schema-version": {
       "enum": [
         "v1"
       ],
@@ -99,7 +99,7 @@
     }
   },
   "required": [
-    "schema_version",
+    "schema-version",
     "rules"
   ],
   "title": "merm8 Rule Configuration v1",

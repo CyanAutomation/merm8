@@ -110,7 +110,7 @@ paths:
         
         Supported lint families: flowchart/graph.
 
-        Sequence/class/ER/state diagrams are parsed and reported with `lint_supported=false` and an informational `unsupported-diagram-type` issue until family-specific rule sets are rolled out.
+        Sequence/class/ER/state diagrams are parsed and reported with `lint-supported=false` and an informational `unsupported-diagram-type` issue until family-specific rule sets are rolled out.
 
         Returns syntax errors if parsing fails, or lint results if parsing succeeds.
       operationId: analyzeCode
@@ -140,7 +140,7 @@ paths:
                         enabled: true
                         limit: 2
                         severity: error
-                        suppression_selectors:
+                        suppression-selectors:
                           - node:A
               syntaxError:
                 summary: Invalid Mermaid syntax
@@ -158,28 +158,28 @@ paths:
                   summary: Valid diagram with no issues
                   value:
                     valid: true
-                    diagram_type: flowchart
-                    lint_supported: true
-                    syntax_error: null
+                    diagram-type: flowchart
+                    lint-supported: true
+                    syntax-error: null
                     issues: []
                     metrics:
-                      node_count: 2
-                      edge_count: 1
-                      disconnected_node_count: 0
-                      duplicate_node_count: 0
-                      max_fanin: 1
-                      max_fanout: 1
-                      diagram_type: flowchart
+                      node-count: 2
+                      edge-count: 1
+                      disconnected-node-count: 0
+                      duplicate-node-count: 0
+                      max-fanin: 1
+                      max-fanout: 1
+                      diagram-type: flowchart
                       direction: TD
-                      issue_counts:
-                        by_severity: {}
-                        by_rule: {}
+                      issue-counts:
+                        by-severity: {}
+                        by-rule: {}
                 syntaxError:
                   summary: Syntax error response
                   value:
                     valid: false
-                    lint_supported: false
-                    syntax_error:
+                    lint-supported: false
+                    syntax-error:
                       message: "Unexpected token '>'"
                       line: 2
                       column: 12
@@ -188,51 +188,51 @@ paths:
                   summary: Valid sequence diagram (lint currently unsupported)
                   value:
                     valid: true
-                    diagram_type: sequence
-                    lint_supported: false
-                    syntax_error: null
+                    diagram-type: sequence
+                    lint-supported: false
+                    syntax-error: null
                     issues: []
                     metrics:
-                      node_count: 0
-                      edge_count: 0
-                      disconnected_node_count: 0
-                      duplicate_node_count: 0
-                      max_fanin: 0
-                      max_fanout: 0
-                      diagram_type: sequence
-                      issue_counts:
-                        by_severity: {}
-                        by_rule: {}
+                      node-count: 0
+                      edge-count: 0
+                      disconnected-node-count: 0
+                      duplicate-node-count: 0
+                      max-fanin: 0
+                      max-fanout: 0
+                      diagram-type: sequence
+                      issue-counts:
+                        by-severity: {}
+                        by-rule: {}
                 withIssues:
                   summary: Valid diagram with lint issues
                   value:
                     valid: true
-                    diagram_type: flowchart
-                    lint_supported: true
-                    syntax_error: null
+                    diagram-type: flowchart
+                    lint-supported: true
+                    syntax-error: null
                     issues:
-                      - rule_id: no-disconnected-nodes
+                      - rule-id: no-disconnected-nodes
                         severity: error
                         message: Node 'D' is not connected to the graph
-                      - rule_id: max-fanout
+                      - rule-id: max-fanout
                         severity: warning
                         message: Node 'A' has fanout 6, exceeding limit of 5
                         line: 2
                         column: 2
                     metrics:
-                      node_count: 4
-                      edge_count: 2
-                      disconnected_node_count: 1
-                      duplicate_node_count: 0
-                      max_fanin: 1
-                      max_fanout: 2
-                      diagram_type: flowchart
+                      node-count: 4
+                      edge-count: 2
+                      disconnected-node-count: 1
+                      duplicate-node-count: 0
+                      max-fanin: 1
+                      max-fanout: 2
+                      diagram-type: flowchart
                       direction: TD
-                      issue_counts:
-                        by_severity:
+                      issue-counts:
+                        by-severity:
                           error: 1
                           warning: 1
-                        by_rule:
+                        by-rule:
                           no-disconnected-nodes: 1
                           max-fanout: 1
         '400':
@@ -284,7 +284,7 @@ paths:
                         - enabled
                         - limit
                         - severity
-                        - suppression_selectors
+                        - suppression-selectors
                 invalidOption:
                   summary: Invalid option value
                   value:
@@ -378,8 +378,8 @@ components:
         - id
         - severity
         - description
-        - default_config
-        - configurable_options
+        - default-config
+        - configurable-options
       properties:
         id:
           type: string
@@ -392,10 +392,10 @@ components:
             - info
         description:
           type: string
-        default_config:
+        default-config:
           type: object
           additionalProperties: true
-        configurable_options:
+        configurable-options:
           type: array
           items:
             $ref: '#/components/schemas/RuleOption'
@@ -420,7 +420,7 @@ components:
       allOf:
         - $ref: './schemas/config.v1.json'
       description: |
-        Preferred versioned config schema for `POST /analyze` (`schema_version: v1`).
+        Preferred versioned config schema for `POST /analyze` (`schema-version: v1`).
         Legacy flat and nested formats are accepted during the migration window.
 
     AnalyzeRequest:
@@ -439,19 +439,19 @@ components:
           $ref: '#/components/schemas/RuleConfigSchema'
           description: |
             Optional lint rule configuration.
-            Preferred format: `{"schema_version":"v1","rules":{"rule-id":{"option":"value"}}}`.
+            Preferred format: `{"schema-version":"v1","rules":{"rule-id":{"option":"value"}}}`.
             Legacy formats remain supported during migration:
             - Flat: `{"rule-id":{"option":"value"}}`
             - Nested: `{"rules":{"rule-id":{"option":"value"}}}`
             Unsupported schema versions are rejected with `unsupported_schema_version`.
           example:
-            schema_version: v1
+            schema-version: v1
             rules:
               max-fanout:
                 enabled: true
                 limit: 3
                 severity: error
-                suppression_selectors:
+                suppression-selectors:
                   - node:A
               no-disconnected-nodes:
                 enabled: false
@@ -461,7 +461,7 @@ components:
       type: object
       required:
         - valid
-        - lint_supported
+        - lint-supported
         - issues
         - error
       properties:
@@ -504,21 +504,21 @@ components:
       type: object
       required:
         - valid
-        - lint_supported
+        - lint-supported
         - issues
       properties:
         valid:
           type: boolean
           description: Whether the Mermaid code is syntactically valid
-        diagram_type:
+        diagram-type:
           type: string
           description: Normalized Mermaid diagram type (flowchart, sequence, class, er, state, unknown).
           enum: [flowchart, sequence, class, er, state, unknown]
           example: flowchart
-        lint_supported:
+        lint-supported:
           type: boolean
           description: Whether lint rules are currently implemented for the parsed diagram type.
-        syntax_error:
+        syntax-error:
           $ref: '#/components/schemas/SyntaxError'
           description: Syntax error details if `valid` is false. Null if valid.
           nullable: true
@@ -555,11 +555,11 @@ components:
     Issue:
       type: object
       required:
-        - rule_id
+        - rule-id
         - severity
         - message
       properties:
-        rule_id:
+        rule-id:
           type: string
           description: Identifier of the lint rule that triggered
           example: no-disconnected-nodes
@@ -596,11 +596,11 @@ components:
     IssueContext:
       type: object
       properties:
-        subgraph_id:
+        subgraph-id:
           type: string
           description: ID of the subgraph containing the affected node.
           example: cluster-1
-        subgraph_label:
+        subgraph-label:
           type: string
           description: Human-readable label of the subgraph containing the affected node.
           example: Core Services
@@ -608,39 +608,39 @@ components:
     Metrics:
       type: object
       required:
-        - node_count
-        - edge_count
-        - disconnected_node_count
-        - duplicate_node_count
-        - max_fanin
-        - max_fanout
-        - diagram_type
+        - node-count
+        - edge-count
+        - disconnected-node-count
+        - duplicate-node-count
+        - max-fanin
+        - max-fanout
+        - diagram-type
       properties:
-        node_count:
+        node-count:
           type: integer
           description: Total number of nodes in the diagram
           example: 5
-        edge_count:
+        edge-count:
           type: integer
           description: Total number of edges (connections) in the diagram
           example: 4
-        disconnected_node_count:
+        disconnected-node-count:
           type: integer
           description: Number of nodes with neither incoming nor outgoing edges
           example: 1
-        duplicate_node_count:
+        duplicate-node-count:
           type: integer
           description: Number of duplicate node declarations beyond first occurrences
           example: 0
-        max_fanin:
+        max-fanin:
           type: integer
           description: Maximum number of incoming edges to any single node
           example: 3
-        max_fanout:
+        max-fanout:
           type: integer
           description: Maximum number of outgoing edges from any single node
           example: 2
-        diagram_type:
+        diagram-type:
           type: string
           description: Diagram type copied from parsed metadata
           enum: [flowchart, sequence, class, er, state, unknown]
@@ -649,21 +649,21 @@ components:
           type: string
           description: Diagram direction when provided by parser
           example: TD
-        issue_counts:
+        issue-counts:
           $ref: '#/components/schemas/IssueCounts'
           description: Issue count aggregations by severity and rule ID
 
     IssueCounts:
       type: object
       required:
-        - by_severity
-        - by_rule
+        - by-severity
+        - by-rule
       properties:
-        by_severity:
+        by-severity:
           type: object
           additionalProperties:
             type: integer
-        by_rule:
+        by-rule:
           type: object
           additionalProperties:
             type: integer
