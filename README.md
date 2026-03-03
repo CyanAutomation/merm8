@@ -615,6 +615,14 @@ Workflow summary:
 2. Run `go run ./scripts/generate_openapi.go`.
 3. Commit the updated generated files with your API change.
 
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) for release history and notable user-visible changes.
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md).
+
 ## Environment Variables
 
 | Variable        | Default                          | Description                         |
