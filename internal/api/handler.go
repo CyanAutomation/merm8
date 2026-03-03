@@ -306,6 +306,7 @@ type apiErrorDetails struct {
 type Handler struct {
 	parser              ParserInterface
 	engine              *engine.Engine
+	logger              Logger
 	serviceVersion      string
 	metricsHandler      http.Handler
 	telemetryMetrics    *telemetry.Metrics
@@ -327,6 +328,7 @@ func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
 	return &Handler{
 		parser: p,
 		engine: e,
+		logger: normalizeLogger(NewLogger("api")),
 	}
 }
 
@@ -365,6 +367,13 @@ func (h *Handler) SetServiceVersion(version string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.serviceVersion = strings.TrimSpace(version)
+}
+
+// SetLogger configures structured logging for API handlers.
+func (h *Handler) SetLogger(logger Logger) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.logger = normalizeLogger(logger)
 }
 
 // NewHandlerWithScript creates a Handler wired with a real parser using the given script path.
@@ -529,6 +538,10 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		}
 	}
 
+	h.mu.RLock()
+	logger := normalizeLogger(h.logger)
+	h.mu.RUnlock()
+
 	r.Body = http.MaxBytesReader(w, r.Body, maxAnalyzeBodyBytes)
 
 	var req analyzeRequest
@@ -596,7 +609,9 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			metrics.ObserveParserDuration(outcome, parseDuration)
 		}
 		observeAnalyzeOutcome(outcome)
-		writeParserFailure(w, err)
+		setAnalyzeLogFields(r.Context(), outcome, string(model.DiagramTypeUnknown))
+		logger.Error("parser failure", "request_id", RequestIDFromContext(r.Context()), "route", r.URL.Path, "method", r.Method, "parser_outcome", outcome, "error", err.Error())
+		writeParserFailure(w, r.Context(), logger, err)
 		return
 	}
 
@@ -609,6 +624,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
+		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
 		resp := analyzeResponse{
 			Valid:         false,
 			DiagramType:   diagramType,
@@ -634,6 +650,8 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			metrics.ObserveParserDuration(telemetry.OutcomeInternalError, parseDuration)
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
+		setAnalyzeLogFields(r.Context(), telemetry.OutcomeInternalError, string(model.DiagramTypeUnknown))
+		logger.Error("parser returned nil diagram", "request_id", RequestIDFromContext(r.Context()), "route", r.URL.Path, "method", r.Method)
 		writeError(w, http.StatusInternalServerError, "internal_error", "parser returned nil diagram")
 		return
 	}
@@ -648,6 +666,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 	family := diagram.Type.Family()
 	if family != model.DiagramFamilyFlowchart {
 		observeAnalyzeOutcome("unsupported_diagram_type")
+		setAnalyzeLogFields(r.Context(), "unsupported_diagram_type", string(diagram.Type))
 		// Keep metrics in the response for parsed diagrams, even when linting is
 		// not currently supported for that Mermaid family.
 		resp := analyzeResponse{
@@ -669,6 +688,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 
 	issues := h.engine.Run(diagram, normalizedCfg)
 	observeAnalyzeOutcome(telemetry.OutcomeLintSuccess)
+	setAnalyzeLogFields(r.Context(), telemetry.OutcomeLintSuccess, string(diagram.Type))
 
 	resp := analyzeResponse{
 		Valid:         true,
@@ -867,17 +887,24 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	})
 }
 
-func writeParserFailure(w http.ResponseWriter, err error) {
+func writeParserFailure(w http.ResponseWriter, ctx context.Context, logger Logger, err error) {
+	requestID := RequestIDFromContext(ctx)
+	logger = normalizeLogger(logger)
 	switch {
 	case errors.Is(err, parser.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
+		logger.Error("write parser failure response", "request_id", requestID, "parser_outcome", telemetry.OutcomeParserTimeout, "error", err.Error())
 		writeError(w, http.StatusGatewayTimeout, "parser_timeout", "parser timed out while validating Mermaid code")
 	case errors.Is(err, parser.ErrSubprocess):
+		logger.Error("write parser failure response", "request_id", requestID, "parser_outcome", telemetry.OutcomeParserSubprocessErr, "error", err.Error())
 		writeError(w, http.StatusInternalServerError, "parser_subprocess_error", "parser subprocess failed")
 	case errors.Is(err, parser.ErrDecode):
+		logger.Error("write parser failure response", "request_id", requestID, "parser_outcome", telemetry.OutcomeParserDecodeErr, "error", err.Error())
 		writeError(w, http.StatusInternalServerError, "parser_decode_error", "parser returned malformed output")
 	case errors.Is(err, parser.ErrContract):
+		logger.Error("write parser failure response", "request_id", requestID, "parser_outcome", telemetry.OutcomeParserContractErr, "error", err.Error())
 		writeError(w, http.StatusInternalServerError, "parser_contract_violation", "parser response violated service contract")
 	default:
+		logger.Error("write parser failure response", "request_id", requestID, "parser_outcome", telemetry.OutcomeInternalError, "error", err.Error())
 		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
 	}
 }
