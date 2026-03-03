@@ -1,4 +1,10 @@
 Docs available at: https://merm8-api-482194634678.europe-west1.run.app/docs
+Reminder:
+```bash
+gcloud run deploy merm8-api-482194634678 \
+  --region=europe-west1 \
+  --set-env-vars=MERM8_API_URL=https://merm8-api-482194634678.europe-west1.run.app
+```
 
 # merm8 — mermaid-lint
 
