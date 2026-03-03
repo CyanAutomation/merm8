@@ -134,6 +134,8 @@ Readiness endpoint for dependency checks (including parser runtime/script availa
 ```json
 {
   "valid": true,
+  "diagram_type": "flowchart",
+  "lint_supported": true,
   "syntax_error": null,
   "issues": [],
   "metrics": {
@@ -149,6 +151,7 @@ Readiness endpoint for dependency checks (including parser runtime/script availa
 ```json
 {
   "valid": false,
+  "lint_supported": false,
   "syntax_error": {
     "message": "No diagram type detected...",
     "line": 0,
@@ -443,7 +446,7 @@ See test comments for rationale behind each skipped test.
 
 ## Future Roadmap
 
-- [ ] Support additional diagram types (sequence, class, ER, state)
+- [~] Incrementally roll out family-specific rules for sequence/class/ER/state diagrams
 - [ ] `no-cycles` rule for flowcharts
 - [ ] `max-depth` rule
 - [x] Per-rule suppression comments in diagram source

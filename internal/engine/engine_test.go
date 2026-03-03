@@ -113,3 +113,16 @@ func TestEngine_DisabledRuleIsSkipped(t *testing.T) {
 		t.Fatalf("expected no issues when rule is disabled, got %v", issues)
 	}
 }
+
+func TestEngine_UnsupportedDiagramTypeReturnsFallbackIssue(t *testing.T) {
+	d := &model.Diagram{Type: model.DiagramTypeSequence}
+	e := engine.New()
+
+	issues := e.Run(d, rules.Config{})
+	if len(issues) != 1 {
+		t.Fatalf("expected exactly one fallback issue, got %d", len(issues))
+	}
+	if issues[0].RuleID != "unsupported-diagram-type" {
+		t.Fatalf("expected fallback rule id, got %q", issues[0].RuleID)
+	}
+}

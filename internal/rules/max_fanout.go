@@ -15,6 +15,10 @@ type MaxFanout struct{}
 
 func (r MaxFanout) ID() string { return "max-fanout" }
 
+func (r MaxFanout) Families() []model.DiagramFamily {
+	return []model.DiagramFamily{model.DiagramFamilyFlowchart}
+}
+
 func (r MaxFanout) Run(d *model.Diagram, cfg Config) []model.Issue {
 	severity := EffectiveSeverity(r.ID(), cfg, "warn")
 

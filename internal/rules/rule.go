@@ -151,6 +151,34 @@ func ValidateConfig(cfg Config) error {
 	return nil
 }
 
+// DiagramFamilyRule is implemented by rules that only apply to specific
+// Mermaid diagram families.
+type DiagramFamilyRule interface {
+	Rule
+	Families() []model.DiagramFamily
+}
+
+// SupportsDiagramFamily reports whether r should run for the given family.
+func SupportsDiagramFamily(r Rule, family model.DiagramFamily) bool {
+	familyRule, ok := r.(DiagramFamilyRule)
+	if !ok {
+		return true
+	}
+
+	families := familyRule.Families()
+	if len(families) == 0 {
+		return true
+	}
+
+	for _, supported := range families {
+		if supported == family {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Rule is the interface every lint rule must implement.
 type Rule interface {
 	// ID returns the unique rule identifier (e.g. "no-duplicate-node-ids").
