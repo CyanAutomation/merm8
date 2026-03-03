@@ -267,8 +267,25 @@ var openapi = map[string]interface{}{
 										"code": "graph TD\n  A[Start] --> B[End]",
 									},
 								},
-								"withConfig": map[string]interface{}{
-									"summary": "With lint configuration",
+								"withConfigVersioned": map[string]interface{}{
+									"summary": "Preferred versioned config payload (recommended)",
+									"value": map[string]interface{}{
+										"code": "graph LR\n  A --> B\n  B --> C",
+										"config": map[string]interface{}{
+											"schema-version": "v1",
+											"rules": map[string]interface{}{
+												"max-fanout": map[string]interface{}{
+													"enabled":               true,
+													"limit":                 2,
+													"severity":              "error",
+													"suppression-selectors": []interface{}{"node:A"},
+												},
+											},
+										},
+									},
+								},
+								"withConfigNestedLegacy": map[string]interface{}{
+									"summary": "Legacy nested rules payload (migration support)",
 									"value": map[string]interface{}{
 										"code": "graph LR\n  A --> B\n  B --> C",
 										"config": map[string]interface{}{
@@ -279,6 +296,20 @@ var openapi = map[string]interface{}{
 													"severity":              "error",
 													"suppression-selectors": []interface{}{"node:A"},
 												},
+											},
+										},
+									},
+								},
+								"withConfigFlatLegacy": map[string]interface{}{
+									"summary": "Legacy flat rule payload (migration support)",
+									"value": map[string]interface{}{
+										"code": "graph LR\n  A --> B\n  B --> C",
+										"config": map[string]interface{}{
+											"max-fanout": map[string]interface{}{
+												"enabled":               true,
+												"limit":                 2,
+												"severity":              "error",
+												"suppression-selectors": []interface{}{"node:A"},
 											},
 										},
 									},

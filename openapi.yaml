@@ -522,8 +522,19 @@
                 "summary": "Invalid Mermaid syntax"
                 "value":
                   "code": "graph TD\n  A --> B -->"
-              "withConfig":
-                "summary": "With lint configuration"
+              "withConfigFlatLegacy":
+                "summary": "Legacy flat rule payload (migration support)"
+                "value":
+                  "code": "graph LR\n  A --> B\n  B --> C"
+                  "config":
+                    "max-fanout":
+                      "enabled": true
+                      "limit": 2
+                      "severity": "error"
+                      "suppression-selectors":
+                        - "node:A"
+              "withConfigNestedLegacy":
+                "summary": "Legacy nested rules payload (migration support)"
                 "value":
                   "code": "graph LR\n  A --> B\n  B --> C"
                   "config":
@@ -534,6 +545,19 @@
                         "severity": "error"
                         "suppression-selectors":
                           - "node:A"
+              "withConfigVersioned":
+                "summary": "Preferred versioned config payload (recommended)"
+                "value":
+                  "code": "graph LR\n  A --> B\n  B --> C"
+                  "config":
+                    "rules":
+                      "max-fanout":
+                        "enabled": true
+                        "limit": 2
+                        "severity": "error"
+                        "suppression-selectors":
+                          - "node:A"
+                    "schema-version": "v1"
             "schema":
               "$ref": "#/components/schemas/AnalyzeRequest"
         "required": true
@@ -639,7 +663,7 @@
                     "valid": true
               "schema":
                 "$ref": "#/components/schemas/AnalyzeResponse"
-          "description": "Analysis completed (valid or syntax error)"
+          "description": "Analysis completed. For HTTP 200: `error` is always null, `issues` is always present as an array, and `syntax-error` is populated only for parser syntax failures (otherwise null)."
         "400":
           "content":
             "application/json":
@@ -710,7 +734,7 @@
                     "valid": false
               "schema":
                 "$ref": "#/components/schemas/AnalyzeResponse"
-          "description": "Bad request (invalid JSON, missing required field, or invalid config)"
+          "description": "Bad request (invalid JSON, missing required field, or invalid config). For non-200 API failures, `valid=false`, `syntax-error=null`, `issues=[]`, and `error` is populated."
         "413":
           "content":
             "application/json":
@@ -724,7 +748,7 @@
                 "valid": false
               "schema":
                 "$ref": "#/components/schemas/AnalyzeResponse"
-          "description": "Request entity too large (body exceeds 1 MiB)"
+          "description": "Request entity too large (body exceeds 1 MiB). For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
         "429":
           "content":
             "application/json":
@@ -738,7 +762,7 @@
                 "valid": false
               "schema":
                 "$ref": "#/components/schemas/AnalyzeResponse"
-          "description": "Rate limited"
+          "description": "Rate limited. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
         "500":
           "content":
             "application/json":
@@ -785,7 +809,7 @@
                     "valid": false
               "schema":
                 "$ref": "#/components/schemas/AnalyzeResponse"
-          "description": "Internal server error"
+          "description": "Internal server error. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
         "503":
           "content":
             "application/json":
@@ -799,7 +823,7 @@
                 "valid": false
               "schema":
                 "$ref": "#/components/schemas/AnalyzeResponse"
-          "description": "Service unavailable"
+          "description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
         "504":
           "content":
             "application/json":
@@ -813,7 +837,7 @@
                 "valid": false
               "schema":
                 "$ref": "#/components/schemas/AnalyzeResponse"
-          "description": "Parser timeout"
+          "description": "Parser timeout. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
       "summary": "Analyze and lint a Mermaid diagram"
       "tags":
         - "Linting"
