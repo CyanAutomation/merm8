@@ -58,17 +58,7 @@ func AnalyzeLoggingMiddleware(next http.Handler, logger Logger) http.Handler {
 		ctx := context.WithValue(r.Context(), analyzeLogFieldsContextKey, fields)
 		r = r.WithContext(ctx)
 
-	recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
-
-type statusRecorder struct {
-	http.ResponseWriter
-	status int
-}
-
-func (r *statusRecorder) WriteHeader(code int) {
-	r.status = code
-	r.ResponseWriter.WriteHeader(code)
-}
+		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		start := time.Now()
 		next.ServeHTTP(recorder, r)
 

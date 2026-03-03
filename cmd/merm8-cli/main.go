@@ -236,6 +236,7 @@ func analyzeRemote(name, code string, cfgRaw json.RawMessage, opts cliOptions) (
 		return outputResult{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return outputResult{}, err
