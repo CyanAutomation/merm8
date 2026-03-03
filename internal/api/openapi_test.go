@@ -350,14 +350,13 @@ func TestServeSpec_ExposesRuleConfigSchemaAndEndpoint(t *testing.T) {
 	}
 
 	ruleSchema := lookup(t, spec, "components", "schemas", "RuleConfigSchema").(map[string]interface{})
-	variants := ruleSchema["oneOf"].([]interface{})
-	if len(variants) != 3 {
-		t.Fatalf("expected RuleConfigSchema.oneOf to have three variants, got %d", len(variants))
+	required := lookup(t, ruleSchema, "required").([]interface{})
+	if len(required) != 2 || required[0] != "schema-version" || required[1] != "rules" {
+		t.Fatalf("expected RuleConfigSchema.required to be [schema-version rules], got %#v", required)
 	}
 
-	flat := variants[1].(map[string]interface{})
-	flatProps := lookup(t, flat, "properties").(map[string]interface{})
-	maxFanout := flatProps["max-fanout"].(map[string]interface{})
+	rulesProps := lookup(t, ruleSchema, "properties", "rules", "properties").(map[string]interface{})
+	maxFanout := rulesProps["max-fanout"].(map[string]interface{})
 	limit := lookup(t, maxFanout, "properties", "limit").(map[string]interface{})
 	if limit["type"] != "integer" || limit["minimum"] != float64(1) {
 		t.Fatalf("expected max-fanout.limit integer minimum=1, got %#v", limit)
