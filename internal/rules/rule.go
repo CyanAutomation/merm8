@@ -88,8 +88,8 @@ func RuleEnabled(ruleID string, cfg Config) bool {
 func normalizeMetaKey(key string) string {
 	normalized := strings.ToLower(strings.TrimSpace(key))
 	switch normalized {
-	case "suppression", "suppress", "suppressions", "suppression_selectors", "suppression-selectors":
-		return "suppression_selectors"
+	case "suppression", "suppress", "suppressions", "suppression-selectors", "suppression_selectors":
+		return "suppression-selectors"
 	default:
 		return normalized
 	}
@@ -141,7 +141,7 @@ func ValidateConfig(cfg Config) error {
 			}
 		}
 
-		if rawSelectors, ok := ruleConfig["suppression_selectors"]; ok {
+		if rawSelectors, ok := ruleConfig["suppression-selectors"]; ok {
 			switch selectors := rawSelectors.(type) {
 			case []interface{}:
 				for _, selector := range selectors {

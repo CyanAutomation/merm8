@@ -88,7 +88,7 @@ type Subgraph struct {
 
 // Issue is a single lint finding produced by a rule.
 type Issue struct {
-	RuleID      string        `json:"rule_id"`
+	RuleID      string        `json:"rule-id"`
 	Severity    string        `json:"severity"`
 	Message     string        `json:"message"`
 	Line        *int          `json:"line,omitempty"`
@@ -99,6 +99,6 @@ type Issue struct {
 
 // IssueContext captures optional grouping information for an issue.
 type IssueContext struct {
-	SubgraphID    string `json:"subgraph_id,omitempty"`
-	SubgraphLabel string `json:"subgraph_label,omitempty"`
+	SubgraphID    string `json:"subgraph-id,omitempty"`
+	SubgraphLabel string `json:"subgraph-label,omitempty"`
 }
