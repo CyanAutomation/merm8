@@ -11,6 +11,7 @@ import (
 
 func TestEngine_CleanDiagram(t *testing.T) {
 	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
 		Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
 		Edges: []model.Edge{{From: "A", To: "B"}},
 	}
@@ -26,6 +27,7 @@ func TestEngine_CleanDiagram(t *testing.T) {
 
 func TestEngine_DuplicateAndDisconnected(t *testing.T) {
 	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
 		Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "C"}},
 		Edges: []model.Edge{{From: "A", To: "B"}},
 	}
@@ -38,6 +40,7 @@ func TestEngine_DuplicateAndDisconnected(t *testing.T) {
 
 func TestEngine_StableOrderingAcrossRuns(t *testing.T) {
 	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
 		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}, {ID: "D"}},
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}},
 	}
@@ -55,6 +58,7 @@ func TestEngine_StableOrderingAcrossRuns(t *testing.T) {
 
 func TestEngine_StableOrderingAcrossRuleRegistrationOrder(t *testing.T) {
 	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
 		Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "C"}, {ID: "D"}},
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}},
 	}
@@ -98,14 +102,14 @@ func (duplicateIssueRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 func TestEngine_DeduplicatesEquivalentIssues(t *testing.T) {
 	e := engine.NewWithRules(duplicateIssueRule{})
 
-	issues := e.Run(&model.Diagram{}, rules.Config{})
+	issues := e.Run(&model.Diagram{Type: model.DiagramTypeFlowchart}, rules.Config{})
 	if len(issues) != 1 {
 		t.Fatalf("expected duplicate issues to be deduplicated; got %d issues: %v", len(issues), issues)
 	}
 }
 
 func TestEngine_DisabledRuleIsSkipped(t *testing.T) {
-	d := &model.Diagram{Nodes: []model.Node{{ID: "A"}, {ID: "A"}}}
+	d := &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}, {ID: "A"}}}
 	e := engine.NewWithRules(rules.NoDuplicateNodeIDs{})
 
 	issues := e.Run(d, rules.Config{"no-duplicate-node-ids": {"enabled": false}})
@@ -158,6 +162,28 @@ func TestEngine_NextLineSuppressionSuppressesOnlyTargetedRule(t *testing.T) {
 	}
 	if issues[0].RuleID != "fixed-line-issue-rule" || issues[0].Line == nil || *issues[0].Line != 1 {
 		t.Fatalf("expected line-1 issue to remain, got %#v", issues)
+	}
+}
+
+func TestEngine_NextLineSuppressionWithRulePopulatedLocation(t *testing.T) {
+	nodeLine := 2
+	nodeColumn := 3
+	e := engine.NewWithRules(rules.NoDisconnectedNodes{})
+	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A", Line: &nodeLine, Column: &nodeColumn}, {ID: "B"}},
+		Edges: []model.Edge{{From: "B", To: "B"}},
+		Suppressions: []model.SuppressionDirective{{
+			RuleID:     "no-disconnected-nodes",
+			Scope:      "next-line",
+			Line:       1,
+			TargetLine: 2,
+		}},
+	}
+
+	issues := e.Run(d, rules.Config{})
+	if len(issues) != 0 {
+		t.Fatalf("expected next-line suppression to match populated issue line, got %#v", issues)
 	}
 }
 

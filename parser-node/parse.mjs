@@ -104,6 +104,8 @@ async function extractAST(mermaidAPI, source, diagramType) {
     suppressions: extractSuppressions(source),
   };
 
+  const sourceLines = source.split(/\r?\n/);
+
   let db = null;
   try {
     const diagram = await mermaidAPI.getDiagramFromText(source);
@@ -129,10 +131,14 @@ async function extractAST(mermaidAPI, source, diagramType) {
   // Edges (reliably populated even without a DOM)
   const rawEdges = Array.isArray(db.edges) ? db.edges : [];
   for (const e of rawEdges) {
+    const from = String(e.start ?? e.from ?? '');
+    const to = String(e.end ?? e.to ?? '');
+    const edgeLoc = findEdgeLocation(sourceLines, from, to);
     ast.edges.push({
-      from: String(e.start ?? e.from ?? ''),
-      to:   String(e.end   ?? e.to   ?? ''),
+      from,
+      to,
       type: String(e.type  ?? 'arrow'),
+      ...(edgeLoc || {}),
     });
   }
 
@@ -141,14 +147,23 @@ async function extractAST(mermaidAPI, source, diagramType) {
   const explicitNodes = Object.entries(rawVertices);
   if (explicitNodes.length > 0) {
     for (const [id, v] of explicitNodes) {
-      ast.nodes.push({ id, label: extractLabel(v) });
+      const nodeLoc = findNodeLocation(sourceLines, id);
+      ast.nodes.push({ id, label: extractLabel(v), ...(nodeLoc || {}) });
     }
   } else {
     // Derive unique node IDs from edge endpoints
     const seen = new Set();
     for (const e of ast.edges) {
-      if (e.from && !seen.has(e.from)) { seen.add(e.from); ast.nodes.push({ id: e.from, label: '' }); }
-      if (e.to   && !seen.has(e.to))   { seen.add(e.to);   ast.nodes.push({ id: e.to,   label: '' }); }
+      if (e.from && !seen.has(e.from)) {
+        seen.add(e.from);
+        const nodeLoc = findNodeLocation(sourceLines, e.from);
+        ast.nodes.push({ id: e.from, label: '', ...(nodeLoc || {}) });
+      }
+      if (e.to && !seen.has(e.to)) {
+        seen.add(e.to);
+        const nodeLoc = findNodeLocation(sourceLines, e.to);
+        ast.nodes.push({ id: e.to, label: '', ...(nodeLoc || {}) });
+      }
     }
   }
 
@@ -166,6 +181,60 @@ async function extractAST(mermaidAPI, source, diagramType) {
 }
 
 
+
+
+function findNodeLocation(lines, id) {
+  const escaped = escapeRegExp(id);
+  const patterns = [
+    new RegExp(`(^|\\s)${escaped}(?=\\s*[\[({])`),
+    new RegExp(`(^|\\s)${escaped}(?=\\s*[-.=xo]+>)`),
+    new RegExp(`(^|\\s)${escaped}(?=\\s*$)`),
+  ];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    for (const pattern of patterns) {
+      const m = line.match(pattern);
+      if (m) {
+        const start = m.index + m[1].length;
+        return { line: i + 1, column: start + 1 };
+      }
+    }
+  }
+
+  return null;
+}
+
+function findEdgeLocation(lines, from, to) {
+  if (!from || !to) return null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const arrowIndex = line.search(/[-.=xo]+>/);
+    if (arrowIndex < 0) {
+      continue;
+    }
+
+    const fromIndex = line.indexOf(from);
+    if (fromIndex < 0 || fromIndex > arrowIndex) {
+      continue;
+    }
+
+    const toIndex = line.indexOf(to, arrowIndex);
+    if (toIndex < 0) {
+      continue;
+    }
+
+    return { line: i + 1, column: fromIndex + 1 };
+  }
+
+  return null;
+}
+
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 function normalizeDiagramType(detectedType) {
   const raw = String(detectedType || '').toLowerCase();
