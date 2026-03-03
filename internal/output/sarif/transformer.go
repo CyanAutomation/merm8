@@ -122,8 +122,19 @@ func Transform(issues []model.Issue, meta RequestMetadata) Report {
 			InformationURI: "https://github.com/CyanAutomation/merm8",
 			Rules:          rules,
 		}},
-		Artifacts: []Artifact{{Location: ArtifactLocation{URI: meta.ArtifactURI}}},
+	artifacts := []Artifact{}
+	if len(issues) > 0 {
+		artifacts = []Artifact{{Location: ArtifactLocation{URI: meta.ArtifactURI}}}
+	}
+	run := Run{
+		Tool: Tool{Driver: Driver{
+			Name:           "merm8",
+			InformationURI: "",
+			Rules:          rules,
+		}},
+		Artifacts: artifacts,
 		Results:   results,
+	}
 	}
 	if meta.RequestURI != "" {
 		run.Invocations = []Invocation{{
