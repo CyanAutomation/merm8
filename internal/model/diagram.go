@@ -90,6 +90,7 @@ type SuppressionDirective struct {
 	Scope      string
 	Line       int
 	TargetLine int
+	SubgraphID string
 }
 
 // Node represents a single node in the diagram.

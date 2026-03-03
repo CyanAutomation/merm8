@@ -173,6 +173,29 @@ func TestEngine_UnsupportedDiagramTypeReturnsFallbackIssueForDirectEngineUse(t *
 	}
 }
 
+type nestedContextIssueRule struct{}
+
+func (nestedContextIssueRule) ID() string { return "nested-context-issue-rule" }
+
+func (nestedContextIssueRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
+	line2 := 2
+	line4 := 4
+	line5 := 5
+	line6 := 6
+	line7 := 7
+	line8 := 8
+	return []model.Issue{
+		{RuleID: "nested-context-issue-rule", Severity: "warning", Message: "outer node issue", Line: &line2},
+		{RuleID: "nested-context-issue-rule", Severity: "warning", Message: "nested target issue", Line: &line4, Context: &model.IssueContext{SubgraphID: "inner"}},
+		{RuleID: "nested-context-issue-rule", Severity: "warning", Message: "nested sibling issue", Line: &line5, Context: &model.IssueContext{SubgraphID: "inner"}},
+		{RuleID: "nested-context-issue-rule", Severity: "warning", Message: "outer sibling issue", Line: &line8, Context: &model.IssueContext{SubgraphID: "outer"}},
+		{RuleID: "other-rule", Severity: "warning", Message: "other nested target issue", Line: &line4, Context: &model.IssueContext{SubgraphID: "inner"}},
+		{RuleID: "other-rule", Severity: "warning", Message: "other nested sibling issue", Line: &line5, Context: &model.IssueContext{SubgraphID: "inner"}},
+		{RuleID: "other-rule", Severity: "warning", Message: "outside nested issue", Line: &line7},
+		{RuleID: "other-rule", Severity: "warning", Message: "inside outer not inner", Line: &line6, Context: &model.IssueContext{SubgraphID: "outer"}},
+	}
+}
+
 type fixedLineIssueRule struct{}
 
 func (fixedLineIssueRule) ID() string { return "fixed-line-issue-rule" }
@@ -245,6 +268,84 @@ func TestEngine_NextLineSuppressionNonMatchingRuleDoesNotHideIssue(t *testing.T)
 	if len(issues) != 2 {
 		t.Fatalf("expected non-matching suppression to keep all issues, got %#v", issues)
 	}
+}
+
+func TestEngine_NextLineSuppressionNestedRegionSuppressesOnlyImmediateTargetLine(t *testing.T) {
+	e := engine.NewWithRules(nestedContextIssueRule{})
+	d := &model.Diagram{
+		Type: model.DiagramTypeFlowchart,
+		Suppressions: []model.SuppressionDirective{{
+			RuleID:     "nested-context-issue-rule",
+			Scope:      "next-line",
+			Line:       3,
+			TargetLine: 4,
+			SubgraphID: "inner",
+		}},
+	}
+
+	issues := e.Run(d, rules.Config{})
+	if len(issues) != 7 {
+		t.Fatalf("expected only one nested target issue to be suppressed, got %#v", issues)
+	}
+	for _, issue := range issues {
+		if issue.RuleID == "nested-context-issue-rule" && issue.Line != nil && *issue.Line == 4 {
+			t.Fatalf("expected nested target issue at line 4 to be suppressed, got %#v", issues)
+		}
+	}
+	foundSibling := false
+	for _, issue := range issues {
+		if issue.RuleID == "nested-context-issue-rule" && issue.Line != nil && *issue.Line == 5 {
+			foundSibling = true
+			break
+		}
+	}
+	if !foundSibling {
+		t.Fatalf("expected sibling issue in nested region to remain visible, got %#v", issues)
+	}
+}
+
+func TestEngine_NextLineSuppressionNestedRegionKeepsSiblingAndOutsideIssuesVisible(t *testing.T) {
+	e := engine.NewWithRules(nestedContextIssueRule{})
+	d := &model.Diagram{
+		Type: model.DiagramTypeFlowchart,
+		Suppressions: []model.SuppressionDirective{{
+			RuleID:     "nested-context-issue-rule",
+			Scope:      "next-line",
+			Line:       3,
+			TargetLine: 4,
+			SubgraphID: "inner",
+		}},
+	}
+
+	issues := e.Run(d, rules.Config{})
+	for _, issue := range issues {
+		if issue.RuleID == "nested-context-issue-rule" && issue.Line != nil && *issue.Line == 8 {
+			return
+		}
+	}
+	t.Fatalf("expected outside-region issue to remain visible, got %#v", issues)
+}
+
+func TestEngine_NestedRuleSpecificSuppressionDoesNotAffectOtherRules(t *testing.T) {
+	e := engine.NewWithRules(nestedContextIssueRule{})
+	d := &model.Diagram{
+		Type: model.DiagramTypeFlowchart,
+		Suppressions: []model.SuppressionDirective{{
+			RuleID:     "nested-context-issue-rule",
+			Scope:      "next-line",
+			Line:       3,
+			TargetLine: 4,
+			SubgraphID: "inner",
+		}},
+	}
+
+	issues := e.Run(d, rules.Config{})
+	for _, issue := range issues {
+		if issue.RuleID == "other-rule" && issue.Line != nil && *issue.Line == 4 {
+			return
+		}
+	}
+	t.Fatalf("expected rule-specific suppression to keep other-rule issue visible at nested target line, got %#v", issues)
 }
 
 func TestEngine_FingerprintStableAcrossRuns(t *testing.T) {
