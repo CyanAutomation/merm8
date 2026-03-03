@@ -561,7 +561,9 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	h.mu.RLock()
 	metrics := h.telemetryMetrics
 	h.mu.RUnlock()
-	metrics.ObserveParserDuration(telemetry.OutcomeLintSuccess, parseDuration)
+	if metrics != nil {
+		metrics.ObserveParserDuration(telemetry.OutcomeLintSuccess, parseDuration)
+	}
 
 	family := diagram.Type.Family()
 	if family != model.DiagramFamilyFlowchart {
