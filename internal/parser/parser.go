@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 )
 
 const defaultTimeout = 5 * time.Second
+const defaultNodeMaxOldSpaceSizeMB = 512
 
 var (
 	// ErrTimeout indicates the parser subprocess exceeded the configured timeout.
@@ -80,9 +82,10 @@ type parsedSuppression struct {
 
 // Parser wraps the Node subprocess invocation.
 type Parser struct {
-	scriptPath string
-	timeout    time.Duration
-	repoRoot   string
+	scriptPath        string
+	timeout           time.Duration
+	repoRoot          string
+	nodeMaxOldSpaceMB int
 }
 
 // New returns a Parser that will invoke the given Node.js script path.
@@ -92,7 +95,12 @@ func New(scriptPath string) (*Parser, error) {
 		return nil, fmt.Errorf("failed to initialize parser: %w", err)
 	}
 
-	return &Parser{scriptPath: scriptPath, timeout: defaultTimeout, repoRoot: root}, nil
+	return &Parser{
+		scriptPath:        scriptPath,
+		timeout:           defaultTimeout,
+		repoRoot:          root,
+		nodeMaxOldSpaceMB: readMaxOldSpaceMB(),
+	}, nil
 }
 
 // Ready performs lightweight dependency checks used by readiness probes.
@@ -111,7 +119,7 @@ func (p *Parser) Ready() error {
 		return fmt.Errorf("node runtime not found: %w", err)
 	}
 
-	cmd := exec.Command("node", "--check", scriptPath) //nolint:gosec
+	cmd := exec.Command("node", append(p.nodeArgs(), "--check", scriptPath)...) //nolint:gosec
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("parser script check failed: %w (%s)", err, strings.TrimSpace(string(out)))
 	}
@@ -210,7 +218,8 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "node", scriptPath) //nolint:gosec
+	// Use both a Node heap cap and a process timeout to reduce memory/CPU abuse.
+	cmd := exec.CommandContext(ctx, "node", append(p.nodeArgs(), scriptPath)...) //nolint:gosec
 	cmd.Stdin = bytes.NewBufferString(mermaidCode)
 
 	var stdout, stderr bytes.Buffer
@@ -248,6 +257,24 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 
 	diagram := toDiagram(result.AST)
 	return diagram, nil, nil
+}
+
+func (p *Parser) nodeArgs() []string {
+	return []string{fmt.Sprintf("--max-old-space-size=%d", p.nodeMaxOldSpaceMB)}
+}
+
+func readMaxOldSpaceMB() int {
+	raw := strings.TrimSpace(os.Getenv("PARSER_MAX_OLD_SPACE_MB"))
+	if raw == "" {
+		return defaultNodeMaxOldSpaceSizeMB
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return defaultNodeMaxOldSpaceSizeMB
+	}
+
+	return value
 }
 
 // toDiagram converts the raw AST into the internal model.
