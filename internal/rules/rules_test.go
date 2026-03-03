@@ -392,3 +392,59 @@ func TestNoDisconnectedNodes_SubgraphContextAbsentForNonMemberNode(t *testing.T)
 		t.Fatalf("expected no context for node outside subgraph, got %#v", issues[0].Context)
 	}
 }
+
+func TestNoCycles_DetectsDirectedCycle(t *testing.T) {
+	d := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "B", To: "C"}, {From: "C", To: "A"}},
+	}
+	issues := rules.NoCycles{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 cycle issue, got %d", len(issues))
+	}
+	if issues[0].RuleID != "no-cycles" {
+		t.Fatalf("expected rule no-cycles, got %q", issues[0].RuleID)
+	}
+}
+
+func TestNoCycles_AllowSelfLoopOption(t *testing.T) {
+	d := &model.Diagram{Edges: []model.Edge{{From: "A", To: "A"}}}
+	issues := rules.NoCycles{}.Run(d, rules.Config{"no-cycles": {"allow-self-loop": true}})
+	if len(issues) != 0 {
+		t.Fatalf("expected self-loop to be ignored, got %d issues", len(issues))
+	}
+}
+
+func TestMaxDepth_OverLimit(t *testing.T) {
+	d := &model.Diagram{Edges: []model.Edge{{From: "A", To: "B"}, {From: "B", To: "C"}, {From: "C", To: "D"}}}
+	issues := rules.MaxDepth{}.Run(d, rules.Config{"max-depth": {"limit": 2}})
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 max-depth issue, got %d", len(issues))
+	}
+	if issues[0].RuleID != "max-depth" {
+		t.Fatalf("expected rule max-depth, got %q", issues[0].RuleID)
+	}
+}
+
+func TestMaxDepth_UnderDefaultLimit(t *testing.T) {
+	d := &model.Diagram{Edges: []model.Edge{{From: "A", To: "B"}, {From: "B", To: "C"}}}
+	issues := rules.MaxDepth{}.Run(d, nil)
+	if len(issues) != 0 {
+		t.Fatalf("expected no max-depth issue, got %d", len(issues))
+	}
+}
+
+func TestValidateOption_NewRules(t *testing.T) {
+	if err := rules.ValidateOption("max-depth", "limit", 3); err != nil {
+		t.Fatalf("expected max-depth limit to be valid, got %v", err)
+	}
+	if err := rules.ValidateOption("max-depth", "limit", 0); err == nil {
+		t.Fatal("expected max-depth limit=0 to be invalid")
+	}
+	if err := rules.ValidateOption("no-cycles", "allow-self-loop", true); err != nil {
+		t.Fatalf("expected allow-self-loop to be valid, got %v", err)
+	}
+	if err := rules.ValidateOption("no-cycles", "allow-self-loop", "true"); err == nil {
+		t.Fatal("expected non-boolean allow-self-loop to be invalid")
+	}
+}

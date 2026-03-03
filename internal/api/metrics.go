@@ -51,7 +51,6 @@ func (e *PrometheusMetricsExporter) ServeHTTP(w http.ResponseWriter, _ *http.Req
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 
 	e.mu.RLock()
-	defer e.mu.RUnlock()
 
 	var b strings.Builder
 	b.WriteString("# HELP merm8_http_requests_total Total number of HTTP requests by route, method, and status.\n")
@@ -91,8 +90,6 @@ func (e *PrometheusMetricsExporter) ServeHTTP(w http.ResponseWriter, _ *http.Req
 	for _, key := range requestKeys {
 		fmt.Fprintf(&b, "merm8_http_requests_total{route=%q,method=%q,status=%q} %d\n", key.route, key.method, strconv.Itoa(key.status), requestCountsCopy[key])
 	}
-	}
-
 	_, _ = w.Write([]byte(b.String()))
 }
 

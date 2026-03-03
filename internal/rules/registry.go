@@ -82,6 +82,29 @@ var ruleSpecificConstraints = map[string]map[string]optionConstraint{
 			},
 		},
 	},
+
+	"max-depth": {
+		"limit": {
+			validate: func(value any) bool {
+				switch n := value.(type) {
+				case int:
+					return n >= 1
+				case float64:
+					return n >= 1 && n == math.Trunc(n)
+				default:
+					return false
+				}
+			},
+		},
+	},
+	"no-cycles": {
+		"allow-self-loop": {
+			validate: func(value any) bool {
+				_, ok := value.(bool)
+				return ok
+			},
+		},
+	},
 }
 
 var builtInRuleMetadata = []RuleMetadata{
@@ -130,6 +153,40 @@ var builtInRuleMetadata = []RuleMetadata{
 			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
 			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warning, info."},
 			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+		},
+	},
+	{
+		ID:          "max-depth",
+		Severity:    "warning",
+		Description: "Flags root-to-leaf traversals whose depth exceeds a configurable limit.",
+		DefaultConfig: map[string]interface{}{
+			"enabled":               true,
+			"severity":              "warning",
+			"suppression-selectors": []string{},
+			"limit":                 defaultMaxDepth,
+		},
+		ConfigurableOptions: []OptionMetadata{
+			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
+			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warning, info."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+			{Name: "limit", Type: "integer", Description: "Maximum allowed depth for root-to-leaf traversals.", Constraints: "Must be an integer >= 1. Default is 8."},
+		},
+	},
+	{
+		ID:          "no-cycles",
+		Severity:    "error",
+		Description: "Flags directed cycles in flowcharts.",
+		DefaultConfig: map[string]interface{}{
+			"enabled":               true,
+			"severity":              "error",
+			"suppression-selectors": []string{},
+			"allow-self-loop":       false,
+		},
+		ConfigurableOptions: []OptionMetadata{
+			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
+			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warning, info."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+			{Name: "allow-self-loop", Type: "boolean", Description: "Allow single-node self-loop cycles without emitting issues.", Constraints: "Must be true or false."},
 		},
 	},
 }
