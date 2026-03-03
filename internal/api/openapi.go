@@ -463,6 +463,19 @@ var openapi = map[string]interface{}{
 											"lint-supported": false,
 											"syntax-error":   nil,
 											"issues":         []interface{}{},
+											"metrics": map[string]interface{}{
+												"node-count":              0,
+												"edge-count":              0,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               0,
+												"max-fanout":              0,
+												"diagram-type":            "unknown",
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
+												},
+											},
 											"error": map[string]interface{}{
 												"code":    "missing_code",
 												"message": "field 'code' is required",
@@ -476,6 +489,19 @@ var openapi = map[string]interface{}{
 											"lint-supported": false,
 											"syntax-error":   nil,
 											"issues":         []interface{}{},
+											"metrics": map[string]interface{}{
+												"node-count":              0,
+												"edge-count":              0,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               0,
+												"max-fanout":              0,
+												"diagram-type":            "unknown",
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
+												},
+											},
 											"error": map[string]interface{}{
 												"code":    "invalid_json",
 												"message": "invalid JSON body",
@@ -489,6 +515,19 @@ var openapi = map[string]interface{}{
 											"lint-supported": false,
 											"syntax-error":   nil,
 											"issues":         []interface{}{},
+											"metrics": map[string]interface{}{
+												"node-count":              0,
+												"edge-count":              0,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               0,
+												"max-fanout":              0,
+												"diagram-type":            "unknown",
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
+												},
+											},
 											"error": map[string]interface{}{
 												"code":      "unknown_rule",
 												"message":   "unknown rule: unknown-rule",
@@ -504,6 +543,19 @@ var openapi = map[string]interface{}{
 											"lint-supported": false,
 											"syntax-error":   nil,
 											"issues":         []interface{}{},
+											"metrics": map[string]interface{}{
+												"node-count":              0,
+												"edge-count":              0,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               0,
+												"max-fanout":              0,
+												"diagram-type":            "unknown",
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
+												},
+											},
 											"error": map[string]interface{}{
 												"code":      "unknown_option",
 												"message":   "unknown option: threshold",
@@ -519,6 +571,19 @@ var openapi = map[string]interface{}{
 											"lint-supported": false,
 											"syntax-error":   nil,
 											"issues":         []interface{}{},
+											"metrics": map[string]interface{}{
+												"node-count":              0,
+												"edge-count":              0,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               0,
+												"max-fanout":              0,
+												"diagram-type":            "unknown",
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
+												},
+											},
 											"error": map[string]interface{}{
 												"code":    "invalid_option",
 												"message": "invalid option value for limit",
@@ -542,6 +607,19 @@ var openapi = map[string]interface{}{
 									"lint-supported": false,
 									"syntax-error":   nil,
 									"issues":         []interface{}{},
+									"metrics": map[string]interface{}{
+										"node-count":              0,
+										"edge-count":              0,
+										"disconnected-node-count": 0,
+										"duplicate-node-count":    0,
+										"max-fanin":               0,
+										"max-fanout":              0,
+										"diagram-type":            "unknown",
+										"issue-counts": map[string]interface{}{
+											"by-severity": map[string]interface{}{},
+											"by-rule":     map[string]interface{}{},
+										},
+									},
 									"error": map[string]interface{}{
 										"code":    "request_too_large",
 										"message": "request body exceeds 1 MiB limit",
@@ -563,6 +641,19 @@ var openapi = map[string]interface{}{
 									"lint-supported": false,
 									"syntax-error":   nil,
 									"issues":         []interface{}{},
+									"metrics": map[string]interface{}{
+										"node-count":              0,
+										"edge-count":              0,
+										"disconnected-node-count": 0,
+										"duplicate-node-count":    0,
+										"max-fanin":               0,
+										"max-fanout":              0,
+										"diagram-type":            "unknown",
+										"issue-counts": map[string]interface{}{
+											"by-severity": map[string]interface{}{},
+											"by-rule":     map[string]interface{}{},
+										},
+									},
 									"error": map[string]interface{}{
 										"code":    "rate_limited",
 										"message": "rate limit exceeded",
@@ -583,6 +674,19 @@ var openapi = map[string]interface{}{
 									"lint-supported": false,
 									"syntax-error":   nil,
 									"issues":         []interface{}{},
+									"metrics": map[string]interface{}{
+										"node-count":              0,
+										"edge-count":              0,
+										"disconnected-node-count": 0,
+										"duplicate-node-count":    0,
+										"max-fanin":               0,
+										"max-fanout":              0,
+										"diagram-type":            "unknown",
+										"issue-counts": map[string]interface{}{
+											"by-severity": map[string]interface{}{},
+											"by-rule":     map[string]interface{}{},
+										},
+									},
 									"error": map[string]interface{}{
 										"code":    "server_busy",
 										"message": "parser concurrency limit reached; try again",
@@ -606,6 +710,19 @@ var openapi = map[string]interface{}{
 											"lint-supported": false,
 											"syntax-error":   nil,
 											"issues":         []interface{}{},
+											"metrics": map[string]interface{}{
+												"node-count":              0,
+												"edge-count":              0,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               0,
+												"max-fanout":              0,
+												"diagram-type":            "unknown",
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
+												},
+											},
 											"error": map[string]interface{}{
 												"code":    "parser_subprocess_error",
 												"message": "parser subprocess failed",
@@ -619,6 +736,19 @@ var openapi = map[string]interface{}{
 											"lint-supported": false,
 											"syntax-error":   nil,
 											"issues":         []interface{}{},
+											"metrics": map[string]interface{}{
+												"node-count":              0,
+												"edge-count":              0,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               0,
+												"max-fanout":              0,
+												"diagram-type":            "unknown",
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
+												},
+											},
 											"error": map[string]interface{}{
 												"code":    "parser_decode_error",
 												"message": "parser returned malformed output",
@@ -632,6 +762,19 @@ var openapi = map[string]interface{}{
 											"lint-supported": false,
 											"syntax-error":   nil,
 											"issues":         []interface{}{},
+											"metrics": map[string]interface{}{
+												"node-count":              0,
+												"edge-count":              0,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               0,
+												"max-fanout":              0,
+												"diagram-type":            "unknown",
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
+												},
+											},
 											"error": map[string]interface{}{
 												"code":    "parser_contract_violation",
 												"message": "parser response violated service contract",
@@ -645,6 +788,19 @@ var openapi = map[string]interface{}{
 											"lint-supported": false,
 											"syntax-error":   nil,
 											"issues":         []interface{}{},
+											"metrics": map[string]interface{}{
+												"node-count":              0,
+												"edge-count":              0,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               0,
+												"max-fanout":              0,
+												"diagram-type":            "unknown",
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
+												},
+											},
 											"error": map[string]interface{}{
 												"code":    "internal_error",
 												"message": "internal server error",
@@ -667,6 +823,19 @@ var openapi = map[string]interface{}{
 									"lint-supported": false,
 									"syntax-error":   nil,
 									"issues":         []interface{}{},
+									"metrics": map[string]interface{}{
+										"node-count":              0,
+										"edge-count":              0,
+										"disconnected-node-count": 0,
+										"duplicate-node-count":    0,
+										"max-fanin":               0,
+										"max-fanout":              0,
+										"diagram-type":            "unknown",
+										"issue-counts": map[string]interface{}{
+											"by-severity": map[string]interface{}{},
+											"by-rule":     map[string]interface{}{},
+										},
+									},
 									"error": map[string]interface{}{
 										"code":    "parser_timeout",
 										"message": "parser timed out while validating Mermaid code",
@@ -942,7 +1111,7 @@ var openapi = map[string]interface{}{
 			},
 			"AnalyzeResponse": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"valid", "lint-supported", "issues"},
+				"required": []string{"valid", "lint-supported", "issues", "syntax-error", "metrics"},
 				"properties": map[string]interface{}{
 					"valid": map[string]interface{}{
 						"type":        "boolean",
