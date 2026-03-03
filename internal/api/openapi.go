@@ -1,5 +1,9 @@
 package api
 
+import (
+	"github.com/CyanAutomation/merm8/internal/rules"
+)
+
 // openapi contains the OpenAPI specification as a map that gets marshaled to JSON
 // This avoids YAML parsing complexity while keeping standard library only
 var openapi = map[string]interface{}{
@@ -116,6 +120,32 @@ var openapi = map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
 									"$ref": "#/components/schemas/RulesResponse",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"/rules/schema": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Linting"},
+				"summary":     "Get JSON Schema for lint rule configuration",
+				"description": "Returns a JSON Schema generated from the rule config registry. The schema validates both flat and nested config payload formats.",
+				"operationId": "getRuleConfigSchema",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Rule configuration schema",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type":     "object",
+									"required": []string{"schema"},
+									"properties": map[string]interface{}{
+										"schema": map[string]interface{}{
+											"$ref": "#/components/schemas/RuleConfigSchema",
+										},
+									},
 								},
 							},
 						},
@@ -529,6 +559,7 @@ var openapi = map[string]interface{}{
 					"constraints": map[string]interface{}{"type": "string"},
 				},
 			},
+			"RuleConfigSchema": rules.ConfigJSONSchema(),
 			"AnalyzeRequest": map[string]interface{}{
 				"type":     "object",
 				"required": []string{"code"},
@@ -539,8 +570,8 @@ var openapi = map[string]interface{}{
 						"example":     "graph TD\n  A[Start] --> B[Process]\n  B --> C[End]",
 					},
 					"config": map[string]interface{}{
-						"type":        "object",
-						"description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`\nUnknown rule IDs are rejected with `400 invalid_config`.",
+						"$ref":        "#/components/schemas/RuleConfigSchema",
+						"description": "Optional lint rule configuration. Supports both flat and nested formats:",
 						"example": map[string]interface{}{
 							"max-fanout": map[string]interface{}{
 								"enabled":               true,

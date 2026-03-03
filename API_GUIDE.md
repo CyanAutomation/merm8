@@ -488,6 +488,39 @@ Both flat and nested configuration formats are accepted:
 
 Both will work identically!
 
+### Pre-validate Config with `GET /rules/schema`
+
+Fetch the generated JSON Schema and validate `config` in your client before calling `/analyze`.
+
+```bash
+curl -s http://localhost:8080/rules/schema | jq '.schema'
+```
+
+Example (Node + Ajv):
+
+```js
+import Ajv from "ajv";
+
+const ajv = new Ajv();
+const schemaResp = await fetch("http://localhost:8080/rules/schema").then(r => r.json());
+const validate = ajv.compile(schemaResp.schema);
+
+const config = {
+  rules: {
+    "max-fanout": {
+      enabled: true,
+      severity: "warning",
+      limit: 3,
+      suppression_selectors: ["node:A"]
+    }
+  }
+};
+
+if (!validate(config)) {
+  console.error(validate.errors);
+}
+```
+
 ---
 
 ## Testing Examples
