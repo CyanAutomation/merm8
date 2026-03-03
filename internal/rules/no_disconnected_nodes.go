@@ -9,10 +9,7 @@ type NoDisconnectedNodes struct{}
 func (r NoDisconnectedNodes) ID() string { return "no-disconnected-nodes" }
 
 func (r NoDisconnectedNodes) Run(d *model.Diagram, cfg Config) []model.Issue {
-	severity, err := resolveSeverity(r.ID(), cfg, "error")
-	if err != nil {
-		severity = "error"
-	}
+	severity := EffectiveSeverity(r.ID(), cfg, "error")
 	if len(d.Edges) == 0 && len(d.Nodes) <= 1 {
 		return nil
 	}

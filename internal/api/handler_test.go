@@ -53,9 +53,17 @@ func newTestMux(mockParseFn func(string) (*model.Diagram, *parser.SyntaxError, e
 
 // newTestMuxWithRealParser creates a test mux that uses the real parser subprocess.
 // Used for integration tests. Returns nil mux if parser script doesn't exist.
-func newTestMuxWithRealParser(scriptPath string) *http.ServeMux {
+func newTestMuxWithRealParser(t *testing.T, scriptPath string) *http.ServeMux {
+	t.Helper()
 	mux := http.NewServeMux()
-	h := api.NewHandler(parser.New(scriptPath), engine.New())
+	p, err := parser.New(scriptPath)
+	if err != nil {
+		t.Skipf("skipping integration test; parser init failed: %v", err)
+	}
+	if err := p.Ready(); err != nil {
+		t.Skipf("skipping integration test; parser not ready: %v", err)
+	}
+	h := api.NewHandler(p, engine.New())
 	h.RegisterRoutes(mux)
 	return mux
 }
@@ -848,7 +856,7 @@ func TestReady_ReturnsUnavailableWhenDependencyUnhealthy(t *testing.T) {
 
 func TestAnalyze_Integration_SingleRuleSuppression(t *testing.T) {
 	scriptPath := getParserScriptPath(t)
-	mux := newTestMuxWithRealParser(scriptPath)
+	mux := newTestMuxWithRealParser(t, scriptPath)
 
 	body := `{
 		"code": "graph TD\n%% merm8-disable max-fanout\nA-->B\nA-->C\nA-->D",
@@ -881,7 +889,7 @@ func TestAnalyze_Integration_SingleRuleSuppression(t *testing.T) {
 
 func TestAnalyze_Integration_GlobalSuppression(t *testing.T) {
 	scriptPath := getParserScriptPath(t)
-	mux := newTestMuxWithRealParser(scriptPath)
+	mux := newTestMuxWithRealParser(t, scriptPath)
 
 	body := `{
 		"code": "graph TD\n%% merm8-disable all\nA-->B\nA-->C\nA-->D\nE",
@@ -889,6 +897,25 @@ func TestAnalyze_Integration_GlobalSuppression(t *testing.T) {
 	}`
 
 	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Issues []model.Issue `json:"issues"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Issues) != 0 {
+		t.Fatalf("expected all issues to be suppressed, got %#v", resp.Issues)
+	}
+}
+
 func TestAnalyze_InvalidSeverityConfig_Returns400(t *testing.T) {
 	parserCalled := false
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
@@ -910,6 +937,65 @@ func TestAnalyze_InvalidSeverityConfig_Returns400(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if parserCalled {
+		t.Fatal("expected parser not to be called when config validation fails")
+	}
+
+	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", `invalid severity for rule "max-fanout": "warning" (allowed: error, warn, info)`)
+}
+
+func TestAnalyze_InvalidUnknownRuleConfig_Returns400(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{}, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A-->B",
+		"config": map[string]interface{}{
+			"rules": map[string]interface{}{
+				"totally-unknown-rule": map[string]interface{}{"enabled": false},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", `unknown rule id "totally-unknown-rule" in config`)
+}
+
+func TestAnalyze_DisableRuleViaConfig(t *testing.T) {
+	diagram := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "B"}},
+		Edges: []model.Edge{{From: "A", To: "B"}},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A; A",
+		"config": map[string]interface{}{
+			"rules": map[string]interface{}{
+				"no-duplicate-node-ids": map[string]interface{}{"enabled": false},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
@@ -921,13 +1007,49 @@ func TestAnalyze_InvalidSeverityConfig_Returns400(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	if len(resp.Issues) != 0 {
-		t.Fatalf("expected all issues to be suppressed, got %#v", resp.Issues)
+		t.Fatalf("expected issues to be empty when rule disabled, got %#v", resp.Issues)
+	}
+}
+
+func TestAnalyze_SeverityOverride(t *testing.T) {
+	diagram := &model.Diagram{Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "B"}}, Edges: []model.Edge{{From: "A", To: "B"}}}
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A; A",
+		"config": map[string]interface{}{
+			"no-duplicate-node-ids": map[string]interface{}{"severity": "info"},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Issues []model.Issue `json:"issues"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Issues) != 1 {
+		t.Fatalf("expected one issue, got %#v", resp.Issues)
+	}
+	if resp.Issues[0].Severity != "info" {
+		t.Fatalf("expected severity override to info, got %q", resp.Issues[0].Severity)
 	}
 }
 
 func TestAnalyze_Integration_NonMatchingSuppressionDoesNotHideIssue(t *testing.T) {
 	scriptPath := getParserScriptPath(t)
-	mux := newTestMuxWithRealParser(scriptPath)
+	mux := newTestMuxWithRealParser(t, scriptPath)
 
 	body := `{
 		"code": "graph TD\n%% merm8-disable no-duplicate-node-ids\nA-->B\nA-->C\nA-->D",
@@ -955,12 +1077,4 @@ func TestAnalyze_Integration_NonMatchingSuppressionDoesNotHideIssue(t *testing.T
 	if resp.Issues[0].RuleID != "max-fanout" {
 		t.Fatalf("expected max-fanout issue, got %#v", resp.Issues)
 	}
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-	if parserCalled {
-		t.Fatal("expected parser not to be called when config validation fails")
-	}
-
-	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", `invalid severity for rule "max-fanout": "warning" (allowed: error, warn, info)`)
 }
