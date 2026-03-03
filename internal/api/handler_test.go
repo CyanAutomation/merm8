@@ -328,7 +328,22 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 when parser returns nil diagram, got %d", w.Code)
 	}
-	assertExactErrorResponse(t, w.Body.Bytes(), "internal_error", "parser returned nil diagram")
+
+	var resp struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Error.Code != "internal_error" {
+		t.Fatalf("expected error.code=internal_error, got %q", resp.Error.Code)
+	}
+	if resp.Error.Message != "parser returned nil diagram" {
+		t.Fatalf("expected exact error message %q, got %q", "parser returned nil diagram", resp.Error.Message)
+	}
 }
 
 // TestAnalyze_NoPanicOnNilDiagram tests that nil diagram from parser doesn't cause panic.
