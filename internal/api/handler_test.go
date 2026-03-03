@@ -620,7 +620,7 @@ func TestAnalyze_SyntaxError_UsesDetectedDiagramTypeForDefaults(t *testing.T) {
 	}
 }
 
-func TestAnalyze_UnsupportedDiagramType_ReturnsFallbackIssue(t *testing.T) {
+func TestAnalyze_UnsupportedDiagramType_ReturnsStructuredError(t *testing.T) {
 	diagram := &model.Diagram{Type: model.DiagramTypeSequence}
 
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
@@ -649,12 +649,26 @@ func TestAnalyze_UnsupportedDiagramType_ReturnsFallbackIssue(t *testing.T) {
 		t.Fatalf("expected diagram-type=sequence, got %v", resp["diagram-type"])
 	}
 	issues, ok := resp["issues"].([]interface{})
-	if !ok || len(issues) != 1 {
-		t.Fatalf("expected one fallback issue, got %#v", resp["issues"])
+	if !ok || len(issues) != 0 {
+		t.Fatalf("expected no lint issues, got %#v", resp["issues"])
 	}
-	issue, _ := issues[0].(map[string]interface{})
-	if issue["rule-id"] != "unsupported-diagram-type" {
-		t.Fatalf("expected unsupported-diagram-type issue, got %v", issue["rule-id"])
+	errorObj, ok := resp["error"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected structured error object, got %#v", resp["error"])
+	}
+	if code, ok := errorObj["code"].(string); !ok || code != "unsupported_diagram_type" {
+		t.Fatalf("expected error.code=unsupported_diagram_type, got %v", errorObj["code"])
+	}
+	if _, hasPath := errorObj["path"]; hasPath {
+		t.Fatalf("did not expect error.path, got %#v", errorObj["path"])
+	}
+
+	metrics, ok := resp["metrics"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected metrics object, got %#v", resp["metrics"])
+	}
+	if diagramType, ok := metrics["diagram-type"].(string); !ok || diagramType != "sequence" {
+		t.Fatalf("expected metrics.diagram-type=sequence, got %v", metrics["diagram-type"])
 	}
 }
 

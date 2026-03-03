@@ -118,7 +118,8 @@ func TestEngine_DisabledRuleIsSkipped(t *testing.T) {
 	}
 }
 
-func TestEngine_UnsupportedDiagramTypeReturnsFallbackIssue(t *testing.T) {
+// The engine still emits a fallback issue for unsupported diagram families when used directly.
+func TestEngine_UnsupportedDiagramTypeReturnsFallbackIssueForDirectEngineUse(t *testing.T) {
 	d := &model.Diagram{Type: model.DiagramTypeSequence}
 	e := engine.New()
 
