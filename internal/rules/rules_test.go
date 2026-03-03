@@ -314,6 +314,12 @@ func TestConfigRegistry_ContainsBuiltins(t *testing.T) {
 	if _, ok := registry["no-disconnected-nodes"]; !ok {
 		t.Fatal("expected no-disconnected-nodes in config registry")
 	}
+	if _, ok := registry["no-cycles"]; !ok {
+		t.Fatal("expected no-cycles in config registry")
+	}
+	if _, ok := registry["max-depth"]; !ok {
+		t.Fatal("expected max-depth in config registry")
+	}
 }
 
 func TestValidateOption_MaxFanoutLimit(t *testing.T) {

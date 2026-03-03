@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -1537,6 +1538,38 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestDiagramTypes_ReturnsParserAndLintSupport(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{}, engine.New())
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/diagram-types", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		ParserRecognized []string `json:"parser-recognized"`
+		LintSupported    []string `json:"lint-supported"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode /diagram-types response: %v", err)
+	}
+
+	wantParser := []string{"flowchart", "sequence", "class", "er", "state"}
+	if !reflect.DeepEqual(resp.ParserRecognized, wantParser) {
+		t.Fatalf("expected parser-recognized=%v, got %v", wantParser, resp.ParserRecognized)
+	}
+
+	wantLint := []string{"flowchart"}
+	if !reflect.DeepEqual(resp.LintSupported, wantLint) {
+		t.Fatalf("expected lint-supported=%v, got %v", wantLint, resp.LintSupported)
 	}
 }
 

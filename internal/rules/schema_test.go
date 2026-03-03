@@ -37,6 +37,12 @@ func TestConfigJSONSchema_UsesCanonicalVersionedFormat(t *testing.T) {
 	if _, ok := rulesProps["no-duplicate-node-ids"]; !ok {
 		t.Fatal("expected no-duplicate-node-ids in rules properties")
 	}
+	if _, ok := rulesProps["max-depth"]; !ok {
+		t.Fatal("expected max-depth in rules properties")
+	}
+	if _, ok := rulesProps["no-cycles"]; !ok {
+		t.Fatal("expected no-cycles in rules properties")
+	}
 }
 
 func TestConfigJSONSchema_EncodesAllowedOptionsAndConstraints(t *testing.T) {
