@@ -58,6 +58,7 @@ func (r MaxFanout) Run(d *model.Diagram, cfg Config) []model.Issue {
 				RuleID:   r.ID(),
 				Severity: severity,
 				Message:  fmt.Sprintf("node %q has fanout %d, exceeding limit of %d", nodeID, count, limit),
+				Context:  NodeSubgraphContext(d, nodeID),
 			}
 			if node, ok := nodeLocations[nodeID]; ok {
 				issue.Line = node.Line

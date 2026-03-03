@@ -31,6 +31,7 @@ func (r NoDisconnectedNodes) Run(d *model.Diagram, cfg Config) []model.Issue {
 				Message:  "node is disconnected: " + n.ID,
 				Line:     n.Line,
 				Column:   n.Column,
+				Context:  NodeSubgraphContext(d, n.ID),
 			})
 		}
 	}
