@@ -3,6 +3,7 @@ package rules
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/CyanAutomation/merm8/internal/model"
 )
@@ -43,11 +44,108 @@ func resolveSeverity(ruleID string, cfg Config, defaultSeverity string) (string,
 	return severity, nil
 }
 
+// EffectiveSeverity returns the configured severity for the given rule ID, or
+// defaultSeverity when no valid override is present.
+func EffectiveSeverity(ruleID string, cfg Config, defaultSeverity string) string {
+	severity, err := resolveSeverity(ruleID, cfg, defaultSeverity)
+	if err != nil {
+		return defaultSeverity
+	}
+	return severity
+}
+
+// RuleEnabled reports whether a rule should run.
+//
+// Rules are enabled by default unless explicitly configured with
+// {"enabled": false}.
+func RuleEnabled(ruleID string, cfg Config) bool {
+	ruleConfig, ok := cfg[ruleID]
+	if !ok {
+		return true
+	}
+
+	rawEnabled, ok := ruleConfig["enabled"]
+	if !ok {
+		return true
+	}
+
+	enabled, ok := rawEnabled.(bool)
+	if !ok {
+		return true
+	}
+
+	return enabled
+}
+
+func normalizeMetaKey(key string) string {
+	normalized := strings.ToLower(strings.TrimSpace(key))
+	switch normalized {
+	case "suppression", "suppress", "suppressions", "suppression_selectors", "suppression-selectors":
+		return "suppression_selectors"
+	default:
+		return normalized
+	}
+}
+
+// NormalizeConfig normalizes per-rule metadata keys and validates rule IDs.
+func NormalizeConfig(cfg Config, knownRuleIDs map[string]struct{}) (Config, error) {
+	if cfg == nil {
+		return Config{}, nil
+	}
+
+	normalized := make(Config, len(cfg))
+	for ruleID, rawRuleCfg := range cfg {
+		canonicalRuleID := strings.TrimSpace(ruleID)
+		if canonicalRuleID == "" {
+			return nil, fmt.Errorf("invalid config: rule id cannot be empty")
+		}
+
+		if _, ok := knownRuleIDs[canonicalRuleID]; !ok {
+			return nil, fmt.Errorf("unknown rule id %q in config", canonicalRuleID)
+		}
+
+		normalizedRuleCfg := make(map[string]interface{}, len(rawRuleCfg))
+		for key, value := range rawRuleCfg {
+			normalizedRuleCfg[normalizeMetaKey(key)] = value
+		}
+
+		normalized[canonicalRuleID] = normalizedRuleCfg
+	}
+
+	if err := ValidateConfig(normalized); err != nil {
+		return nil, err
+	}
+
+	return normalized, nil
+}
+
 // ValidateConfig validates lint configuration values shared across rules.
 func ValidateConfig(cfg Config) error {
 	for ruleID := range cfg {
 		if _, err := resolveSeverity(ruleID, cfg, "warn"); err != nil {
 			return err
+		}
+
+		ruleConfig := cfg[ruleID]
+		if rawEnabled, ok := ruleConfig["enabled"]; ok {
+			if _, ok := rawEnabled.(bool); !ok {
+				return fmt.Errorf("invalid enabled flag for rule %q: must be a boolean", ruleID)
+			}
+		}
+
+		if rawSelectors, ok := ruleConfig["suppression_selectors"]; ok {
+			switch selectors := rawSelectors.(type) {
+			case []interface{}:
+				for _, selector := range selectors {
+					if _, ok := selector.(string); !ok {
+						return fmt.Errorf("invalid suppression selectors for rule %q: must be an array of strings", ruleID)
+					}
+				}
+			case []string:
+				// Already valid.
+			default:
+				return fmt.Errorf("invalid suppression selectors for rule %q: must be an array of strings", ruleID)
+			}
 		}
 	}
 	return nil

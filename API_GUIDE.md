@@ -86,7 +86,10 @@ Add a `config` field to customize rule behavior:
   "config": {
     "rules": {
       "max-fanout": {
-        "limit": 2
+        "enabled": true,
+        "severity": "error",
+        "limit": 2,
+        "suppression_selectors": ["node:A"]
       }
     }
   }
@@ -97,8 +100,10 @@ Add a `config` field to customize rule behavior:
 
 - `max-fanout` — Set maximum outgoing edges per node
   ```json
-  "max-fanout": { "limit": 3 }
+  "max-fanout": { "enabled": true, "severity": "warn", "limit": 3 }
   ```
+
+Unknown rule IDs in config are rejected with `400 invalid_config`.
 
 #### Step 4: Execute and View Results
 

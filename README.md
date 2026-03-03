@@ -112,13 +112,20 @@ Readiness endpoint for dependency checks (including parser runtime/script availa
   "code": "graph TD\n  A-->B\n  B-->C",
   "config": {
     "rules": {
-      "max-fanout": { "limit": 3 }
+      "max-fanout": {
+        "enabled": true,
+        "severity": "error",
+        "limit": 3,
+        "suppression_selectors": ["node:A"]
+      }
     }
   }
 }
 ```
 
 > `config` is optional. Both flat `{"max-fanout": {...}}` and nested `{"rules": {"max-fanout": {...}}}` formats are accepted.
+>
+> Unknown rule IDs in config are rejected with `400 invalid_config`.
 
 > Request body size limit: **1 MiB**. Oversized payloads return `413` with JSON: `{"error":"request body exceeds 1 MiB limit"}`.
 
