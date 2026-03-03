@@ -314,9 +314,9 @@ var openapi = map[string]interface{}{
 										},
 									},
 									"sequenceDiagram": map[string]interface{}{
-										"summary": "Valid sequence diagram (lint currently unsupported)",
+										"summary": "Parsed sequence diagram (lint currently unsupported)",
 										"value": map[string]interface{}{
-											"valid":          true,
+											"valid":          false,
 											"diagram-type":   "sequence",
 											"lint-supported": false,
 											"syntax-error":   nil,
@@ -755,7 +755,7 @@ var openapi = map[string]interface{}{
 				"properties": map[string]interface{}{
 					"valid": map[string]interface{}{
 						"type":        "boolean",
-						"description": "Whether the Mermaid code is syntactically valid",
+						"description": "Whether the Mermaid code is syntactically valid and lint-supported (unsupported parsed families return valid=false).",
 					},
 					"diagram-type": map[string]interface{}{
 						"type":        "string",
@@ -786,7 +786,7 @@ var openapi = map[string]interface{}{
 					},
 					"metrics": map[string]interface{}{
 						"$ref":        "#/components/schemas/Metrics",
-						"description": "Aggregate statistics about the diagram. Present for successful analyze responses, including syntax errors (zeroed counters with fallback diagram-type).",
+						"description": "Aggregate statistics about the diagram. Present for successful analyze responses, including syntax errors (zeroed counters with fallback diagram-type) and parsed but lint-unsupported families.",
 						"nullable":    true,
 					},
 				},

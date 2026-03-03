@@ -645,6 +645,9 @@ func TestAnalyze_UnsupportedDiagramType_ReturnsStructuredError(t *testing.T) {
 	if lintSupported, ok := resp["lint-supported"].(bool); !ok || lintSupported {
 		t.Fatalf("expected lint-supported=false, got %v", resp["lint-supported"])
 	}
+	if valid, ok := resp["valid"].(bool); !ok || valid {
+		t.Fatalf("expected valid=false for unsupported diagram family, got %v", resp["valid"])
+	}
 	if diagramType, ok := resp["diagram-type"].(string); !ok || diagramType != "sequence" {
 		t.Fatalf("expected diagram-type=sequence, got %v", resp["diagram-type"])
 	}

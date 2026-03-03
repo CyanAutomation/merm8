@@ -204,7 +204,7 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 
 **Current type support behavior:**
 - `flowchart`/`graph` diagrams are linted by built-in rules.
-- `sequence`, `class`, `er`, and `state` diagrams are parsed, and return `valid=false`, `lint-supported=false`, `issues=[]`, and a structured `error.code` of `unsupported_diagram_type`.
+- `sequence`, `class`, `er`, and `state` diagrams are parsed, and return `valid=false`, `lint-supported=false`, `issues=[]`, a structured `error.code` of `unsupported_diagram_type`, and populated `metrics` computed from the parsed diagram (with empty issue-count maps).
 
 - **`valid`** — Boolean indicating if the Mermaid syntax is syntactically correct
 - **`diagram-type`** — Normalized Mermaid type for valid diagrams (`flowchart`, `sequence`, `class`, `er`, `state`, `unknown`)
@@ -224,7 +224,7 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 - **`issues[].context`** is optional grouping metadata. For node-scoped findings in subgraphs, it includes `subgraph-id` and `subgraph-label`; it is omitted when no grouping applies.
   - `line` / `column` — Location in the diagram code
   - **Ordering guarantee** — Issues are deterministically sorted before returning: by severity priority (`error` → `warning` → `info`), then `rule-id`, then `line`, then `column`, then `message`. If two rules produce the exact same issue signature, duplicates are removed.
-- **`metrics`** — Statistics about the diagram structure
+- **`metrics`** — Statistics about the diagram structure (also populated for parsed-but-unsupported families and syntax-error responses)
   - `node-count` — Total nodes in the diagram
   - `edge-count` — Total connections/edges
   - `max-fanout` — Maximum outgoing edges from any single node
