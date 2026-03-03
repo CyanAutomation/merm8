@@ -122,6 +122,11 @@ func TestServeSpec_HasRequiredOpenAPIFieldsAndRefs(t *testing.T) {
 			ref:  "#/components/schemas/AnalyzeResponse",
 		},
 		{
+			name: "Analyze SARIF 200 response schema",
+			path: []string{"paths", "/analyze/sarif", "post", "responses", "200", "content", "application/sarif+json", "schema", "$ref"},
+			ref:  "#/components/schemas/SARIFReport",
+		},
+		{
 			name: "Analyze 400 response schema",
 			path: []string{"paths", "/analyze", "post", "responses", "400", "content", "application/json", "schema", "$ref"},
 			ref:  "#/components/schemas/AnalyzeResponse",
@@ -240,6 +245,7 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 		{"paths", "/analyze", "post", "responses", "400", "content", "application/json", "schema", "$ref"},
 		{"components", "schemas", "Issue", "properties", "severity", "enum"},
 		{"paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfig", "value", "config", "rules", "max-fanout", "severity"},
+		{"paths", "/analyze/sarif", "post", "responses", "200", "content", "application/sarif+json", "schema", "$ref"},
 	}
 
 	for _, p := range selectedPaths {
@@ -263,6 +269,8 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 		"- \"warning\"",
 		"- \"info\"",
 		"\"severity\": \"error\"",
+		"\"/analyze/sarif\"",
+		"\"application/sarif+json\"",
 	} {
 		if !strings.Contains(yamlSpec, snippet) {
 			t.Fatalf("openapi.yaml missing drift-check snippet: %q", snippet)
