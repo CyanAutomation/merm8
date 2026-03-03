@@ -1520,6 +1520,52 @@ func TestHealthz_ReturnsOK(t *testing.T) {
 	}
 }
 
+func TestMetrics_ReturnsNotImplementedWhenExporterMissing(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{}, engine.New())
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotImplemented {
+		t.Fatalf("expected 501, got %d", w.Code)
+	}
+
+	if got := w.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Fatalf("expected JSON content-type, got %q", got)
+	}
+}
+
+func TestMetrics_ExporterExposesPrometheusText(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{}, engine.New())
+
+	h.SetMetricsHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		_, _ = w.Write([]byte("# HELP merm8_http_requests_total test\nmerm8_http_requests_total 1\n"))
+	}))
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	if got := w.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/plain") {
+		t.Fatalf("expected text/plain content-type, got %q", got)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "merm8_http_requests_total") {
+		t.Fatalf("expected metrics payload to include merm8_http_requests_total, got %q", body)
+	}
+}
+
 func TestReady_ReturnsReadyWhenDependencyHealthy(t *testing.T) {
 	mux := http.NewServeMux()
 	h := api.NewHandler(&mockParser{}, engine.New())

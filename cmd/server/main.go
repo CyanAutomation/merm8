@@ -41,6 +41,10 @@ func main() {
 
 	parserConcurrencyLimit := envInt("PARSER_CONCURRENCY_LIMIT", defaultParserConcurrencyLimit)
 	handler.SetParserConcurrencyLimit(parserConcurrencyLimit)
+
+	metricsExporter := api.NewPrometheusMetricsExporter()
+	handler.SetMetricsHandler(metricsExporter)
+
 	handler.RegisterRoutes(mux)
 
 	rootHandler := http.Handler(mux)
@@ -58,6 +62,13 @@ func main() {
 	if deploymentMode == "production" {
 		rootHandler = api.AnalyzeBearerAuthMiddleware(authToken, rootHandler)
 	}
+
+	routePatterns := map[string]string{
+		"GET /healthz":  "/healthz",
+		"GET /ready":    "/ready",
+		"POST /analyze": "/analyze",
+	}
+	rootHandler = api.MetricsMiddleware(rootHandler, routePatterns, metricsExporter)
 
 	addr := fmt.Sprintf(":%s", port)
 	log.Printf("mermaid-lint listening on %s (parser: %s, mode: %s, parser_concurrency_limit: %d, analyze_rate_limit_per_minute: %d, analyze_auth_enabled: %t)", addr, scriptPath, deploymentMode, parserConcurrencyLimit, rateLimitPerMinute, authToken != "")
