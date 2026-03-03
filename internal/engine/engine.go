@@ -3,6 +3,9 @@
 package engine
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"log"
 	"sort"
 
@@ -66,6 +69,7 @@ func (e *Engine) Run(d *model.Diagram, cfg rules.Config) []model.Issue {
 
 	sortIssues(issues)
 	issues = dedupeIssues(issues)
+	populateFingerprints(issues)
 	return issues
 }
 
@@ -137,6 +141,9 @@ func sortIssues(issues []model.Issue) {
 		if compareIntPtr(left.Column, right.Column) != 0 {
 			return compareIntPtr(left.Column, right.Column) < 0
 		}
+		if compareIssueContext(left.Context, right.Context) != 0 {
+			return compareIssueContext(left.Context, right.Context) < 0
+		}
 		return left.Message < right.Message
 	})
 }
@@ -176,7 +183,58 @@ func sameIssue(left, right model.Issue) bool {
 		left.Severity == right.Severity &&
 		left.Message == right.Message &&
 		compareIntPtr(left.Line, right.Line) == 0 &&
-		compareIntPtr(left.Column, right.Column) == 0
+		compareIntPtr(left.Column, right.Column) == 0 &&
+		compareIssueContext(left.Context, right.Context) == 0
+}
+
+func compareIssueContext(left, right *model.IssueContext) int {
+	if left == nil && right == nil {
+		return 0
+	}
+	if left == nil {
+		return 1
+	}
+	if right == nil {
+		return -1
+	}
+	if left.SubgraphID < right.SubgraphID {
+		return -1
+	}
+	if left.SubgraphID > right.SubgraphID {
+		return 1
+	}
+	if left.SubgraphLabel < right.SubgraphLabel {
+		return -1
+	}
+	if left.SubgraphLabel > right.SubgraphLabel {
+		return 1
+	}
+	return 0
+}
+
+func populateFingerprints(issues []model.Issue) {
+	for i := range issues {
+		issues[i].Fingerprint = issueFingerprint(issues[i])
+	}
+}
+
+func issueFingerprint(issue model.Issue) string {
+	contextID := ""
+	contextLabel := ""
+	if issue.Context != nil {
+		contextID = issue.Context.SubgraphID
+		contextLabel = issue.Context.SubgraphLabel
+	}
+	signature := fmt.Sprintf("%s|%s|%s|%d|%d|%s|%s", issue.RuleID, issue.Severity, issue.Message, intValue(issue.Line), intValue(issue.Column), contextID, contextLabel)
+	hash := sha256.Sum256([]byte(signature))
+	return hex.EncodeToString(hash[:])
+}
+
+func intValue(value *int) int {
+	if value == nil {
+		return -1
+	}
+	return *value
 }
 
 func severityPriority(severity string) int {

@@ -728,6 +728,31 @@ var openapi = map[string]interface{}{
 						"example":     2,
 						"nullable":    true,
 					},
+					"fingerprint": map[string]interface{}{
+						"type":        "string",
+						"description": "Deterministic SHA-256 hash of the normalized issue signature for CI tracking and dedupe.",
+						"example":     "b57b8d8ac7c95f6e8f6e30a38ae2e6bcd2c6576d7f20d3155014a4f14f7a8f46",
+					},
+					"context": map[string]interface{}{
+						"$ref":        "#/components/schemas/IssueContext",
+						"description": "Optional grouping context for node-scoped findings.",
+						"nullable":    true,
+					},
+				},
+			},
+			"IssueContext": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"subgraph_id": map[string]interface{}{
+						"type":        "string",
+						"description": "ID of the subgraph containing the affected node.",
+						"example":     "cluster-1",
+					},
+					"subgraph_label": map[string]interface{}{
+						"type":        "string",
+						"description": "Human-readable label of the subgraph containing the affected node.",
+						"example":     "Core Services",
+					},
 				},
 			},
 			"Metrics": map[string]interface{}{
