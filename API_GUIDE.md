@@ -792,3 +792,83 @@ done
 ---
 
 **Happy Linting! 🎨**
+
+---
+
+## CLI usage for local + CI (`cmd/merm8-cli`)
+
+You can run merm8 via a CLI in two modes:
+
+1. **Local/offline mode (default)** — parse + lint in-process (good for CI runners without API connectivity).
+2. **Server mode (`--url`)** — send code to `POST /analyze`.
+
+Build:
+
+```bash
+go build -o merm8-cli ./cmd/merm8-cli
+```
+
+### Inputs
+
+- File path(s):
+  ```bash
+  ./merm8-cli diagrams/a.mmd diagrams/b.mmd
+  ```
+- stdin:
+  ```bash
+  cat diagrams/a.mmd | ./merm8-cli --stdin
+  ```
+- If no files are provided, stdin is used automatically.
+
+### Outputs
+
+- Human-readable text (default):
+  ```bash
+  ./merm8-cli --format text diagrams/a.mmd
+  ```
+- JSON (API-like fields):
+  ```bash
+  ./merm8-cli --format json diagrams/a.mmd
+  ```
+
+JSON includes `valid`, `diagram-type`, `lint-supported`, `syntax-error`, `issues`, and `error` where applicable.
+
+### Config passing
+
+Use `--config <file>` for rule overrides:
+
+```bash
+./merm8-cli --config lint-config.json diagrams/a.mmd
+```
+
+Versioned config shape:
+
+```json
+{
+  "schema-version": "v1",
+  "rules": {
+    "max-fanout": { "enabled": true, "limit": 2 }
+  }
+}
+```
+
+### Exit codes
+
+- `0`: success / no configured failure condition
+- `1`: lint or syntax findings when fail flags are enabled
+- `2`: local/internal/config/input failure
+- `3`: transport failure in server mode (`--url`)
+
+### CI examples
+
+Offline CI:
+
+```bash
+PARSER_SCRIPT=./parser-node/parse.mjs ./merm8-cli --fail-on-lint --config lint-config.json diagrams/**/*.mmd
+```
+
+Server mode CI:
+
+```bash
+./merm8-cli --url http://localhost:8080 --fail-on-lint --format json diagrams/**/*.mmd
+```
