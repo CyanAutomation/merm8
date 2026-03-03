@@ -155,6 +155,17 @@ func TestServeSpec_HasRequiredOpenAPIFieldsAndRefs(t *testing.T) {
 func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	spec := loadServedSpec(t)
 
+	required := lookup(t, spec, "components", "schemas", "AnalyzeResponse", "required").([]interface{})
+	requiredSet := map[string]bool{}
+	for _, field := range required {
+		requiredSet[field.(string)] = true
+	}
+	for _, field := range []string{"issues", "syntax-error", "metrics"} {
+		if !requiredSet[field] {
+			t.Fatalf("expected AnalyzeResponse.required to include %q, got %#v", field, required)
+		}
+	}
+
 	examples200 := lookup(t, spec, "paths", "/analyze", "post", "responses", "200", "content", "application/json", "examples").(map[string]interface{})
 	validDiagram := lookup(t, examples200, "validDiagram", "value").(map[string]interface{})
 	if validDiagram["valid"] != true {
@@ -202,6 +213,9 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	if errField := withIssues["error"]; errField != nil {
 		t.Fatalf("expected withIssues.error to be null/omitted, got %#v", errField)
 	}
+	if _, ok := withIssues["metrics"].(map[string]interface{}); !ok {
+		t.Fatalf("expected withIssues.metrics object, got %#v", withIssues["metrics"])
+	}
 
 	syntaxExample := lookup(t, examples200, "syntaxError", "value").(map[string]interface{})
 	if syntaxExample["valid"] != false {
@@ -216,6 +230,9 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	}
 	if errField := syntaxExample["error"]; errField != nil {
 		t.Fatalf("expected syntaxError.error to be null/omitted, got %#v", errField)
+	}
+	if _, ok := syntaxExample["metrics"].(map[string]interface{}); !ok {
+		t.Fatalf("expected syntaxError.metrics object, got %#v", syntaxExample["metrics"])
 	}
 
 	examples400 := lookup(t, spec, "paths", "/analyze", "post", "responses", "400", "content", "application/json", "examples").(map[string]interface{})
@@ -255,6 +272,13 @@ func assertErrorShape(t *testing.T, payload map[string]interface{}, expectedCode
 	issues, ok := payload["issues"].([]interface{})
 	if !ok || len(issues) != 0 {
 		t.Fatalf("expected empty issues array, got %#v", payload["issues"])
+	}
+	metrics, ok := payload["metrics"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected metrics object, got %#v", payload["metrics"])
+	}
+	if metrics["diagram-type"] != "unknown" {
+		t.Fatalf("expected metrics.diagram-type=unknown, got %#v", metrics["diagram-type"])
 	}
 	code := lookup(t, payload, "error", "code")
 	if code != expectedCode {
