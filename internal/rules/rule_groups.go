@@ -6,6 +6,8 @@ func FlowchartRules() []Rule {
 		NoDuplicateNodeIDs{},
 		NoDisconnectedNodes{},
 		MaxFanout{},
+		NoCycles{},
+		MaxDepth{},
 	}
 }
 
