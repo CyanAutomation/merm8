@@ -35,3 +35,16 @@ func TestTransform_MapsSeverityRuleAndLocation(t *testing.T) {
 		t.Fatalf("expected rule ID propagation")
 	}
 }
+
+func TestTransform_OmitsArtifactsWhenNoResults(t *testing.T) {
+	report := Transform(nil, RequestMetadata{RequestURI: "/analyze/sarif"})
+	if got := len(report.Runs); got != 1 {
+		t.Fatalf("expected one run, got %d", got)
+	}
+	if report.Runs[0].Artifacts != nil {
+		t.Fatalf("expected artifacts to be omitted when no results, got %#v", report.Runs[0].Artifacts)
+	}
+	if got := len(report.Runs[0].Results); got != 0 {
+		t.Fatalf("expected no results, got %d", got)
+	}
+}
