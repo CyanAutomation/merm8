@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,7 +18,18 @@ import (
 	"github.com/CyanAutomation/merm8/internal/model"
 )
 
-const defaultTimeout = 2 * time.Second
+const defaultTimeout = 5 * time.Second
+
+var (
+	// ErrTimeout indicates the parser subprocess exceeded the configured timeout.
+	ErrTimeout = errors.New("parser timeout")
+	// ErrSubprocess indicates a non-timeout Node subprocess failure.
+	ErrSubprocess = errors.New("parser subprocess error")
+	// ErrDecode indicates parser output could not be decoded as the expected JSON contract.
+	ErrDecode = errors.New("parser decode error")
+	// ErrContract indicates parser output violated the expected parse contract.
+	ErrContract = errors.New("parser contract violation")
+)
 
 // SyntaxError describes a parse failure reported by the Node.js parser.
 type SyntaxError struct {
@@ -208,21 +220,21 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 	runErr := cmd.Run()
 	if runErr != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, nil, fmt.Errorf("parser timeout after %s", p.timeout)
+			return nil, nil, fmt.Errorf("%w: after %s", ErrTimeout, p.timeout)
 		}
 	}
 
 	var result ParseResult
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		if runErr != nil {
-			return nil, nil, fmt.Errorf("parser subprocess error: %w (stderr: %s)", runErr, stderr.String())
+			return nil, nil, fmt.Errorf("%w: %w (stderr: %s)", ErrSubprocess, runErr, stderr.String())
 		}
-		return nil, nil, fmt.Errorf("failed to decode parser output: %w", err)
+		return nil, nil, fmt.Errorf("%w: failed to decode parser output: %w", ErrDecode, err)
 	}
 
 	if runErr != nil {
 		if result.Error == nil || strings.HasPrefix(strings.ToLower(strings.TrimSpace(result.Error.Message)), "internal parser error:") {
-			return nil, nil, fmt.Errorf("parser subprocess error: %w (stderr: %s)", runErr, stderr.String())
+			return nil, nil, fmt.Errorf("%w: %w (stderr: %s)", ErrSubprocess, runErr, stderr.String())
 		}
 	}
 
@@ -231,7 +243,7 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 	}
 
 	if result.AST == nil {
-		return nil, nil, fmt.Errorf("parser contract violation: valid result missing AST")
+		return nil, nil, fmt.Errorf("%w: valid result missing AST", ErrContract)
 	}
 
 	diagram := toDiagram(result.AST)

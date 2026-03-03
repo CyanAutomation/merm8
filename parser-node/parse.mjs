@@ -44,9 +44,11 @@ try {
   try {
     detectType(input, { suppressErrors: false });
   } catch (typeErr) {
+    const base = String(typeErr?.message || typeErr);
+    const hint = 'Hint: start the diagram with a Mermaid type keyword like "flowchart", "graph", "sequenceDiagram", "classDiagram", "stateDiagram", or "erDiagram".';
     writeResult({
       valid: false,
-      error: { message: String(typeErr.message || typeErr), line: 0, column: 0 },
+      error: { message: `${base}. ${hint}`, line: 0, column: 0 },
     });
     process.exit(0);
   }
@@ -170,8 +172,6 @@ function extractSuppressions(source) {
         line: i + 1,
         targetLine: i + 1,
       });
-      continue;
-    }
       continue;
     }
 
