@@ -990,6 +990,38 @@
         ]
       }
     },
+    "/metrics": {
+      "get": {
+        "description": "Returns service metrics in Prometheus text exposition format.",
+        "operationId": "getMetrics",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Metrics in Prometheus text format"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeErrorResponse"
+                }
+              }
+            },
+            "description": "Metrics exporter not configured"
+          }
+        },
+        "summary": "Prometheus metrics",
+        "tags": [
+          "Probes"
+        ]
+      }
+    },
     "/ready": {
       "get": {
         "description": "Returns readiness status, including parser dependency checks when available.",
