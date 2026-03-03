@@ -2751,3 +2751,88 @@ func (severityProbeRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 		{RuleID: "r3", Severity: "info", Message: "i"},
 	}
 }
+
+func TestAnalyze_ConfigSuppressionSelectors_Node(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		line := 2
+		return &model.Diagram{
+			Type:  model.DiagramTypeFlowchart,
+			Nodes: []model.Node{{ID: "A", Line: &line}, {ID: "B"}, {ID: "C"}},
+			Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+		}, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]any{
+		"code": "graph TD\nA-->B\nA-->C",
+		"config": map[string]any{
+			"schema-version": "v1",
+			"rules": map[string]any{
+				"max-fanout": map[string]any{
+					"limit":                 1,
+					"suppression-selectors": []string{"node:A"},
+				},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Issues []model.Issue `json:"issues"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Issues) != 0 {
+		t.Fatalf("expected node selector suppression to hide issue, got %#v", resp.Issues)
+	}
+}
+
+func TestAnalyze_ConfigSuppressionSelectors_MalformedIgnored(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{
+			Type:  model.DiagramTypeFlowchart,
+			Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+			Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+		}, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]any{
+		"code": "graph TD\nA-->B\nA-->C",
+		"config": map[string]any{
+			"schema-version": "v1",
+			"rules": map[string]any{
+				"max-fanout": map[string]any{
+					"limit":                 1,
+					"suppression-selectors": []string{"node", "subgraph:"},
+				},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Issues []model.Issue `json:"issues"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Issues) == 0 {
+		t.Fatalf("expected malformed selectors to be ignored and issue retained")
+	}
+}

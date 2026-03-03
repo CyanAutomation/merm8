@@ -7,7 +7,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/CyanAutomation/merm8/internal/model"
 	"github.com/CyanAutomation/merm8/internal/rules"
@@ -63,6 +65,11 @@ func (e *Engine) Run(d *model.Diagram, cfg rules.Config) []model.Issue {
 	}
 
 	issues = applySuppressions(issues, d.Suppressions)
+	if len(issues) == 0 {
+		return []model.Issue{}
+	}
+
+	issues = applyConfigSelectors(issues, d, normalizedCfg)
 	if len(issues) == 0 {
 		return []model.Issue{}
 	}
@@ -155,6 +162,138 @@ func isSuppressed(issue model.Issue, suppressions []model.SuppressionDirective) 
 
 func suppressionMatchesRule(issueRuleID, suppressedRuleID string) bool {
 	return suppressedRuleID == "all" || suppressedRuleID == issueRuleID
+}
+
+var (
+	maxFanoutNodePattern        = regexp.MustCompile(`^node "([^"]+)" has fanout`)
+	disconnectedNodePattern     = regexp.MustCompile(`^node is disconnected: (.+)$`)
+	duplicateNodeIDPattern      = regexp.MustCompile(`^duplicate node ID: (.+)$`)
+	suppressionSelectorPrefixes = map[string]struct{}{"node": {}, "subgraph": {}, "rule": {}}
+)
+
+func applyConfigSelectors(issues []model.Issue, d *model.Diagram, cfg rules.Config) []model.Issue {
+	filtered := make([]model.Issue, 0, len(issues))
+	nodeLineIndex := buildNodeLineIndex(d)
+	for _, issue := range issues {
+		selectors := suppressionSelectorsForRule(cfg, issue.RuleID)
+		if len(selectors) == 0 {
+			filtered = append(filtered, issue)
+			continue
+		}
+
+		if issueMatchesAnySelector(issue, selectors, nodeLineIndex) {
+			continue
+		}
+		filtered = append(filtered, issue)
+	}
+	return filtered
+}
+
+func suppressionSelectorsForRule(cfg rules.Config, ruleID string) []string {
+	ruleCfg, ok := cfg[ruleID]
+	if !ok {
+		return nil
+	}
+	raw, ok := ruleCfg["suppression-selectors"]
+	if !ok {
+		return nil
+	}
+
+	switch selectors := raw.(type) {
+	case []string:
+		return selectors
+	case []interface{}:
+		out := make([]string, 0, len(selectors))
+		for _, selector := range selectors {
+			value, ok := selector.(string)
+			if !ok {
+				continue
+			}
+			out = append(out, value)
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func issueMatchesAnySelector(issue model.Issue, selectors []string, nodeLineIndex map[int][]string) bool {
+	for _, raw := range selectors {
+		prefix, value, ok := parseSelector(raw)
+		if !ok {
+			continue
+		}
+
+		switch prefix {
+		case "rule":
+			if issue.RuleID == value {
+				return true
+			}
+		case "subgraph":
+			if issue.Context != nil && issue.Context.SubgraphID == value {
+				return true
+			}
+		case "node":
+			for _, nodeID := range linkedNodeIDs(issue, nodeLineIndex) {
+				if nodeID == value {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+func parseSelector(raw string) (prefix string, value string, ok bool) {
+	selector := strings.TrimSpace(raw)
+	parts := strings.SplitN(selector, ":", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+
+	prefix = strings.ToLower(strings.TrimSpace(parts[0]))
+	if _, valid := suppressionSelectorPrefixes[prefix]; !valid {
+		return "", "", false
+	}
+
+	value = strings.TrimSpace(parts[1])
+	if value == "" {
+		return "", "", false
+	}
+
+	return prefix, value, true
+}
+
+func buildNodeLineIndex(d *model.Diagram) map[int][]string {
+	index := map[int][]string{}
+	for _, node := range d.Nodes {
+		if node.Line == nil {
+			continue
+		}
+		index[*node.Line] = append(index[*node.Line], node.ID)
+	}
+	return index
+}
+
+func linkedNodeIDs(issue model.Issue, nodeLineIndex map[int][]string) []string {
+	if issue.Line != nil {
+		if ids, ok := nodeLineIndex[*issue.Line]; ok {
+			return ids
+		}
+	}
+
+	if matches := maxFanoutNodePattern.FindStringSubmatch(issue.Message); len(matches) == 2 {
+		return []string{matches[1]}
+	}
+	if matches := disconnectedNodePattern.FindStringSubmatch(issue.Message); len(matches) == 2 {
+		return []string{matches[1]}
+	}
+	if matches := duplicateNodeIDPattern.FindStringSubmatch(issue.Message); len(matches) == 2 {
+		return []string{matches[1]}
+	}
+
+	return nil
 }
 
 func sortIssues(issues []model.Issue) {
