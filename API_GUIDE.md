@@ -31,10 +31,24 @@ You should see a professional API documentation page with all available endpoint
 
 The Swagger UI provides:
 
-- **Left sidebar** — List of all available endpoints (currently `/healthz`, `/ready`, `/analyze`, `/spec`, `/docs`)
+- **Left sidebar** — List of all available endpoints (currently `/healthz`, `/ready`, `/rules`, `/analyze`, `/spec`, `/docs`)
 - **Main panel** — Detailed endpoint documentation with parameters and response schemas
 - **Try it out button** — Execute requests directly from the browser
 - **Example requests** — Pre-filled request templates for common scenarios
+
+
+### Discovering Rules with `/rules`
+
+Use **`GET /rules`** to discover the live built-in rule catalog at runtime.
+
+The response includes:
+- Rule identifier
+- Default severity
+- Rule description
+- Default configuration
+- Configurable option docs (name/type/constraints)
+
+This is the recommended source for integrations and generated docs.
 
 ### Testing the `/analyze` Endpoint
 

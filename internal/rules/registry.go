@@ -6,10 +6,22 @@ import (
 	"sort"
 )
 
-// RuleMetadata describes supported config options and validations for a rule.
+// OptionMetadata documents a configurable rule option.
+type OptionMetadata struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Description string `json:"description"`
+	Constraints string `json:"constraints,omitempty"`
+}
+
+// RuleMetadata describes supported config options, defaults, and validations for a rule.
 type RuleMetadata struct {
-	ID                string
-	AllowedOptionKeys []string
+	ID                  string                 `json:"id"`
+	Severity            string                 `json:"severity"`
+	Description         string                 `json:"description"`
+	DefaultConfig       map[string]interface{} `json:"default_config"`
+	ConfigurableOptions []OptionMetadata       `json:"configurable_options"`
+	AllowedOptionKeys   []string               `json:"-"`
 }
 
 type optionConstraint struct {
@@ -69,25 +81,95 @@ var ruleSpecificConstraints = map[string]map[string]optionConstraint{
 	},
 }
 
+var builtInRuleMetadata = []RuleMetadata{
+	{
+		ID:          "max-fanout",
+		Severity:    "warn",
+		Description: "Flags nodes whose outgoing edge count exceeds a configurable limit.",
+		DefaultConfig: map[string]interface{}{
+			"enabled":               true,
+			"severity":              "warn",
+			"suppression_selectors": []string{},
+			"limit":                 defaultMaxFanout,
+		},
+		ConfigurableOptions: []OptionMetadata{
+			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
+			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warn, info."},
+			{Name: "suppression_selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+			{Name: "limit", Type: "integer", Description: "Maximum allowed outgoing edges per node.", Constraints: "Must be an integer >= 1. Default is 5."},
+		},
+	},
+	{
+		ID:          "no-duplicate-node-ids",
+		Severity:    "error",
+		Description: "Flags diagrams containing more than one node with the same ID.",
+		DefaultConfig: map[string]interface{}{
+			"enabled":               true,
+			"severity":              "error",
+			"suppression_selectors": []string{},
+		},
+		ConfigurableOptions: []OptionMetadata{
+			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
+			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warn, info."},
+			{Name: "suppression_selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+		},
+	},
+	{
+		ID:          "no-disconnected-nodes",
+		Severity:    "error",
+		Description: "Flags nodes that are not connected by any incoming or outgoing edge.",
+		DefaultConfig: map[string]interface{}{
+			"enabled":               true,
+			"severity":              "error",
+			"suppression_selectors": []string{},
+		},
+		ConfigurableOptions: []OptionMetadata{
+			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
+			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warn, info."},
+			{Name: "suppression_selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+		},
+	},
+}
+
+// ListRuleMetadata returns all built-in rule metadata sorted by rule ID.
+func ListRuleMetadata() []RuleMetadata {
+	metadata := make([]RuleMetadata, 0, len(builtInRuleMetadata))
+	for _, rule := range builtInRuleMetadata {
+		metadata = append(metadata, cloneRuleMetadata(rule))
+	}
+	sort.Slice(metadata, func(i, j int) bool {
+		return metadata[i].ID < metadata[j].ID
+	})
+	return metadata
+}
+
 // ConfigRegistry returns rule metadata keyed by rule ID.
 func ConfigRegistry() map[string]RuleMetadata {
 	registry := map[string]RuleMetadata{}
-	for _, ruleID := range []string{
-		"max-fanout",
-		"no-duplicate-node-ids",
-		"no-disconnected-nodes",
-	} {
-		allowed := make([]string, 0, len(sharedOptionConstraints)+len(ruleSpecificConstraints[ruleID]))
+	for _, metadata := range ListRuleMetadata() {
+		allowed := make([]string, 0, len(sharedOptionConstraints)+len(ruleSpecificConstraints[metadata.ID]))
 		for key := range sharedOptionConstraints {
 			allowed = append(allowed, key)
 		}
-		for key := range ruleSpecificConstraints[ruleID] {
+		for key := range ruleSpecificConstraints[metadata.ID] {
 			allowed = append(allowed, key)
 		}
 		sort.Strings(allowed)
-		registry[ruleID] = RuleMetadata{ID: ruleID, AllowedOptionKeys: allowed}
+		metadata.AllowedOptionKeys = allowed
+		registry[metadata.ID] = metadata
 	}
 	return registry
+}
+
+func cloneRuleMetadata(metadata RuleMetadata) RuleMetadata {
+	copyMetadata := metadata
+	copyMetadata.DefaultConfig = make(map[string]interface{}, len(metadata.DefaultConfig))
+	for key, value := range metadata.DefaultConfig {
+		copyMetadata.DefaultConfig[key] = value
+	}
+	copyMetadata.ConfigurableOptions = append([]OptionMetadata(nil), metadata.ConfigurableOptions...)
+	copyMetadata.AllowedOptionKeys = append([]string(nil), metadata.AllowedOptionKeys...)
+	return copyMetadata
 }
 
 // NormalizeOptionKey normalizes option key aliases to their canonical key.
