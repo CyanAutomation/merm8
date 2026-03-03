@@ -121,6 +121,38 @@
         - "code"
         - "message"
       "type": "object"
+    "InfoResponse":
+      "properties":
+        "lint_supported":
+          "items":
+            "enum":
+              - "flowchart"
+              - "sequence"
+              - "class"
+              - "er"
+              - "state"
+            "type": "string"
+          "type": "array"
+        "mermaid_version":
+          "type": "string"
+        "parser_recognized":
+          "items":
+            "enum":
+              - "flowchart"
+              - "sequence"
+              - "class"
+              - "er"
+              - "state"
+            "type": "string"
+          "type": "array"
+        "parser_version":
+          "type": "string"
+        "service_version":
+          "type": "string"
+      "required":
+        - "parser_recognized"
+        - "lint_supported"
+      "type": "object"
     "Issue":
       "properties":
         "column":
@@ -238,6 +270,18 @@
         - "max-fanin"
         - "max-fanout"
         - "diagram-type"
+      "type": "object"
+    "ReadyResponse":
+      "properties":
+        "mermaid_version":
+          "type": "string"
+        "parser_version":
+          "type": "string"
+        "status":
+          "example": "ready"
+          "type": "string"
+      "required":
+        - "status"
       "type": "object"
     "RuleConfigSchema":
       "$schema": "https://json-schema.org/draft/2020-12/schema"
@@ -894,6 +938,20 @@
       "summary": "Liveness probe (canonical)"
       "tags":
         - "Probes"
+  "/info":
+    "get":
+      "description": "Returns service/app version metadata (when configured), parser and Mermaid versions, plus parser-recognized and lint-supported diagram families."
+      "operationId": "getInfo"
+      "responses":
+        "200":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/InfoResponse"
+          "description": "Service metadata"
+      "summary": "Service and parser runtime metadata"
+      "tags":
+        - "Probes"
   "/metrics":
     "get":
       "description": "Returns service metrics in Prometheus text exposition format. Includes request_total, request_duration_seconds, analyze_requests_total, and parser_duration_seconds metric families."
@@ -923,11 +981,7 @@
           "content":
             "application/json":
               "schema":
-                "properties":
-                  "status":
-                    "example": "ready"
-                    "type": "string"
-                "type": "object"
+                "$ref": "#/components/schemas/ReadyResponse"
           "description": "Service is ready"
         "503":
           "content":

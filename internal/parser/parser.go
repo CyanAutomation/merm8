@@ -49,6 +49,12 @@ type ParseResult struct {
 	Error       *SyntaxError `json:"error,omitempty"`
 }
 
+// VersionInfo describes parser/runtime version metadata reported by parser-node/parse.mjs.
+type VersionInfo struct {
+	ParserVersion  string `json:"parser_version"`
+	MermaidVersion string `json:"mermaid_version"`
+}
+
 // parsedAST mirrors the simplified AST returned by parser-node/parse.mjs.
 type parsedAST struct {
 	Type         string              `json:"type"`
@@ -132,6 +138,45 @@ func (p *Parser) Ready() error {
 	}
 
 	return nil
+}
+
+// VersionInfo returns parser script and Mermaid runtime version metadata.
+func (p *Parser) VersionInfo() (*VersionInfo, error) {
+	root, err := p.getRepoRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	scriptPath, err := validateScriptPath(p.scriptPath, root)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "node", append(p.nodeArgs(), scriptPath, "--version-info")...) //nolint:gosec
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	runErr := cmd.Run()
+	if runErr != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("%w: after %s", ErrTimeout, p.timeout)
+		}
+		return nil, fmt.Errorf("%w: %w (stderr: %s)", ErrSubprocess, runErr, stderr.String())
+	}
+
+	var info VersionInfo
+	if err := json.Unmarshal(stdout.Bytes(), &info); err != nil {
+		return nil, fmt.Errorf("%w: failed to decode parser version output: %w", ErrDecode, err)
+	}
+	if strings.TrimSpace(info.ParserVersion) == "" || strings.TrimSpace(info.MermaidVersion) == "" {
+		return nil, fmt.Errorf("%w: version info missing parser_version or mermaid_version", ErrContract)
+	}
+
+	return &info, nil
 }
 
 func validateScriptPath(scriptPath, root string) (string, error) {
