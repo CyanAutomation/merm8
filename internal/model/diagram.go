@@ -38,7 +38,7 @@ func (t DiagramType) Family() DiagramFamily {
 	case DiagramTypeState:
 		return DiagramFamilyState
 	case "":
-		return DiagramFamilyFlowchart
+		return DiagramFamilyUnknown
 	default:
 		return DiagramFamilyUnknown
 	}
