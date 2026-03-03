@@ -183,9 +183,11 @@ func isSuppressed(issue model.Issue, suppressions []model.SuppressionDirective) 
 
 		switch suppression.Scope {
 		case "file":
-			return true
+			if suppressionAppliesToContext(issue, suppression) {
+				return true
+			}
 		case "next-line":
-			if issue.Line != nil && *issue.Line == suppression.TargetLine {
+			if issue.Line != nil && *issue.Line == suppression.TargetLine && suppressionAppliesToContext(issue, suppression) {
 				return true
 			}
 		}
@@ -195,6 +197,13 @@ func isSuppressed(issue model.Issue, suppressions []model.SuppressionDirective) 
 
 func suppressionMatchesRule(issueRuleID, suppressedRuleID string) bool {
 	return suppressedRuleID == "all" || suppressedRuleID == issueRuleID
+}
+
+func suppressionAppliesToContext(issue model.Issue, suppression model.SuppressionDirective) bool {
+	if suppression.SubgraphID == "" {
+		return true
+	}
+	return issue.Context != nil && issue.Context.SubgraphID == suppression.SubgraphID
 }
 
 var (
