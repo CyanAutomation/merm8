@@ -560,12 +560,63 @@ func TestAnalyze_SyntaxError_Returns200(t *testing.T) {
 	if lintSupported, ok := resp["lint-supported"].(bool); !ok || lintSupported {
 		t.Errorf("expected lint-supported=false for syntax error, got %v", resp["lint-supported"])
 	}
+	if diagramType, ok := resp["diagram-type"].(string); !ok || diagramType != "unknown" {
+		t.Errorf("expected diagram-type=unknown for syntax error without parser hint, got %v", resp["diagram-type"])
+	}
 	if syntaxErrResp, ok := resp["syntax-error"].(map[string]interface{}); !ok {
 		t.Error("expected syntax-error object")
 	} else {
 		if msg, ok := syntaxErrResp["message"].(string); !ok || msg != "No diagram type detected" {
 			t.Errorf("expected error message, got %v", syntaxErrResp["message"])
 		}
+	}
+	metrics, ok := resp["metrics"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected metrics object for syntax error, got %T", resp["metrics"])
+	}
+	for _, key := range []string{"node-count", "edge-count", "disconnected-node-count", "duplicate-node-count", "max-fanin", "max-fanout"} {
+		if got, ok := metrics[key].(float64); !ok || got != 0 {
+			t.Fatalf("expected metrics.%s=0 for syntax error, got %v", key, metrics[key])
+		}
+	}
+	if diagramType, ok := metrics["diagram-type"].(string); !ok || diagramType != "unknown" {
+		t.Fatalf("expected metrics.diagram-type=unknown, got %v", metrics["diagram-type"])
+	}
+}
+
+func TestAnalyze_SyntaxError_UsesDetectedDiagramTypeForDefaults(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{Message: "Unexpected token", Line: 2, Column: 10}
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\nA-->"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for syntax error, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode syntax error response: %v", err)
+	}
+
+	if diagramType, ok := resp["diagram-type"].(string); !ok || diagramType != "flowchart" {
+		t.Fatalf("expected syntax error diagram-type=flowchart fallback from input, got %v", resp["diagram-type"])
+	}
+	if lintSupported, ok := resp["lint-supported"].(bool); !ok || !lintSupported {
+		t.Fatalf("expected lint-supported=true for flowchart syntax error fallback, got %v", resp["lint-supported"])
+	}
+	metrics, ok := resp["metrics"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected metrics object for syntax error, got %T", resp["metrics"])
+	}
+	if diagramType, ok := metrics["diagram-type"].(string); !ok || diagramType != "flowchart" {
+		t.Fatalf("expected metrics.diagram-type=flowchart fallback, got %v", metrics["diagram-type"])
 	}
 }
 
@@ -1335,6 +1386,9 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 				}
 				if syntaxErrorResp, ok := resp["syntax-error"].(map[string]interface{}); !ok || syntaxErrorResp["message"] == nil {
 					return fmt.Errorf("syntax-error payload expected syntax-error object with message, got %v", resp["syntax-error"])
+				}
+				if metrics, ok := resp["metrics"].(map[string]interface{}); !ok || metrics["diagram-type"] == nil {
+					return fmt.Errorf("syntax-error payload expected default metrics with diagram-type, got %v", resp["metrics"])
 				}
 				return nil
 			},
