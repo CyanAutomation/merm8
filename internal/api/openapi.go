@@ -128,7 +128,8 @@ var openapi = map[string]interface{}{
 										"code": "graph LR\n  A --> B\n  B --> C",
 										"config": map[string]interface{}{
 											"max-fanout": map[string]interface{}{
-												"limit": 2,
+												"limit":    2,
+												"severity": "error",
 											},
 										},
 									},
@@ -208,7 +209,7 @@ var openapi = map[string]interface{}{
 						},
 					},
 					"400": map[string]interface{}{
-						"description": "Bad request (invalid JSON or missing required field)",
+						"description": "Bad request (invalid JSON, missing required field, or invalid config)",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -234,6 +235,17 @@ var openapi = map[string]interface{}{
 											"error": map[string]interface{}{
 												"code":    "invalid_json",
 												"message": "invalid JSON body",
+											},
+										},
+									},
+									"invalidConfig": map[string]interface{}{
+										"summary": "Invalid lint configuration",
+										"value": map[string]interface{}{
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":    "invalid_config",
+												"message": `invalid severity for rule "max-fanout": "warning" (allowed: error, warn, info)`,
 											},
 										},
 									},
@@ -354,10 +366,12 @@ var openapi = map[string]interface{}{
 						"description": "Optional lint rule configuration. Supports both flat and nested formats:\n- Flat format: `{\"rule-id\": {\"option\": \"value\"}}`\n- Nested format: `{\"rules\": {\"rule-id\": {\"option\": \"value\"}}}`",
 						"example": map[string]interface{}{
 							"max-fanout": map[string]interface{}{
-								"limit": 3,
+								"limit":    3,
+								"severity": "error",
 							},
 							"no-disconnected-nodes": map[string]interface{}{
-								"enabled": true,
+								"enabled":  true,
+								"severity": "warn",
 							},
 						},
 					},

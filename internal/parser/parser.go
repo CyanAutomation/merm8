@@ -108,23 +108,31 @@ func validateScriptPath(scriptPath string) (string, error) {
 		return "", fmt.Errorf("failed to resolve parser script path: %w", err)
 	}
 
-	// Resolve any symbolic links before validation
+	root, err := repoRoot()
+	if err != nil {
+		return "", err
+	}
+
+	rel, err := filepath.Rel(root, absPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to validate parser script path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("parser script path is outside allowed repository root")
+	}
+
+	// Resolve any symbolic links and validate again to prevent symlink escapes.
 	absPath, err = filepath.EvalSymlinks(absPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve symlinks in parser script path: %w", err)
 	}
 
-	cwd, err := os.Getwd()
+	rel, err = filepath.Rel(root, absPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve working directory: %w", err)
-	}
-
-	rel, err := filepath.Rel(cwd, absPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to validate parser script path: %w", err)
+		return "", fmt.Errorf("failed to validate parser script path after symlink resolution: %w", err)
 	}
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("parser script path is outside allowed working directory")
+		return "", fmt.Errorf("parser script path is outside allowed repository root")
 	}
 
 	info, err := os.Stat(absPath)
@@ -138,13 +146,40 @@ func validateScriptPath(scriptPath string) (string, error) {
 	return absPath, nil
 }
 
+func repoRoot() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve working directory: %w", err)
+	}
+
+	for {
+		gomod := filepath.Join(cwd, "go.mod")
+		if _, err := os.Stat(gomod); err == nil {
+			return cwd, nil
+		}
+
+		parent := filepath.Dir(cwd)
+		if parent == cwd {
+			break
+		}
+		cwd = parent
+	}
+
+	return "", fmt.Errorf("failed to locate repository root")
+}
+
 // Parse sends mermaidCode to the Node parser and returns either a Diagram or a
 // SyntaxError. A non-nil error means an unexpected failure (e.g. timeout).
 func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error) {
+	scriptPath, err := validateScriptPath(p.scriptPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "node", p.scriptPath) //nolint:gosec
+	cmd := exec.CommandContext(ctx, "node", scriptPath) //nolint:gosec
 	cmd.Stdin = bytes.NewBufferString(mermaidCode)
 
 	var stdout, stderr bytes.Buffer

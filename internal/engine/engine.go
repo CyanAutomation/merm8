@@ -123,6 +123,11 @@ func compareIntPtr(left, right *int) int {
 		return 1
 	}
 	return 0
+func intPtrValue(v *int) int {
+	if v == nil {
+		return -1
+	}
+	return *v
 }
 
 func dedupeIssues(issues []model.Issue) []model.Issue {
