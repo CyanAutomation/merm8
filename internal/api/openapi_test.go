@@ -24,12 +24,12 @@ func loadServedSpec(t *testing.T) map[string]interface{} {
 	h := api.NewHandler(&mockParser{}, engine.New())
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/spec", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/spec", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("expected /spec 200, got %d", w.Code)
+		t.Fatalf("expected /v1/spec 200, got %d", w.Code)
 	}
 
 	var spec map[string]interface{}
@@ -102,7 +102,7 @@ func TestServeSpec_HasRequiredOpenAPIFieldsAndRefs(t *testing.T) {
 	if got := lookup(t, spec, "info", "title"); got == "" {
 		t.Fatal("expected non-empty info.title")
 	}
-	if got := lookup(t, spec, "paths", "/analyze", "post", "operationId"); got != "analyzeCode" {
+	if got := lookup(t, spec, "paths", "/v1/analyze", "post", "operationId"); got != "analyzeCode" {
 		t.Fatalf("expected analyze operationId analyzeCode, got %#v", got)
 	}
 
@@ -113,32 +113,32 @@ func TestServeSpec_HasRequiredOpenAPIFieldsAndRefs(t *testing.T) {
 	}{
 		{
 			name: "Analyze request schema",
-			path: []string{"paths", "/analyze", "post", "requestBody", "content", "application/json", "schema", "$ref"},
+			path: []string{"paths", "/v1/analyze", "post", "requestBody", "content", "application/json", "schema", "$ref"},
 			ref:  "#/components/schemas/AnalyzeRequest",
 		},
 		{
 			name: "Analyze 200 response schema",
-			path: []string{"paths", "/analyze", "post", "responses", "200", "content", "application/json", "schema", "$ref"},
+			path: []string{"paths", "/v1/analyze", "post", "responses", "200", "content", "application/json", "schema", "$ref"},
 			ref:  "#/components/schemas/AnalyzeResponse",
 		},
 		{
 			name: "Analyze SARIF 200 response schema",
-			path: []string{"paths", "/analyze/sarif", "post", "responses", "200", "content", "application/sarif+json", "schema", "$ref"},
+			path: []string{"paths", "/v1/analyze/sarif", "post", "responses", "200", "content", "application/sarif+json", "schema", "$ref"},
 			ref:  "#/components/schemas/SARIFReport",
 		},
 		{
 			name: "Analyze 400 response schema",
-			path: []string{"paths", "/analyze", "post", "responses", "400", "content", "application/json", "schema", "$ref"},
+			path: []string{"paths", "/v1/analyze", "post", "responses", "400", "content", "application/json", "schema", "$ref"},
 			ref:  "#/components/schemas/AnalyzeResponse",
 		},
 		{
 			name: "Analyze 500 response schema",
-			path: []string{"paths", "/analyze", "post", "responses", "500", "content", "application/json", "schema", "$ref"},
+			path: []string{"paths", "/v1/analyze", "post", "responses", "500", "content", "application/json", "schema", "$ref"},
 			ref:  "#/components/schemas/AnalyzeResponse",
 		},
 		{
 			name: "Analyze 504 response schema",
-			path: []string{"paths", "/analyze", "post", "responses", "504", "content", "application/json", "schema", "$ref"},
+			path: []string{"paths", "/v1/analyze", "post", "responses", "504", "content", "application/json", "schema", "$ref"},
 			ref:  "#/components/schemas/AnalyzeResponse",
 		},
 	}
@@ -166,7 +166,7 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 		}
 	}
 
-	examples200 := lookup(t, spec, "paths", "/analyze", "post", "responses", "200", "content", "application/json", "examples").(map[string]interface{})
+	examples200 := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "200", "content", "application/json", "examples").(map[string]interface{})
 	validDiagram := lookup(t, examples200, "validDiagram", "value").(map[string]interface{})
 	if validDiagram["valid"] != true {
 		t.Fatalf("expected validDiagram.valid=true, got %#v", validDiagram["valid"])
@@ -235,7 +235,7 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 		t.Fatalf("expected syntaxError.metrics object, got %#v", syntaxExample["metrics"])
 	}
 
-	examples400 := lookup(t, spec, "paths", "/analyze", "post", "responses", "400", "content", "application/json", "examples").(map[string]interface{})
+	examples400 := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "400", "content", "application/json", "examples").(map[string]interface{})
 	missingCode := lookup(t, examples400, "missingCode", "value").(map[string]interface{})
 	assertErrorShape(t, missingCode, "missing_code")
 	unknownRule := lookup(t, examples400, "unknownRule", "value").(map[string]interface{})
@@ -244,7 +244,7 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 		t.Fatalf("expected unknownRule path, got %q", path)
 	}
 
-	examples500 := lookup(t, spec, "paths", "/analyze", "post", "responses", "500", "content", "application/json", "examples").(map[string]interface{})
+	examples500 := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "500", "content", "application/json", "examples").(map[string]interface{})
 	for name, code := range map[string]string{
 		"subprocess": "parser_subprocess_error",
 		"decode":     "parser_decode_error",
@@ -254,7 +254,7 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 		assertErrorShape(t, lookup(t, examples500, name, "value").(map[string]interface{}), code)
 	}
 
-	example504 := lookup(t, spec, "paths", "/analyze", "post", "responses", "504", "content", "application/json", "example").(map[string]interface{})
+	example504 := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "504", "content", "application/json", "example").(map[string]interface{})
 	assertErrorShape(t, example504, "parser_timeout")
 }
 
@@ -292,7 +292,7 @@ func assertErrorShape(t *testing.T, payload map[string]interface{}, expectedCode
 func TestServeSpec_AnalyzeDescriptionDocumentsOperationalEnvVars(t *testing.T) {
 	spec := loadServedSpec(t)
 
-	desc := lookup(t, spec, "paths", "/analyze", "post", "description").(string)
+	desc := lookup(t, spec, "paths", "/v1/analyze", "post", "description").(string)
 	for _, snippet := range []string{"PARSER_CONCURRENCY_LIMIT", "PARSER_MAX_OLD_SPACE_MB", "error.code=server_busy", "--max-old-space-size", "Operational environment variables"} {
 		if !strings.Contains(desc, snippet) {
 			t.Fatalf("expected /analyze description to contain %q, got %q", snippet, desc)
@@ -303,7 +303,7 @@ func TestServeSpec_AnalyzeDescriptionDocumentsOperationalEnvVars(t *testing.T) {
 func TestServeSpec_AnalyzeResponseDescriptionsDocumentModeSemantics(t *testing.T) {
 	spec := loadServedSpec(t)
 
-	desc200 := lookup(t, spec, "paths", "/analyze", "post", "responses", "200", "description").(string)
+	desc200 := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "200", "description").(string)
 	for _, snippet := range []string{"error` is always null", "issues` is always present as an array", "syntax-error` is populated only for parser syntax failures"} {
 		if !strings.Contains(desc200, snippet) {
 			t.Fatalf("expected 200 description to contain %q, got %q", snippet, desc200)
@@ -311,7 +311,7 @@ func TestServeSpec_AnalyzeResponseDescriptionsDocumentModeSemantics(t *testing.T
 	}
 
 	for _, status := range []string{"400", "413", "429", "500", "503", "504"} {
-		desc := lookup(t, spec, "paths", "/analyze", "post", "responses", status, "description").(string)
+		desc := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", status, "description").(string)
 		for _, snippet := range []string{"error", "syntax-error", "issues"} {
 			if !strings.Contains(desc, snippet) {
 				t.Fatalf("expected %s description to mention %q, got %q", status, snippet, desc)
@@ -332,12 +332,12 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 	selectedPaths := [][]string{
 		{"openapi"},
 		{"info", "title"},
-		{"paths", "/analyze", "post", "operationId"},
+		{"paths", "/v1/analyze", "post", "operationId"},
 		{"paths", "/diagram-types", "get", "operationId"},
-		{"paths", "/analyze", "post", "responses", "400", "content", "application/json", "schema", "$ref"},
+		{"paths", "/v1/analyze", "post", "responses", "400", "content", "application/json", "schema", "$ref"},
 		{"components", "schemas", "Issue", "properties", "severity", "enum"},
-		{"paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigVersioned", "value", "config", "rules", "max-fanout", "severity"},
-		{"paths", "/analyze/sarif", "post", "responses", "200", "content", "application/sarif+json", "schema", "$ref"},
+		{"paths", "/v1/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigVersioned", "value", "config", "rules", "max-fanout", "severity"},
+		{"paths", "/v1/analyze/sarif", "post", "responses", "200", "content", "application/sarif+json", "schema", "$ref"},
 	}
 
 	for _, p := range selectedPaths {
@@ -354,14 +354,14 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 	for _, snippet := range []string{
 		"Code generated by go run ./scripts/generate_openapi.go; DO NOT EDIT.",
 		"\"openapi\": \"3.0.0\"",
-		"\"/analyze\"",
+		"\"/v1/analyze\"",
 		"\"operationId\": \"analyzeCode\"",
 		"\"$ref\": \"#/components/schemas/AnalyzeResponse\"",
 		"- \"error\"",
 		"- \"warning\"",
 		"- \"info\"",
 		"\"severity\": \"error\"",
-		"\"/analyze/sarif\"",
+		"\"/v1/analyze/sarif\"",
 		"\"application/sarif+json\"",
 	} {
 		if !strings.Contains(yamlSpec, snippet) {
@@ -395,17 +395,17 @@ func TestServeSpec_IssueLocationFieldsAreOptionalAndNullable(t *testing.T) {
 func TestServeSpec_Regression_ConfigValidationAndSeverityExamples(t *testing.T) {
 	spec := loadServedSpec(t)
 
-	if got := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigVersioned", "summary"); got != "Preferred versioned config payload (recommended)" {
+	if got := lookup(t, spec, "paths", "/v1/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigVersioned", "summary"); got != "Preferred versioned config payload (recommended)" {
 		t.Fatalf("expected withConfigVersioned summary to describe preferred payload, got %#v", got)
 	}
-	if got := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigNestedLegacy", "summary"); got != "Legacy nested rules payload (migration support)" {
+	if got := lookup(t, spec, "paths", "/v1/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigNestedLegacy", "summary"); got != "Legacy nested rules payload (migration support)" {
 		t.Fatalf("expected withConfigNestedLegacy summary to describe legacy migration support, got %#v", got)
 	}
-	if got := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigFlatLegacy", "summary"); got != "Legacy flat rule payload (migration support)" {
+	if got := lookup(t, spec, "paths", "/v1/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigFlatLegacy", "summary"); got != "Legacy flat rule payload (migration support)" {
 		t.Fatalf("expected withConfigFlatLegacy summary to describe legacy migration support, got %#v", got)
 	}
 
-	withConfigVersioned := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigVersioned", "value").(map[string]interface{})
+	withConfigVersioned := lookup(t, spec, "paths", "/v1/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigVersioned", "value").(map[string]interface{})
 	if got := lookup(t, withConfigVersioned, "config", "schema-version"); got != "v1" {
 		t.Fatalf("expected withConfigVersioned schema-version=v1, got %#v", got)
 	}
@@ -422,7 +422,7 @@ func TestServeSpec_Regression_ConfigValidationAndSeverityExamples(t *testing.T) 
 		t.Fatalf("expected suppression-selectors entries to be strings, got %#v", selectors[0])
 	}
 
-	withConfigNestedLegacy := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigNestedLegacy", "value").(map[string]interface{})
+	withConfigNestedLegacy := lookup(t, spec, "paths", "/v1/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigNestedLegacy", "value").(map[string]interface{})
 	if _, hasSchemaVersion := lookup(t, withConfigNestedLegacy, "config").(map[string]interface{})["schema-version"]; hasSchemaVersion {
 		t.Fatal("expected withConfigNestedLegacy to omit schema-version")
 	}
@@ -430,7 +430,7 @@ func TestServeSpec_Regression_ConfigValidationAndSeverityExamples(t *testing.T) 
 		t.Fatalf("expected withConfigNestedLegacy max-fanout.limit=2, got %#v", got)
 	}
 
-	withConfigFlatLegacy := lookup(t, spec, "paths", "/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigFlatLegacy", "value").(map[string]interface{})
+	withConfigFlatLegacy := lookup(t, spec, "paths", "/v1/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigFlatLegacy", "value").(map[string]interface{})
 	if _, hasRules := lookup(t, withConfigFlatLegacy, "config").(map[string]interface{})["rules"]; hasRules {
 		t.Fatal("expected withConfigFlatLegacy to omit nested rules key")
 	}
@@ -438,7 +438,7 @@ func TestServeSpec_Regression_ConfigValidationAndSeverityExamples(t *testing.T) 
 		t.Fatalf("expected withConfigFlatLegacy max-fanout.limit=2, got %#v", got)
 	}
 
-	unknownOption := lookup(t, spec, "paths", "/analyze", "post", "responses", "400", "content", "application/json", "examples", "unknownOption", "value").(map[string]interface{})
+	unknownOption := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "400", "content", "application/json", "examples", "unknownOption", "value").(map[string]interface{})
 	assertErrorShape(t, unknownOption, "unknown_option")
 
 	severityEnum := lookup(t, spec, "components", "schemas", "Issue", "properties", "severity", "enum").([]interface{})
@@ -471,10 +471,10 @@ var _ interface {
 
 func TestServeSpec_ExposesRulesEndpointAndSchemas(t *testing.T) {
 	spec := loadServedSpec(t)
-	if got := lookup(t, spec, "paths", "/rules", "get", "operationId"); got != "listRules" {
+	if got := lookup(t, spec, "paths", "/v1/rules", "get", "operationId"); got != "listRules" {
 		t.Fatalf("expected /rules operationId listRules, got %#v", got)
 	}
-	if got := lookup(t, spec, "paths", "/rules", "get", "responses", "200", "content", "application/json", "schema", "$ref"); got != "#/components/schemas/RulesResponse" {
+	if got := lookup(t, spec, "paths", "/v1/rules", "get", "responses", "200", "content", "application/json", "schema", "$ref"); got != "#/components/schemas/RulesResponse" {
 		t.Fatalf("expected /rules response schema ref, got %#v", got)
 	}
 	_ = lookup(t, spec, "components", "schemas", "RulesResponse")
@@ -485,7 +485,7 @@ func TestServeSpec_ExposesRulesEndpointAndSchemas(t *testing.T) {
 func TestServeSpec_ExposesRuleConfigSchemaAndEndpoint(t *testing.T) {
 	spec := loadServedSpec(t)
 
-	if got := lookup(t, spec, "paths", "/rules/schema", "get", "operationId"); got != "getRuleConfigSchema" {
+	if got := lookup(t, spec, "paths", "/v1/rules/schema", "get", "operationId"); got != "getRuleConfigSchema" {
 		t.Fatalf("expected /rules/schema operationId getRuleConfigSchema, got %#v", got)
 	}
 	if got := lookup(t, spec, "components", "schemas", "AnalyzeRequest", "properties", "config", "$ref"); got != "#/components/schemas/RuleConfigSchema" {
@@ -509,5 +509,18 @@ func TestServeSpec_ExposesRuleConfigSchemaAndEndpoint(t *testing.T) {
 	limit := lookup(t, maxFanout, "properties", "limit").(map[string]interface{})
 	if limit["type"] != "integer" || limit["minimum"] != float64(1) {
 		t.Fatalf("expected max-fanout.limit integer minimum=1, got %#v", limit)
+	}
+}
+
+func TestServeSpec_LegacyAliasesAreDeprecated(t *testing.T) {
+	spec := loadServedSpec(t)
+	for _, path := range []string{"/analyze", "/rules", "/rules/schema", "/spec", "/docs"} {
+		methods := lookup(t, spec, "paths", path).(map[string]interface{})
+		for _, methodDef := range methods {
+			operation := methodDef.(map[string]interface{})
+			if deprecated, ok := operation["deprecated"].(bool); !ok || !deprecated {
+				t.Fatalf("expected %s to be marked deprecated", path)
+			}
+		}
 	}
 }
