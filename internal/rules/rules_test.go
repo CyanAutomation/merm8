@@ -407,6 +407,23 @@ func TestNoCycles_DetectsDirectedCycle(t *testing.T) {
 	}
 }
 
+func TestNoCycles_DeduplicatesRotations(t *testing.T) {
+	d := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}, {ID: "D"}},
+		Edges: []model.Edge{
+			{From: "A", To: "B"},
+			{From: "B", To: "C"},
+			{From: "C", To: "A"},
+			{From: "D", To: "B"},
+		},
+	}
+
+	issues := rules.NoCycles{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 deduplicated cycle issue, got %d", len(issues))
+	}
+}
+
 func TestNoCycles_AllowSelfLoopOption(t *testing.T) {
 	d := &model.Diagram{Edges: []model.Edge{{From: "A", To: "A"}}}
 	issues := rules.NoCycles{}.Run(d, rules.Config{"no-cycles": {"allow-self-loop": true}})
@@ -423,6 +440,23 @@ func TestMaxDepth_OverLimit(t *testing.T) {
 	}
 	if issues[0].RuleID != "max-depth" {
 		t.Fatalf("expected rule max-depth, got %q", issues[0].RuleID)
+	}
+}
+
+func TestMaxDepth_NoRootsDoesNotDuplicateIssues(t *testing.T) {
+	d := &model.Diagram{
+		Edges: []model.Edge{
+			{From: "A", To: "B"},
+			{From: "B", To: "C"},
+			{From: "C", To: "A"},
+			{From: "C", To: "D"},
+			{From: "D", To: "E"},
+		},
+	}
+
+	issues := rules.MaxDepth{}.Run(d, rules.Config{"max-depth": {"limit": 2}})
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 deduplicated max-depth issue, got %d", len(issues))
 	}
 }
 
