@@ -38,27 +38,39 @@ type analyzeRequest struct {
 	Config json.RawMessage `json:"config"`
 }
 
-// parseConfig accepts both flat {"rule-id": {...}} and nested
+// parseConfig validates and accepts both flat {"rule-id": {...}} and nested
 // {"rules": {"rule-id": {...}}} config formats.
-func parseConfig(raw json.RawMessage) rules.Config {
+func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.Config, error) {
 	if len(raw) == 0 {
-		return rules.Config{}
+		return rules.Config{}, nil
 	}
 
-	// Try nested format first: {"rules": {...}}
-	var nested struct {
-		Rules rules.Config `json:"rules"`
-	}
-	if err := json.Unmarshal(raw, &nested); err == nil && len(nested.Rules) > 0 {
-		return nested.Rules
+	var asMap map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &asMap); err != nil {
+		return rules.Config{}, errors.New("invalid config object")
 	}
 
-	// Fall back to flat format: {"rule-id": {...}}
-	var flat rules.Config
-	if err := json.Unmarshal(raw, &flat); err == nil {
-		return flat
+	cfgRaw := raw
+	if rulesRaw, ok := asMap["rules"]; ok {
+		cfgRaw = rulesRaw
 	}
-	return rules.Config{}
+
+	var ruleMap map[string]json.RawMessage
+	if err := json.Unmarshal(cfgRaw, &ruleMap); err != nil {
+		return rules.Config{}, errors.New("invalid config object")
+	}
+
+	for ruleID := range ruleMap {
+		if _, known := knownRuleIDs[ruleID]; !known {
+			return rules.Config{}, errors.New("unknown rule: " + ruleID)
+		}
+	}
+
+	var cfg rules.Config
+	if err := json.Unmarshal(cfgRaw, &cfg); err != nil {
+		return rules.Config{}, errors.New("invalid config object")
+	}
+	return cfg, nil
 }
 
 // syntaxErrorResponse mirrors parser.SyntaxError for the JSON response.
@@ -203,7 +215,12 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg := parseConfig(req.Config)
+	cfg, err := parseConfig(req.Config, h.engine.KnownRuleIDs())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+		return
+	}
+
 	normalizedCfg, err := h.engine.NormalizeConfig(cfg)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
