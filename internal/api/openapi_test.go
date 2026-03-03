@@ -175,10 +175,10 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	examples400 := lookup(t, spec, "paths", "/analyze", "post", "responses", "400", "content", "application/json", "examples").(map[string]interface{})
 	missingCode := lookup(t, examples400, "missingCode", "value").(map[string]interface{})
 	assertErrorShape(t, missingCode, "missing_code")
-	invalidConfig := lookup(t, examples400, "invalidConfig", "value").(map[string]interface{})
-	assertErrorShape(t, invalidConfig, "invalid_config")
-	if msg := lookup(t, invalidConfig, "error", "message").(string); !strings.Contains(msg, "unknown rule id") {
-		t.Fatalf("expected invalidConfig message to mention unknown rule id, got %q", msg)
+	unknownRule := lookup(t, examples400, "unknownRule", "value").(map[string]interface{})
+	assertErrorShape(t, unknownRule, "unknown_rule")
+	if path := lookup(t, unknownRule, "error", "path").(string); path != "config.rules.unknown-rule" {
+		t.Fatalf("expected unknownRule path, got %q", path)
 	}
 
 	examples500 := lookup(t, spec, "paths", "/analyze", "post", "responses", "500", "content", "application/json", "examples").(map[string]interface{})
@@ -291,8 +291,8 @@ func TestServeSpec_Regression_ConfigValidationAndSeverityExamples(t *testing.T) 
 		t.Fatalf("expected suppression_selectors entries to be strings, got %#v", selectors[0])
 	}
 
-	invalidConfig := lookup(t, spec, "paths", "/analyze", "post", "responses", "400", "content", "application/json", "examples", "invalidConfig", "value").(map[string]interface{})
-	assertErrorShape(t, invalidConfig, "invalid_config")
+	unknownOption := lookup(t, spec, "paths", "/analyze", "post", "responses", "400", "content", "application/json", "examples", "unknownOption", "value").(map[string]interface{})
+	assertErrorShape(t, unknownOption, "unknown_option")
 
 	severityEnum := lookup(t, spec, "components", "schemas", "Issue", "properties", "severity", "enum").([]interface{})
 	got := make([]string, 0, len(severityEnum))

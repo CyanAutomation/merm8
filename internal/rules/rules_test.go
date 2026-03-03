@@ -230,3 +230,25 @@ func TestNormalizeConfig_UnknownRuleID(t *testing.T) {
 		t.Fatal("expected error for unknown rule id")
 	}
 }
+
+func TestConfigRegistry_ContainsBuiltins(t *testing.T) {
+	registry := rules.ConfigRegistry()
+	if _, ok := registry["max-fanout"]; !ok {
+		t.Fatal("expected max-fanout in config registry")
+	}
+	if _, ok := registry["no-duplicate-node-ids"]; !ok {
+		t.Fatal("expected no-duplicate-node-ids in config registry")
+	}
+	if _, ok := registry["no-disconnected-nodes"]; !ok {
+		t.Fatal("expected no-disconnected-nodes in config registry")
+	}
+}
+
+func TestValidateOption_MaxFanoutLimit(t *testing.T) {
+	if err := rules.ValidateOption("max-fanout", "limit", 2); err != nil {
+		t.Fatalf("expected valid limit, got %v", err)
+	}
+	if err := rules.ValidateOption("max-fanout", "limit", 0); err == nil {
+		t.Fatal("expected invalid limit to fail validation")
+	}
+}
