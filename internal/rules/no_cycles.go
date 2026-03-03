@@ -72,13 +72,21 @@ func (r NoCycles) Run(d *model.Diagram, cfg Config) []model.Issue {
 					continue
 				}
 
-				cycleNodes := append([]string{}, stack[cycleStart:]...)
-				cycleNodes = append(cycleNodes, next)
-				cycleKey := strings.Join(cycleNodes, "->")
-				if _, exists := seenCycles[cycleKey]; exists {
-					continue
-				}
-				seenCycles[cycleKey] = struct{}{}
+		cycleNodes := append([]string{}, stack[cycleStart:]...)
+		cycleNodes = append(cycleNodes, next)
+		// Normalize cycle representation to prevent duplicates
+		minIdx := 0
+		for i, node := range cycleNodes {
+			if node < cycleNodes[minIdx] {
+				minIdx = i
+			}
+		}
+		normalized := append(cycleNodes[minIdx:], cycleNodes[:minIdx]...)
+		cycleKey := strings.Join(normalized, "->")
+		if _, exists := seenCycles[cycleKey]; exists {
+			continue
+		}
+		seenCycles[cycleKey] = struct{}{}
 
 				issue := model.Issue{
 					RuleID:   r.ID(),
