@@ -204,7 +204,7 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 
 **Current type support behavior:**
 - `flowchart`/`graph` diagrams are linted by built-in rules.
-- `sequence`, `class`, `er`, and `state` diagrams are parsed, and return `lint-supported=false` plus an informational `unsupported-diagram-type` issue.
+- `sequence`, `class`, `er`, and `state` diagrams are parsed, and return `valid=false`, `lint-supported=false`, `issues=[]`, and a structured `error.code` of `unsupported_diagram_type`.
 
 - **`valid`** — Boolean indicating if the Mermaid syntax is syntactically correct
 - **`diagram-type`** — Normalized Mermaid type for valid diagrams (`flowchart`, `sequence`, `class`, `er`, `state`, `unknown`)

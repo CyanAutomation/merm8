@@ -444,6 +444,26 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	family := diagram.Type.Family()
+	if family != model.DiagramFamilyFlowchart {
+		// Keep metrics in the response for parsed diagrams, even when linting is
+		// not currently supported for that Mermaid family.
+		resp := analyzeResponse{
+			Valid:         false,
+			DiagramType:   diagram.Type,
+			LintSupported: false,
+			SyntaxError:   nil,
+			Issues:        []model.Issue{},
+			Error: &apiErrorDetails{
+				Code:    "unsupported_diagram_type",
+				Message: "diagram type is parsed but linting is not supported",
+			},
+			Metrics: computeMetrics(diagram, []model.Issue{}),
+		}
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+
 	issues := h.engine.Run(diagram, normalizedCfg)
 
 	resp := analyzeResponse{
