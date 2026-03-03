@@ -245,7 +245,7 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 		"operationId: analyzeCode",
 		"$ref: '#/components/schemas/ErrorResponse'",
 		"- error",
-		"- warn",
+		"- warning",
 		"- info",
 		"severity: error",
 	} {
@@ -299,7 +299,7 @@ func TestServeSpec_Regression_ConfigValidationAndSeverityExamples(t *testing.T) 
 	for _, v := range severityEnum {
 		got = append(got, v.(string))
 	}
-	for _, expected := range []string{"error", "warn", "info"} {
+	for _, expected := range []string{"error", "warning", "info"} {
 		if !slices.Contains(got, expected) {
 			t.Fatalf("expected severity enum to include %q, got %#v", expected, got)
 		}
