@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
@@ -420,15 +421,18 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if syntaxErr != nil {
+		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		resp := analyzeResponse{
 			Valid:         false,
-			LintSupported: false,
+			DiagramType:   diagramType,
+			LintSupported: diagramType.Family() == model.DiagramFamilyFlowchart,
 			SyntaxError: &syntaxErrorResponse{
 				Message: syntaxErr.Message,
 				Line:    syntaxErr.Line,
 				Column:  syntaxErr.Column,
 			},
-			Issues: []model.Issue{},
+			Issues:  []model.Issue{},
+			Metrics: defaultMetrics(diagramType),
 		}
 		writeJSON(w, http.StatusOK, resp)
 		return
@@ -450,6 +454,40 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		Metrics:       computeMetrics(diagram, issues),
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func defaultDiagramTypeForSyntaxError(code string) model.DiagramType {
+	firstLine := strings.TrimSpace(strings.SplitN(code, "\n", 2)[0])
+	switch {
+	case strings.HasPrefix(firstLine, "graph"), strings.HasPrefix(firstLine, "flowchart"):
+		return model.DiagramTypeFlowchart
+	case strings.HasPrefix(firstLine, "sequenceDiagram"):
+		return model.DiagramTypeSequence
+	case strings.HasPrefix(firstLine, "classDiagram"):
+		return model.DiagramTypeClass
+	case strings.HasPrefix(firstLine, "erDiagram"):
+		return model.DiagramTypeER
+	case strings.HasPrefix(firstLine, "stateDiagram"):
+		return model.DiagramTypeState
+	default:
+		return model.DiagramTypeUnknown
+	}
+}
+
+func defaultMetrics(diagramType model.DiagramType) *metricsResponse {
+	return &metricsResponse{
+		NodeCount:             0,
+		EdgeCount:             0,
+		DisconnectedNodeCount: 0,
+		DuplicateNodeCount:    0,
+		MaxFanin:              0,
+		MaxFanout:             0,
+		DiagramType:           diagramType,
+		IssueCounts: &issueCountsResponse{
+			BySeverity: map[string]int{},
+			ByRule:     map[string]int{},
+		},
+	}
 }
 
 func writeConfigValidationError(w http.ResponseWriter, configValidationErr *validationError) {
