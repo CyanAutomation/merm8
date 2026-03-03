@@ -218,6 +218,8 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
   - `message` — Description of the issue
   - `line` / `column` — Optional location in the diagram code (omitted when unknown)
 - **`issues`** can include findings both with source locations (`line`/`column`) and without them when exact positions are unavailable.
+- **`issues[].fingerprint`** is a deterministic SHA-256 hash over normalized issue fields (`rule_id`, `severity`, `message`, `line`, `column`, and grouping context) suitable for CI baselining.
+- **`issues[].context`** is optional grouping metadata. For node-scoped findings in subgraphs, it includes `subgraph_id` and `subgraph_label`; it is omitted when no grouping applies.
   - `line` / `column` — Location in the diagram code
   - **Ordering guarantee** — Issues are deterministically sorted before returning: by severity priority (`error` → `warning` → `info`), then `rule_id`, then `line`, then `column`, then `message`. If two rules produce the exact same issue signature, duplicates are removed.
 - **`metrics`** — Statistics about the diagram structure

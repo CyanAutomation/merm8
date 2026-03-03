@@ -159,6 +159,18 @@ func ValidateConfig(cfg Config) error {
 	return nil
 }
 
+// NodeSubgraphContext returns subgraph context for a node ID when available.
+func NodeSubgraphContext(d *model.Diagram, nodeID string) *model.IssueContext {
+	for _, subgraph := range d.Subgraphs {
+		for _, id := range subgraph.Nodes {
+			if id == nodeID {
+				return &model.IssueContext{SubgraphID: subgraph.ID, SubgraphLabel: subgraph.Label}
+			}
+		}
+	}
+	return nil
+}
+
 // DiagramFamilyRule is implemented by rules that only apply to specific
 // Mermaid diagram families.
 type DiagramFamilyRule interface {
