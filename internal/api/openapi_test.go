@@ -378,6 +378,9 @@ func TestServeSpec_IssueLocationFieldsAreOptionalAndNullable(t *testing.T) {
 	for _, v := range requiredRaw {
 		required = append(required, v.(string))
 	}
+	if !slices.Contains(required, "fingerprint") {
+		t.Fatalf("expected %q to be required in Issue schema, got required=%#v", "fingerprint", required)
+	}
 	for _, field := range []string{"line", "column"} {
 		if slices.Contains(required, field) {
 			t.Fatalf("expected %q to be optional in Issue schema, got required=%#v", field, required)
