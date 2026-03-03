@@ -290,6 +290,54 @@ func TestParser_DiagramTypeMetadata(t *testing.T) {
 	}
 }
 
+func TestParser_SuppressionDirectiveAliasesAndNextLineTarget(t *testing.T) {
+	script := getParserScript(t)
+	p := mustNewParser(t, script)
+
+	code := `graph TD
+%% merm8-ignore-next-line MAX-FANOUT
+A-->B
+A-->C
+%% merm8-ignore all
+A-->D`
+
+	diagram, syntaxErr, err := p.Parse(code)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if syntaxErr != nil {
+		t.Fatalf("unexpected syntax error: %+v", syntaxErr)
+	}
+	if diagram == nil {
+		t.Fatal("expected diagram, got nil")
+	}
+	if len(diagram.Suppressions) != 2 {
+		t.Fatalf("expected 2 suppressions, got %#v", diagram.Suppressions)
+	}
+
+	nextLine := diagram.Suppressions[0]
+	if nextLine.RuleID != "max-fanout" {
+		t.Fatalf("expected lowercased next-line rule id, got %q", nextLine.RuleID)
+	}
+	if nextLine.Scope != "next-line" {
+		t.Fatalf("expected next-line scope, got %q", nextLine.Scope)
+	}
+	if nextLine.Line != 2 {
+		t.Fatalf("expected directive line 2, got %d", nextLine.Line)
+	}
+	if nextLine.TargetLine != 3 {
+		t.Fatalf("expected next-line target line 3, got %d", nextLine.TargetLine)
+	}
+
+	fileScope := diagram.Suppressions[1]
+	if fileScope.RuleID != "all" {
+		t.Fatalf("expected all suppression rule id, got %q", fileScope.RuleID)
+	}
+	if fileScope.Scope != "file" {
+		t.Fatalf("expected file scope, got %q", fileScope.Scope)
+	}
+}
+
 // TestParser_ASTExtractionFailureAndContractMapping verifies deterministic parser
 // output mapping for AST extraction-style failures and contract-breaking payloads.
 

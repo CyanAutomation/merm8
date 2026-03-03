@@ -126,3 +126,55 @@ func TestEngine_UnsupportedDiagramTypeReturnsFallbackIssue(t *testing.T) {
 		t.Fatalf("expected fallback rule id, got %q", issues[0].RuleID)
 	}
 }
+
+type fixedLineIssueRule struct{}
+
+func (fixedLineIssueRule) ID() string { return "fixed-line-issue-rule" }
+
+func (fixedLineIssueRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
+	lineOne := 1
+	lineTwo := 2
+	return []model.Issue{
+		{RuleID: "fixed-line-issue-rule", Severity: "warning", Message: "line one issue", Line: &lineOne},
+		{RuleID: "fixed-line-issue-rule", Severity: "warning", Message: "line two issue", Line: &lineTwo},
+	}
+}
+
+func TestEngine_NextLineSuppressionSuppressesOnlyTargetedRule(t *testing.T) {
+	e := engine.NewWithRules(fixedLineIssueRule{})
+	d := &model.Diagram{
+		Type: model.DiagramTypeFlowchart,
+		Suppressions: []model.SuppressionDirective{{
+			RuleID:     "fixed-line-issue-rule",
+			Scope:      "next-line",
+			Line:       1,
+			TargetLine: 2,
+		}},
+	}
+
+	issues := e.Run(d, rules.Config{})
+	if len(issues) != 1 {
+		t.Fatalf("expected one remaining issue after next-line suppression, got %#v", issues)
+	}
+	if issues[0].RuleID != "fixed-line-issue-rule" || issues[0].Line == nil || *issues[0].Line != 1 {
+		t.Fatalf("expected line-1 issue to remain, got %#v", issues)
+	}
+}
+
+func TestEngine_NextLineSuppressionNonMatchingRuleDoesNotHideIssue(t *testing.T) {
+	e := engine.NewWithRules(fixedLineIssueRule{})
+	d := &model.Diagram{
+		Type: model.DiagramTypeFlowchart,
+		Suppressions: []model.SuppressionDirective{{
+			RuleID:     "some-other-rule",
+			Scope:      "next-line",
+			Line:       1,
+			TargetLine: 2,
+		}},
+	}
+
+	issues := e.Run(d, rules.Config{})
+	if len(issues) != 2 {
+		t.Fatalf("expected non-matching suppression to keep all issues, got %#v", issues)
+	}
+}
