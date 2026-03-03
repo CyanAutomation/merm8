@@ -160,9 +160,11 @@ var openapi = map[string]interface{}{
 									"validDiagram": map[string]interface{}{
 										"summary": "Valid diagram with no issues",
 										"value": map[string]interface{}{
-											"valid":        true,
-											"syntax_error": nil,
-											"issues":       []interface{}{},
+											"valid":          true,
+											"diagram_type":   "flowchart",
+											"lint_supported": true,
+											"syntax_error":   nil,
+											"issues":         []interface{}{},
 											"metrics": map[string]interface{}{
 												"node_count": 2,
 												"edge_count": 1,
@@ -173,7 +175,8 @@ var openapi = map[string]interface{}{
 									"syntaxError": map[string]interface{}{
 										"summary": "Syntax error response",
 										"value": map[string]interface{}{
-											"valid": false,
+											"valid":          false,
+											"lint_supported": false,
 											"syntax_error": map[string]interface{}{
 												"message": "Unexpected token '>'",
 												"line":    2,
@@ -185,8 +188,10 @@ var openapi = map[string]interface{}{
 									"withIssues": map[string]interface{}{
 										"summary": "Valid diagram with lint issues",
 										"value": map[string]interface{}{
-											"valid":        true,
-											"syntax_error": nil,
+											"valid":          true,
+											"diagram_type":   "flowchart",
+											"lint_supported": true,
+											"syntax_error":   nil,
 											"issues": []interface{}{
 												map[string]interface{}{
 													"rule_id":  "no-disconnected-nodes",
@@ -462,11 +467,20 @@ var openapi = map[string]interface{}{
 			},
 			"AnalyzeResponse": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"valid", "issues"},
+				"required": []string{"valid", "lint_supported", "issues"},
 				"properties": map[string]interface{}{
 					"valid": map[string]interface{}{
 						"type":        "boolean",
 						"description": "Whether the Mermaid code is syntactically valid",
+					},
+					"diagram_type": map[string]interface{}{
+						"type":        "string",
+						"description": "Normalized Mermaid diagram type (flowchart, sequence, class, er, state, unknown).",
+						"example":     "flowchart",
+					},
+					"lint_supported": map[string]interface{}{
+						"type":        "boolean",
+						"description": "Whether lint rules are currently implemented for the parsed diagram type.",
 					},
 					"syntax_error": map[string]interface{}{
 						"$ref":        "#/components/schemas/SyntaxError",

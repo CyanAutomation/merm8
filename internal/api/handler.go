@@ -77,10 +77,12 @@ type metricsResponse struct {
 
 // analyzeResponse is returned by POST /analyze.
 type analyzeResponse struct {
-	Valid       bool                 `json:"valid"`
-	SyntaxError *syntaxErrorResponse `json:"syntax_error"`
-	Issues      []model.Issue        `json:"issues"`
-	Metrics     *metricsResponse     `json:"metrics,omitempty"`
+	Valid         bool                 `json:"valid"`
+	DiagramType   model.DiagramType    `json:"diagram_type,omitempty"`
+	LintSupported bool                 `json:"lint_supported"`
+	SyntaxError   *syntaxErrorResponse `json:"syntax_error"`
+	Issues        []model.Issue        `json:"issues"`
+	Metrics       *metricsResponse     `json:"metrics,omitempty"`
 }
 
 // apiErrorDetails holds machine-readable and human-readable error information.
@@ -218,7 +220,8 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 
 	if syntaxErr != nil {
 		resp := analyzeResponse{
-			Valid: false,
+			Valid:         false,
+			LintSupported: false,
 			SyntaxError: &syntaxErrorResponse{
 				Message: syntaxErr.Message,
 				Line:    syntaxErr.Line,
@@ -238,10 +241,12 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	issues := h.engine.Run(diagram, normalizedCfg)
 
 	resp := analyzeResponse{
-		Valid:       true,
-		SyntaxError: nil,
-		Issues:      issues,
-		Metrics:     computeMetrics(diagram),
+		Valid:         true,
+		DiagramType:   diagram.Type,
+		LintSupported: diagram.Type.Family() == model.DiagramFamilyFlowchart,
+		SyntaxError:   nil,
+		Issues:        issues,
+		Metrics:       computeMetrics(diagram),
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

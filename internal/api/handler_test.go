@@ -306,6 +306,7 @@ func TestAnalyze_NoPanicOnNilDiagram(t *testing.T) {
 // TestAnalyze_ValidDiagram_SuccessPath tests a valid diagram end-to-end.
 func TestAnalyze_ValidDiagram_SuccessPath(t *testing.T) {
 	validDiagram := &model.Diagram{
+		Type:      model.DiagramTypeFlowchart,
 		Direction: "TD",
 		Nodes: []model.Node{
 			{ID: "A", Label: "Start"},
@@ -343,6 +344,12 @@ func TestAnalyze_ValidDiagram_SuccessPath(t *testing.T) {
 	}
 	if syntaxErr := resp["syntax_error"]; syntaxErr != nil {
 		t.Error("expected syntax_error=null")
+	}
+	if diagramType, ok := resp["diagram_type"].(string); !ok || diagramType != "flowchart" {
+		t.Errorf("expected diagram_type=flowchart, got %v", resp["diagram_type"])
+	}
+	if lintSupported, ok := resp["lint_supported"].(bool); !ok || !lintSupported {
+		t.Errorf("expected lint_supported=true, got %v", resp["lint_supported"])
 	}
 	if issues, ok := resp["issues"].([]interface{}); !ok {
 		t.Error("expected issues array")
@@ -389,6 +396,9 @@ func TestAnalyze_SyntaxError_Returns200(t *testing.T) {
 	if valid, ok := resp["valid"].(bool); !ok || valid {
 		t.Error("expected valid=false")
 	}
+	if lintSupported, ok := resp["lint_supported"].(bool); !ok || lintSupported {
+		t.Errorf("expected lint_supported=false for syntax error, got %v", resp["lint_supported"])
+	}
 	if syntaxErrResp, ok := resp["syntax_error"].(map[string]interface{}); !ok {
 		t.Error("expected syntax_error object")
 	} else {
@@ -398,10 +408,49 @@ func TestAnalyze_SyntaxError_Returns200(t *testing.T) {
 	}
 }
 
+func TestAnalyze_UnsupportedDiagramType_ReturnsFallbackIssue(t *testing.T) {
+	diagram := &model.Diagram{Type: model.DiagramTypeSequence}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]string{"code": "sequenceDiagram\n  Alice->>Bob: Hi"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if lintSupported, ok := resp["lint_supported"].(bool); !ok || lintSupported {
+		t.Fatalf("expected lint_supported=false, got %v", resp["lint_supported"])
+	}
+	if diagramType, ok := resp["diagram_type"].(string); !ok || diagramType != "sequence" {
+		t.Fatalf("expected diagram_type=sequence, got %v", resp["diagram_type"])
+	}
+	issues, ok := resp["issues"].([]interface{})
+	if !ok || len(issues) != 1 {
+		t.Fatalf("expected one fallback issue, got %#v", resp["issues"])
+	}
+	issue, _ := issues[0].(map[string]interface{})
+	if issue["rule_id"] != "unsupported-diagram-type" {
+		t.Fatalf("expected unsupported-diagram-type issue, got %v", issue["rule_id"])
+	}
+}
+
 // TestAnalyze_ConfigApplied_MaxFanout tests that custom rule config is applied.
 func TestAnalyze_ConfigApplied_MaxFanout(t *testing.T) {
 	// Diagram with node A having 3 outgoing edges (violates limit of 2)
 	diagram := &model.Diagram{
+		Type:      model.DiagramTypeFlowchart,
 		Direction: "TD",
 		Nodes: []model.Node{
 			{ID: "A", Label: "A"},
@@ -555,6 +604,7 @@ func TestAnalyze_ConfigParsing(t *testing.T) {
 func TestAnalyze_MultipleRulesAggregate(t *testing.T) {
 	// Diagram with duplicate node ID "A" and disconnected node "C"
 	diagram := &model.Diagram{
+		Type:      model.DiagramTypeFlowchart,
 		Direction: "TD",
 		Nodes: []model.Node{
 			{ID: "A", Label: "A"},
@@ -616,6 +666,7 @@ func TestAnalyze_LargeDiagram(t *testing.T) {
 	}
 
 	diagram := &model.Diagram{
+		Type:      model.DiagramTypeFlowchart,
 		Direction: "TD",
 		Nodes:     nodes,
 		Edges:     edges,

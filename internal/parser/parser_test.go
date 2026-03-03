@@ -254,6 +254,41 @@ func TestParser_MultipleEdges(t *testing.T) {
 	}
 }
 
+func TestParser_DiagramTypeMetadata(t *testing.T) {
+	script := getParserScript(t)
+	p := mustNewParser(t, script)
+
+	tests := []struct {
+		name     string
+		code     string
+		wantType string
+	}{
+		{name: "flowchart", code: "graph TD\n  A-->B", wantType: "flowchart"},
+		{name: "sequence", code: "sequenceDiagram\n  Alice->>Bob: Hi", wantType: "sequence"},
+		{name: "class", code: "classDiagram\n  class Animal", wantType: "class"},
+		{name: "er", code: "erDiagram\n  CUSTOMER ||--o{ ORDER : places", wantType: "er"},
+		{name: "state", code: "stateDiagram-v2\n  [*] --> Active", wantType: "state"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diagram, syntaxErr, err := p.Parse(tt.code)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if syntaxErr != nil {
+				t.Fatalf("unexpected syntax error: %+v", syntaxErr)
+			}
+			if diagram == nil {
+				t.Fatal("expected diagram, got nil")
+			}
+			if got := string(diagram.Type); got != tt.wantType {
+				t.Fatalf("expected type %q, got %q", tt.wantType, got)
+			}
+		})
+	}
+}
+
 // TestParser_ASTExtractionFailureAndContractMapping verifies deterministic parser
 // output mapping for AST extraction-style failures and contract-breaking payloads.
 func TestParser_ASTExtractionFailureAndContractMapping(t *testing.T) {

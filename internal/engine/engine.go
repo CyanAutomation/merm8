@@ -17,11 +17,13 @@ type Engine struct {
 
 // New returns an Engine pre-loaded with the default rule set.
 func New() *Engine {
-	return NewWithRules(
-		rules.NoDuplicateNodeIDs{},
-		rules.NoDisconnectedNodes{},
-		rules.MaxFanout{},
-	)
+	registeredRules := make([]rules.Rule, 0)
+	registeredRules = append(registeredRules, rules.FlowchartRules()...)
+	registeredRules = append(registeredRules, rules.SequenceRules()...)
+	registeredRules = append(registeredRules, rules.ClassRules()...)
+	registeredRules = append(registeredRules, rules.ERRules()...)
+	registeredRules = append(registeredRules, rules.StateRules()...)
+	return NewWithRules(registeredRules...)
 }
 
 // NewWithRules returns an Engine configured with the provided rule set.
@@ -37,8 +39,16 @@ func (e *Engine) Run(d *model.Diagram, cfg rules.Config) []model.Issue {
 		return []model.Issue{}
 	}
 
+	family := d.Type.Family()
+	if family != model.DiagramFamilyFlowchart {
+		return []model.Issue{unsupportedDiagramTypeIssue(d)}
+	}
+
 	var issues []model.Issue
 	for _, r := range e.rules {
+		if !rules.SupportsDiagramFamily(r, family) {
+			continue
+		}
 		if !rules.RuleEnabled(r.ID(), normalizedCfg) {
 			continue
 		}
@@ -175,5 +185,13 @@ func severityPriority(severity string) int {
 		return 2
 	default:
 		return 3
+	}
+}
+
+func unsupportedDiagramTypeIssue(d *model.Diagram) model.Issue {
+	return model.Issue{
+		RuleID:   "unsupported-diagram-type",
+		Severity: "info",
+		Message:  "diagram type \"" + string(d.Type) + "\" is parsed but lint rules are not available yet",
 	}
 }

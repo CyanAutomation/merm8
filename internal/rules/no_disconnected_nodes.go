@@ -8,6 +8,10 @@ type NoDisconnectedNodes struct{}
 
 func (r NoDisconnectedNodes) ID() string { return "no-disconnected-nodes" }
 
+func (r NoDisconnectedNodes) Families() []model.DiagramFamily {
+	return []model.DiagramFamily{model.DiagramFamilyFlowchart}
+}
+
 func (r NoDisconnectedNodes) Run(d *model.Diagram, cfg Config) []model.Issue {
 	severity := EffectiveSeverity(r.ID(), cfg, "error")
 	if len(d.Edges) == 0 && len(d.Nodes) <= 1 {

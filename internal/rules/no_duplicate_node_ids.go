@@ -8,6 +8,10 @@ type NoDuplicateNodeIDs struct{}
 
 func (r NoDuplicateNodeIDs) ID() string { return "no-duplicate-node-ids" }
 
+func (r NoDuplicateNodeIDs) Families() []model.DiagramFamily {
+	return []model.DiagramFamily{model.DiagramFamilyFlowchart}
+}
+
 func (r NoDuplicateNodeIDs) Run(d *model.Diagram, cfg Config) []model.Issue {
 	severity := EffectiveSeverity(r.ID(), cfg, "error")
 	seen := make(map[string]bool, len(d.Nodes))
