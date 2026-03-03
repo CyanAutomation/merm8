@@ -171,7 +171,7 @@ curl -s -X POST http://localhost:8080/analyze \
   -H "Content-Type: application/json" \
   -d '{"code": "this is not valid mermaid"}'
 
-# Fan-out warning with custom limit
+# Fan-out warn-level issue with custom limit
 curl -s -X POST http://localhost:8080/analyze \
   -H "Content-Type: application/json" \
   -d '{
