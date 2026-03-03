@@ -265,6 +265,17 @@ func assertErrorShape(t *testing.T, payload map[string]interface{}, expectedCode
 	}
 }
 
+func TestServeSpec_AnalyzeDescriptionDocumentsOperationalEnvVars(t *testing.T) {
+	spec := loadServedSpec(t)
+
+	desc := lookup(t, spec, "paths", "/analyze", "post", "description").(string)
+	for _, snippet := range []string{"PARSER_CONCURRENCY_LIMIT", "PARSER_MAX_OLD_SPACE_MB", "error.code=server_busy", "--max-old-space-size", "Operational environment variables"} {
+		if !strings.Contains(desc, snippet) {
+			t.Fatalf("expected /analyze description to contain %q, got %q", snippet, desc)
+		}
+	}
+}
+
 func TestServeSpec_AnalyzeResponseDescriptionsDocumentModeSemantics(t *testing.T) {
 	spec := loadServedSpec(t)
 
