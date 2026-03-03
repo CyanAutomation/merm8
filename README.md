@@ -199,6 +199,46 @@ curl -s -X POST http://localhost:8080/analyze \
 
 ---
 
+
+## Security & Production Hardening
+
+### Threat model (practical)
+
+This service accepts untrusted Mermaid source text and executes a Node.js parser subprocess for each analysis request. The key risks are:
+
+- **Resource exhaustion / DoS**: very large payloads, many concurrent requests, or parser-heavy inputs can consume memory and CPU.
+- **Abuse of public endpoints**: anonymous users can repeatedly call `/analyze` unless guarded by authentication and rate limits.
+- **Operational misconfiguration**: running without limits in production can allow a single tenant to degrade service for others.
+
+### Built-in controls
+
+- **Request size limit**: `/analyze` request body is capped at **1 MiB**.
+- **Parser wall-clock timeout**: each parser subprocess is bounded by a Go context timeout.
+- **Node heap cap**: parser subprocesses run with `--max-old-space-size=<MB>` (default `512` MB, configurable with `PARSER_MAX_OLD_SPACE_MB`).
+- **Parser concurrency cap**: concurrent parser invocations are limited (default `8`, configurable with `PARSER_CONCURRENCY_LIMIT`).
+- **Optional auth middleware**: in `DEPLOYMENT_MODE=production`, set `ANALYZE_AUTH_TOKEN` to require `Authorization: Bearer <token>` for `POST /analyze`.
+- **Optional rate limiting middleware**: in `DEPLOYMENT_MODE=production`, requests to `POST /analyze` are rate limited per client (default `120/min`, configurable via `ANALYZE_RATE_LIMIT_PER_MINUTE`).
+
+### Recommended production controls
+
+At deployment time, use the built-in limits plus infrastructure-level controls:
+
+1. Put the service behind an API gateway or ingress with TLS and additional request throttling.
+2. Restrict network exposure (private VPC, firewall rules, or zero-trust proxy) where possible.
+3. Run containers with explicit CPU and memory limits so parser workloads cannot starve host resources.
+4. Enable structured logging and alerting on `429`, `503`, and parser timeout spikes.
+5. Rotate `ANALYZE_AUTH_TOKEN` and store it in a secrets manager.
+
+### Security-related environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PARSER_MAX_OLD_SPACE_MB` | `512` | Caps Node.js V8 old-space heap for parser subprocesses. |
+| `PARSER_CONCURRENCY_LIMIT` | `8` | Maximum concurrent parser invocations in the API process. |
+| `DEPLOYMENT_MODE` | `development` | Enables production-oriented defaults when set to `production`. |
+| `ANALYZE_RATE_LIMIT_PER_MINUTE` | `0` in development, `120` in production | Per-client fixed-window limit for `POST /analyze`. |
+| `ANALYZE_AUTH_TOKEN` | _unset_ | Bearer token required by auth middleware in production when provided. |
+
 ## Rule System
 
 Rules live in `internal/rules/` and implement the `Rule` interface:
