@@ -524,7 +524,9 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		h.mu.RLock()
 		metrics := h.telemetryMetrics
 		h.mu.RUnlock()
-		metrics.ObserveParserDuration(telemetry.OutcomeSyntaxError, parseDuration)
+		if metrics != nil {
+			metrics.ObserveParserDuration(telemetry.OutcomeSyntaxError, parseDuration)
+		}
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		resp := analyzeResponse{
