@@ -112,6 +112,22 @@ Returns each rule's `id`, default `severity`, description, `default_config`, and
 
 Use this endpoint to power UI/docs so runtime and documentation remain in sync.
 
+### `GET /rules/schema`
+
+Returns a generated JSON Schema for the `config` object accepted by `POST /analyze`.
+
+The schema includes:
+- allowed rule IDs,
+- allowed options per rule (`enabled`, `severity`, `limit`, `suppression_selectors`),
+- option types/constraints (e.g. `max-fanout.limit` must be an integer `>= 1`), and
+- both accepted formats (`{"rule-id": {...}}` and `{"rules": {"rule-id": {...}}}`).
+
+You can use this endpoint so clients pre-validate config before calling `/analyze`.
+
+```bash
+curl -s http://localhost:8080/rules/schema | jq '.schema'
+```
+
 ### `POST /analyze`
 
 **Request body**
@@ -135,6 +151,8 @@ Use this endpoint to power UI/docs so runtime and documentation remain in sync.
 > `config` is optional. Both flat `{"max-fanout": {...}}` and nested `{"rules": {"max-fanout": {...}}}` formats are accepted.
 >
 > Unknown rule IDs in config are rejected with `400 invalid_config`.
+>
+> Tip: fetch `GET /rules/schema` and validate config client-side before sending requests.
 
 > Request body size limit: **1 MiB**. Oversized payloads return `413` with JSON: `{"error":"request body exceeds 1 MiB limit"}`.
 
