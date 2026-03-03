@@ -164,8 +164,8 @@ func assertExactErrorResponse(t *testing.T, body []byte, wantCode, wantMessage s
 	if err := json.Unmarshal(body, &resp); err != nil {
 		t.Fatalf("failed to decode error response: %v", err)
 	}
-	if len(resp) != 5 {
-		t.Fatalf("expected exactly 5 top-level fields, got %d: %v", len(resp), resp)
+	if len(resp) != 6 {
+		t.Fatalf("expected exactly 6 top-level fields, got %d: %v", len(resp), resp)
 	}
 	if valid, ok := resp["valid"].(bool); !ok || valid {
 		t.Fatalf("expected valid=false, got %#v", resp["valid"])
@@ -183,6 +183,14 @@ func assertExactErrorResponse(t *testing.T, body []byte, wantCode, wantMessage s
 	}
 	if syntaxErr, exists := resp["syntax-error"]; !exists || syntaxErr != nil {
 		t.Fatalf("expected syntax-error=null, got %#v", resp["syntax-error"])
+	}
+
+	metrics, ok := resp["metrics"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected metrics object, got %#v", resp["metrics"])
+	}
+	if diagramType, ok := metrics["diagram-type"].(string); !ok || diagramType != "unknown" {
+		t.Fatalf("expected metrics.diagram-type=unknown, got %#v", metrics["diagram-type"])
 	}
 	errObj, ok := resp["error"].(map[string]interface{})
 	if !ok {
@@ -206,10 +214,11 @@ func assertValidationErrorResponse(t *testing.T, body []byte, wantCode, wantMess
 	t.Helper()
 
 	var resp struct {
-		Valid         bool          `json:"valid"`
-		LintSupported bool          `json:"lint-supported"`
-		SyntaxError   interface{}   `json:"syntax-error"`
-		Issues        []model.Issue `json:"issues"`
+		Valid         bool                   `json:"valid"`
+		LintSupported bool                   `json:"lint-supported"`
+		SyntaxError   interface{}            `json:"syntax-error"`
+		Issues        []model.Issue          `json:"issues"`
+		Metrics       map[string]interface{} `json:"metrics"`
 		Error         struct {
 			Code      string   `json:"code"`
 			Message   string   `json:"message"`
@@ -231,6 +240,12 @@ func assertValidationErrorResponse(t *testing.T, body []byte, wantCode, wantMess
 	}
 	if len(resp.Issues) != 0 {
 		t.Fatalf("expected empty issues array, got %#v", resp.Issues)
+	}
+	if resp.Metrics == nil {
+		t.Fatal("expected metrics object")
+	}
+	if got := resp.Metrics["diagram-type"]; got != "unknown" {
+		t.Fatalf("expected metrics.diagram-type=unknown, got %#v", got)
 	}
 	if resp.Error.Code != wantCode {
 		t.Fatalf("expected error.code=%q, got %q", wantCode, resp.Error.Code)
@@ -403,10 +418,11 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 	}
 
 	var resp struct {
-		Valid         bool          `json:"valid"`
-		LintSupported bool          `json:"lint-supported"`
-		SyntaxError   interface{}   `json:"syntax-error"`
-		Issues        []interface{} `json:"issues"`
+		Valid         bool                   `json:"valid"`
+		LintSupported bool                   `json:"lint-supported"`
+		SyntaxError   interface{}            `json:"syntax-error"`
+		Issues        []interface{}          `json:"issues"`
+		Metrics       map[string]interface{} `json:"metrics"`
 		Error         struct {
 			Code    string `json:"code"`
 			Message string `json:"message"`
@@ -428,6 +444,9 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 	}
 	if len(resp.Issues) != 0 {
 		t.Fatalf("expected empty issues array, got %#v", resp.Issues)
+	}
+	if got := resp.Metrics["diagram-type"]; got != "unknown" {
+		t.Fatalf("expected metrics.diagram-type=unknown, got %#v", got)
 	}
 	if resp.Error.Code != "internal_error" {
 		t.Fatalf("expected error.code=internal_error, got %q", resp.Error.Code)

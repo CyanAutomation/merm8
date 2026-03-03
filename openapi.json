@@ -91,7 +91,9 @@
         "required": [
           "valid",
           "lint-supported",
-          "issues"
+          "issues",
+          "syntax-error",
+          "metrics"
         ],
         "type": "object"
       },
@@ -396,7 +398,7 @@
                     "type": "integer"
                   },
                   "severity": {
-                    "description": "Severity assigned to emitted issues.",
+                    "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
                     "enum": [
                       "error",
                       "warning",
@@ -427,7 +429,7 @@
                     "type": "integer"
                   },
                   "severity": {
-                    "description": "Severity assigned to emitted issues.",
+                    "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
                     "enum": [
                       "error",
                       "warning",
@@ -457,7 +459,7 @@
                     "type": "boolean"
                   },
                   "severity": {
-                    "description": "Severity assigned to emitted issues.",
+                    "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
                     "enum": [
                       "error",
                       "warning",
@@ -483,7 +485,7 @@
                     "type": "boolean"
                   },
                   "severity": {
-                    "description": "Severity assigned to emitted issues.",
+                    "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
                     "enum": [
                       "error",
                       "warning",
@@ -509,7 +511,7 @@
                     "type": "boolean"
                   },
                   "severity": {
-                    "description": "Severity assigned to emitted issues.",
+                    "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
                     "enum": [
                       "error",
                       "warning",
@@ -909,6 +911,19 @@
                       },
                       "issues": [],
                       "lint-supported": false,
+                      "metrics": {
+                        "diagram-type": "unknown",
+                        "disconnected-node-count": 0,
+                        "duplicate-node-count": 0,
+                        "edge-count": 0,
+                        "issue-counts": {
+                          "by-rule": {},
+                          "by-severity": {}
+                        },
+                        "max-fanin": 0,
+                        "max-fanout": 0,
+                        "node-count": 0
+                      },
                       "syntax-error": null,
                       "valid": false
                     }
@@ -923,6 +938,19 @@
                       },
                       "issues": [],
                       "lint-supported": false,
+                      "metrics": {
+                        "diagram-type": "unknown",
+                        "disconnected-node-count": 0,
+                        "duplicate-node-count": 0,
+                        "edge-count": 0,
+                        "issue-counts": {
+                          "by-rule": {},
+                          "by-severity": {}
+                        },
+                        "max-fanin": 0,
+                        "max-fanout": 0,
+                        "node-count": 0
+                      },
                       "syntax-error": null,
                       "valid": false
                     }
@@ -936,6 +964,19 @@
                       },
                       "issues": [],
                       "lint-supported": false,
+                      "metrics": {
+                        "diagram-type": "unknown",
+                        "disconnected-node-count": 0,
+                        "duplicate-node-count": 0,
+                        "edge-count": 0,
+                        "issue-counts": {
+                          "by-rule": {},
+                          "by-severity": {}
+                        },
+                        "max-fanin": 0,
+                        "max-fanout": 0,
+                        "node-count": 0
+                      },
                       "syntax-error": null,
                       "valid": false
                     }
@@ -956,6 +997,19 @@
                       },
                       "issues": [],
                       "lint-supported": false,
+                      "metrics": {
+                        "diagram-type": "unknown",
+                        "disconnected-node-count": 0,
+                        "duplicate-node-count": 0,
+                        "edge-count": 0,
+                        "issue-counts": {
+                          "by-rule": {},
+                          "by-severity": {}
+                        },
+                        "max-fanin": 0,
+                        "max-fanout": 0,
+                        "node-count": 0
+                      },
                       "syntax-error": null,
                       "valid": false
                     }
@@ -977,6 +1031,19 @@
                       },
                       "issues": [],
                       "lint-supported": false,
+                      "metrics": {
+                        "diagram-type": "unknown",
+                        "disconnected-node-count": 0,
+                        "duplicate-node-count": 0,
+                        "edge-count": 0,
+                        "issue-counts": {
+                          "by-rule": {},
+                          "by-severity": {}
+                        },
+                        "max-fanin": 0,
+                        "max-fanout": 0,
+                        "node-count": 0
+                      },
                       "syntax-error": null,
                       "valid": false
                     }
@@ -999,6 +1066,19 @@
                   },
                   "issues": [],
                   "lint-supported": false,
+                  "metrics": {
+                    "diagram-type": "unknown",
+                    "disconnected-node-count": 0,
+                    "duplicate-node-count": 0,
+                    "edge-count": 0,
+                    "issue-counts": {
+                      "by-rule": {},
+                      "by-severity": {}
+                    },
+                    "max-fanin": 0,
+                    "max-fanout": 0,
+                    "node-count": 0
+                  },
                   "syntax-error": null,
                   "valid": false
                 },
@@ -1019,6 +1099,19 @@
                   },
                   "issues": [],
                   "lint-supported": false,
+                  "metrics": {
+                    "diagram-type": "unknown",
+                    "disconnected-node-count": 0,
+                    "duplicate-node-count": 0,
+                    "edge-count": 0,
+                    "issue-counts": {
+                      "by-rule": {},
+                      "by-severity": {}
+                    },
+                    "max-fanin": 0,
+                    "max-fanout": 0,
+                    "node-count": 0
+                  },
                   "syntax-error": null,
                   "valid": false
                 },
@@ -1042,6 +1135,19 @@
                       },
                       "issues": [],
                       "lint-supported": false,
+                      "metrics": {
+                        "diagram-type": "unknown",
+                        "disconnected-node-count": 0,
+                        "duplicate-node-count": 0,
+                        "edge-count": 0,
+                        "issue-counts": {
+                          "by-rule": {},
+                          "by-severity": {}
+                        },
+                        "max-fanin": 0,
+                        "max-fanout": 0,
+                        "node-count": 0
+                      },
                       "syntax-error": null,
                       "valid": false
                     }
@@ -1055,6 +1161,19 @@
                       },
                       "issues": [],
                       "lint-supported": false,
+                      "metrics": {
+                        "diagram-type": "unknown",
+                        "disconnected-node-count": 0,
+                        "duplicate-node-count": 0,
+                        "edge-count": 0,
+                        "issue-counts": {
+                          "by-rule": {},
+                          "by-severity": {}
+                        },
+                        "max-fanin": 0,
+                        "max-fanout": 0,
+                        "node-count": 0
+                      },
                       "syntax-error": null,
                       "valid": false
                     }
@@ -1068,6 +1187,19 @@
                       },
                       "issues": [],
                       "lint-supported": false,
+                      "metrics": {
+                        "diagram-type": "unknown",
+                        "disconnected-node-count": 0,
+                        "duplicate-node-count": 0,
+                        "edge-count": 0,
+                        "issue-counts": {
+                          "by-rule": {},
+                          "by-severity": {}
+                        },
+                        "max-fanin": 0,
+                        "max-fanout": 0,
+                        "node-count": 0
+                      },
                       "syntax-error": null,
                       "valid": false
                     }
@@ -1081,6 +1213,19 @@
                       },
                       "issues": [],
                       "lint-supported": false,
+                      "metrics": {
+                        "diagram-type": "unknown",
+                        "disconnected-node-count": 0,
+                        "duplicate-node-count": 0,
+                        "edge-count": 0,
+                        "issue-counts": {
+                          "by-rule": {},
+                          "by-severity": {}
+                        },
+                        "max-fanin": 0,
+                        "max-fanout": 0,
+                        "node-count": 0
+                      },
                       "syntax-error": null,
                       "valid": false
                     }
@@ -1103,6 +1248,19 @@
                   },
                   "issues": [],
                   "lint-supported": false,
+                  "metrics": {
+                    "diagram-type": "unknown",
+                    "disconnected-node-count": 0,
+                    "duplicate-node-count": 0,
+                    "edge-count": 0,
+                    "issue-counts": {
+                      "by-rule": {},
+                      "by-severity": {}
+                    },
+                    "max-fanin": 0,
+                    "max-fanout": 0,
+                    "node-count": 0
+                  },
                   "syntax-error": null,
                   "valid": false
                 },
@@ -1123,6 +1281,19 @@
                   },
                   "issues": [],
                   "lint-supported": false,
+                  "metrics": {
+                    "diagram-type": "unknown",
+                    "disconnected-node-count": 0,
+                    "duplicate-node-count": 0,
+                    "edge-count": 0,
+                    "issue-counts": {
+                      "by-rule": {},
+                      "by-severity": {}
+                    },
+                    "max-fanin": 0,
+                    "max-fanout": 0,
+                    "node-count": 0
+                  },
                   "syntax-error": null,
                   "valid": false
                 },

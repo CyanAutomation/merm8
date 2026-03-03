@@ -269,7 +269,7 @@ type analyzeResponse struct {
 	Issues        []model.Issue        `json:"issues"`
 	Warnings      []string             `json:"warnings,omitempty"`
 	Error         *apiErrorDetails     `json:"error,omitempty"`
-	Metrics       *metricsResponse     `json:"metrics,omitempty"`
+	Metrics       *metricsResponse     `json:"metrics"`
 }
 
 // ruleOptionResponse describes a configurable option for a lint rule.
@@ -825,6 +825,7 @@ func writeConfigValidationError(w http.ResponseWriter, configValidationErr *vali
 		LintSupported: false,
 		SyntaxError:   nil,
 		Issues:        []model.Issue{},
+		Metrics:       defaultMetrics(model.DiagramTypeUnknown),
 	})
 }
 
@@ -926,6 +927,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 		LintSupported: false,
 		SyntaxError:   nil,
 		Issues:        []model.Issue{},
+		Metrics:       defaultMetrics(model.DiagramTypeUnknown),
 		Error: &apiErrorDetails{
 			Code:    code,
 			Message: message,
