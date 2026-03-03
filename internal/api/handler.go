@@ -433,6 +433,20 @@ func SetStrictConfigSchemaForTesting(strict bool) {
 
 // RegisterRoutes attaches all routes to mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	// Canonical versioned API routes.
+	mux.HandleFunc("GET /v1/healthz", h.Healthz)
+	mux.HandleFunc("GET /v1/ready", h.Ready)
+	mux.HandleFunc("GET /v1/info", h.Info)
+	mux.HandleFunc("GET /v1/metrics", h.Metrics)
+	mux.HandleFunc("GET /v1/rules", h.ListRules)
+	mux.HandleFunc("GET /v1/rules/schema", h.RuleConfigSchema)
+	mux.HandleFunc("GET /v1/diagram-types", h.DiagramTypes)
+	mux.HandleFunc("POST /v1/analyze", h.Analyze)
+	mux.HandleFunc("POST /v1/analyze/sarif", h.AnalyzeSARIF)
+	mux.HandleFunc("GET /v1/spec", h.ServeSpec)
+	mux.HandleFunc("GET /v1/docs", h.ServeSwagger)
+
+	// Legacy unversioned compatibility aliases.
 	mux.HandleFunc("GET /health", h.Healthz)
 	mux.HandleFunc("GET /healthz", h.Healthz)
 	mux.HandleFunc("GET /ready", h.Ready)

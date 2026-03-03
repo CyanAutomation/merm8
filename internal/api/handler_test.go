@@ -3052,3 +3052,89 @@ func TestAnalyze_RequestIDHeaderGeneratedWhenMissing(t *testing.T) {
 		t.Fatal("expected generated request id header")
 	}
 }
+
+func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	for _, tc := range []struct {
+		method string
+		path   string
+		body   string
+		want   int
+	}{
+		{method: http.MethodPost, path: "/v1/analyze", body: `{"code":"graph TD;A-->B"}`, want: http.StatusOK},
+		{method: http.MethodPost, path: "/analyze", body: `{"code":"graph TD;A-->B"}`, want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/rules", want: http.StatusOK},
+		{method: http.MethodGet, path: "/rules", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/rules/schema", want: http.StatusOK},
+		{method: http.MethodGet, path: "/rules/schema", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/spec", want: http.StatusOK},
+		{method: http.MethodGet, path: "/spec", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/docs", want: http.StatusOK},
+		{method: http.MethodGet, path: "/docs", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/healthz", want: http.StatusOK},
+		{method: http.MethodGet, path: "/healthz", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/ready", want: http.StatusOK},
+		{method: http.MethodGet, path: "/ready", want: http.StatusOK},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			var reqBody *strings.Reader
+			if tc.body != "" {
+				reqBody = strings.NewReader(tc.body)
+			} else {
+				reqBody = strings.NewReader("")
+			}
+			req := httptest.NewRequest(tc.method, tc.path, reqBody)
+			if tc.method == http.MethodPost {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+			if w.Code != tc.want {
+				t.Fatalf("expected %d, got %d body=%s", tc.want, w.Code, w.Body.String())
+			}
+		})
+	}
+
+}
+
+func TestAnalyzeBearerAuthMiddleware_RequiresTokenOnV1Endpoint(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{}, nil, nil
+	})
+	secured := api.AnalyzeBearerAuthMiddleware("s3cr3t", mux)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(`{"code":"graph TD;A-->B"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	secured.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when token is missing, got %d", w.Code)
+	}
+}
+
+func TestAnalyzeRateLimitMiddleware_AppliesOnV1Endpoint(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{}, nil, nil
+	})
+	limited := api.AnalyzeRateLimitMiddleware(api.NewRateLimiter(1, time.Minute), mux)
+
+	firstReq := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(`{"code":"graph TD;A-->B"}`))
+	firstReq.Header.Set("Content-Type", "application/json")
+	firstReq.RemoteAddr = "127.0.0.1:1234"
+	firstW := httptest.NewRecorder()
+	limited.ServeHTTP(firstW, firstReq)
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(`{"code":"graph TD;A-->B"}`))
+	secondReq.Header.Set("Content-Type", "application/json")
+	secondReq.RemoteAddr = "127.0.0.1:5678"
+	secondW := httptest.NewRecorder()
+	limited.ServeHTTP(secondW, secondReq)
+
+	if secondW.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 when request rate is exceeded, got %d", secondW.Code)
+	}
+}

@@ -49,7 +49,7 @@ func AnalyzeLoggingMiddleware(next http.Handler, logger Logger) http.Handler {
 	logger = normalizeLogger(logger)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/analyze" && r.URL.Path != "/analyze/sarif" {
+		if !isAnalyzePath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -228,14 +228,14 @@ func (rl *RateLimiter) deleteExpiredEntries(now time.Time, maxDeletes int) {
 	}
 }
 
-// AnalyzeRateLimitMiddleware protects POST /analyze with the provided limiter.
+// AnalyzeRateLimitMiddleware protects POST analyze endpoints with the provided limiter.
 func AnalyzeRateLimitMiddleware(limiter *RateLimiter, next http.Handler) http.Handler {
 	if limiter == nil {
 		return next
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/analyze" {
+		if r.Method == http.MethodPost && isAnalyzeJSONPath(r.URL.Path) {
 			clientID := clientIdentifier(r)
 
 			// Calculate current window reset time
@@ -261,7 +261,7 @@ func AnalyzeRateLimitMiddleware(limiter *RateLimiter, next http.Handler) http.Ha
 	})
 }
 
-// AnalyzeBearerAuthMiddleware requires Bearer auth on POST /analyze.
+// AnalyzeBearerAuthMiddleware requires Bearer auth on POST analyze endpoints.
 func AnalyzeBearerAuthMiddleware(token string, next http.Handler) http.Handler {
 	token = strings.TrimSpace(token)
 	if token == "" {
@@ -269,7 +269,7 @@ func AnalyzeBearerAuthMiddleware(token string, next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/analyze" {
+		if r.Method == http.MethodPost && isAnalyzeJSONPath(r.URL.Path) {
 			header := r.Header.Get("Authorization")
 			if !strings.HasPrefix(header, "Bearer ") {
 				writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
@@ -283,6 +283,14 @@ func AnalyzeBearerAuthMiddleware(token string, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isAnalyzePath(path string) bool {
+	return isAnalyzeJSONPath(path) || path == "/analyze/sarif" || path == "/v1/analyze/sarif"
+}
+
+func isAnalyzeJSONPath(path string) bool {
+	return path == "/analyze" || path == "/v1/analyze"
 }
 
 func clientIdentifier(r *http.Request) string {

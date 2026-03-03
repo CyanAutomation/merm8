@@ -161,7 +161,11 @@ For migration details, see [API_GUIDE.md — Configuration Format and Deprecatio
 
 ## API
 
-### `GET /healthz` (canonical) and `GET /health`
+Canonical API endpoints are now versioned under `/v1` (for example: `/v1/analyze`, `/v1/rules`, `/v1/rules/schema`, `/v1/spec`, `/v1/docs`, `/v1/healthz`, `/v1/ready`).
+
+Unversioned endpoints remain available as compatibility aliases during migration and are **deprecated**. Planned removal is **v1.2.0 (Q2 2026)**.
+
+### `GET /v1/healthz` (canonical) and legacy aliases `GET /healthz`, `GET /health`
 
 Liveness-only endpoints for process-up checks. `GET /healthz` is the canonical probe path, and `GET /health` is supported as an alias.
 
@@ -171,7 +175,7 @@ Liveness-only endpoints for process-up checks. `GET /healthz` is the canonical p
 {"status":"ok"}
 ```
 
-### `GET /ready`
+### `GET /v1/ready` (canonical) and legacy alias `GET /ready`
 
 Dependency/readiness-only endpoint (including parser runtime/script availability when supported). This endpoint may return `503` when dependencies are not ready.
 
@@ -216,7 +220,7 @@ scrape_configs:
 ```
 
 
-### `GET /rules`
+### `GET /v1/rules` (canonical) and legacy alias `GET /rules`
 
 Live discovery endpoint for built-in lint rules and their metadata.
 
@@ -224,7 +228,7 @@ Returns each rule's `id`, default `severity`, description, `default-config`, and
 
 Use this endpoint to power UI/docs so runtime and documentation remain in sync.
 
-### `GET /rules/schema`
+### `GET /v1/rules/schema` (canonical) and legacy alias `GET /rules/schema`
 
 Returns a generated JSON Schema for the `config` object accepted by `POST /analyze`.
 
@@ -242,7 +246,7 @@ A versioned schema artifact is also published at `schemas/config.v1.json` for to
 curl -s http://localhost:8080/rules/schema | jq '.schema'
 ```
 
-### `POST /analyze`
+### `POST /v1/analyze` (canonical) and legacy alias `POST /analyze`
 
 **Request body**
 
@@ -412,14 +416,14 @@ curl -s -X POST http://localhost:8080/analyze \
 
 ### Interactive API Documentation
 
-**Swagger UI** is available at `http://localhost:8080/docs` when the server is running. This provides:
+**Swagger UI** is available at `http://localhost:8080/v1/docs` (legacy alias: `/docs`) when the server is running. This provides:
 
 - Interactive API explorer with schema documentation
 - "Try it out" feature to test endpoints directly
 - Request/response examples for each operation
 - Full OpenAPI specification browsing
 
-**OpenAPI Specification** is available at `http://localhost:8080/spec` in JSON format, useful for code generation and API tooling integration.
+**OpenAPI Specification** is available at `http://localhost:8080/v1/spec` (legacy alias: `/spec`) in JSON format, useful for code generation and API tooling integration.
 
 **For detailed usage instructions**, see [API_GUIDE.md](API_GUIDE.md) which covers:
 - How to use the Swagger UI dashboard
