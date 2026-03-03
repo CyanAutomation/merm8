@@ -103,6 +103,15 @@ Readiness endpoint for dependency checks (including parser runtime/script availa
 {"status":"not_ready","error":"..."}
 ```
 
+
+### `GET /rules`
+
+Live discovery endpoint for built-in lint rules and their metadata.
+
+Returns each rule's `id`, default `severity`, description, `default_config`, and documented configurable options.
+
+Use this endpoint to power UI/docs so runtime and documentation remain in sync.
+
 ### `POST /analyze`
 
 **Request body**

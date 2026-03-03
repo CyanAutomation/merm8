@@ -82,6 +82,22 @@ paths:
                   error:
                     type: string
 
+
+  /rules:
+    get:
+      tags:
+        - Linting
+      summary: List built-in lint rules
+      description: Returns centralized metadata for all built-in rules, including defaults and configurable options.
+      operationId: listRules
+      responses:
+        '200':
+          description: Built-in rule metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RulesResponse'
+
   /analyze:
     post:
       tags:
@@ -327,6 +343,60 @@ paths:
 
 components:
   schemas:
+    RulesResponse:
+      type: object
+      required:
+        - rules
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleMetadata'
+
+    RuleMetadata:
+      type: object
+      required:
+        - id
+        - severity
+        - description
+        - default_config
+        - configurable_options
+      properties:
+        id:
+          type: string
+          example: max-fanout
+        severity:
+          type: string
+          enum:
+            - error
+            - warn
+            - info
+        description:
+          type: string
+        default_config:
+          type: object
+          additionalProperties: true
+        configurable_options:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleOption'
+
+    RuleOption:
+      type: object
+      required:
+        - name
+        - type
+        - description
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+        constraints:
+          type: string
+
     AnalyzeRequest:
       type: object
       required:

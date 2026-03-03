@@ -310,3 +310,16 @@ func TestServeSpec_Regression_ConfigValidationAndSeverityExamples(t *testing.T) 
 var _ interface {
 	Parse(string) (*model.Diagram, *parser.SyntaxError, error)
 } = (*mockParser)(nil)
+
+func TestServeSpec_ExposesRulesEndpointAndSchemas(t *testing.T) {
+	spec := loadServedSpec(t)
+	if got := lookup(t, spec, "paths", "/rules", "get", "operationId"); got != "listRules" {
+		t.Fatalf("expected /rules operationId listRules, got %#v", got)
+	}
+	if got := lookup(t, spec, "paths", "/rules", "get", "responses", "200", "content", "application/json", "schema", "$ref"); got != "#/components/schemas/RulesResponse" {
+		t.Fatalf("expected /rules response schema ref, got %#v", got)
+	}
+	_ = lookup(t, spec, "components", "schemas", "RulesResponse")
+	_ = lookup(t, spec, "components", "schemas", "RuleMetadata")
+	_ = lookup(t, spec, "components", "schemas", "RuleOption")
+}
