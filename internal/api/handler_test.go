@@ -366,10 +366,9 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 		t.Fatalf("expected 500 when parser returns nil diagram, got %d", w.Code)
 	}
 
-
 	var resp struct {
-		Valid  bool                   `json:"valid"`
-		Issues []interface{}          `json:"issues"`
+		Valid  bool          `json:"valid"`
+		Issues []interface{} `json:"issues"`
 		Error  struct {
 			Code    string `json:"code"`
 			Message string `json:"message"`
@@ -378,7 +377,7 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to decode error response: %v", err)
 	}
-	
+
 	// Validate complete response structure
 	if resp.Valid {
 		t.Fatalf("expected valid=false, got %v", resp.Valid)
@@ -682,6 +681,7 @@ func TestAnalyze_ConfigParsing(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Diagram with node A having 3 outgoing edges (violates custom limit of 2)
 			diagram := &model.Diagram{
+				Type: model.DiagramTypeFlowchart,
 				Nodes: []model.Node{
 					{ID: "A"},
 					{ID: "B"},
@@ -943,7 +943,7 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 				edges = append(edges, model.Edge{From: fmt.Sprintf("N%d", i-1), To: fmt.Sprintf("N%d", i), Type: "arrow"})
 			}
 		}
-		return &model.Diagram{Direction: "TD", Nodes: nodes, Edges: edges}
+		return &model.Diagram{Type: model.DiagramTypeFlowchart, Direction: "TD", Nodes: nodes, Edges: edges}
 	}
 
 	buildHighFanoutDiagram := func(fanout int) *model.Diagram {
@@ -955,7 +955,7 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 			nodes = append(nodes, model.Node{ID: nodeID, Label: nodeID})
 			edges = append(edges, model.Edge{From: "HUB", To: nodeID, Type: "arrow"})
 		}
-		return &model.Diagram{Direction: "TD", Nodes: nodes, Edges: edges}
+		return &model.Diagram{Type: model.DiagramTypeFlowchart, Direction: "TD", Nodes: nodes, Edges: edges}
 	}
 
 	buildHighFaninDiagram := func(sources int) *model.Diagram {
@@ -967,7 +967,7 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 			nodes = append(nodes, model.Node{ID: nodeID, Label: nodeID})
 			edges = append(edges, model.Edge{From: nodeID, To: "TARGET", Type: "arrow"})
 		}
-		return &model.Diagram{Direction: "TD", Nodes: nodes, Edges: edges}
+		return &model.Diagram{Type: model.DiagramTypeFlowchart, Direction: "TD", Nodes: nodes, Edges: edges}
 	}
 
 	chainNodes := 10000
@@ -1745,6 +1745,7 @@ func TestAnalyze_InvalidMaxFanoutLimitConfig_Returns400(t *testing.T) {
 
 func TestAnalyze_DisableRuleViaConfig(t *testing.T) {
 	diagram := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
 		Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "B"}},
 		Edges: []model.Edge{{From: "A", To: "B"}},
 	}
@@ -1783,7 +1784,7 @@ func TestAnalyze_DisableRuleViaConfig(t *testing.T) {
 }
 
 func TestAnalyze_SeverityOverride(t *testing.T) {
-	diagram := &model.Diagram{Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "B"}}, Edges: []model.Edge{{From: "A", To: "B"}}}
+	diagram := &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "B"}}, Edges: []model.Edge{{From: "A", To: "B"}}}
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return diagram, nil, nil
 	})
@@ -1973,6 +1974,47 @@ func TestAnalyzeAuthMiddleware_PrecedesRateLimitQuotaConsumption(t *testing.T) {
 	}
 }
 
+func TestRuleConfigSchema_ResponseShape(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/rules/schema", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Schema map[string]any `json:"schema"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode /rules/schema response: %v", err)
+	}
+	if resp.Schema["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
+		t.Fatalf("expected draft schema id, got %#v", resp.Schema["$schema"])
+	}
+
+	variants, ok := resp.Schema["oneOf"].([]any)
+	if !ok || len(variants) != 2 {
+		t.Fatalf("expected schema.oneOf with flat+nested variants, got %#v", resp.Schema["oneOf"])
+	}
+
+	flat := variants[0].(map[string]any)
+	flatProps := flat["properties"].(map[string]any)
+	maxFanout := flatProps["max-fanout"].(map[string]any)
+	maxFanoutProps := maxFanout["properties"].(map[string]any)
+	if got := maxFanoutProps["limit"].(map[string]any)["minimum"]; got != float64(1) {
+		t.Fatalf("expected max-fanout.limit minimum=1, got %#v", got)
+	}
+	severity := maxFanoutProps["severity"].(map[string]any)
+	levels := severity["enum"].([]any)
+	if len(levels) != 3 || levels[0] != "error" || levels[1] != "warning" || levels[2] != "info" {
+		t.Fatalf("unexpected severity enum: %#v", levels)
+	}
+}
 func TestListRules_ResponseShape(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, nil
