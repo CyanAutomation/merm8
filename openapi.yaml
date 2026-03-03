@@ -71,6 +71,8 @@
         - "valid"
         - "lint-supported"
         - "issues"
+        - "syntax-error"
+        - "metrics"
       "type": "object"
     "DiagramTypesResponse":
       "properties":
@@ -301,7 +303,7 @@
                   "minimum": 1
                   "type": "integer"
                 "severity":
-                  "description": "Severity assigned to emitted issues."
+                  "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                   "enum":
                     - "error"
                     - "warning"
@@ -324,7 +326,7 @@
                   "minimum": 1
                   "type": "integer"
                 "severity":
-                  "description": "Severity assigned to emitted issues."
+                  "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                   "enum":
                     - "error"
                     - "warning"
@@ -346,7 +348,7 @@
                   "description": "Enable or disable this rule."
                   "type": "boolean"
                 "severity":
-                  "description": "Severity assigned to emitted issues."
+                  "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                   "enum":
                     - "error"
                     - "warning"
@@ -365,7 +367,7 @@
                   "description": "Enable or disable this rule."
                   "type": "boolean"
                 "severity":
-                  "description": "Severity assigned to emitted issues."
+                  "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                   "enum":
                     - "error"
                     - "warning"
@@ -384,7 +386,7 @@
                   "description": "Enable or disable this rule."
                   "type": "boolean"
                 "severity":
-                  "description": "Severity assigned to emitted issues."
+                  "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                   "enum":
                     - "error"
                     - "warning"
@@ -676,6 +678,17 @@
                       "message": "invalid JSON body"
                     "issues":
                     "lint-supported": false
+                    "metrics":
+                      "diagram-type": "unknown"
+                      "disconnected-node-count": 0
+                      "duplicate-node-count": 0
+                      "edge-count": 0
+                      "issue-counts":
+                        "by-rule":
+                        "by-severity":
+                      "max-fanin": 0
+                      "max-fanout": 0
+                      "node-count": 0
                     "syntax-error": null
                     "valid": false
                 "invalidOption":
@@ -687,6 +700,17 @@
                       "path": "config.rules.max-fanout.limit"
                     "issues":
                     "lint-supported": false
+                    "metrics":
+                      "diagram-type": "unknown"
+                      "disconnected-node-count": 0
+                      "duplicate-node-count": 0
+                      "edge-count": 0
+                      "issue-counts":
+                        "by-rule":
+                        "by-severity":
+                      "max-fanin": 0
+                      "max-fanout": 0
+                      "node-count": 0
                     "syntax-error": null
                     "valid": false
                 "missingCode":
@@ -697,6 +721,17 @@
                       "message": "field 'code' is required"
                     "issues":
                     "lint-supported": false
+                    "metrics":
+                      "diagram-type": "unknown"
+                      "disconnected-node-count": 0
+                      "duplicate-node-count": 0
+                      "edge-count": 0
+                      "issue-counts":
+                        "by-rule":
+                        "by-severity":
+                      "max-fanin": 0
+                      "max-fanout": 0
+                      "node-count": 0
                     "syntax-error": null
                     "valid": false
                 "unknownOption":
@@ -713,6 +748,17 @@
                         - "suppression-selectors"
                     "issues":
                     "lint-supported": false
+                    "metrics":
+                      "diagram-type": "unknown"
+                      "disconnected-node-count": 0
+                      "duplicate-node-count": 0
+                      "edge-count": 0
+                      "issue-counts":
+                        "by-rule":
+                        "by-severity":
+                      "max-fanin": 0
+                      "max-fanout": 0
+                      "node-count": 0
                     "syntax-error": null
                     "valid": false
                 "unknownRule":
@@ -730,6 +776,17 @@
                         - "no-duplicate-node-ids"
                     "issues":
                     "lint-supported": false
+                    "metrics":
+                      "diagram-type": "unknown"
+                      "disconnected-node-count": 0
+                      "duplicate-node-count": 0
+                      "edge-count": 0
+                      "issue-counts":
+                        "by-rule":
+                        "by-severity":
+                      "max-fanin": 0
+                      "max-fanout": 0
+                      "node-count": 0
                     "syntax-error": null
                     "valid": false
               "schema":
@@ -744,6 +801,17 @@
                   "message": "request body exceeds 1 MiB limit"
                 "issues":
                 "lint-supported": false
+                "metrics":
+                  "diagram-type": "unknown"
+                  "disconnected-node-count": 0
+                  "duplicate-node-count": 0
+                  "edge-count": 0
+                  "issue-counts":
+                    "by-rule":
+                    "by-severity":
+                  "max-fanin": 0
+                  "max-fanout": 0
+                  "node-count": 0
                 "syntax-error": null
                 "valid": false
               "schema":
@@ -758,6 +826,17 @@
                   "message": "rate limit exceeded"
                 "issues":
                 "lint-supported": false
+                "metrics":
+                  "diagram-type": "unknown"
+                  "disconnected-node-count": 0
+                  "duplicate-node-count": 0
+                  "edge-count": 0
+                  "issue-counts":
+                    "by-rule":
+                    "by-severity":
+                  "max-fanin": 0
+                  "max-fanout": 0
+                  "node-count": 0
                 "syntax-error": null
                 "valid": false
               "schema":
@@ -775,6 +854,17 @@
                       "message": "parser response violated service contract"
                     "issues":
                     "lint-supported": false
+                    "metrics":
+                      "diagram-type": "unknown"
+                      "disconnected-node-count": 0
+                      "duplicate-node-count": 0
+                      "edge-count": 0
+                      "issue-counts":
+                        "by-rule":
+                        "by-severity":
+                      "max-fanin": 0
+                      "max-fanout": 0
+                      "node-count": 0
                     "syntax-error": null
                     "valid": false
                 "decode":
@@ -785,6 +875,17 @@
                       "message": "parser returned malformed output"
                     "issues":
                     "lint-supported": false
+                    "metrics":
+                      "diagram-type": "unknown"
+                      "disconnected-node-count": 0
+                      "duplicate-node-count": 0
+                      "edge-count": 0
+                      "issue-counts":
+                        "by-rule":
+                        "by-severity":
+                      "max-fanin": 0
+                      "max-fanout": 0
+                      "node-count": 0
                     "syntax-error": null
                     "valid": false
                 "internal":
@@ -795,6 +896,17 @@
                       "message": "internal server error"
                     "issues":
                     "lint-supported": false
+                    "metrics":
+                      "diagram-type": "unknown"
+                      "disconnected-node-count": 0
+                      "duplicate-node-count": 0
+                      "edge-count": 0
+                      "issue-counts":
+                        "by-rule":
+                        "by-severity":
+                      "max-fanin": 0
+                      "max-fanout": 0
+                      "node-count": 0
                     "syntax-error": null
                     "valid": false
                 "subprocess":
@@ -805,6 +917,17 @@
                       "message": "parser subprocess failed"
                     "issues":
                     "lint-supported": false
+                    "metrics":
+                      "diagram-type": "unknown"
+                      "disconnected-node-count": 0
+                      "duplicate-node-count": 0
+                      "edge-count": 0
+                      "issue-counts":
+                        "by-rule":
+                        "by-severity":
+                      "max-fanin": 0
+                      "max-fanout": 0
+                      "node-count": 0
                     "syntax-error": null
                     "valid": false
               "schema":
@@ -819,6 +942,17 @@
                   "message": "parser concurrency limit reached; try again"
                 "issues":
                 "lint-supported": false
+                "metrics":
+                  "diagram-type": "unknown"
+                  "disconnected-node-count": 0
+                  "duplicate-node-count": 0
+                  "edge-count": 0
+                  "issue-counts":
+                    "by-rule":
+                    "by-severity":
+                  "max-fanin": 0
+                  "max-fanout": 0
+                  "node-count": 0
                 "syntax-error": null
                 "valid": false
               "schema":
@@ -833,6 +967,17 @@
                   "message": "parser timed out while validating Mermaid code"
                 "issues":
                 "lint-supported": false
+                "metrics":
+                  "diagram-type": "unknown"
+                  "disconnected-node-count": 0
+                  "duplicate-node-count": 0
+                  "edge-count": 0
+                  "issue-counts":
+                    "by-rule":
+                    "by-severity":
+                  "max-fanin": 0
+                  "max-fanout": 0
+                  "node-count": 0
                 "syntax-error": null
                 "valid": false
               "schema":
