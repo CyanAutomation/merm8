@@ -2,10 +2,19 @@ package model
 
 // Diagram is the internal representation of a parsed Mermaid flowchart.
 type Diagram struct {
-	Direction string
-	Nodes     []Node
-	Edges     []Edge
-	Subgraphs []Subgraph
+	Direction    string
+	Nodes        []Node
+	Edges        []Edge
+	Subgraphs    []Subgraph
+	Suppressions []SuppressionDirective
+}
+
+// SuppressionDirective represents a source-level lint suppression comment.
+type SuppressionDirective struct {
+	RuleID     string
+	Scope      string
+	Line       int
+	TargetLine int
 }
 
 // Node represents a single node in the diagram.

@@ -80,6 +80,8 @@ func TestEngine_StableOrderingAcrossRuleRegistrationOrder(t *testing.T) {
 
 type duplicateIssueRule struct{}
 
+func intPtr(v int) *int { return &v }
+
 func (duplicateIssueRule) ID() string { return "duplicate-issue-rule" }
 
 func (duplicateIssueRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
@@ -87,8 +89,8 @@ func (duplicateIssueRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 		RuleID:   "duplicate-issue-rule",
 		Severity: "warn",
 		Message:  "duplicate issue",
-		Line:     2,
-		Column:   4,
+		Line:     intPtr(2),
+		Column:   intPtr(4),
 	}
 	return []model.Issue{issue, issue}
 }

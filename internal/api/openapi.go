@@ -106,7 +106,7 @@ var openapi = map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Analyze and lint a Mermaid diagram",
-				"description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nReturns syntax errors if parsing fails, or lint results if parsing succeeds.",
+				"description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors if parsing fails, or lint results if parsing succeeds.",
 				"operationId": "analyzeCode",
 				"requestBody": map[string]interface{}{
 					"required": true,
@@ -358,7 +358,7 @@ var openapi = map[string]interface{}{
 				"properties": map[string]interface{}{
 					"code": map[string]interface{}{
 						"type":        "string",
-						"description": "Mermaid diagram code to analyze. Total request body must be 1 MiB or smaller.",
+						"description": "Mermaid diagram code to analyze. Total request body must be 1 MiB or smaller. Supports suppression comments like `%% merm8-disable max-fanout` and `%% merm8-disable all`.",
 						"example":     "graph TD\n  A[Start] --> B[Process]\n  B --> C[End]",
 					},
 					"config": map[string]interface{}{

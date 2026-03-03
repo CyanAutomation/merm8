@@ -355,6 +355,17 @@ curl http://localhost:8080/spec | jq .
 
 ### POST `/analyze`
 
+#### Source-level suppression directives
+
+You can suppress lint findings directly in Mermaid source using comment directives:
+
+- `%% merm8-disable <rule-id>`
+- `%% merm8-disable all`
+- `%% merm8-disable-next-line <rule-id>`
+- `%% merm8-disable-next-line all`
+
+`all` suppresses every rule. Rule-specific suppressions only affect matching `rule_id` values.
+
 **Description:** Validate and lint a Mermaid diagram  
 **Request body:**
 ```json
