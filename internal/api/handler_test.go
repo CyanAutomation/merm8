@@ -122,14 +122,59 @@ func assertExactErrorResponse(t *testing.T, body []byte, wantCode, wantMessage s
 	if !ok {
 		t.Fatalf("expected error object, got %#v", resp["error"])
 	}
-	if len(errObj) != 2 {
-		t.Fatalf("expected exactly code/message in error object, got %#v", errObj)
-	}
 	if code, ok := errObj["code"].(string); !ok || code != wantCode {
 		t.Fatalf("expected error.code=%q, got %#v", wantCode, errObj["code"])
 	}
 	if msg, ok := errObj["message"].(string); !ok || msg != wantMessage {
 		t.Fatalf("expected error.message=%q, got %#v", wantMessage, errObj["message"])
+	}
+	if _, hasPath := errObj["path"]; hasPath {
+		t.Fatalf("did not expect error.path for generic errors, got %#v", errObj["path"])
+	}
+	if _, hasSupported := errObj["supported"]; hasSupported {
+		t.Fatalf("did not expect error.supported for generic errors, got %#v", errObj["supported"])
+	}
+}
+
+func assertValidationErrorResponse(t *testing.T, body []byte, wantCode, wantMessage, wantPath string, wantSupported []string) {
+	t.Helper()
+
+	var resp struct {
+		Valid  bool          `json:"valid"`
+		Issues []model.Issue `json:"issues"`
+		Error  struct {
+			Code      string   `json:"code"`
+			Message   string   `json:"message"`
+			Path      string   `json:"path"`
+			Supported []string `json:"supported"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if resp.Valid {
+		t.Fatal("expected valid=false")
+	}
+	if len(resp.Issues) != 0 {
+		t.Fatalf("expected empty issues array, got %#v", resp.Issues)
+	}
+	if resp.Error.Code != wantCode {
+		t.Fatalf("expected error.code=%q, got %q", wantCode, resp.Error.Code)
+	}
+	if resp.Error.Message != wantMessage {
+		t.Fatalf("expected error.message=%q, got %q", wantMessage, resp.Error.Message)
+	}
+	if resp.Error.Path != wantPath {
+		t.Fatalf("expected error.path=%q, got %q", wantPath, resp.Error.Path)
+	}
+	if len(wantSupported) == 0 {
+		if len(resp.Error.Supported) != 0 {
+			t.Fatalf("expected empty supported list, got %#v", resp.Error.Supported)
+		}
+		return
+	}
+	if strings.Join(resp.Error.Supported, ",") != strings.Join(wantSupported, ",") {
+		t.Fatalf("expected supported=%v, got %v", wantSupported, resp.Error.Supported)
 	}
 }
 
@@ -1313,11 +1358,13 @@ func TestAnalyze_MalformedConfigObjects_Returns400(t *testing.T) {
 		name        string
 		config      interface{}
 		wantMessage string
+		wantPath    string
 	}{
 		{
 			name:        "config must be object",
 			config:      true,
 			wantMessage: "config must be object",
+			wantPath:    "config",
 		},
 		{
 			name: "config rules must be object",
@@ -1325,6 +1372,7 @@ func TestAnalyze_MalformedConfigObjects_Returns400(t *testing.T) {
 				"rules": []interface{}{"max-fanout"},
 			},
 			wantMessage: "config.rules must be object",
+			wantPath:    "config.rules",
 		},
 		{
 			name: "flat rule config must be object",
@@ -1332,6 +1380,7 @@ func TestAnalyze_MalformedConfigObjects_Returns400(t *testing.T) {
 				"max-fanout": 1,
 			},
 			wantMessage: "config.max-fanout must be object",
+			wantPath:    "config.max-fanout",
 		},
 		{
 			name: "nested rule config must be object",
@@ -1341,6 +1390,7 @@ func TestAnalyze_MalformedConfigObjects_Returns400(t *testing.T) {
 				},
 			},
 			wantMessage: "config.rules.max-fanout must be object",
+			wantPath:    "config.rules.max-fanout",
 		},
 	}
 
@@ -1369,7 +1419,7 @@ func TestAnalyze_MalformedConfigObjects_Returns400(t *testing.T) {
 				t.Fatal("expected parser not to be called when config validation fails")
 			}
 
-			assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", tt.wantMessage)
+			assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", tt.wantMessage, tt.wantPath, nil)
 		})
 	}
 }
@@ -1402,7 +1452,7 @@ func TestAnalyze_InvalidSeverityConfig_Returns400(t *testing.T) {
 		t.Fatal("expected parser not to be called when config validation fails")
 	}
 
-	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", `invalid severity for rule "max-fanout": "warning" (allowed: error, warn, info)`)
+	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for severity", "config.max-fanout.severity", nil)
 }
 
 func TestAnalyze_InvalidUnknownRuleConfigNested_Returns400(t *testing.T) {
@@ -1432,7 +1482,7 @@ func TestAnalyze_InvalidUnknownRuleConfigNested_Returns400(t *testing.T) {
 	if parserCalled {
 		t.Fatal("expected parser not to be called when config validation fails")
 	}
-	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", "unknown rule: no-cycles")
+	assertValidationErrorResponse(t, w.Body.Bytes(), "unknown_rule", "unknown rule: no-cycles", "config.rules.no-cycles", []string{"max-fanout", "no-disconnected-nodes", "no-duplicate-node-ids"})
 }
 
 func TestAnalyze_InvalidUnknownRuleConfigFlat_Returns400(t *testing.T) {
@@ -1460,7 +1510,67 @@ func TestAnalyze_InvalidUnknownRuleConfigFlat_Returns400(t *testing.T) {
 	if parserCalled {
 		t.Fatal("expected parser not to be called when config validation fails")
 	}
-	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", "unknown rule: no-cycles")
+	assertValidationErrorResponse(t, w.Body.Bytes(), "unknown_rule", "unknown rule: no-cycles", "config.no-cycles", []string{"max-fanout", "no-disconnected-nodes", "no-duplicate-node-ids"})
+}
+
+func TestAnalyze_InvalidUnknownOptionConfig_Returns400(t *testing.T) {
+	parserCalled := false
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		parserCalled = true
+		return &model.Diagram{}, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A-->B",
+		"config": map[string]interface{}{
+			"rules": map[string]interface{}{
+				"max-fanout": map[string]interface{}{"unknown": true},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if parserCalled {
+		t.Fatal("expected parser not to be called when config validation fails")
+	}
+	assertValidationErrorResponse(t, w.Body.Bytes(), "unknown_option", "unknown option: unknown", "config.rules.max-fanout.unknown", []string{"enabled", "limit", "severity", "suppression_selectors"})
+}
+
+func TestAnalyze_InvalidMaxFanoutLimitConfig_Returns400(t *testing.T) {
+	parserCalled := false
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		parserCalled = true
+		return &model.Diagram{}, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A-->B",
+		"config": map[string]interface{}{
+			"rules": map[string]interface{}{
+				"max-fanout": map[string]interface{}{"limit": 0},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if parserCalled {
+		t.Fatal("expected parser not to be called when config validation fails")
+	}
+	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for limit", "config.rules.max-fanout.limit", nil)
 }
 
 func TestAnalyze_DisableRuleViaConfig(t *testing.T) {
