@@ -250,7 +250,7 @@ func TestAnalyze_ParserFails_Returns500(t *testing.T) {
 	assertExactErrorResponse(t, w.Body.Bytes(), "internal_error", "internal server error")
 }
 
-func TestAnalyze_ParserTimeout_Returns504(t *testing.T) {
+func TestAnalyze_ParserTimeout_Returns500(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, fmt.Errorf("%w: after 2s", parser.ErrTimeout)
 	})
@@ -260,8 +260,8 @@ func TestAnalyze_ParserTimeout_Returns504(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusGatewayTimeout {
-		t.Fatalf("expected 504 when parser times out, got %d", w.Code)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when parser times out, got %d", w.Code)
 	}
 	assertExactErrorResponse(t, w.Body.Bytes(), "parser_timeout", "parser timed out while validating Mermaid code")
 }
@@ -1350,6 +1350,59 @@ func TestAnalyze_Integration_GlobalSuppression(t *testing.T) {
 	}
 	if len(resp.Issues) != 0 {
 		t.Fatalf("expected all issues to be suppressed, got %#v", resp.Issues)
+	}
+}
+
+func TestAnalyze_Integration_ParserTimeout_Returns500AndHandlerStaysResponsive(t *testing.T) {
+	tempDir, err := os.MkdirTemp(".", "api-timeout-parser-")
+	if err != nil {
+		t.Fatalf("failed to create repo temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(tempDir)
+	})
+
+	scriptPath := filepath.Join(tempDir, "parse.mjs")
+	scriptBody := `#!/usr/bin/env node
+setTimeout(() => {
+  process.stdout.write(JSON.stringify({ valid: true, ast: { type: "flowchart", direction: "TD", nodes: [], edges: [], subgraphs: [], suppressions: [] } }) + "\n");
+}, 8000);
+`
+	if err := os.WriteFile(scriptPath, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write timeout parser script: %v", err)
+	}
+
+	mux := newTestMuxWithRealParser(t, scriptPath)
+
+	body := `{"code":"graph TD\nA-->B"}`
+	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when parser times out, got %d", w.Code)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode timeout response: %v", err)
+	}
+	errObj, ok := resp["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected error object, got %#v", resp["error"])
+	}
+	msg, _ := errObj["message"].(string)
+	if !strings.Contains(strings.ToLower(msg), "timed out") {
+		t.Fatalf("expected timeout wording in error message, got %q", msg)
+	}
+
+	healthReq := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	healthW := httptest.NewRecorder()
+	mux.ServeHTTP(healthW, healthReq)
+
+	if healthW.Code != http.StatusOK {
+		t.Fatalf("expected handler to remain responsive after timeout; /healthz got %d", healthW.Code)
 	}
 }
 
