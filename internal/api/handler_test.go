@@ -1308,6 +1308,72 @@ func TestAnalyze_Integration_GlobalSuppression(t *testing.T) {
 	}
 }
 
+func TestAnalyze_MalformedConfigObjects_Returns400(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      interface{}
+		wantMessage string
+	}{
+		{
+			name:        "config must be object",
+			config:      true,
+			wantMessage: "config must be object",
+		},
+		{
+			name: "config rules must be object",
+			config: map[string]interface{}{
+				"rules": []interface{}{"max-fanout"},
+			},
+			wantMessage: "config.rules must be object",
+		},
+		{
+			name: "flat rule config must be object",
+			config: map[string]interface{}{
+				"max-fanout": 1,
+			},
+			wantMessage: "config.max-fanout must be object",
+		},
+		{
+			name: "nested rule config must be object",
+			config: map[string]interface{}{
+				"rules": map[string]interface{}{
+					"max-fanout": false,
+				},
+			},
+			wantMessage: "config.rules.max-fanout must be object",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parserCalled := false
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				parserCalled = true
+				return &model.Diagram{}, nil, nil
+			})
+
+			body, _ := json.Marshal(map[string]interface{}{
+				"code":   "graph TD; A-->B",
+				"config": tt.config,
+			})
+
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d", w.Code)
+			}
+			if parserCalled {
+				t.Fatal("expected parser not to be called when config validation fails")
+			}
+
+			assertExactErrorResponse(t, w.Body.Bytes(), "invalid_config", tt.wantMessage)
+		})
+	}
+}
+
 func TestAnalyze_InvalidSeverityConfig_Returns400(t *testing.T) {
 	parserCalled := false
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {

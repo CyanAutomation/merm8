@@ -317,7 +317,20 @@ components:
             Optional lint rule configuration. Supports both flat and nested formats:
             - Flat format: `{"rule-id": {"option": "value"}}`
             - Nested format: `{"rules": {"rule-id": {"option": "value"}}}`
+            `config` and `config.rules` (when present) must be objects.
+            Each per-rule config value must be an object.
             Unknown rule IDs are rejected with `400 invalid_config`.
+          oneOf:
+            - type: object
+              additionalProperties:
+                type: object
+            - type: object
+              properties:
+                rules:
+                  type: object
+                  additionalProperties:
+                    type: object
+              additionalProperties: true
           example:
             max-fanout:
               enabled: true
