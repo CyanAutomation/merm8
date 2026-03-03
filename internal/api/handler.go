@@ -444,7 +444,9 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		h.mu.RLock()
 		metrics := h.telemetryMetrics
 		h.mu.RUnlock()
-		metrics.ObserveAnalyzeOutcome(outcome)
+		if metrics != nil {
+			metrics.ObserveAnalyzeOutcome(outcome)
+		}
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxAnalyzeBodyBytes)
