@@ -314,6 +314,41 @@ type Handler struct {
 	parserConcurrencyCh chan struct{}
 }
 
+type requestRuleMetricsSink struct {
+	mu     sync.Mutex
+	byRule map[string]engine.RuleMetrics
+}
+
+func newRequestRuleMetricsSink() *requestRuleMetricsSink {
+	return &requestRuleMetricsSink{byRule: make(map[string]engine.RuleMetrics)}
+}
+
+func (s *requestRuleMetricsSink) RecordRuleMetrics(metrics engine.RuleMetrics) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	aggregated := s.byRule[metrics.RuleID]
+	aggregated.RuleID = metrics.RuleID
+	aggregated.Executions += metrics.Executions
+	aggregated.IssuesEmitted += metrics.IssuesEmitted
+	aggregated.TotalDurationNS += metrics.TotalDurationNS
+	s.byRule[metrics.RuleID] = aggregated
+}
+
+func (s *requestRuleMetricsSink) Snapshot() []engine.RuleMetrics {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := make([]engine.RuleMetrics, 0, len(s.byRule))
+	for _, metrics := range s.byRule {
+		out = append(out, metrics)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].RuleID < out[j].RuleID
+	})
+	return out
+}
+
 type infoResponse struct {
 	ServiceVersion   string                `json:"service_version,omitempty"`
 	ParserVersion    string                `json:"parser_version,omitempty"`
@@ -686,7 +721,18 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		return
 	}
 
-	issues := h.engine.Run(diagram, normalizedCfg)
+	ruleMetricsSink := newRequestRuleMetricsSink()
+	issues := h.engine.RunWithInstrumentation(diagram, normalizedCfg, ruleMetricsSink)
+	for _, ruleMetrics := range ruleMetricsSink.Snapshot() {
+		logger.Info(
+			"engine rule metrics",
+			"request_id", RequestIDFromContext(r.Context()),
+			"rule_id", ruleMetrics.RuleID,
+			"executions", ruleMetrics.Executions,
+			"issues_emitted", ruleMetrics.IssuesEmitted,
+			"total_duration_ns", ruleMetrics.TotalDurationNS,
+		)
+	}
 	observeAnalyzeOutcome(telemetry.OutcomeLintSuccess)
 	setAnalyzeLogFields(r.Context(), telemetry.OutcomeLintSuccess, string(diagram.Type))
 
