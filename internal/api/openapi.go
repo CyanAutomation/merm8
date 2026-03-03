@@ -236,13 +236,27 @@ var openapi = map[string]interface{}{
 										"summary": "Syntax error response",
 										"value": map[string]interface{}{
 											"valid":          false,
-											"lint-supported": false,
+											"diagram-type":   "flowchart",
+											"lint-supported": true,
 											"syntax-error": map[string]interface{}{
 												"message": "Unexpected token '>'",
 												"line":    2,
 												"column":  12,
 											},
 											"issues": []interface{}{},
+											"metrics": map[string]interface{}{
+												"node-count":              0,
+												"edge-count":              0,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               0,
+												"max-fanout":              0,
+												"diagram-type":            "flowchart",
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
+												},
+											},
 										},
 									},
 									"sequenceDiagram": map[string]interface{}{
@@ -697,7 +711,7 @@ var openapi = map[string]interface{}{
 					},
 					"lint-supported": map[string]interface{}{
 						"type":        "boolean",
-						"description": "Whether lint rules are currently implemented for the parsed diagram type.",
+						"description": "Whether lint rules are currently implemented for the reported diagram type. Syntax-error responses use parser-detected type fallback when available.",
 					},
 					"syntax-error": map[string]interface{}{
 						"$ref":        "#/components/schemas/SyntaxError",
@@ -718,7 +732,7 @@ var openapi = map[string]interface{}{
 					},
 					"metrics": map[string]interface{}{
 						"$ref":        "#/components/schemas/Metrics",
-						"description": "Aggregate statistics about the diagram. Present if valid.",
+						"description": "Aggregate statistics about the diagram. Present for successful analyze responses, including syntax errors (zeroed counters with fallback diagram-type).",
 						"nullable":    true,
 					},
 				},

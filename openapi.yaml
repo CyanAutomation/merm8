@@ -51,11 +51,11 @@ components:
             $ref: '#/components/schemas/Issue'
           type: array
         lint-supported:
-          description: Whether lint rules are currently implemented for the parsed diagram type.
+          description: Whether lint rules are currently implemented for the reported diagram type. Syntax-error responses use parser-detected type fallback when available.
           type: boolean
         metrics:
           $ref: '#/components/schemas/Metrics'
-          description: Aggregate statistics about the diagram. Present if valid.
+          description: Aggregate statistics about the diagram. Present for successful analyze responses, including syntax errors (zeroed counters with fallback diagram-type).
           nullable: true
         syntax-error:
           $ref: '#/components/schemas/SyntaxError'
@@ -592,8 +592,20 @@ paths:
                 syntaxError:
                   summary: Syntax error response
                   value:
+                    diagram-type: flowchart
                     issues: []
-                    lint-supported: false
+                    lint-supported: true
+                    metrics:
+                      diagram-type: flowchart
+                      disconnected-node-count: 0
+                      duplicate-node-count: 0
+                      edge-count: 0
+                      issue-counts:
+                        by-rule: {}
+                        by-severity: {}
+                      max-fanin: 0
+                      max-fanout: 0
+                      node-count: 0
                     syntax-error:
                       column: 12
                       line: 2
