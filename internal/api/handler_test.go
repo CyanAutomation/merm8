@@ -366,6 +366,34 @@ func TestAnalyze_ValidDiagram_SuccessPath(t *testing.T) {
 		if edgeCount, ok := metrics["edge_count"].(float64); !ok || edgeCount != 2 {
 			t.Errorf("expected edge_count=2, got %v", metrics["edge_count"])
 		}
+		if disconnected, ok := metrics["disconnected_node_count"].(float64); !ok || disconnected != 0 {
+			t.Errorf("expected disconnected_node_count=0, got %v", metrics["disconnected_node_count"])
+		}
+		if duplicate, ok := metrics["duplicate_node_count"].(float64); !ok || duplicate != 0 {
+			t.Errorf("expected duplicate_node_count=0, got %v", metrics["duplicate_node_count"])
+		}
+		if maxFanin, ok := metrics["max_fanin"].(float64); !ok || maxFanin != 1 {
+			t.Errorf("expected max_fanin=1, got %v", metrics["max_fanin"])
+		}
+		if maxFanout, ok := metrics["max_fanout"].(float64); !ok || maxFanout != 1 {
+			t.Errorf("expected max_fanout=1, got %v", metrics["max_fanout"])
+		}
+		if diagramType, ok := metrics["diagram_type"].(string); !ok || diagramType != "flowchart" {
+			t.Errorf("expected metrics.diagram_type=flowchart, got %v", metrics["diagram_type"])
+		}
+		if direction, ok := metrics["direction"].(string); !ok || direction != "TD" {
+			t.Errorf("expected metrics.direction=TD, got %v", metrics["direction"])
+		}
+		issueCounts, ok := metrics["issue_counts"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected metrics.issue_counts object, got %T", metrics["issue_counts"])
+		}
+		if bySeverity, ok := issueCounts["by_severity"].(map[string]interface{}); !ok || len(bySeverity) != 0 {
+			t.Errorf("expected empty issue_counts.by_severity, got %v", issueCounts["by_severity"])
+		}
+		if byRule, ok := issueCounts["by_rule"].(map[string]interface{}); !ok || len(byRule) != 0 {
+			t.Errorf("expected empty issue_counts.by_rule, got %v", issueCounts["by_rule"])
+		}
 	}
 }
 
@@ -652,6 +680,69 @@ func TestAnalyze_MultipleRulesAggregate(t *testing.T) {
 		}
 	}
 	t.Logf("rules fired: %v", ruleIDs)
+}
+
+func TestAnalyze_MetricsExtendedFields(t *testing.T) {
+	diagram := &model.Diagram{
+		Type:      model.DiagramTypeFlowchart,
+		Direction: "LR",
+		Nodes:     []model.Node{{ID: "A"}, {ID: "A"}, {ID: "B"}, {ID: "C"}, {ID: "D"}},
+		Edges:     []model.Edge{{From: "A", To: "B", Type: "arrow"}, {From: "C", To: "B", Type: "arrow"}},
+	}
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+	body, _ := json.Marshal(map[string]string{"code": "graph LR\n  A-->B\n  C-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	metrics, ok := resp["metrics"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected metrics object, got %T", resp["metrics"])
+	}
+	expected := map[string]int{
+		"node_count":              5,
+		"edge_count":              2,
+		"disconnected_node_count": 1,
+		"duplicate_node_count":    1,
+		"max_fanin":               2,
+		"max_fanout":              1,
+	}
+	for k, want := range expected {
+		got, ok := metrics[k].(float64)
+		if !ok || int(got) != want {
+			t.Fatalf("expected %s=%d, got %v", k, want, metrics[k])
+		}
+	}
+	if got := metrics["diagram_type"]; got != "flowchart" {
+		t.Fatalf("expected diagram_type=flowchart, got %v", got)
+	}
+	if got := metrics["direction"]; got != "LR" {
+		t.Fatalf("expected direction=LR, got %v", got)
+	}
+	issueCounts, ok := metrics["issue_counts"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected issue_counts object, got %T", metrics["issue_counts"])
+	}
+	bySeverity := issueCounts["by_severity"].(map[string]interface{})
+	if bySeverity["error"] != float64(2) {
+		t.Fatalf("expected by_severity.error=2, got %v", bySeverity["error"])
+	}
+	byRule := issueCounts["by_rule"].(map[string]interface{})
+	if byRule["no-duplicate-node-ids"] != float64(1) {
+		t.Fatalf("expected no-duplicate-node-ids count=1, got %v", byRule["no-duplicate-node-ids"])
+	}
+	if byRule["no-disconnected-nodes"] != float64(1) {
+		t.Fatalf("expected no-disconnected-nodes count=1, got %v", byRule["no-disconnected-nodes"])
+	}
 }
 
 // TestAnalyze_LargeDiagram tests handling of large diagrams (500+ nodes) with timing and detailed metrics.

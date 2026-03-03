@@ -149,7 +149,15 @@ paths:
                     metrics:
                       node_count: 2
                       edge_count: 1
+                      disconnected_node_count: 0
+                      duplicate_node_count: 0
+                      max_fanin: 1
                       max_fanout: 1
+                      diagram_type: flowchart
+                      direction: TD
+                      issue_counts:
+                        by_severity: {}
+                        by_rule: {}
                 syntaxError:
                   summary: Syntax error response
                   value:
@@ -179,7 +187,19 @@ paths:
                     metrics:
                       node_count: 4
                       edge_count: 2
+                      disconnected_node_count: 1
+                      duplicate_node_count: 0
+                      max_fanin: 1
                       max_fanout: 2
+                      diagram_type: flowchart
+                      direction: TD
+                      issue_counts:
+                        by_severity:
+                          error: 1
+                          warn: 1
+                        by_rule:
+                          no-disconnected-nodes: 1
+                          max-fanout: 1
         '400':
           description: Bad request (invalid JSON or missing required field)
           content:
@@ -432,7 +452,11 @@ components:
       required:
         - node_count
         - edge_count
+        - disconnected_node_count
+        - duplicate_node_count
+        - max_fanin
         - max_fanout
+        - diagram_type
       properties:
         node_count:
           type: integer
@@ -442,7 +466,45 @@ components:
           type: integer
           description: Total number of edges (connections) in the diagram
           example: 4
+        disconnected_node_count:
+          type: integer
+          description: Number of nodes with neither incoming nor outgoing edges
+          example: 1
+        duplicate_node_count:
+          type: integer
+          description: Number of duplicate node declarations beyond first occurrences
+          example: 0
+        max_fanin:
+          type: integer
+          description: Maximum number of incoming edges to any single node
+          example: 3
         max_fanout:
           type: integer
           description: Maximum number of outgoing edges from any single node
           example: 2
+        diagram_type:
+          type: string
+          description: Diagram type copied from parsed metadata
+          example: flowchart
+        direction:
+          type: string
+          description: Diagram direction when provided by parser
+          example: TD
+        issue_counts:
+          $ref: '#/components/schemas/IssueCounts'
+          description: Issue count aggregations by severity and rule ID
+
+    IssueCounts:
+      type: object
+      required:
+        - by_severity
+        - by_rule
+      properties:
+        by_severity:
+          type: object
+          additionalProperties:
+            type: integer
+        by_rule:
+          type: object
+          additionalProperties:
+            type: integer
