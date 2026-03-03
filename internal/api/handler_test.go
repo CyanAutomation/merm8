@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -881,6 +882,207 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 				t.Fatalf("analysis exceeded stable upper bound (%v): %v", tt.maxDuration, elapsed)
 			}
 		})
+	}
+}
+
+func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
+	t.Parallel()
+
+	validDiagram := &model.Diagram{
+		Type:      model.DiagramTypeFlowchart,
+		Direction: "TD",
+		Nodes: []model.Node{
+			{ID: "A"},
+			{ID: "B"},
+			{ID: "C"},
+			{ID: "D"},
+			{ID: "E"},
+			{ID: "F"},
+		},
+		Edges: []model.Edge{
+			{From: "A", To: "B", Type: "arrow"},
+			{From: "B", To: "C", Type: "arrow"},
+			{From: "C", To: "D", Type: "arrow"},
+			{From: "D", To: "E", Type: "arrow"},
+			{From: "E", To: "F", Type: "arrow"},
+		},
+	}
+
+	highFanoutDiagram := &model.Diagram{
+		Type:      model.DiagramTypeFlowchart,
+		Direction: "TD",
+		Nodes: []model.Node{
+			{ID: "A"},
+			{ID: "B"},
+			{ID: "C"},
+			{ID: "D"},
+			{ID: "E"},
+			{ID: "F"},
+			{ID: "G"},
+		},
+		Edges: []model.Edge{
+			{From: "A", To: "B", Type: "arrow"},
+			{From: "A", To: "C", Type: "arrow"},
+			{From: "A", To: "D", Type: "arrow"},
+			{From: "A", To: "E", Type: "arrow"},
+			{From: "A", To: "F", Type: "arrow"},
+			{From: "A", To: "G", Type: "arrow"},
+		},
+	}
+
+	syntaxErr := &parser.SyntaxError{Message: "mock syntax error", Line: 1, Column: 1}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		switch {
+		case strings.Contains(code, "SYNTAX_ERROR"):
+			return nil, syntaxErr, nil
+		case strings.Contains(code, "HIGH_FANOUT"):
+			return highFanoutDiagram, nil, nil
+		default:
+			return validDiagram, nil, nil
+		}
+	})
+
+	makeValidBody := func(i int) []byte {
+		body, _ := json.Marshal(map[string]interface{}{
+			"code": fmt.Sprintf("graph TD\nA-->B\nB-->C\n%% VALID_%d", i),
+		})
+		return body
+	}
+	makeSyntaxErrorBody := func(i int) []byte {
+		body, _ := json.Marshal(map[string]interface{}{
+			"code": fmt.Sprintf("SYNTAX_ERROR_%d", i),
+		})
+		return body
+	}
+	makeHighFanoutBody := func(i int) []byte {
+		body, _ := json.Marshal(map[string]interface{}{
+			"code": fmt.Sprintf("HIGH_FANOUT_%d", i),
+			"config": map[string]interface{}{
+				"rules": map[string]interface{}{
+					"max-fanout": map[string]interface{}{"limit": 3},
+				},
+			},
+		})
+		return body
+	}
+
+	type scenario struct {
+		name      string
+		buildBody func(int) []byte
+		assertFn  func(*httptest.ResponseRecorder) error
+	}
+
+	scenarios := []scenario{
+		{
+			name:      "valid",
+			buildBody: makeValidBody,
+			assertFn: func(w *httptest.ResponseRecorder) error {
+				if w.Code != http.StatusOK {
+					return fmt.Errorf("valid payload expected 200, got %d", w.Code)
+				}
+				var resp map[string]interface{}
+				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+					return fmt.Errorf("valid payload decode failed: %w", err)
+				}
+				if valid, ok := resp["valid"].(bool); !ok || !valid {
+					return fmt.Errorf("valid payload expected valid=true, got %v", resp["valid"])
+				}
+				return nil
+			},
+		},
+		{
+			name:      "syntax-error",
+			buildBody: makeSyntaxErrorBody,
+			assertFn: func(w *httptest.ResponseRecorder) error {
+				if w.Code != http.StatusOK {
+					return fmt.Errorf("syntax-error payload expected 200, got %d", w.Code)
+				}
+				var resp map[string]interface{}
+				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+					return fmt.Errorf("syntax-error payload decode failed: %w", err)
+				}
+				if valid, ok := resp["valid"].(bool); !ok || valid {
+					return fmt.Errorf("syntax-error payload expected valid=false, got %v", resp["valid"])
+				}
+				if syntaxErrorResp, ok := resp["syntax_error"].(map[string]interface{}); !ok || syntaxErrorResp["message"] == nil {
+					return fmt.Errorf("syntax-error payload expected syntax_error object with message, got %v", resp["syntax_error"])
+				}
+				return nil
+			},
+		},
+		{
+			name:      "high-fanout",
+			buildBody: makeHighFanoutBody,
+			assertFn: func(w *httptest.ResponseRecorder) error {
+				if w.Code != http.StatusOK {
+					return fmt.Errorf("high-fanout payload expected 200, got %d", w.Code)
+				}
+				var resp map[string]interface{}
+				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+					return fmt.Errorf("high-fanout payload decode failed: %w", err)
+				}
+				issues, ok := resp["issues"].([]interface{})
+				if !ok {
+					return fmt.Errorf("high-fanout payload expected issues array, got %T", resp["issues"])
+				}
+				found := false
+				for _, issue := range issues {
+					issueMap, ok := issue.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					if issueMap["rule_id"] == "max-fanout" {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return fmt.Errorf("high-fanout payload expected max-fanout issue, got %v", issues)
+				}
+				return nil
+			},
+		},
+	}
+
+	const goroutinesPerScenario = 120
+	errCh := make(chan error, len(scenarios)*goroutinesPerScenario)
+	var wg sync.WaitGroup
+
+	for _, sc := range scenarios {
+		sc := sc
+		for i := 0; i < goroutinesPerScenario; i++ {
+			i := i
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer func() {
+					if r := recover(); r != nil {
+						errCh <- fmt.Errorf("scenario %s[%d] panicked: %v", sc.name, i, r)
+					}
+				}()
+
+				body := sc.buildBody(i)
+				req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				w := httptest.NewRecorder()
+
+				mux.ServeHTTP(w, req)
+
+				if err := sc.assertFn(w); err != nil {
+					errCh <- fmt.Errorf("scenario %s[%d] response assertion failed: %v; status=%d body=%s", sc.name, i, err, w.Code, w.Body.String())
+				}
+			}()
+		}
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
