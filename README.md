@@ -117,6 +117,31 @@ Readiness endpoint for dependency checks (including parser runtime/script availa
 {"status":"not_ready","error":"..."}
 ```
 
+### `GET /metrics`
+
+Prometheus-compatible metrics endpoint in text exposition format.
+
+The server exports request count, status code, and latency metrics for key API routes:
+- `POST /analyze`
+- `GET /healthz`
+- `GET /ready`
+
+Example scrape:
+
+```bash
+curl -s http://localhost:8080/metrics
+```
+
+Example Prometheus `scrape_configs` entry:
+
+```yaml
+scrape_configs:
+  - job_name: "merm8"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["localhost:8080"]
+```
+
 
 ### `GET /rules`
 

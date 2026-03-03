@@ -274,6 +274,7 @@ type apiErrorDetails struct {
 type Handler struct {
 	parser              ParserInterface
 	engine              *engine.Engine
+	metricsHandler      http.Handler
 	mu                  sync.RWMutex
 	parserConcurrencyCh chan struct{}
 }
@@ -301,6 +302,14 @@ func (h *Handler) SetParserConcurrencyLimit(limit int) {
 	h.parserConcurrencyCh = make(chan struct{}, limit)
 }
 
+// SetMetricsHandler configures the exporter used by GET /metrics.
+func (h *Handler) SetMetricsHandler(metricsHandler http.Handler) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.metricsHandler = metricsHandler
+}
+
 // NewHandlerWithScript creates a Handler wired with a real parser using the given script path.
 // This is the typical constructor for production use.
 func NewHandlerWithScript(scriptPath string) (*Handler, error) {
@@ -320,11 +329,26 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", h.Healthz)
 	mux.HandleFunc("GET /healthz", h.Healthz)
 	mux.HandleFunc("GET /ready", h.Ready)
+	mux.HandleFunc("GET /metrics", h.Metrics)
 	mux.HandleFunc("GET /rules", h.ListRules)
 	mux.HandleFunc("GET /rules/schema", h.RuleConfigSchema)
 	mux.HandleFunc("POST /analyze", h.Analyze)
 	mux.HandleFunc("GET /spec", h.ServeSpec)
 	mux.HandleFunc("GET /docs", h.ServeSwagger)
+}
+
+// Metrics handles GET /metrics and serves exporter output when configured.
+func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
+	h.mu.RLock()
+	metricsHandler := h.metricsHandler
+	h.mu.RUnlock()
+
+	if metricsHandler == nil {
+		writeError(w, http.StatusNotImplemented, "metrics_not_configured", "metrics exporter is not configured")
+		return
+	}
+
+	metricsHandler.ServeHTTP(w, r)
 }
 
 // ListRules handles GET /rules.

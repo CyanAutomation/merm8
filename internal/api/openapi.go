@@ -130,6 +130,37 @@ var openapi = map[string]interface{}{
 			},
 		},
 
+		"/metrics": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Prometheus metrics",
+				"description": "Returns service metrics in Prometheus text exposition format.",
+				"operationId": "getMetrics",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Metrics in Prometheus text format",
+						"content": map[string]interface{}{
+							"text/plain": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "string",
+								},
+							},
+						},
+					},
+					"501": map[string]interface{}{
+						"description": "Metrics exporter not configured",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/AnalyzeErrorResponse",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+
 		"/rules": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Linting"},
