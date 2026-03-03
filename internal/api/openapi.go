@@ -230,7 +230,7 @@ var openapi = map[string]interface{}{
 												},
 												map[string]interface{}{
 													"rule_id":  "max-fanout",
-													"severity": "warn",
+													"severity": "warning",
 													"message":  "Node 'A' has fanout 6, exceeding limit of 5",
 													"line":     2,
 													"column":   2,
@@ -246,7 +246,7 @@ var openapi = map[string]interface{}{
 												"diagram_type":            "flowchart",
 												"direction":               "TD",
 												"issue_counts": map[string]interface{}{
-													"by_severity": map[string]interface{}{"error": 1, "warn": 1},
+													"by_severity": map[string]interface{}{"error": 1, "warning": 1},
 													"by_rule":     map[string]interface{}{"no-disconnected-nodes": 1, "max-fanout": 1},
 												},
 											},
@@ -286,44 +286,44 @@ var openapi = map[string]interface{}{
 											},
 										},
 									},
-								"unknownRule": map[string]interface{}{
-									"summary": "Unknown rule in config",
-									"value": map[string]interface{}{
-										"valid":  false,
-										"issues": []interface{}{},
-										"error": map[string]interface{}{
-											"code":      "unknown_rule",
-											"message":   "unknown rule: unknown-rule",
-											"path":      "config.rules.unknown-rule",
-											"supported": []interface{}{"max-fanout", "no-disconnected-nodes", "no-duplicate-node-ids"},
+									"unknownRule": map[string]interface{}{
+										"summary": "Unknown rule in config",
+										"value": map[string]interface{}{
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":      "unknown_rule",
+												"message":   "unknown rule: unknown-rule",
+												"path":      "config.rules.unknown-rule",
+												"supported": []interface{}{"max-fanout", "no-disconnected-nodes", "no-duplicate-node-ids"},
+											},
 										},
 									},
-								},
-								"unknownOption": map[string]interface{}{
-									"summary": "Unknown option in rule config",
-									"value": map[string]interface{}{
-										"valid":  false,
-										"issues": []interface{}{},
-										"error": map[string]interface{}{
-											"code":      "unknown_option",
-											"message":   "unknown option: threshold",
-											"path":      "config.rules.max-fanout.threshold",
-											"supported": []interface{}{"enabled", "limit", "severity", "suppression_selectors"},
+									"unknownOption": map[string]interface{}{
+										"summary": "Unknown option in rule config",
+										"value": map[string]interface{}{
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":      "unknown_option",
+												"message":   "unknown option: threshold",
+												"path":      "config.rules.max-fanout.threshold",
+												"supported": []interface{}{"enabled", "limit", "severity", "suppression_selectors"},
+											},
 										},
 									},
-								},
-								"invalidOption": map[string]interface{}{
-									"summary": "Invalid option value",
-									"value": map[string]interface{}{
-										"valid":  false,
-										"issues": []interface{}{},
-										"error": map[string]interface{}{
-											"code":    "invalid_option",
-											"message": "invalid option value for limit",
-											"path":    "config.rules.max-fanout.limit",
+									"invalidOption": map[string]interface{}{
+										"summary": "Invalid option value",
+										"value": map[string]interface{}{
+											"valid":  false,
+											"issues": []interface{}{},
+											"error": map[string]interface{}{
+												"code":    "invalid_option",
+												"message": "invalid option value for limit",
+												"path":    "config.rules.max-fanout.limit",
+											},
 										},
 									},
-								},
 								},
 							},
 						},
@@ -484,9 +484,9 @@ var openapi = map[string]interface{}{
 				"type":     "object",
 				"required": []string{"id", "severity", "description", "default_config", "configurable_options"},
 				"properties": map[string]interface{}{
-					"id": map[string]interface{}{"type": "string", "example": "max-fanout"},
-					"severity": map[string]interface{}{"type": "string", "enum": []string{"error", "warn", "info"}},
-					"description": map[string]interface{}{"type": "string"},
+					"id":             map[string]interface{}{"type": "string", "example": "max-fanout"},
+					"severity":       map[string]interface{}{"type": "string", "enum": []string{"error", "warning", "info"}},
+					"description":    map[string]interface{}{"type": "string"},
 					"default_config": map[string]interface{}{"type": "object", "additionalProperties": true},
 					"configurable_options": map[string]interface{}{
 						"type": "array",
@@ -500,8 +500,8 @@ var openapi = map[string]interface{}{
 				"type":     "object",
 				"required": []string{"name", "type", "description"},
 				"properties": map[string]interface{}{
-					"name": map[string]interface{}{"type": "string"},
-					"type": map[string]interface{}{"type": "string"},
+					"name":        map[string]interface{}{"type": "string"},
+					"type":        map[string]interface{}{"type": "string"},
 					"description": map[string]interface{}{"type": "string"},
 					"constraints": map[string]interface{}{"type": "string"},
 				},
@@ -650,7 +650,7 @@ var openapi = map[string]interface{}{
 					},
 					"severity": map[string]interface{}{
 						"type":        "string",
-						"enum":        []string{"error", "warn", "info"},
+						"enum":        []string{"error", "warning", "info"},
 						"description": "Severity level of the issue",
 					},
 					"message": map[string]interface{}{
