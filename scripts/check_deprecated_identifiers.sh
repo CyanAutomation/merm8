@@ -9,6 +9,11 @@ check() {
   local pattern="$1"
   local label="$2"
 
+  if ! command -v rg &> /dev/null; then
+    echo "ERROR: ripgrep (rg) is required but not installed. Install it from " >&2
+    exit 1
+  fi
+  
   if rg -n --pcre2 "$pattern" "${files[@]}"; then
     echo "\nERROR: Found deprecated form: ${label}" >&2
     fail=1
