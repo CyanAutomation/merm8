@@ -1179,7 +1179,7 @@ var openapi = map[string]interface{}{
 			},
 			"Issue": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"rule-id", "severity", "message"},
+				"required": []string{"rule-id", "severity", "message", "fingerprint"},
 				"properties": map[string]interface{}{
 					"rule-id": map[string]interface{}{
 						"type":        "string",
@@ -1215,7 +1215,7 @@ var openapi = map[string]interface{}{
 					},
 					"context": map[string]interface{}{
 						"$ref":        "#/components/schemas/IssueContext",
-						"description": "Optional grouping context for node-scoped findings.",
+						"description": "Optional grouping context for node-scoped findings; omitted when no grouping applies.",
 						"nullable":    true,
 					},
 				},
