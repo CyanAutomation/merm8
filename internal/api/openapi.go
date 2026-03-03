@@ -265,17 +265,44 @@ var openapi = map[string]interface{}{
 											},
 										},
 									},
-									"invalidConfig": map[string]interface{}{
-										"summary": "Invalid lint configuration",
-										"value": map[string]interface{}{
-											"valid":  false,
-											"issues": []interface{}{},
-											"error": map[string]interface{}{
-												"code":    "invalid_config",
-												"message": `unknown rule id "unknown-rule" in config`,
-											},
+								"unknownRule": map[string]interface{}{
+									"summary": "Unknown rule in config",
+									"value": map[string]interface{}{
+										"valid":  false,
+										"issues": []interface{}{},
+										"error": map[string]interface{}{
+											"code":      "unknown_rule",
+											"message":   "unknown rule: unknown-rule",
+											"path":      "config.rules.unknown-rule",
+											"supported": []interface{}{"max-fanout", "no-disconnected-nodes", "no-duplicate-node-ids"},
 										},
 									},
+								},
+								"unknownOption": map[string]interface{}{
+									"summary": "Unknown option in rule config",
+									"value": map[string]interface{}{
+										"valid":  false,
+										"issues": []interface{}{},
+										"error": map[string]interface{}{
+											"code":      "unknown_option",
+											"message":   "unknown option: threshold",
+											"path":      "config.rules.max-fanout.threshold",
+											"supported": []interface{}{"enabled", "limit", "severity", "suppression_selectors"},
+										},
+									},
+								},
+								"invalidOption": map[string]interface{}{
+									"summary": "Invalid option value",
+									"value": map[string]interface{}{
+										"valid":  false,
+										"issues": []interface{}{},
+										"error": map[string]interface{}{
+											"code":    "invalid_option",
+											"message": "invalid option value for limit",
+											"path":    "config.rules.max-fanout.limit",
+										},
+									},
+								},
 								},
 							},
 						},
@@ -480,6 +507,18 @@ var openapi = map[string]interface{}{
 						"type":        "string",
 						"description": "Human-readable error message",
 						"example":     "invalid JSON body",
+					},
+					"path": map[string]interface{}{
+						"type":        "string",
+						"description": "JSON path to the invalid config field when config validation fails",
+						"example":     "config.rules.max-fanout.limit",
+					},
+					"supported": map[string]interface{}{
+						"type":        "array",
+						"description": "Supported values for unknown rule/option errors",
+						"items": map[string]interface{}{
+							"type": "string",
+						},
 					},
 				},
 			},

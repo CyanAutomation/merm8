@@ -201,7 +201,7 @@ paths:
                           no-disconnected-nodes: 1
                           max-fanout: 1
         '400':
-          description: Bad request (invalid JSON or missing required field)
+          description: Bad request (invalid JSON, missing required field, or invalid config)
           content:
             application/json:
               schema:
@@ -223,14 +223,42 @@ paths:
                     error:
                       code: invalid_json
                       message: "invalid JSON body"
-                invalidConfig:
-                  summary: Invalid lint configuration
+                unknownRule:
+                  summary: Unknown rule in config
                   value:
                     valid: false
                     issues: []
                     error:
-                      code: invalid_config
-                      message: "unknown rule id \"unknown-rule\" in config"
+                      code: unknown_rule
+                      message: "unknown rule: unknown-rule"
+                      path: config.rules.unknown-rule
+                      supported:
+                        - max-fanout
+                        - no-disconnected-nodes
+                        - no-duplicate-node-ids
+                unknownOption:
+                  summary: Unknown option in rule config
+                  value:
+                    valid: false
+                    issues: []
+                    error:
+                      code: unknown_option
+                      message: "unknown option: threshold"
+                      path: config.rules.max-fanout.threshold
+                      supported:
+                        - enabled
+                        - limit
+                        - severity
+                        - suppression_selectors
+                invalidOption:
+                  summary: Invalid option value
+                  value:
+                    valid: false
+                    issues: []
+                    error:
+                      code: invalid_option
+                      message: invalid option value for limit
+                      path: config.rules.max-fanout.limit
         '413':
           description: Request entity too large (body exceeds 1 MiB)
           content:
@@ -319,7 +347,8 @@ components:
             - Nested format: `{"rules": {"rule-id": {"option": "value"}}}`
             `config` and `config.rules` (when present) must be objects.
             Each per-rule config value must be an object.
-            Unknown rule IDs are rejected with `400 invalid_config`.
+            Unknown rule IDs/options and invalid option values are rejected with HTTP 400 and
+            structured error codes (`unknown_rule`, `unknown_option`, `invalid_option`).
           oneOf:
             - type: object
               additionalProperties:
@@ -375,6 +404,15 @@ components:
           type: string
           description: Human-readable error message
           example: invalid JSON body
+        path:
+          type: string
+          description: JSON path to the invalid config field when config validation fails
+          example: config.rules.max-fanout.limit
+        supported:
+          type: array
+          description: Supported values for unknown rule/option errors
+          items:
+            type: string
 
     AnalyzeResponse:
       type: object
