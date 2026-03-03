@@ -642,4 +642,4 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 - [x] SARIF output format for CI integration (`POST /analyze/sarif`)
 - [x] Liveness endpoints (`GET /healthz` canonical, `GET /health` alias)
 - [x] Dependency readiness endpoint (`GET /ready`, returns `503` when not ready)
-- [ ] Metrics endpoint (Prometheus-compatible)
+- [x] Metrics endpoint (Prometheus-compatible)
