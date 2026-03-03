@@ -64,9 +64,9 @@ COPY --from=go-builder /app/mermaid-lint .
 # Copy go.mod so parser can locate repository root
 COPY go.mod .
 
-# Create non-root user for security (UID 1000 is standard unprivileged user)
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser && \
+# Create non-root user for security (UID/GID 10001 avoids conflicts with existing users in alpine)
+RUN addgroup -g 10001 appuser && \
+    adduser -D -u 10001 -G appuser appuser && \
     chown -R appuser:appuser /app
 
 # Switch to non-root user
