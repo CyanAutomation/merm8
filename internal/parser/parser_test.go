@@ -48,11 +48,22 @@ func getParserScript(t *testing.T) string {
 	return ""
 }
 
+func mustNewParser(t *testing.T, scriptPath string) *parser.Parser {
+	t.Helper()
+
+	p, err := parser.New(scriptPath)
+	if err != nil {
+		t.Fatalf("failed to construct parser: %v", err)
+	}
+
+	return p
+}
+
 // TestParser_ValidFlowchart tests parsing a valid flowchart.
 func TestParser_ValidFlowchart(t *testing.T) {
 	script := getParserScript(t)
 
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 
 	mermaidCode := `graph TD
     A[Start]
@@ -111,7 +122,7 @@ func TestParser_ValidFlowchart(t *testing.T) {
 func TestParser_InvalidMermaid(t *testing.T) {
 	script := getParserScript(t)
 
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 
 	mermaidCode := "this is not valid mermaid at all"
 
@@ -138,7 +149,7 @@ func TestParser_InvalidMermaid(t *testing.T) {
 func TestParser_EmptyCode(t *testing.T) {
 	script := getParserScript(t)
 
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 
 	diagram, syntaxErr, err := p.Parse("")
 
@@ -156,7 +167,7 @@ func TestParser_EmptyCode(t *testing.T) {
 // TestParser_WithDirection tests parsing diagrams with all supported directions.
 func TestParser_WithDirection(t *testing.T) {
 	script := getParserScript(t)
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 
 	tests := []struct {
 		name      string
@@ -198,7 +209,7 @@ func TestParser_WithDirection(t *testing.T) {
 // TestParser_MultipleEdges tests parsing diagrams with multiple edges from one node.
 func TestParser_MultipleEdges(t *testing.T) {
 	script := getParserScript(t)
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 
 	mermaidCode := `graph TD
     A[Start]
@@ -289,7 +300,7 @@ process.exit(0);
 				t.Fatalf("failed to write test parser script: %v", err)
 			}
 
-			p := parser.New(script)
+			p := mustNewParser(t, script)
 			diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
 
 			if tt.wantErrSubstr != "" {
@@ -335,7 +346,7 @@ process.exit(0);
 // TestParser_LargeGraph tests parsing a reasonably large diagram.
 func TestParser_LargeGraph(t *testing.T) {
 	script := getParserScript(t)
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 
 	// Build a diagram with 20 nodes and many edges
 	mermaidCode := "graph TD\n"
@@ -378,7 +389,7 @@ process.stdout.write(JSON.stringify({ valid: true }) + "\n");
 		t.Fatalf("failed to write test parser script: %v", err)
 	}
 
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
 
 	if err == nil {
@@ -409,7 +420,7 @@ process.exit(1);
 		t.Fatalf("failed to write test parser script: %v", err)
 	}
 
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
 
 	if err == nil {
@@ -455,7 +466,7 @@ func repoTempDir(t *testing.T) string {
 //   - No data races in AST extraction or error handling
 func TestParser_ConcurrentParsing(t *testing.T) {
 	script := getParserScript(t)
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 
 	// Test concurrent parsing
 	numGoroutines := 5
@@ -494,7 +505,7 @@ func TestParser_ConcurrentParsing(t *testing.T) {
 }
 
 func TestParser_ReadyRejectsTraversalPath(t *testing.T) {
-	p := parser.New("parser-node/../secrets/parse.mjs")
+	p := mustNewParser(t, "parser-node/../secrets/parse.mjs")
 
 	err := p.Ready()
 	if err == nil {
@@ -525,7 +536,7 @@ func TestParser_ReadyRejectsSymlinkPathOutsideWorkingDirectory(t *testing.T) {
 		t.Fatalf("failed to create symlink: %v", err)
 	}
 
-	p := parser.New(linkPath)
+	p := mustNewParser(t, linkPath)
 	err = p.Ready()
 	if err == nil {
 		t.Fatal("expected error for symlink resolving outside working directory, got nil")
@@ -542,7 +553,7 @@ func TestParser_ParseRejectsPathOutsideWorkingDirectory(t *testing.T) {
 		t.Fatalf("failed to write parser script: %v", err)
 	}
 
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
 	if err == nil {
 		t.Fatal("expected validation error for script path outside working directory, got nil")
@@ -562,7 +573,7 @@ func TestParser_ReadyRejectsPathOutsideWorkingDirectory(t *testing.T) {
 		t.Fatalf("failed to write parser script: %v", err)
 	}
 
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 	err := p.Ready()
 	if err == nil {
 		t.Fatal("expected error for script path outside working directory, got nil")
@@ -589,7 +600,7 @@ process.exit(0);
 		t.Fatalf("failed to write parser script: %v", err)
 	}
 
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 	err = p.Ready()
 	if err != nil {
 		t.Fatalf("expected ready check to pass for local script path, got %v", err)
@@ -598,7 +609,7 @@ process.exit(0);
 
 func TestParser_RepoRootCachedAcrossWorkingDirectoryChange(t *testing.T) {
 	script := getParserScript(t)
-	p := parser.New(script)
+	p := mustNewParser(t, script)
 
 	origWD, err := os.Getwd()
 	if err != nil {
@@ -626,5 +637,30 @@ func TestParser_RepoRootCachedAcrossWorkingDirectoryChange(t *testing.T) {
 	}
 	if diagram == nil {
 		t.Fatal("expected diagram, got nil")
+	}
+}
+
+func TestParser_NewFailsWhenRepoRootMissing(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+
+	tmp := t.TempDir()
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("failed to chdir to temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		if chdirErr := os.Chdir(cwd); chdirErr != nil {
+			t.Fatalf("failed to restore cwd: %v", chdirErr)
+		}
+	})
+
+	p, err := parser.New("parser-node/parse.mjs")
+	if err == nil {
+		t.Fatal("expected New to fail when repository root cannot be located")
+	}
+	if p != nil {
+		t.Fatal("expected nil parser when New fails")
 	}
 }

@@ -113,11 +113,16 @@ func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
 
 // NewHandlerWithScript creates a Handler wired with a real parser using the given script path.
 // This is the typical constructor for production use.
-func NewHandlerWithScript(scriptPath string) *Handler {
+func NewHandlerWithScript(scriptPath string) (*Handler, error) {
+	p, err := parser.New(scriptPath)
+	if err != nil {
+		return nil, err
+	}
+
 	return NewHandler(
-		parser.New(scriptPath),
+		p,
 		engine.New(),
-	)
+	), nil
 }
 
 // RegisterRoutes attaches all routes to mux.
