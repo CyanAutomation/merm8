@@ -200,15 +200,16 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 
 > Request body size limit: **1 MiB**. Oversized payloads return `413` with the same unified `AnalyzeResponse` shape (`valid=false`, `lint-supported=false`, `syntax-error=null`, `issues=[]`, and populated `error`).
 
-**Response semantics matrix (HTTP 200)**
+**Response-mode matrix (`POST /analyze`)**
 
-| Case | `valid` | `lint-supported` | `metrics` | `issues` | Notes |
-|---|---:|---:|---|---|---|
-| Parsed flowchart (lint runs) | `true` | `true` | Present, computed from parsed graph and issue counts | Rule findings (possibly empty) | `syntax-error` is `null`. |
-| Parsed non-flowchart (unsupported lint family) | `false` | `false` | Present, computed from parsed graph with issue counts set to empty maps | Always `[]` | `error.code = "unsupported_diagram_type"`; `syntax-error` is `null`. |
-| Syntax error with detected flowchart prefix (`graph`/`flowchart`) | `false` | `true` | Present, zeroed counters with fallback `diagram-type=flowchart` | Always `[]` | `syntax-error` is populated. |
-| Syntax error with detected non-flowchart prefix (e.g. `sequenceDiagram`) | `false` | `false` | Present, zeroed counters with fallback detected `diagram-type` | Always `[]` | `syntax-error` is populated. |
-| Syntax error with unknown prefix | `false` | `false` | Present, zeroed counters with fallback `diagram-type=unknown` | Always `[]` | `syntax-error` is populated. |
+| HTTP status | `valid` | `syntax-error` | `issues` | `error` | when it occurs |
+|---|---:|---|---|---|---|
+| `200` | `true` | `null` | `[]` | `null` | Diagram parsed and linted successfully with no lint findings. |
+| `200` | `true` | `null` | Non-empty array | `null` | Diagram parsed and linted successfully, and one or more lint findings were produced. |
+| `200` | `false` | Populated object | `[]` | `null` | Mermaid parser reports a syntax failure. |
+| Non-`200` (`400`/`413`/`429`/`500`/`503`/`504`) | `false` | `null` | `[]` | Populated object | API-level failure (invalid request, limits, parser infrastructure, timeout, etc.). |
+
+`issues` is always present as an array (possibly empty). `syntax-error` and `error` are mutually exclusive.
 
 **Response — valid diagram**
 

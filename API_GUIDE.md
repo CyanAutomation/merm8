@@ -147,6 +147,15 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 
 ### Understanding the Response
 
+| HTTP status | `valid` | `syntax-error` | `issues` | `error` | when it occurs |
+|---|---:|---|---|---|---|
+| `200` | `true` | `null` | `[]` | `null` | Diagram parsed and linted successfully with no lint findings. |
+| `200` | `true` | `null` | Non-empty array | `null` | Diagram parsed and linted successfully, and lint findings were produced. |
+| `200` | `false` | Populated object | `[]` | `null` | Mermaid parser reports a syntax parse failure. |
+| Non-`200` (`400`/`413`/`429`/`500`/`503`/`504`) | `false` | `null` | `[]` | Populated object | API-level failure (request validation/limits/infrastructure/timeout). |
+
+`issues` is always present as an array. `syntax-error` and `error` are mutually exclusive.
+
 **Successful analysis of a valid diagram:**
 ```json
 {
@@ -227,11 +236,11 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 - **`valid`** — Boolean indicating if the Mermaid syntax is syntactically correct
 - **`diagram-type`** — Normalized Mermaid type for valid diagrams (`flowchart`, `sequence`, `class`, `er`, `state`, `unknown`)
 - **`lint-supported`** — Whether the parsed diagram type currently has active lint rule coverage
-- **`syntax-error`** — Object with parsing error details (only present if `valid` is false)
+- **`syntax-error`** — Object with parsing error details (present only for parser syntax failures; otherwise `null`)
   - `message` — Human-readable error description
   - `line` — 1-based line number where error occurred
   - `column` — 0-based column number where error occurred
-- **`issues`** — Array of lint rule violations found (empty if no issues)
+- **`issues`** — Array of lint rule violations found (always present, empty when there are no issues)
   - `rule-id` — The lint rule that triggered
   - `severity` — One of: `error`, `warning`, `info`
     - Deprecated alias: `warn` is accepted for backwards compatibility and normalized to `warning`.

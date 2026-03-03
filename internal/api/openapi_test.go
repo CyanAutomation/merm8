@@ -163,6 +163,12 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	if _, ok := validDiagram["issues"].([]interface{}); !ok {
 		t.Fatalf("expected validDiagram.issues array, got %T", validDiagram["issues"])
 	}
+	if syntaxErr := lookup(t, validDiagram, "syntax-error"); syntaxErr != nil {
+		t.Fatalf("expected validDiagram.syntax-error=null, got %#v", syntaxErr)
+	}
+	if errField := validDiagram["error"]; errField != nil {
+		t.Fatalf("expected validDiagram.error to be null/omitted, got %#v", errField)
+	}
 	metrics := lookup(t, validDiagram, "metrics").(map[string]interface{})
 	for _, metric := range []string{"node-count", "edge-count", "disconnected-node-count", "duplicate-node-count", "max-fanin", "max-fanout"} {
 		if _, ok := metrics[metric].(float64); !ok {
@@ -180,6 +186,36 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	}
 	if _, ok := lookup(t, metrics, "issue-counts", "by-rule").(map[string]interface{}); !ok {
 		t.Fatalf("expected issue-counts.by-rule object, got %T", lookup(t, metrics, "issue-counts", "by-rule"))
+	}
+
+	withIssues := lookup(t, examples200, "withIssues", "value").(map[string]interface{})
+	if withIssues["valid"] != true {
+		t.Fatalf("expected withIssues.valid=true, got %#v", withIssues["valid"])
+	}
+	issuesWithFindings, ok := withIssues["issues"].([]interface{})
+	if !ok || len(issuesWithFindings) == 0 {
+		t.Fatalf("expected withIssues.issues non-empty array, got %#v", withIssues["issues"])
+	}
+	if syntaxErr := lookup(t, withIssues, "syntax-error"); syntaxErr != nil {
+		t.Fatalf("expected withIssues.syntax-error=null, got %#v", syntaxErr)
+	}
+	if errField := withIssues["error"]; errField != nil {
+		t.Fatalf("expected withIssues.error to be null/omitted, got %#v", errField)
+	}
+
+	syntaxExample := lookup(t, examples200, "syntaxError", "value").(map[string]interface{})
+	if syntaxExample["valid"] != false {
+		t.Fatalf("expected syntaxError.valid=false, got %#v", syntaxExample["valid"])
+	}
+	if _, ok := lookup(t, syntaxExample, "syntax-error").(map[string]interface{}); !ok {
+		t.Fatalf("expected syntaxError.syntax-error object, got %#v", lookup(t, syntaxExample, "syntax-error"))
+	}
+	issuesSyntax, ok := syntaxExample["issues"].([]interface{})
+	if !ok || len(issuesSyntax) != 0 {
+		t.Fatalf("expected syntaxError.issues empty array, got %#v", syntaxExample["issues"])
+	}
+	if errField := syntaxExample["error"]; errField != nil {
+		t.Fatalf("expected syntaxError.error to be null/omitted, got %#v", errField)
 	}
 
 	examples400 := lookup(t, spec, "paths", "/analyze", "post", "responses", "400", "content", "application/json", "examples").(map[string]interface{})
@@ -226,6 +262,26 @@ func assertErrorShape(t *testing.T, payload map[string]interface{}, expectedCode
 	}
 	if msg := lookup(t, payload, "error", "message"); msg == "" {
 		t.Fatal("expected non-empty error.message")
+	}
+}
+
+func TestServeSpec_AnalyzeResponseDescriptionsDocumentModeSemantics(t *testing.T) {
+	spec := loadServedSpec(t)
+
+	desc200 := lookup(t, spec, "paths", "/analyze", "post", "responses", "200", "description").(string)
+	for _, snippet := range []string{"error` is always null", "issues` is always present as an array", "syntax-error` is populated only for parser syntax failures"} {
+		if !strings.Contains(desc200, snippet) {
+			t.Fatalf("expected 200 description to contain %q, got %q", snippet, desc200)
+		}
+	}
+
+	for _, status := range []string{"400", "413", "429", "500", "503", "504"} {
+		desc := lookup(t, spec, "paths", "/analyze", "post", "responses", status, "description").(string)
+		for _, snippet := range []string{"error", "syntax-error", "issues"} {
+			if !strings.Contains(desc, snippet) {
+				t.Fatalf("expected %s description to mention %q, got %q", status, snippet, desc)
+			}
+		}
 	}
 }
 

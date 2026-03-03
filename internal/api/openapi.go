@@ -295,7 +295,7 @@ var openapi = map[string]interface{}{
 				},
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
-						"description": "Analysis completed (valid or syntax error)",
+						"description": "Analysis completed. For HTTP 200: `error` is always null, `issues` is always present as an array, and `syntax-error` is populated only for parser syntax failures (otherwise null).",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -418,7 +418,7 @@ var openapi = map[string]interface{}{
 						},
 					},
 					"400": map[string]interface{}{
-						"description": "Bad request (invalid JSON, missing required field, or invalid config)",
+						"description": "Bad request (invalid JSON, missing required field, or invalid config). For non-200 API failures, `valid=false`, `syntax-error=null`, `issues=[]`, and `error` is populated.",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -500,7 +500,7 @@ var openapi = map[string]interface{}{
 						},
 					},
 					"413": map[string]interface{}{
-						"description": "Request entity too large (body exceeds 1 MiB)",
+						"description": "Request entity too large (body exceeds 1 MiB). For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -521,7 +521,7 @@ var openapi = map[string]interface{}{
 					},
 
 					"429": map[string]interface{}{
-						"description": "Rate limited",
+						"description": "Rate limited. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -541,7 +541,7 @@ var openapi = map[string]interface{}{
 						},
 					},
 					"503": map[string]interface{}{
-						"description": "Service unavailable",
+						"description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -561,7 +561,7 @@ var openapi = map[string]interface{}{
 						},
 					},
 					"500": map[string]interface{}{
-						"description": "Internal server error",
+						"description": "Internal server error. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -625,7 +625,7 @@ var openapi = map[string]interface{}{
 						},
 					},
 					"504": map[string]interface{}{
-						"description": "Parser timeout",
+						"description": "Parser timeout. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
