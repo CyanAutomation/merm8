@@ -131,6 +131,11 @@ func TestServeSpec_HasRequiredOpenAPIFieldsAndRefs(t *testing.T) {
 			path: []string{"paths", "/analyze", "post", "responses", "500", "content", "application/json", "schema", "$ref"},
 			ref:  "#/components/schemas/AnalyzeResponse",
 		},
+		{
+			name: "Analyze 504 response schema",
+			path: []string{"paths", "/analyze", "post", "responses", "504", "content", "application/json", "schema", "$ref"},
+			ref:  "#/components/schemas/AnalyzeResponse",
+		},
 	}
 
 	for _, tc := range requiredRefs {
@@ -190,6 +195,9 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	} {
 		assertErrorShape(t, lookup(t, examples500, name, "value").(map[string]interface{}), code)
 	}
+
+	example504 := lookup(t, spec, "paths", "/analyze", "post", "responses", "504", "content", "application/json", "example").(map[string]interface{})
+	assertErrorShape(t, example504, "parser_timeout")
 }
 
 func assertErrorShape(t *testing.T, payload map[string]interface{}, expectedCode string) {
