@@ -254,3 +254,67 @@ func TestEngine_FingerprintDiffersForMateriallyDifferentIssues(t *testing.T) {
 		t.Fatalf("expected fingerprints to differ when severity changes, both=%s", issuesA[0].Fingerprint)
 	}
 }
+
+type contextIssueRule struct{}
+
+func (contextIssueRule) ID() string { return "context-issue-rule" }
+
+func (contextIssueRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
+	line := 3
+	return []model.Issue{{
+		RuleID:   "context-issue-rule",
+		Severity: "warning",
+		Message:  "context issue",
+		Line:     &line,
+		Context:  &model.IssueContext{SubgraphID: "cluster-1", SubgraphLabel: "Core"},
+	}}
+}
+
+func TestEngine_ConfigSuppressionSelectors_Node(t *testing.T) {
+	line := 2
+	e := engine.NewWithRules(rules.MaxFanout{})
+	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A", Line: &line}, {ID: "B"}, {ID: "C"}, {ID: "D"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}},
+	}
+
+	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"node:A"}}})
+	if len(issues) != 0 {
+		t.Fatalf("expected node selector to suppress max-fanout issue, got %#v", issues)
+	}
+}
+
+func TestEngine_ConfigSuppressionSelectors_RuleAndSubgraph(t *testing.T) {
+	eRule := engine.NewWithRules(rules.MaxFanout{})
+	dRule := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+	}
+	issues := eRule.Run(dRule, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:max-fanout"}}})
+	if len(issues) != 0 {
+		t.Fatalf("expected rule selector to suppress issue, got %#v", issues)
+	}
+
+	eSubgraph := engine.NewWithRules(contextIssueRule{})
+	dSubgraph := &model.Diagram{Type: model.DiagramTypeFlowchart}
+	issues = eSubgraph.Run(dSubgraph, rules.Config{"context-issue-rule": {"suppression-selectors": []string{"subgraph:cluster-1"}}})
+	if len(issues) != 0 {
+		t.Fatalf("expected subgraph selector to suppress issue, got %#v", issues)
+	}
+}
+
+func TestEngine_ConfigSuppressionSelectors_MalformedIgnored(t *testing.T) {
+	e := engine.NewWithRules(rules.MaxFanout{})
+	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+	}
+
+	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"node", "node:", "unknown:A"}}})
+	if len(issues) != 1 {
+		t.Fatalf("expected malformed selectors to be ignored, got %#v", issues)
+	}
+}
