@@ -462,9 +462,23 @@ The merm8 engine includes three built-in lint rules:
 
 ### Configuration Formats
 
-Both flat and nested configuration formats are accepted:
+Preferred format (versioned contract):
 
-**Flat format:**
+```json
+{
+  "code": "...",
+  "config": {
+    "schema_version": "v1",
+    "rules": {
+      "max-fanout": { "limit": 3 }
+    }
+  }
+}
+```
+
+Migration window compatibility (still accepted):
+
+**Flat legacy format:**
 ```json
 {
   "code": "...",
@@ -474,7 +488,7 @@ Both flat and nested configuration formats are accepted:
 }
 ```
 
-**Nested format:**
+**Nested legacy format:**
 ```json
 {
   "code": "...",
@@ -486,11 +500,13 @@ Both flat and nested configuration formats are accepted:
 }
 ```
 
-Both will work identically!
+Unsupported versions are rejected with `400 unsupported_schema_version` and include a `supported` list.
 
 ### Pre-validate Config with `GET /rules/schema`
 
 Fetch the generated JSON Schema and validate `config` in your client before calling `/analyze`.
+
+For pinned tooling/CI usage, use the versioned artifact in this repo: `schemas/config.v1.json`.
 
 ```bash
 curl -s http://localhost:8080/rules/schema | jq '.schema'
@@ -506,6 +522,7 @@ const schemaResp = await fetch("http://localhost:8080/rules/schema").then(r => r
 const validate = ajv.compile(schemaResp.schema);
 
 const config = {
+  schema_version: "v1",
   rules: {
     "max-fanout": {
       enabled: true,

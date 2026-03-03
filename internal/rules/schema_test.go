@@ -1,6 +1,11 @@
 package rules
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestConfigJSONSchema_SupportsFlatAndNestedFormats(t *testing.T) {
 	schema := ConfigJSONSchema()
@@ -10,11 +15,19 @@ func TestConfigJSONSchema_SupportsFlatAndNestedFormats(t *testing.T) {
 	}
 
 	variants, ok := schema["oneOf"].([]any)
-	if !ok || len(variants) != 2 {
-		t.Fatalf("expected oneOf with flat+nested variants, got %#v", schema["oneOf"])
+	if !ok || len(variants) != 3 {
+		t.Fatalf("expected oneOf with versioned+legacy variants, got %#v", schema["oneOf"])
 	}
 
-	flat := variants[0].(map[string]any)
+	versioned := variants[0].(map[string]any)
+	if got := versioned["required"].([]string); len(got) != 2 || got[0] != "schema_version" || got[1] != "rules" {
+		t.Fatalf("unexpected required keys on versioned schema: %#v", got)
+	}
+	if enumVals := versioned["properties"].(map[string]any)["schema_version"].(map[string]any)["enum"].([]string); len(enumVals) != 1 || enumVals[0] != CurrentConfigSchemaVersion {
+		t.Fatalf("unexpected schema_version enum: %#v", enumVals)
+	}
+
+	flat := variants[1].(map[string]any)
 	flatProps := flat["properties"].(map[string]any)
 	if _, ok := flatProps["max-fanout"]; !ok {
 		t.Fatal("expected max-fanout in flat properties")
@@ -23,7 +36,7 @@ func TestConfigJSONSchema_SupportsFlatAndNestedFormats(t *testing.T) {
 		t.Fatal("expected no-disconnected-nodes in flat properties")
 	}
 
-	nested := variants[1].(map[string]any)
+	nested := variants[2].(map[string]any)
 	nestedProps := nested["properties"].(map[string]any)
 	rulesProperty := nestedProps["rules"].(map[string]any)
 	rulesProps := rulesProperty["properties"].(map[string]any)
@@ -35,7 +48,7 @@ func TestConfigJSONSchema_SupportsFlatAndNestedFormats(t *testing.T) {
 func TestConfigJSONSchema_EncodesAllowedOptionsAndConstraints(t *testing.T) {
 	schema := ConfigJSONSchema()
 	variants := schema["oneOf"].([]any)
-	flat := variants[0].(map[string]any)
+	flat := variants[1].(map[string]any)
 	flatProps := flat["properties"].(map[string]any)
 
 	maxFanout := flatProps["max-fanout"].(map[string]any)
@@ -60,5 +73,33 @@ func TestConfigJSONSchema_EncodesAllowedOptionsAndConstraints(t *testing.T) {
 	nonMaxFanoutProps := nonMaxFanout["properties"].(map[string]any)
 	if _, ok := nonMaxFanoutProps["limit"]; ok {
 		t.Fatal("did not expect limit option on no-disconnected-nodes")
+	}
+}
+
+func TestConfigV1JSONSchema_MatchesVersionedArtifact(t *testing.T) {
+	artifactPath := filepath.Join("..", "..", "schemas", "config.v1.json")
+	artifactBytes, err := os.ReadFile(artifactPath)
+	if err != nil {
+		t.Fatalf("failed to read schema artifact: %v", err)
+	}
+
+	var artifact any
+	if err := json.Unmarshal(artifactBytes, &artifact); err != nil {
+		t.Fatalf("failed to decode schema artifact: %v", err)
+	}
+
+	generatedBytes, err := json.Marshal(ConfigV1JSONSchema())
+	if err != nil {
+		t.Fatalf("failed to marshal generated schema: %v", err)
+	}
+	var generated any
+	if err := json.Unmarshal(generatedBytes, &generated); err != nil {
+		t.Fatalf("failed to decode generated schema: %v", err)
+	}
+
+	normalizedArtifact, _ := json.Marshal(artifact)
+	normalizedGenerated, _ := json.Marshal(generated)
+	if string(normalizedArtifact) != string(normalizedGenerated) {
+		t.Fatal("schemas/config.v1.json is out of sync with ConfigV1JSONSchema")
 	}
 }
