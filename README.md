@@ -282,6 +282,9 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 
 `issues` is always present as an array (possibly empty). `syntax-error` and `error` are mutually exclusive.
 
+- `issues[].fingerprint` is required and is a deterministic SHA-256 hash over the normalized issue signature for CI tracking and dedupe.
+- `issues[].context` is optional grouping metadata for node-scoped findings; when present for subgraphs it includes `subgraph-id` and `subgraph-label`, and it is omitted when no grouping applies.
+
 **Response — valid diagram**
 
 ```json

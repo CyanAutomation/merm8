@@ -217,7 +217,7 @@
           },
           "context": {
             "$ref": "#/components/schemas/IssueContext",
-            "description": "Optional grouping context for node-scoped findings.",
+            "description": "Optional grouping context for node-scoped findings; omitted when no grouping applies.",
             "nullable": true
           },
           "fingerprint": {
@@ -254,7 +254,8 @@
         "required": [
           "rule-id",
           "severity",
-          "message"
+          "message",
+          "fingerprint"
         ],
         "type": "object"
       },
