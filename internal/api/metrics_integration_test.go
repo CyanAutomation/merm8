@@ -1,0 +1,112 @@
+package api_test
+
+import (
+	"bytes"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/CyanAutomation/merm8/internal/api"
+	"github.com/CyanAutomation/merm8/internal/engine"
+	"github.com/CyanAutomation/merm8/internal/model"
+	"github.com/CyanAutomation/merm8/internal/parser"
+	"github.com/CyanAutomation/merm8/internal/telemetry"
+)
+
+type metricsParser struct {
+	diagram   *model.Diagram
+	syntaxErr *parser.SyntaxError
+	err       error
+}
+
+func (m *metricsParser) Parse(_ string) (*model.Diagram, *parser.SyntaxError, error) {
+	return m.diagram, m.syntaxErr, m.err
+}
+
+func TestMetricsEndpoint_ExposesCoreMetricFamilies(t *testing.T) {
+	mux := http.NewServeMux()
+	tm := telemetry.NewMetrics()
+	h := api.NewHandler(&metricsParser{diagram: &model.Diagram{Type: model.DiagramTypeFlowchart}}, engine.New())
+	h.SetTelemetryMetrics(tm)
+	h.SetMetricsHandler(tm.Handler())
+	h.RegisterRoutes(mux)
+
+	routes := map[string]string{
+		"GET /health":   "/health",
+		"GET /healthz":  "/healthz",
+		"GET /ready":    "/ready",
+		"GET /metrics":  "/metrics",
+		"POST /analyze": "/analyze",
+	}
+	root := api.MetricsMiddleware(mux, routes, tm)
+
+	for _, tc := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/healthz"},
+		{method: http.MethodGet, path: "/ready"},
+		{method: http.MethodPost, path: "/analyze", body: `{"code":"graph TD\nA-->B"}`},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		w := httptest.NewRecorder()
+		root.ServeHTTP(w, req)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w := httptest.NewRecorder()
+	root.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /metrics, got %d", w.Code)
+	}
+	if got := w.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/plain") {
+		t.Fatalf("expected text/plain content-type, got %q", got)
+	}
+
+	body := w.Body.String()
+	for _, family := range []string{
+		"# HELP request_total",
+		"# HELP request_duration_seconds",
+		"# HELP analyze_requests_total",
+		"# HELP parser_duration_seconds",
+	} {
+		if !strings.Contains(body, family) {
+			t.Fatalf("expected metrics payload to include %q, got %q", family, body)
+		}
+	}
+}
+
+func TestAnalyzeErrorMetrics_OutcomesRecorded(t *testing.T) {
+	mux := http.NewServeMux()
+	tm := telemetry.NewMetrics()
+	h := api.NewHandler(&metricsParser{err: errors.New("boom")}, engine.New())
+	h.SetTelemetryMetrics(tm)
+	h.SetMetricsHandler(tm.Handler())
+	h.RegisterRoutes(mux)
+
+	routes := map[string]string{
+		"GET /metrics":  "/metrics",
+		"POST /analyze": "/analyze",
+	}
+	root := api.MetricsMiddleware(mux, routes, tm)
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewBufferString(`{"code":"graph TD\nA-->B"}`))
+	w := httptest.NewRecorder()
+	root.ServeHTTP(w, req)
+
+	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsW := httptest.NewRecorder()
+	root.ServeHTTP(metricsW, metricsReq)
+
+	body := metricsW.Body.String()
+	if !strings.Contains(body, `analyze_requests_total{outcome="internal_error"} 1`) {
+		t.Fatalf("expected analyze outcome counter for internal_error, got %q", body)
+	}
+	if !strings.Contains(body, `parser_duration_seconds_count{outcome="internal_error"} 1`) {
+		t.Fatalf("expected parser duration histogram count for internal_error, got %q", body)
+	}
+}

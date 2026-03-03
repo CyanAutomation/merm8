@@ -10,11 +10,13 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
 	"github.com/CyanAutomation/merm8/internal/model"
 	"github.com/CyanAutomation/merm8/internal/parser"
 	"github.com/CyanAutomation/merm8/internal/rules"
+	"github.com/CyanAutomation/merm8/internal/telemetry"
 )
 
 const maxAnalyzeBodyBytes int64 = 1 << 20 // 1 MiB
@@ -294,6 +296,7 @@ type Handler struct {
 	parser              ParserInterface
 	engine              *engine.Engine
 	metricsHandler      http.Handler
+	telemetryMetrics    *telemetry.Metrics
 	mu                  sync.RWMutex
 	parserConcurrencyCh chan struct{}
 }
@@ -327,6 +330,14 @@ func (h *Handler) SetMetricsHandler(metricsHandler http.Handler) {
 	defer h.mu.Unlock()
 
 	h.metricsHandler = metricsHandler
+}
+
+// SetTelemetryMetrics configures application telemetry collectors.
+func (h *Handler) SetTelemetryMetrics(metrics *telemetry.Metrics) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.telemetryMetrics = metrics
 }
 
 // NewHandlerWithScript creates a Handler wired with a real parser using the given script path.
@@ -429,25 +440,38 @@ func (h *Handler) Ready(w http.ResponseWriter, _ *http.Request) {
 
 // Analyze handles POST /analyze.
 func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
+	observeAnalyzeOutcome := func(outcome string) {
+		h.mu.RLock()
+		metrics := h.telemetryMetrics
+		h.mu.RUnlock()
+		if metrics != nil {
+			metrics.ObserveAnalyzeOutcome(outcome)
+		}
+	}
+
 	r.Body = http.MaxBytesReader(w, r.Body, maxAnalyzeBodyBytes)
 
 	var req analyzeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
+			observeAnalyzeOutcome("request_too_large")
 			writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "request body exceeds 1 MiB limit")
 			return
 		}
+		observeAnalyzeOutcome("invalid_json")
 		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON body")
 		return
 	}
 	if req.Code == "" {
+		observeAnalyzeOutcome("missing_code")
 		writeError(w, http.StatusBadRequest, "missing_code", "field 'code' is required")
 		return
 	}
 
 	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchema)
 	if configValidationErr != nil {
+		observeAnalyzeOutcome(configValidationErr.Code)
 		writeConfigValidationError(w, configValidationErr)
 		return
 	}
@@ -460,6 +484,7 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 
 	normalizedCfg, err := h.engine.NormalizeConfig(cfg)
 	if err != nil {
+		observeAnalyzeOutcome("invalid_config")
 		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
 		return
 	}
@@ -473,18 +498,36 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		case parserConcurrencyCh <- struct{}{}:
 			defer func() { <-parserConcurrencyCh }()
 		default:
+			observeAnalyzeOutcome("server_busy")
 			writeError(w, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again")
 			return
 		}
 	}
 
+	parseStart := time.Now()
 	diagram, syntaxErr, err := h.parser.Parse(req.Code)
+	parseDuration := time.Since(parseStart)
 	if err != nil {
+		outcome := parserFailureOutcome(err)
+		h.mu.RLock()
+		metrics := h.telemetryMetrics
+		h.mu.RUnlock()
+		if metrics != nil {
+			metrics.ObserveParserDuration(outcome, parseDuration)
+		}
+		observeAnalyzeOutcome(outcome)
 		writeParserFailure(w, err)
 		return
 	}
 
 	if syntaxErr != nil {
+		h.mu.RLock()
+		metrics := h.telemetryMetrics
+		h.mu.RUnlock()
+		if metrics != nil {
+			metrics.ObserveParserDuration(telemetry.OutcomeSyntaxError, parseDuration)
+		}
+		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		resp := analyzeResponse{
 			Valid:         false,
@@ -504,12 +547,27 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if diagram == nil {
+		h.mu.RLock()
+		metrics := h.telemetryMetrics
+		h.mu.RUnlock()
+		if metrics != nil {
+			metrics.ObserveParserDuration(telemetry.OutcomeInternalError, parseDuration)
+		}
+		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
 		writeError(w, http.StatusInternalServerError, "internal_error", "parser returned nil diagram")
 		return
 	}
 
+	h.mu.RLock()
+	metrics := h.telemetryMetrics
+	h.mu.RUnlock()
+	if metrics != nil {
+		metrics.ObserveParserDuration(telemetry.OutcomeLintSuccess, parseDuration)
+	}
+
 	family := diagram.Type.Family()
 	if family != model.DiagramFamilyFlowchart {
+		observeAnalyzeOutcome("unsupported_diagram_type")
 		// Keep metrics in the response for parsed diagrams, even when linting is
 		// not currently supported for that Mermaid family.
 		resp := analyzeResponse{
@@ -530,6 +588,7 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	issues := h.engine.Run(diagram, normalizedCfg)
+	observeAnalyzeOutcome(telemetry.OutcomeLintSuccess)
 
 	resp := analyzeResponse{
 		Valid:         true,
@@ -719,5 +778,20 @@ func writeParserFailure(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusInternalServerError, "parser_contract_violation", "parser response violated service contract")
 	default:
 		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
+	}
+}
+
+func parserFailureOutcome(err error) string {
+	switch {
+	case errors.Is(err, parser.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
+		return telemetry.OutcomeParserTimeout
+	case errors.Is(err, parser.ErrSubprocess):
+		return telemetry.OutcomeParserSubprocessErr
+	case errors.Is(err, parser.ErrDecode):
+		return telemetry.OutcomeParserDecodeErr
+	case errors.Is(err, parser.ErrContract):
+		return telemetry.OutcomeParserContractErr
+	default:
+		return telemetry.OutcomeInternalError
 	}
 }
