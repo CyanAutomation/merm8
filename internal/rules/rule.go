@@ -12,15 +12,19 @@ import (
 type Config map[string]map[string]interface{}
 
 var allowedSeverities = map[string]struct{}{
-	"error": {},
-	"warn":  {},
-	"info":  {},
+	"error":   {},
+	"warning": {},
+	"info":    {},
+}
+
+var severityAliases = map[string]string{
+	"warn": "warning",
 }
 
 // resolveSeverity returns the configured severity for the given rule ID, or
 // defaultSeverity when no override is present.
 //
-// Allowed severity values are: error, warn, info.
+// Allowed severity values are: error, warning, info.
 func resolveSeverity(ruleID string, cfg Config, defaultSeverity string) (string, error) {
 	ruleConfig, ok := cfg[ruleID]
 	if !ok {
@@ -34,11 +38,15 @@ func resolveSeverity(ruleID string, cfg Config, defaultSeverity string) (string,
 
 	severity, ok := rawSeverity.(string)
 	if !ok {
-		return "", fmt.Errorf("invalid severity for rule %q: must be one of error, warn, info", ruleID)
+		return "", fmt.Errorf("invalid severity for rule %q: must be one of error, warning, info", ruleID)
+	}
+
+	if canonical, ok := severityAliases[severity]; ok {
+		severity = canonical
 	}
 
 	if _, ok := allowedSeverities[severity]; !ok {
-		return "", fmt.Errorf("invalid severity for rule %q: %q (allowed: error, warn, info)", ruleID, severity)
+		return "", fmt.Errorf("invalid severity for rule %q: %q (allowed: error, warning, info)", ruleID, severity)
 	}
 
 	return severity, nil
@@ -122,7 +130,7 @@ func NormalizeConfig(cfg Config, knownRuleIDs map[string]struct{}) (Config, erro
 // ValidateConfig validates lint configuration values shared across rules.
 func ValidateConfig(cfg Config) error {
 	for ruleID := range cfg {
-		if _, err := resolveSeverity(ruleID, cfg, "warn"); err != nil {
+		if _, err := resolveSeverity(ruleID, cfg, "warning"); err != nil {
 			return err
 		}
 

@@ -183,7 +183,7 @@ curl -s -X POST http://localhost:8080/analyze \
   -H "Content-Type: application/json" \
   -d '{"code": "this is not valid mermaid"}'
 
-# Fan-out warn-level issue with custom limit
+# Fan-out warning-level issue with custom limit
 curl -s -X POST http://localhost:8080/analyze \
   -H "Content-Type: application/json" \
   -d '{
@@ -268,7 +268,9 @@ type Rule interface {
 |--------------------------|----------|------------------------------------------------------|
 | `no-duplicate-node-ids`  | error    | Each node ID must be unique within the diagram.      |
 | `no-disconnected-nodes`  | error    | Every node must participate in at least one edge.    |
-| `max-fanout`             | warn     | No node may have more outgoing edges than the limit. |
+| `max-fanout`             | warning     | No node may have more outgoing edges than the limit. |
+
+Severity values are canonicalized to `error`, `warning`, and `info`. The legacy `warn` value is still accepted in config and normalized to `warning`.
 
 Default `max-fanout` limit: **5**.
 

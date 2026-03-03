@@ -41,6 +41,9 @@ var sharedOptionConstraints = map[string]optionConstraint{
 			if !ok {
 				return false
 			}
+			if canonical, ok := severityAliases[severity]; ok {
+				severity = canonical
+			}
 			_, ok = allowedSeverities[severity]
 			return ok
 		},
@@ -84,17 +87,17 @@ var ruleSpecificConstraints = map[string]map[string]optionConstraint{
 var builtInRuleMetadata = []RuleMetadata{
 	{
 		ID:          "max-fanout",
-		Severity:    "warn",
+		Severity:    "warning",
 		Description: "Flags nodes whose outgoing edge count exceeds a configurable limit.",
 		DefaultConfig: map[string]interface{}{
 			"enabled":               true,
-			"severity":              "warn",
+			"severity":              "warning",
 			"suppression_selectors": []string{},
 			"limit":                 defaultMaxFanout,
 		},
 		ConfigurableOptions: []OptionMetadata{
 			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
-			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warn, info."},
+			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warning, info."},
 			{Name: "suppression_selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
 			{Name: "limit", Type: "integer", Description: "Maximum allowed outgoing edges per node.", Constraints: "Must be an integer >= 1. Default is 5."},
 		},
@@ -110,7 +113,7 @@ var builtInRuleMetadata = []RuleMetadata{
 		},
 		ConfigurableOptions: []OptionMetadata{
 			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
-			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warn, info."},
+			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warning, info."},
 			{Name: "suppression_selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
 		},
 	},
@@ -125,7 +128,7 @@ var builtInRuleMetadata = []RuleMetadata{
 		},
 		ConfigurableOptions: []OptionMetadata{
 			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
-			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warn, info."},
+			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warning, info."},
 			{Name: "suppression_selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
 		},
 	},

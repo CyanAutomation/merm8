@@ -20,8 +20,8 @@ check() {
   fi
 }
 
-# Deprecated severity spelling (canonical: warn)
-check '"severity"\s*:\s*"warning"|severity:\s*warning\b' 'severity: warning'
+## Deprecated severity spelling (canonical: warning)
+check '"severity"\s*:\s*"warn"|severity:\s*warn\b' 'severity: warn (use warning)'
 
 # Deprecated max-fanout option key (canonical: limit)
 check '"max"\s*:|\bmax:\s*[0-9]+' 'max-fanout option key max (use limit)'
