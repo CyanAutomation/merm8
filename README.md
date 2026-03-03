@@ -568,16 +568,14 @@ The test suite uses two complementary approaches:
 2. **Integration Parser Tests**: Test real Node.js subprocess
    - Require `PARSER_SCRIPT` env var to point to parse.mjs
    - Exercise actual Mermaid parsing with official parser
-   - Some tests explicitly skip if Mermaid version lacks features (e.g., subgraphs, special characters)
-   - Run with `-v` flag to see which tests were skipped and why
-   - Examples: `TestParser_ValidFlowchart`, `TestParser_InvalidMermaid`, `TestParser_MultipleEdges`
+   - Includes explicit coverage for timeout categorization and parser subprocess failures
+   - Run with `-v` for detailed per-test output
+   - Examples: `TestParser_ValidFlowchart`, `TestParser_InvalidMermaid`, `TestParser_MultipleEdges`, `TestParser_TimeoutCategory`
 
-**Skipped Tests (Expected Behavior):**
-- `TestParser_WithSubgraphs` — Skips if Mermaid doesn't extract subgraphs from AST
-- `TestParser_SpecialCharacters` — Skips if special character parsing isn't supported
-- `TestParser_Timeout` — Skips with documentation: direct timeout testing isn't feasible; verified via code review
-
-See test comments for rationale behind each skipped test.
+**Current guarantees and limitations:**
+- Parser integration tests are active (not intentionally skipped) when `PARSER_SCRIPT` is configured.
+- Timeout handling is validated by `TestParser_TimeoutCategory`, which uses a controlled hanging parser script.
+- Results still depend on the Mermaid parser version and Node.js runtime available in the test environment.
 
 | Component | Tests | Status |
 |-----------|-------|--------|
