@@ -22,3 +22,10 @@ func TestReadMaxOldSpaceMB_UsesConfiguredValue(t *testing.T) {
 		t.Fatalf("expected configured value 256, got %d", got)
 	}
 }
+
+func TestReadMaxOldSpaceMB_DefaultOnOutOfRangeValue(t *testing.T) {
+	t.Setenv("PARSER_MAX_OLD_SPACE_MB", "999999")
+	if got := readMaxOldSpaceMB(); got != defaultNodeMaxOldSpaceSizeMB {
+		t.Fatalf("expected default %d for out-of-range value, got %d", defaultNodeMaxOldSpaceSizeMB, got)
+	}
+}

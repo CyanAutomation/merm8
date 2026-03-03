@@ -4,19 +4,24 @@ import (
 	"crypto/subtle"
 	"net"
 	"net/http"
+	"net/netip"
+	"os"
 	"strings"
 	"sync"
 	"time"
 )
 
+const trustedProxyCIDRsEnv = "ANALYZE_TRUSTED_PROXY_CIDRS"
+
 // RateLimiter applies a simple per-client fixed-window request limit.
 type RateLimiter struct {
-	mu         sync.Mutex
-	window     time.Duration
-	limit      int
-	clients    map[string]*clientWindow
-	now        func() time.Time
-	maxClients int
+	mu               sync.Mutex
+	window           time.Duration
+	limit            int
+	clients          map[string]*clientWindow
+	now              func() time.Time
+	maxClients       int
+	cleanupBatchSize int
 }
 
 type clientWindow struct {
@@ -27,11 +32,12 @@ type clientWindow struct {
 // NewRateLimiter returns a fixed-window per-client rate limiter.
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	return &RateLimiter{
-		window:     window,
-		limit:      limit,
-		clients:    make(map[string]*clientWindow),
-		now:        time.Now,
-		maxClients: 10000,
+		window:           window,
+		limit:            limit,
+		clients:          make(map[string]*clientWindow),
+		now:              time.Now,
+		maxClients:       10000,
+		cleanupBatchSize: 128,
 	}
 }
 
@@ -45,11 +51,7 @@ func (rl *RateLimiter) Allow(clientID string) bool {
 	defer rl.mu.Unlock()
 
 	if len(rl.clients) > rl.maxClients {
-		for id, entry := range rl.clients {
-			if now.Sub(entry.windowStart) > rl.window*2 {
-				delete(rl.clients, id)
-			}
-		}
+		rl.deleteExpiredEntries(now, rl.cleanupBatchSize)
 	}
 
 	entry := rl.clients[clientID]
@@ -70,6 +72,23 @@ func (rl *RateLimiter) Allow(clientID string) bool {
 
 	entry.count++
 	return true
+}
+
+func (rl *RateLimiter) deleteExpiredEntries(now time.Time, maxDeletes int) {
+	if maxDeletes <= 0 {
+		maxDeletes = 1
+	}
+
+	deleted := 0
+	for id, entry := range rl.clients {
+		if now.Sub(entry.windowStart) > rl.window*2 {
+			delete(rl.clients, id)
+			deleted++
+			if deleted >= maxDeletes {
+				return
+			}
+		}
+	}
 }
 
 // AnalyzeRateLimitMiddleware protects POST /analyze with the provided limiter.
@@ -99,36 +118,29 @@ func AnalyzeBearerAuthMiddleware(token string, next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/analyze" {
-		header := r.Header.Get("Authorization")
-		if !strings.HasPrefix(header, "Bearer ") {
-			writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
-			return
-		}
-		providedToken := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
-		// Use constant-time comparison to prevent timing attacks
-		if subtle.ConstantTimeCompare([]byte(providedToken), []byte(token)) != 1 {
-			writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
-			return
-		}
+			header := r.Header.Get("Authorization")
+			if !strings.HasPrefix(header, "Bearer ") {
+				writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
+				return
+			}
+			providedToken := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
+			if subtle.ConstantTimeCompare([]byte(providedToken), []byte(token)) != 1 {
+				writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
 func clientIdentifier(r *http.Request) string {
-	// Parse X-Forwarded-For only if behind a trusted proxy
-	// Use the rightmost IP before your trusted proxy IP for proper client identification
-	if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
-		parts := strings.Split(forwardedFor, ",")
-		// Get the rightmost IP (client IP closest to your infrastructure)
-		// In production, validate against a list of trusted proxy IPs
-		if len(parts) > 0 {
-			clientIP := strings.TrimSpace(parts[len(parts)-1])
-			if clientIP != "" {
-				return clientIP
+	if remoteIP, ok := remoteIPFromAddr(r.RemoteAddr); ok {
+		if isTrustedProxy(remoteIP) {
+			if forwardedIP, ok := rightmostForwardedForIP(r.Header.Get("X-Forwarded-For")); ok {
+				return forwardedIP.String()
 			}
 		}
-	}
+		return remoteIP.String()
 	}
 
 	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
@@ -141,4 +153,58 @@ func clientIdentifier(r *http.Request) string {
 	}
 
 	return "unknown"
+}
+
+func rightmostForwardedForIP(header string) (netip.Addr, bool) {
+	parts := strings.Split(header, ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		candidate := strings.TrimSpace(parts[i])
+		if candidate == "" {
+			continue
+		}
+		if ip, err := netip.ParseAddr(candidate); err == nil {
+			return ip, true
+		}
+	}
+	return netip.Addr{}, false
+}
+
+func remoteIPFromAddr(addr string) (netip.Addr, bool) {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(addr))
+	if err != nil {
+		host = strings.TrimSpace(addr)
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	return ip, true
+}
+
+func isTrustedProxy(remoteIP netip.Addr) bool {
+	configured := strings.TrimSpace(os.Getenv(trustedProxyCIDRsEnv))
+	if configured == "" {
+		return false
+	}
+
+	for _, token := range strings.Split(configured, ",") {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+
+		if strings.Contains(token, "/") {
+			prefix, err := netip.ParsePrefix(token)
+			if err == nil && prefix.Contains(remoteIP) {
+				return true
+			}
+			continue
+		}
+
+		if ip, err := netip.ParseAddr(token); err == nil && ip == remoteIP {
+			return true
+		}
+	}
+
+	return false
 }
