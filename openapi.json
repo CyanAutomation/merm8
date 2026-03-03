@@ -322,7 +322,7 @@
                     "value": {
                       "error": {
                         "code": "invalid_config",
-                        "message": "invalid severity for rule \"max-fanout\": \"warning\" (allowed: error, warn, info)"
+                        "message": "unknown rule id \"unknown-rule\" in config"
                       },
                       "issues": [],
                       "valid": false

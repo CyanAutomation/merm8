@@ -69,7 +69,7 @@ The request body editor will appear. Enter your Mermaid code:
 }
 ```
 
-**Diagram with high fan-out (warning):**
+**Diagram with high fan-out (warn severity):**
 ```json
 {
   "code": "graph TD\n  A --> B\n  A --> C\n  A --> D\n  A --> E\n  A --> F\n  A --> G"
@@ -289,8 +289,6 @@ for issue in result['issues']:
 #### JavaScript / Node.js
 
 ```javascript
-const fetch = require('node-fetch');
-
 const payload = {
   code: "graph TD\n  A --> B\n  A --> C\n  A --> D",
   config: {
@@ -300,19 +298,18 @@ const payload = {
   }
 };
 
-fetch('http://localhost:8080/analyze', {
+const response = await fetch('http://localhost:8080/analyze', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(payload)
-})
-  .then(res => res.json())
-  .then(data => {
-    console.log(`Valid: ${data.valid}`);
-    console.log(`Issues: ${data.issues.length}`);
-    data.issues.forEach(issue => {
-      console.log(`  - ${issue.rule_id}: ${issue.message}`);
-    });
-  });
+});
+
+const data = await response.json();
+console.log(`Valid: ${data.valid}`);
+console.log(`Issues: ${data.issues.length}`);
+for (const issue of data.issues) {
+  console.log(`  - ${issue.rule_id}: ${issue.message}`);
+}
 ```
 
 ---
