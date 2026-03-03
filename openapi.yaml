@@ -164,7 +164,7 @@
           "type": "integer"
         "context":
           "$ref": "#/components/schemas/IssueContext"
-          "description": "Optional grouping context for node-scoped findings."
+          "description": "Optional grouping context for node-scoped findings; omitted when no grouping applies."
           "nullable": true
         "fingerprint":
           "description": "Deterministic SHA-256 hash of the normalized issue signature for CI tracking and dedupe."
@@ -194,6 +194,7 @@
         - "rule-id"
         - "severity"
         - "message"
+        - "fingerprint"
       "type": "object"
     "IssueContext":
       "properties":
