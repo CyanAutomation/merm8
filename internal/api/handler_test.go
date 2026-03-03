@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -2489,6 +2490,136 @@ func TestAnalyze_ParserConcurrencyLimitReached_Returns503(t *testing.T) {
 
 	close(release)
 	<-done
+}
+
+func TestAnalyze_ParserConcurrencyLimit_HighConcurrencyContention(t *testing.T) {
+	const (
+		limit      = 2
+		totalCalls = 12
+	)
+
+	start := make(chan struct{})
+	release := make(chan struct{})
+	entered := make(chan struct{}, totalCalls)
+
+	var inFlight int32
+	var peakInFlight int32
+
+	mockP := &mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		current := atomic.AddInt32(&inFlight, 1)
+		for {
+			peak := atomic.LoadInt32(&peakInFlight)
+			if current <= peak || atomic.CompareAndSwapInt32(&peakInFlight, peak, current) {
+				break
+			}
+		}
+
+		entered <- struct{}{}
+		<-release
+		atomic.AddInt32(&inFlight, -1)
+		return &model.Diagram{}, nil, nil
+	}}
+
+	h := api.NewHandler(mockP, engine.New())
+	h.SetParserConcurrencyLimit(limit)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
+
+	type result struct {
+		status    int
+		errorCode string
+	}
+	results := make(chan result, totalCalls)
+
+	var wg sync.WaitGroup
+	for i := 0; i < totalCalls; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			res := result{status: w.Code}
+			if w.Code != http.StatusOK {
+				var payload struct {
+					Error struct {
+						Code string `json:"code"`
+					} `json:"error"`
+				}
+				if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+					t.Errorf("failed to decode response: %v", err)
+				} else {
+					res.errorCode = payload.Error.Code
+				}
+			}
+			results <- res
+		}()
+	}
+
+	close(start)
+
+	for i := 0; i < limit; i++ {
+		select {
+		case <-entered:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for admitted parse call %d", i+1)
+		}
+	}
+
+	nonAdmitted := totalCalls - limit
+	busyCount := 0
+	for i := 0; i < nonAdmitted; i++ {
+		select {
+		case res := <-results:
+			if res.status != http.StatusServiceUnavailable {
+				t.Fatalf("expected queued overflow request to return 503, got %d", res.status)
+			}
+			if res.errorCode != "server_busy" {
+				t.Fatalf("expected error.code=server_busy, got %q", res.errorCode)
+			}
+			busyCount++
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for overflow request result %d", i+1)
+		}
+	}
+
+	if got := int(atomic.LoadInt32(&peakInFlight)); got > limit {
+		t.Fatalf("peak parser in-flight calls exceeded limit: got %d want <= %d", got, limit)
+	}
+	if busyCount != nonAdmitted {
+		t.Fatalf("expected %d server_busy responses, got %d", nonAdmitted, busyCount)
+	}
+
+	close(release)
+
+	admittedOK := 0
+	for admittedOK < limit {
+		select {
+		case res := <-results:
+			if res.status != http.StatusOK {
+				t.Fatalf("expected admitted request to complete with 200, got %d", res.status)
+			}
+			admittedOK++
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for released admitted requests")
+		}
+	}
+
+	wg.Wait()
+
+	postReleaseReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	postReleaseReq.Header.Set("Content-Type", "application/json")
+	postReleaseW := httptest.NewRecorder()
+	mux.ServeHTTP(postReleaseW, postReleaseReq)
+	if postReleaseW.Code != http.StatusOK {
+		t.Fatalf("expected handler to remain responsive after release, got %d", postReleaseW.Code)
+	}
 }
 
 func TestAnalyzeBearerAuthMiddleware_RequiresTokenInProduction(t *testing.T) {
