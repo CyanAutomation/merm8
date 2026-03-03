@@ -278,10 +278,10 @@ Default `max-fanout` limit: **5**.
 
 The parser recognizes Mermaid line comments with `merm8` suppression tags:
 
-- `%% merm8-disable <rule-id>`: suppresses that rule for the rest of the file.
-- `%% merm8-disable all`: suppresses all rules for the rest of the file.
-- `%% merm8-disable-next-line <rule-id>`: suppresses that rule only for the next source line.
-- `%% merm8-disable-next-line all`: suppresses all rules only for the next source line.
+- `%% merm8-disable <rule-id>` or `%% merm8-ignore <rule-id>`: suppresses that rule for the rest of the file.
+- `%% merm8-disable all` or `%% merm8-ignore all`: suppresses all rules for the rest of the file.
+- `%% merm8-disable-next-line <rule-id>` or `%% merm8-ignore-next-line <rule-id>`: suppresses that rule only for the next source line.
+- `%% merm8-disable-next-line all` or `%% merm8-ignore-next-line all`: suppresses all rules only for the next source line.
 
 Example:
 
