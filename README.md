@@ -155,7 +155,9 @@ All API JSON field names use **kebab-case** as the canonical contract for reques
 Canonical config format is `{"schema-version":"v1","rules":{...}}` and canonical key style is kebab-case.
 
 - **Phase 1 (current)**: legacy snake_case keys (for example `schema_version`, `suppression_selectors`) and legacy shapes (flat `{"rule-id":{...}}` / unversioned nested `{"rules":{...}}`) are accepted **with runtime deprecation signals** (`Deprecation: true`, `Warning` header, and response `warnings`).
-- **Phase 2 (implemented, toggleable)**: legacy keys/shapes can be rejected with machine-readable `400 deprecated_config_format` errors when strict schema mode is enabled.
+- **Phase 2 (v1.2.0, Q2 2026 planned)**: legacy keys/shapes will be rejected with machine-readable `400 deprecated_config_format` errors. Only canonical versioned format will be accepted.
+
+For migration details, see [API_GUIDE.md — Configuration Format and Deprecation Policy](API_GUIDE.md#configuration-format-and-deprecation-policy).
 
 ## API
 

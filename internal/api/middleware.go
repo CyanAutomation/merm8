@@ -146,7 +146,34 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	}
 }
 
-func (rl *RateLimiter) Allow(clientID string) bool {
+// Remaining returns the number of requests remaining for the client in current window.
+func (rl *RateLimiter) Remaining(clientID string) int {
+	if rl == nil || rl.limit <= 0 || rl.window <= 0 {
+		return rl.limit
+	}
+
+	now := rl.now()
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	entry := rl.clients[clientID]
+	if entry == nil {
+		return rl.limit
+	}
+
+	if now.Sub(entry.windowStart) >= rl.window {
+		return rl.limit
+	}
+
+	remaining := rl.limit - entry.count
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
+
+// AllowWithMetrics checks if request is allowed and updates metrics without setting headers.
+func (rl *RateLimiter) AllowWithMetrics(clientID string) bool {
 	if rl == nil || rl.limit <= 0 || rl.window <= 0 {
 		return true
 	}
@@ -179,6 +206,11 @@ func (rl *RateLimiter) Allow(clientID string) bool {
 	return true
 }
 
+// Allow checks if a request is allowed (deprecated: use AllowWithMetrics).
+func (rl *RateLimiter) Allow(clientID string) bool {
+	return rl.AllowWithMetrics(clientID)
+}
+
 func (rl *RateLimiter) deleteExpiredEntries(now time.Time, maxDeletes int) {
 	if maxDeletes <= 0 {
 		maxDeletes = 1
@@ -205,10 +237,25 @@ func AnalyzeRateLimitMiddleware(limiter *RateLimiter, next http.Handler) http.Ha
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/analyze" {
 			clientID := clientIdentifier(r)
-			if !limiter.Allow(clientID) {
+			
+			// Calculate current window reset time
+			now := time.Now()
+			reset := now.Add(limiter.window).Unix()
+			
+			if !limiter.AllowWithMetrics(clientID) {
+				// Rate limit exceeded
+				w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limiter.limit))
+				w.Header().Set("X-RateLimit-Remaining", "0")
+				w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", reset))
 				writeError(w, http.StatusTooManyRequests, "rate_limited", "rate limit exceeded")
 				return
 			}
+			
+			// Request allowed, set remaining headers
+			remaining := limiter.Remaining(clientID)
+			w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limiter.limit))
+			w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+			w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", reset))
 		}
 		next.ServeHTTP(w, r)
 	})

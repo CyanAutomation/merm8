@@ -1,6 +1,10 @@
 package api
 
 import (
+	"encoding/json"
+	"os"
+	"strings"
+
 	"github.com/CyanAutomation/merm8/internal/output/sarif"
 	"github.com/CyanAutomation/merm8/internal/rules"
 )
@@ -26,10 +30,6 @@ var openapi = map[string]interface{}{
 		{
 			"url":         "http://localhost:8080",
 			"description": "Local development server",
-		},
-		{
-			"url":         "https://api.example.com",
-			"description": "Production server (replace with actual URL)",
 		},
 	},
 	"tags": []map[string]interface{}{
@@ -327,6 +327,23 @@ var openapi = map[string]interface{}{
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
 						"description": "Analysis completed. For HTTP 200: `error` is always null, `issues` is always present as an array, and `syntax-error` is populated only for parser syntax failures (otherwise null).",
+						"headers": map[string]interface{}{
+							"X-RateLimit-Limit": map[string]interface{}{
+								"description": "Maximum number of requests allowed in the current time window",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     120,
+							},
+							"X-RateLimit-Remaining": map[string]interface{}{
+								"description": "Number of requests remaining in the current time window",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     119,
+							},
+							"X-RateLimit-Reset": map[string]interface{}{
+								"description": "Unix timestamp when the rate limit window resets",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     1234567890,
+							},
+						},
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -450,6 +467,23 @@ var openapi = map[string]interface{}{
 					},
 					"400": map[string]interface{}{
 						"description": "Bad request (invalid JSON, missing required field, or invalid config). For non-200 API failures, `valid=false`, `syntax-error=null`, `issues=[]`, and `error` is populated.",
+						"headers": map[string]interface{}{
+							"X-RateLimit-Limit": map[string]interface{}{
+								"description": "Maximum number of requests allowed in the current time window",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     120,
+							},
+							"X-RateLimit-Remaining": map[string]interface{}{
+								"description": "Number of requests remaining in the current time window",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     119,
+							},
+							"X-RateLimit-Reset": map[string]interface{}{
+								"description": "Unix timestamp when the rate limit window resets",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     1234567890,
+							},
+						},
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -597,6 +631,23 @@ var openapi = map[string]interface{}{
 					},
 					"413": map[string]interface{}{
 						"description": "Request entity too large (body exceeds 1 MiB). For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
+						"headers": map[string]interface{}{
+							"X-RateLimit-Limit": map[string]interface{}{
+								"description": "Maximum number of requests allowed in the current time window",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     120,
+							},
+							"X-RateLimit-Remaining": map[string]interface{}{
+								"description": "Number of requests remaining in the current time window",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     119,
+							},
+							"X-RateLimit-Reset": map[string]interface{}{
+								"description": "Unix timestamp when the rate limit window resets",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     1234567890,
+							},
+						},
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -631,6 +682,23 @@ var openapi = map[string]interface{}{
 
 					"429": map[string]interface{}{
 						"description": "Rate limited. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
+						"headers": map[string]interface{}{
+							"X-RateLimit-Limit": map[string]interface{}{
+								"description": "Maximum number of requests allowed in the current time window",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     120,
+							},
+							"X-RateLimit-Remaining": map[string]interface{}{
+								"description": "Number of requests remaining in the current time window",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     0,
+							},
+							"X-RateLimit-Reset": map[string]interface{}{
+								"description": "Unix timestamp when the rate limit window resets",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     1234567890,
+							},
+						},
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -664,6 +732,23 @@ var openapi = map[string]interface{}{
 					},
 					"503": map[string]interface{}{
 						"description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
+						"headers": map[string]interface{}{
+							"X-RateLimit-Limit": map[string]interface{}{
+								"description": "Maximum number of requests allowed in the current time window",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     120,
+							},
+							"X-RateLimit-Remaining": map[string]interface{}{
+								"description": "Number of requests remaining in the current time window",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     119,
+							},
+							"X-RateLimit-Reset": map[string]interface{}{
+								"description": "Unix timestamp when the rate limit window resets",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     1234567890,
+							},
+						},
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -697,6 +782,23 @@ var openapi = map[string]interface{}{
 					},
 					"500": map[string]interface{}{
 						"description": "Internal server error. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
+						"headers": map[string]interface{}{
+							"X-RateLimit-Limit": map[string]interface{}{
+								"description": "Maximum number of requests allowed in the current time window",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     120,
+							},
+							"X-RateLimit-Remaining": map[string]interface{}{
+								"description": "Number of requests remaining in the current time window",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     119,
+							},
+							"X-RateLimit-Reset": map[string]interface{}{
+								"description": "Unix timestamp when the rate limit window resets",
+								"schema":      map[string]interface{}{"type": "integer"},
+								"example":     1234567890,
+							},
+						},
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -867,16 +969,38 @@ var openapi = map[string]interface{}{
 						"content": map[string]interface{}{
 							"application/sarif+json": map[string]interface{}{
 								"schema": map[string]interface{}{"$ref": "#/components/schemas/SARIFReport"},
-								"example": map[string]interface{}{
-									"version": "2.1.0",
-									"runs": []interface{}{map[string]interface{}{
-										"tool": map[string]interface{}{"driver": map[string]interface{}{"name": "merm8"}},
-										"results": []interface{}{map[string]interface{}{
-											"ruleId":  "no-cycles",
-											"level":   "error",
-											"message": map[string]interface{}{"text": "Cycle detected"},
-										}},
-									}},
+								"examples": map[string]interface{}{
+									"validDiagram": map[string]interface{}{
+										"summary": "Valid diagram with no issues",
+										"value": map[string]interface{}{
+											"version": "2.1.0",
+											"runs": []interface{}{map[string]interface{}{
+												"tool": map[string]interface{}{"driver": map[string]interface{}{"name": "merm8"}},
+												"results": []interface{}{},
+											}},
+										},
+									},
+									"diagramWithIssues": map[string]interface{}{
+										"summary": "Diagram with lint violations",
+										"value": map[string]interface{}{
+											"version": "2.1.0",
+											"runs": []interface{}{map[string]interface{}{
+												"tool": map[string]interface{}{"driver": map[string]interface{}{"name": "merm8"}},
+												"results": []interface{}{
+													map[string]interface{}{
+														"ruleId":  "no-cycles",
+														"level":   "error",
+														"message": map[string]interface{}{"text": "Cycle detected"},
+													},
+													map[string]interface{}{
+														"ruleId":  "max-fanout",
+														"level":   "warning",
+														"message": map[string]interface{}{"text": "Node 'A' has fanout 6, exceeding limit of 5"},
+													},
+												},
+											}},
+										},
+									},
 								},
 							},
 						},
@@ -1304,7 +1428,44 @@ var openapi = map[string]interface{}{
 	},
 }
 
-// OpenAPISpec returns the canonical OpenAPI spec used by /spec.
+// getServersFromEnv constructs the servers array based on environment configuration.
+// If MERM8_API_URL is set, it will be used as the primary server.
+// Otherwise, defaults to localhost:8080 for development.
+func getServersFromEnv() []map[string]interface{} {
+	apiURL := strings.TrimSpace(os.Getenv("MERM8_API_URL"))
+	
+	if apiURL == "" {
+		// Default development servers
+		return []map[string]interface{}{
+			{
+				"url":         "http://localhost:8080",
+				"description": "Local development server",
+			},
+		}
+	}
+	
+	// Production server from environment
+	return []map[string]interface{}{
+		{
+			"url":         apiURL,
+			"description": "Production server",
+		},
+		{
+			"url":         "http://localhost:8080",
+			"description": "Local development server",
+		},
+	}
+}
+
+// OpenAPISpec returns the OpenAPI spec with dynamic servers based on environment.
 func OpenAPISpec() map[string]interface{} {
-	return openapi
+	// Deep copy the openapi spec to avoid modifying the global
+	specJSON, _ := json.Marshal(openapi)
+	var spec map[string]interface{}
+	json.Unmarshal(specJSON, &spec)
+	
+	// Update servers from environment
+	spec["servers"] = getServersFromEnv()
+	
+	return spec
 }

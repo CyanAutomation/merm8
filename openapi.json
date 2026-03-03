@@ -381,9 +381,8 @@
       },
       "RuleConfigSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "additionalProperties": false,
-        "properties": {
-          "rules": {
+        "oneOf": [
+          {
             "additionalProperties": false,
             "properties": {
               "max-depth": {
@@ -533,19 +532,176 @@
             },
             "type": "object"
           },
-          "schema-version": {
-            "enum": [
-              "v1"
+          {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "rules": {
+                "additionalProperties": false,
+                "properties": {
+                  "max-depth": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "description": "Enable or disable this rule.",
+                        "type": "boolean"
+                      },
+                      "limit": {
+                        "description": "Maximum allowed depth for root-to-leaf traversals.",
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "severity": {
+                        "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "type": "string"
+                      },
+                      "suppression-selectors": {
+                        "description": "Selectors that suppress matching issues.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "max-fanout": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "description": "Enable or disable this rule.",
+                        "type": "boolean"
+                      },
+                      "limit": {
+                        "description": "Maximum allowed outgoing edges per node.",
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "severity": {
+                        "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "type": "string"
+                      },
+                      "suppression-selectors": {
+                        "description": "Selectors that suppress matching issues.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "no-cycles": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "allow-self-loop": {
+                        "description": "Allow single-node self-loop cycles without emitting issues.",
+                        "type": "boolean"
+                      },
+                      "enabled": {
+                        "description": "Enable or disable this rule.",
+                        "type": "boolean"
+                      },
+                      "severity": {
+                        "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "type": "string"
+                      },
+                      "suppression-selectors": {
+                        "description": "Selectors that suppress matching issues.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "no-disconnected-nodes": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "description": "Enable or disable this rule.",
+                        "type": "boolean"
+                      },
+                      "severity": {
+                        "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "type": "string"
+                      },
+                      "suppression-selectors": {
+                        "description": "Selectors that suppress matching issues.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "no-duplicate-node-ids": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "enabled": {
+                        "description": "Enable or disable this rule.",
+                        "type": "boolean"
+                      },
+                      "severity": {
+                        "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "type": "string"
+                      },
+                      "suppression-selectors": {
+                        "description": "Selectors that suppress matching issues.",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              },
+              "schema-version": {
+                "enum": [
+                  "v1"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema-version",
+              "rules"
             ],
-            "type": "string"
+            "title": "merm8 Rule Configuration v1",
+            "type": "object"
           }
-        },
-        "required": [
-          "schema-version",
-          "rules"
         ],
-        "title": "merm8 Rule Configuration v1",
-        "type": "object"
+        "title": "merm8 Rule Configuration"
       },
       "RuleMetadata": {
         "properties": {
@@ -897,7 +1053,30 @@
                 }
               }
             },
-            "description": "Analysis completed. For HTTP 200: `error` is always null, `issues` is always present as an array, and `syntax-error` is populated only for parser syntax failures (otherwise null)."
+            "description": "Analysis completed. For HTTP 200: `error` is always null, `issues` is always present as an array, and `syntax-error` is populated only for parser syntax failures (otherwise null).",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Maximum number of requests allowed in the current time window",
+                "example": 120,
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Number of requests remaining in the current time window",
+                "example": 119,
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix timestamp when the rate limit window resets",
+                "example": 1234567890,
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -1055,7 +1234,30 @@
                 }
               }
             },
-            "description": "Bad request (invalid JSON, missing required field, or invalid config). For non-200 API failures, `valid=false`, `syntax-error=null`, `issues=[]`, and `error` is populated."
+            "description": "Bad request (invalid JSON, missing required field, or invalid config). For non-200 API failures, `valid=false`, `syntax-error=null`, `issues=[]`, and `error` is populated.",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Maximum number of requests allowed in the current time window",
+                "example": 120,
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Number of requests remaining in the current time window",
+                "example": 119,
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix timestamp when the rate limit window resets",
+                "example": 1234567890,
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           },
           "413": {
             "content": {
@@ -1088,7 +1290,30 @@
                 }
               }
             },
-            "description": "Request entity too large (body exceeds 1 MiB). For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
+            "description": "Request entity too large (body exceeds 1 MiB). For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Maximum number of requests allowed in the current time window",
+                "example": 120,
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Number of requests remaining in the current time window",
+                "example": 119,
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix timestamp when the rate limit window resets",
+                "example": 1234567890,
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           },
           "429": {
             "content": {
@@ -1121,7 +1346,30 @@
                 }
               }
             },
-            "description": "Rate limited. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
+            "description": "Rate limited. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Maximum number of requests allowed in the current time window",
+                "example": 120,
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Number of requests remaining in the current time window",
+                "example": 0,
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix timestamp when the rate limit window resets",
+                "example": 1234567890,
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -1237,7 +1485,30 @@
                 }
               }
             },
-            "description": "Internal server error. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
+            "description": "Internal server error. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Maximum number of requests allowed in the current time window",
+                "example": 120,
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Number of requests remaining in the current time window",
+                "example": 119,
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix timestamp when the rate limit window resets",
+                "example": 1234567890,
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           },
           "503": {
             "content": {
@@ -1270,7 +1541,30 @@
                 }
               }
             },
-            "description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
+            "description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Maximum number of requests allowed in the current time window",
+                "example": 120,
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Number of requests remaining in the current time window",
+                "example": 119,
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix timestamp when the rate limit window resets",
+                "example": 1234567890,
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           },
           "504": {
             "content": {
@@ -1330,26 +1624,54 @@
           "200": {
             "content": {
               "application/sarif+json": {
-                "example": {
-                  "runs": [
-                    {
-                      "results": [
+                "examples": {
+                  "diagramWithIssues": {
+                    "summary": "Diagram with lint violations",
+                    "value": {
+                      "runs": [
                         {
-                          "level": "error",
-                          "message": {
-                            "text": "Cycle detected"
-                          },
-                          "ruleId": "no-cycles"
+                          "results": [
+                            {
+                              "level": "error",
+                              "message": {
+                                "text": "Cycle detected"
+                              },
+                              "ruleId": "no-cycles"
+                            },
+                            {
+                              "level": "warning",
+                              "message": {
+                                "text": "Node 'A' has fanout 6, exceeding limit of 5"
+                              },
+                              "ruleId": "max-fanout"
+                            }
+                          ],
+                          "tool": {
+                            "driver": {
+                              "name": "merm8"
+                            }
+                          }
                         }
                       ],
-                      "tool": {
-                        "driver": {
-                          "name": "merm8"
-                        }
-                      }
+                      "version": "2.1.0"
                     }
-                  ],
-                  "version": "2.1.0"
+                  },
+                  "validDiagram": {
+                    "summary": "Valid diagram with no issues",
+                    "value": {
+                      "runs": [
+                        {
+                          "results": [],
+                          "tool": {
+                            "driver": {
+                              "name": "merm8"
+                            }
+                          }
+                        }
+                      ],
+                      "version": "2.1.0"
+                    }
+                  }
                 },
                 "schema": {
                   "$ref": "#/components/schemas/SARIFReport"
@@ -1679,10 +2001,6 @@
     {
       "description": "Local development server",
       "url": "http://localhost:8080"
-    },
-    {
-      "description": "Production server (replace with actual URL)",
-      "url": "https://api.example.com"
     }
   ],
   "tags": [

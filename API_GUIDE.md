@@ -518,10 +518,50 @@ Accepted canonical format (versioned contract):
 }
 ```
 
-Legacy migration timeline:
+#### Deprecation Timeline
 
-1. **Phase 1 (current)**: legacy snake_case keys/shapes are still accepted, but responses include deprecation signals (`Deprecation: true`, `Warning` header, and response `warnings`).
-2. **Phase 2 (implemented, toggleable)**: legacy keys/shapes can be rejected with machine-readable `400 deprecated_config_format` errors when strict schema mode is enabled.
+| Phase | Version | Timeline | Behavior |
+|-------|---------|----------|----------|
+| **Phase 1** | v1.0.x | Current (active) | Legacy snake_case keys and unversioned config shapes are **accepted** with deprecation warnings in response `warnings` array and HTTP `Warning` header (RFC 7234) |
+| **Phase 2** | v1.2.0 | Q2 2026 (planned) | Legacy config shapes are **rejected** with HTTP 400 `deprecated_config_format` error; only canonical versioned format accepted |
+
+**Deprecation Signals (Phase 1)**:
+
+When your code uses legacy config format, responses include:
+- `warnings` array in JSON body: `"legacy config format is deprecated; migrate to {\"schema-version\":\"v1\",\"rules\":{...}} with kebab-case keys"`
+- HTTP `Warning` header: `299 - "legacy config format is deprecated and will be rejected in a future phase"`
+
+**Migration Guide (Legacy → Canonical)**:
+
+Legacy flat format:
+```json
+{
+  "code": "...",
+  "config": {
+    "max_fanout": { "limit": 3, "severity": "error" },
+    "no_disconnected_nodes": { "enabled": false }
+  }
+}
+```
+
+Canonical format:
+```json
+{
+  "code": "...",
+  "config": {
+    "schema-version": "v1",
+    "rules": {
+      "max-fanout": { "limit": 3, "severity": "error" },
+      "no-disconnected-nodes": { "enabled": false }
+    }
+  }
+}
+```
+
+Key changes:
+- Add `"schema-version": "v1"` at config root
+- Wrap rules under `"rules"` key
+- Use kebab-case key names: `max_fanout` → `max-fanout`, `no_disconnected_nodes` → `no-disconnected-nodes`
 
 ### SARIF Output (`POST /analyze/sarif`)
 
