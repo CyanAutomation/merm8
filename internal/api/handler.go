@@ -550,7 +550,9 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		h.mu.RLock()
 		metrics := h.telemetryMetrics
 		h.mu.RUnlock()
-		metrics.ObserveParserDuration(telemetry.OutcomeInternalError, parseDuration)
+		if metrics != nil {
+			metrics.ObserveParserDuration(telemetry.OutcomeInternalError, parseDuration)
+		}
 		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
 		writeError(w, http.StatusInternalServerError, "internal_error", "parser returned nil diagram")
 		return
