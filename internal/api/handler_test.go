@@ -2594,12 +2594,18 @@ func TestRuleConfigSchema_ResponseShape(t *testing.T) {
 		t.Fatalf("expected draft schema id, got %#v", resp.Schema["$schema"])
 	}
 
-	required, ok := resp.Schema["required"].([]any)
-	if !ok || len(required) != 2 || required[0] != "schema-version" || required[1] != "rules" {
-		t.Fatalf("expected canonical required fields [schema-version rules], got %#v", resp.Schema["required"])
+	oneOf, ok := resp.Schema["oneOf"].([]any)
+	if !ok || len(oneOf) != 2 {
+		t.Fatalf("expected migration oneOf with two schema variants, got %#v", resp.Schema["oneOf"])
 	}
 
-	rulesSchema := resp.Schema["properties"].(map[string]any)["rules"].(map[string]any)
+	versionedSchema := oneOf[1].(map[string]any)
+	required, ok := versionedSchema["required"].([]any)
+	if !ok || len(required) != 2 || required[0] != "schema-version" || required[1] != "rules" {
+		t.Fatalf("expected versioned required fields [schema-version rules], got %#v", versionedSchema["required"])
+	}
+
+	rulesSchema := versionedSchema["properties"].(map[string]any)["rules"].(map[string]any)
 	rulesProps := rulesSchema["properties"].(map[string]any)
 	maxFanout := rulesProps["max-fanout"].(map[string]any)
 	maxFanoutProps := maxFanout["properties"].(map[string]any)
