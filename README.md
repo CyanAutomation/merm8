@@ -230,7 +230,7 @@ scrape_configs:
 
 ### `GET /v1/rules` (canonical) and legacy alias `GET /rules`
 
-Live discovery endpoint for built-in lint rules and their metadata.
+Live discovery endpoint for enforceable lint rules and their metadata.
 
 Returns each rule's `id`, default `severity`, description, `default-config`, and documented configurable options.
 
@@ -729,8 +729,8 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 ## Future Roadmap
 
 - [~] Incrementally roll out family-specific rules for sequence/class/ER/state diagrams
-- [ ] `no-cycles` rule for flowcharts
-- [ ] `max-depth` rule
+- [x] `no-cycles` rule for flowcharts
+- [x] `max-depth` rule
 - [x] Per-rule suppression comments in diagram source
 - [x] Configurable rule severity overrides
 - [x] SARIF output format for CI integration (`POST /analyze/sarif`)

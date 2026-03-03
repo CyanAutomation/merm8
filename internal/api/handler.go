@@ -165,6 +165,8 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		deprecations = append(deprecations, legacyConfigDeprecationMessage)
 	}
 
+	registryByRuleID := rules.ConfigRegistryForRuleIDs(knownRuleIDs)
+
 	for ruleID, ruleConfig := range asMap {
 		ruleConfigMap, ok := ruleConfig.(map[string]any)
 		if !ok {
@@ -179,7 +181,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 			}
 		}
 
-		registry, ok := rules.ConfigRegistry()[ruleID]
+		registry, ok := registryByRuleID[ruleID]
 		if !ok {
 			return rules.Config{}, nil, &validationError{
 				Code:      "unknown_rule",
@@ -537,7 +539,7 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 
 // ListRules handles GET /rules.
 func (h *Handler) ListRules(w http.ResponseWriter, _ *http.Request) {
-	metadata := rules.ListRuleMetadata()
+	metadata := rules.ListRuleMetadataForRuleIDs(h.engine.KnownRuleIDs())
 	resp := make([]ruleResponse, 0, len(metadata))
 	for _, rule := range metadata {
 		options := make([]ruleOptionResponse, 0, len(rule.ConfigurableOptions))
@@ -563,7 +565,7 @@ func (h *Handler) ListRules(w http.ResponseWriter, _ *http.Request) {
 
 // RuleConfigSchema handles GET /rules/schema.
 func (h *Handler) RuleConfigSchema(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"schema": rules.ConfigJSONSchema()})
+	writeJSON(w, http.StatusOK, map[string]any{"schema": rules.ConfigJSONSchemaForRuleIDs(h.engine.KnownRuleIDs())})
 }
 
 // DiagramTypes handles GET /diagram-types.

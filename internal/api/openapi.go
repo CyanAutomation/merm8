@@ -230,11 +230,11 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "List built-in lint rules",
-				"description": "Returns centralized metadata for all built-in rules, including defaults and configurable options.",
+				"description": "Returns metadata for rules implemented by the currently registered runtime rule set, including defaults and configurable options.",
 				"operationId": "listRules",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
-						"description": "Built-in rule metadata",
+						"description": "Implemented rule metadata",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -250,7 +250,7 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Get JSON Schema for lint rule configuration",
-				"description": "Returns a JSON Schema generated from the rule config registry. The schema validates only the canonical versioned config payload format.",
+				"description": "Returns a JSON Schema generated from the currently implemented rule config registry. The schema validates only the canonical versioned config payload format and excludes unimplemented rules.",
 				"operationId": "getRuleConfigSchema",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
