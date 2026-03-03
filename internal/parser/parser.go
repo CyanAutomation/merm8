@@ -21,6 +21,7 @@ import (
 
 const defaultTimeout = 5 * time.Second
 const defaultNodeMaxOldSpaceSizeMB = 512
+const maxNodeMaxOldSpaceSizeMB = 4096
 
 var (
 	// ErrTimeout indicates the parser subprocess exceeded the configured timeout.
@@ -274,9 +275,7 @@ func readMaxOldSpaceMB() int {
 		return defaultNodeMaxOldSpaceSizeMB
 	}
 
-	// Prevent excessive memory allocation
-	const maxAllowedMB = 4096
-	if value > maxAllowedMB {
+	if value > maxNodeMaxOldSpaceSizeMB {
 		return defaultNodeMaxOldSpaceSizeMB
 	}
 

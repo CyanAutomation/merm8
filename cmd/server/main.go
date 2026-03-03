@@ -46,10 +46,6 @@ func main() {
 	rootHandler := http.Handler(mux)
 
 	authToken := strings.TrimSpace(os.Getenv("ANALYZE_AUTH_TOKEN"))
-	if deploymentMode == "production" {
-		rootHandler = api.AnalyzeBearerAuthMiddleware(authToken, rootHandler)
-	}
-
 	rateLimitPerMinute := envInt("ANALYZE_RATE_LIMIT_PER_MINUTE", 0)
 	if deploymentMode == "production" && rateLimitPerMinute <= 0 {
 		rateLimitPerMinute = defaultRateLimitPerMinute
@@ -57,6 +53,10 @@ func main() {
 	if rateLimitPerMinute > 0 {
 		limiter := api.NewRateLimiter(rateLimitPerMinute, time.Minute)
 		rootHandler = api.AnalyzeRateLimitMiddleware(limiter, rootHandler)
+	}
+
+	if deploymentMode == "production" {
+		rootHandler = api.AnalyzeBearerAuthMiddleware(authToken, rootHandler)
 	}
 
 	addr := fmt.Sprintf(":%s", port)
