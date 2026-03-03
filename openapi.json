@@ -16,7 +16,7 @@
                 "enabled": true,
                 "limit": 3,
                 "severity": "error",
-                "suppression_selectors": [
+                "suppression-selectors": [
                   "node:A"
                 ]
               },
@@ -34,7 +34,7 @@
       },
       "AnalyzeResponse": {
         "properties": {
-          "diagram_type": {
+          "diagram-type": {
             "description": "Normalized Mermaid diagram type (flowchart, sequence, class, er, state, unknown).",
             "enum": [
               "flowchart",
@@ -54,7 +54,7 @@
             },
             "type": "array"
           },
-          "lint_supported": {
+          "lint-supported": {
             "description": "Whether lint rules are currently implemented for the parsed diagram type.",
             "type": "boolean"
           },
@@ -63,7 +63,7 @@
             "description": "Aggregate statistics about the diagram. Present if valid.",
             "nullable": true
           },
-          "syntax_error": {
+          "syntax-error": {
             "$ref": "#/components/schemas/SyntaxError",
             "description": "Syntax error details if `valid` is false. Null if valid.",
             "nullable": true
@@ -75,7 +75,7 @@
         },
         "required": [
           "valid",
-          "lint_supported",
+          "lint-supported",
           "issues"
         ],
         "type": "object"
@@ -154,7 +154,7 @@
             "example": "Node 'isolated' is not connected to the graph",
             "type": "string"
           },
-          "rule_id": {
+          "rule-id": {
             "description": "Identifier of the lint rule that triggered",
             "example": "no-disconnected-nodes",
             "type": "string"
@@ -170,7 +170,7 @@
           }
         },
         "required": [
-          "rule_id",
+          "rule-id",
           "severity",
           "message"
         ],
@@ -178,13 +178,13 @@
       },
       "IssueCounts": {
         "properties": {
-          "by_rule": {
+          "by-rule": {
             "additionalProperties": {
               "type": "integer"
             },
             "type": "object"
           },
-          "by_severity": {
+          "by-severity": {
             "additionalProperties": {
               "type": "integer"
             },
@@ -192,14 +192,14 @@
           }
         },
         "required": [
-          "by_severity",
-          "by_rule"
+          "by-severity",
+          "by-rule"
         ],
         "type": "object"
       },
       "Metrics": {
         "properties": {
-          "diagram_type": {
+          "diagram-type": {
             "description": "Diagram type copied from parsed metadata",
             "enum": [
               "flowchart",
@@ -217,49 +217,49 @@
             "example": "TD",
             "type": "string"
           },
-          "disconnected_node_count": {
+          "disconnected-node-count": {
             "description": "Number of nodes with neither incoming nor outgoing edges",
             "example": 1,
             "type": "integer"
           },
-          "duplicate_node_count": {
+          "duplicate-node-count": {
             "description": "Number of duplicate node declarations beyond first occurrences",
             "example": 0,
             "type": "integer"
           },
-          "edge_count": {
+          "edge-count": {
             "description": "Total number of edges (connections) in the diagram",
             "example": 4,
             "type": "integer"
           },
-          "issue_counts": {
+          "issue-counts": {
             "$ref": "#/components/schemas/IssueCounts",
             "description": "Issue count aggregations by severity and rule ID"
           },
-          "max_fanin": {
+          "max-fanin": {
             "description": "Maximum number of incoming edges to any single node",
             "example": 3,
             "type": "integer"
           },
-          "max_fanout": {
+          "max-fanout": {
             "description": "Maximum number of outgoing edges from any single node",
             "example": 2,
             "type": "integer"
           },
-          "node_count": {
+          "node-count": {
             "description": "Total number of nodes in the diagram",
             "example": 5,
             "type": "integer"
           }
         },
         "required": [
-          "node_count",
-          "edge_count",
-          "disconnected_node_count",
-          "duplicate_node_count",
-          "max_fanin",
-          "max_fanout",
-          "diagram_type"
+          "node-count",
+          "edge-count",
+          "disconnected-node-count",
+          "duplicate-node-count",
+          "max-fanin",
+          "max-fanout",
+          "diagram-type"
         ],
         "type": "object"
       },
@@ -290,7 +290,7 @@
                     ],
                     "type": "string"
                   },
-                  "suppression_selectors": {
+                  "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
                       "type": "string"
@@ -316,7 +316,7 @@
                     ],
                     "type": "string"
                   },
-                  "suppression_selectors": {
+                  "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
                       "type": "string"
@@ -342,7 +342,7 @@
                     ],
                     "type": "string"
                   },
-                  "suppression_selectors": {
+                  "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
                       "type": "string"
@@ -382,7 +382,7 @@
                         ],
                         "type": "string"
                       },
-                      "suppression_selectors": {
+                      "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
                           "type": "string"
@@ -408,7 +408,7 @@
                         ],
                         "type": "string"
                       },
-                      "suppression_selectors": {
+                      "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
                           "type": "string"
@@ -434,7 +434,7 @@
                         ],
                         "type": "string"
                       },
-                      "suppression_selectors": {
+                      "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
                           "type": "string"
@@ -459,13 +459,13 @@
       },
       "RuleMetadata": {
         "properties": {
-          "configurable_options": {
+          "configurable-options": {
             "items": {
               "$ref": "#/components/schemas/RuleOption"
             },
             "type": "array"
           },
-          "default_config": {
+          "default-config": {
             "additionalProperties": true,
             "type": "object"
           },
@@ -489,8 +489,8 @@
           "id",
           "severity",
           "description",
-          "default_config",
-          "configurable_options"
+          "default-config",
+          "configurable-options"
         ],
         "type": "object"
       },
@@ -602,7 +602,7 @@
                           "enabled": true,
                           "limit": 2,
                           "severity": "error",
-                          "suppression_selectors": [
+                          "suppression-selectors": [
                             "node:A"
                           ]
                         }
@@ -626,23 +626,23 @@
                   "sequenceDiagram": {
                     "summary": "Valid sequence diagram (lint currently unsupported)",
                     "value": {
-                      "diagram_type": "sequence",
+                      "diagram-type": "sequence",
                       "issues": [],
-                      "lint_supported": false,
+                      "lint-supported": false,
                       "metrics": {
-                        "diagram_type": "sequence",
-                        "disconnected_node_count": 0,
-                        "duplicate_node_count": 0,
-                        "edge_count": 0,
-                        "issue_counts": {
-                          "by_rule": {},
-                          "by_severity": {}
+                        "diagram-type": "sequence",
+                        "disconnected-node-count": 0,
+                        "duplicate-node-count": 0,
+                        "edge-count": 0,
+                        "issue-counts": {
+                          "by-rule": {},
+                          "by-severity": {}
                         },
-                        "max_fanin": 0,
-                        "max_fanout": 0,
-                        "node_count": 0
+                        "max-fanin": 0,
+                        "max-fanout": 0,
+                        "node-count": 0
                       },
-                      "syntax_error": null,
+                      "syntax-error": null,
                       "valid": true
                     }
                   },
@@ -650,8 +650,8 @@
                     "summary": "Syntax error response",
                     "value": {
                       "issues": [],
-                      "lint_supported": false,
-                      "syntax_error": {
+                      "lint-supported": false,
+                      "syntax-error": {
                         "column": 12,
                         "line": 2,
                         "message": "Unexpected token '\u003e'"
@@ -662,67 +662,67 @@
                   "validDiagram": {
                     "summary": "Valid diagram with no issues",
                     "value": {
-                      "diagram_type": "flowchart",
+                      "diagram-type": "flowchart",
                       "issues": [],
-                      "lint_supported": true,
+                      "lint-supported": true,
                       "metrics": {
-                        "diagram_type": "flowchart",
+                        "diagram-type": "flowchart",
                         "direction": "TD",
-                        "disconnected_node_count": 0,
-                        "duplicate_node_count": 0,
-                        "edge_count": 1,
-                        "issue_counts": {
-                          "by_rule": {},
-                          "by_severity": {}
+                        "disconnected-node-count": 0,
+                        "duplicate-node-count": 0,
+                        "edge-count": 1,
+                        "issue-counts": {
+                          "by-rule": {},
+                          "by-severity": {}
                         },
-                        "max_fanin": 1,
-                        "max_fanout": 1,
-                        "node_count": 2
+                        "max-fanin": 1,
+                        "max-fanout": 1,
+                        "node-count": 2
                       },
-                      "syntax_error": null,
+                      "syntax-error": null,
                       "valid": true
                     }
                   },
                   "withIssues": {
                     "summary": "Valid diagram with lint issues",
                     "value": {
-                      "diagram_type": "flowchart",
+                      "diagram-type": "flowchart",
                       "issues": [
                         {
                           "message": "Node 'D' is not connected to the graph",
-                          "rule_id": "no-disconnected-nodes",
+                          "rule-id": "no-disconnected-nodes",
                           "severity": "error"
                         },
                         {
                           "column": 2,
                           "line": 2,
                           "message": "Node 'A' has fanout 6, exceeding limit of 5",
-                          "rule_id": "max-fanout",
+                          "rule-id": "max-fanout",
                           "severity": "warning"
                         }
                       ],
-                      "lint_supported": true,
+                      "lint-supported": true,
                       "metrics": {
-                        "diagram_type": "flowchart",
+                        "diagram-type": "flowchart",
                         "direction": "TD",
-                        "disconnected_node_count": 1,
-                        "duplicate_node_count": 0,
-                        "edge_count": 2,
-                        "issue_counts": {
-                          "by_rule": {
+                        "disconnected-node-count": 1,
+                        "duplicate-node-count": 0,
+                        "edge-count": 2,
+                        "issue-counts": {
+                          "by-rule": {
                             "max-fanout": 1,
                             "no-disconnected-nodes": 1
                           },
-                          "by_severity": {
+                          "by-severity": {
                             "error": 1,
                             "warning": 1
                           }
                         },
-                        "max_fanin": 1,
-                        "max_fanout": 2,
-                        "node_count": 4
+                        "max-fanin": 1,
+                        "max-fanout": 2,
+                        "node-count": 4
                       },
-                      "syntax_error": null,
+                      "syntax-error": null,
                       "valid": true
                     }
                   }
@@ -783,7 +783,7 @@
                           "enabled",
                           "limit",
                           "severity",
-                          "suppression_selectors"
+                          "suppression-selectors"
                         ]
                       },
                       "issues": [],

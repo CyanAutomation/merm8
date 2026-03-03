@@ -275,8 +275,24 @@ func TestNormalizeConfig_KeyAliases(t *testing.T) {
 	if _, ok := normalized["max-fanout"]["severity"]; !ok {
 		t.Fatal("expected severity key to be normalized to lowercase")
 	}
-	if _, ok := normalized["max-fanout"]["suppression_selectors"]; !ok {
-		t.Fatal("expected suppression selector alias to normalize to suppression_selectors")
+	if _, ok := normalized["max-fanout"]["suppression-selectors"]; !ok {
+		t.Fatal("expected suppression selector alias to normalize to suppression-selectors")
+	}
+}
+
+func TestNormalizeConfig_LegacySnakeCaseAlias(t *testing.T) {
+	cfg := rules.Config{
+		"max-fanout": {
+			"suppression_selectors": []interface{}{"node:A"},
+		},
+	}
+
+	normalized, err := rules.NormalizeConfig(cfg, map[string]struct{}{"max-fanout": {}})
+	if err != nil {
+		t.Fatalf("expected normalization to succeed, got %v", err)
+	}
+	if _, ok := normalized["max-fanout"]["suppression-selectors"]; !ok {
+		t.Fatal("expected suppression_selectors legacy key to normalize to suppression-selectors")
 	}
 }
 

@@ -103,7 +103,7 @@ Add a `config` field to customize rule behavior:
         "enabled": true,
         "severity": "error",
         "limit": 2,
-        "suppression_selectors": ["node:A"]
+        "suppression-selectors": ["node:A"]
       }
     }
   }
@@ -133,14 +133,14 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 ```json
 {
   "valid": true,
-  "diagram_type": "flowchart",
-  "lint_supported": true,
-  "syntax_error": null,
+  "diagram-type": "flowchart",
+  "lint-supported": true,
+  "syntax-error": null,
   "issues": [],
   "metrics": {
-    "node_count": 3,
-    "edge_count": 2,
-    "max_fanout": 1
+    "node-count": 3,
+    "edge-count": 2,
+    "max-fanout": 1
   }
 }
 ```
@@ -149,18 +149,18 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 ```json
 {
   "valid": true,
-  "syntax_error": null,
+  "syntax-error": null,
   "issues": [
     {
-      "rule_id": "no-disconnected-nodes",
+      "rule-id": "no-disconnected-nodes",
       "severity": "error",
       "message": "Node 'Isolated' is not connected to the graph"
     }
   ],
   "metrics": {
-    "node_count": 3,
-    "edge_count": 2,
-    "max_fanout": 1
+    "node-count": 3,
+    "edge-count": 2,
+    "max-fanout": 1
   }
 }
 ```
@@ -169,8 +169,8 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 ```json
 {
   "valid": false,
-  "lint_supported": false,
-  "syntax_error": {
+  "lint-supported": false,
+  "syntax-error": {
     "message": "No diagram type detected",
     "line": 0,
     "column": 0
@@ -202,30 +202,30 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 
 **Current type support behavior:**
 - `flowchart`/`graph` diagrams are linted by built-in rules.
-- `sequence`, `class`, `er`, and `state` diagrams are parsed, and return `lint_supported=false` plus an informational `unsupported-diagram-type` issue.
+- `sequence`, `class`, `er`, and `state` diagrams are parsed, and return `lint-supported=false` plus an informational `unsupported-diagram-type` issue.
 
 - **`valid`** — Boolean indicating if the Mermaid syntax is syntactically correct
-- **`diagram_type`** — Normalized Mermaid type for valid diagrams (`flowchart`, `sequence`, `class`, `er`, `state`, `unknown`)
-- **`lint_supported`** — Whether the parsed diagram type currently has active lint rule coverage
-- **`syntax_error`** — Object with parsing error details (only present if `valid` is false)
+- **`diagram-type`** — Normalized Mermaid type for valid diagrams (`flowchart`, `sequence`, `class`, `er`, `state`, `unknown`)
+- **`lint-supported`** — Whether the parsed diagram type currently has active lint rule coverage
+- **`syntax-error`** — Object with parsing error details (only present if `valid` is false)
   - `message` — Human-readable error description
   - `line` — 1-based line number where error occurred
   - `column` — 0-based column number where error occurred
 - **`issues`** — Array of lint rule violations found (empty if no issues)
-  - `rule_id` — The lint rule that triggered
+  - `rule-id` — The lint rule that triggered
   - `severity` — One of: `error`, `warning`, `info`
     - Deprecated alias: `warn` is accepted for backwards compatibility and normalized to `warning`.
   - `message` — Description of the issue
   - `line` / `column` — Optional location in the diagram code (omitted when unknown)
 - **`issues`** can include findings both with source locations (`line`/`column`) and without them when exact positions are unavailable.
-- **`issues[].fingerprint`** is a deterministic SHA-256 hash over normalized issue fields (`rule_id`, `severity`, `message`, `line`, `column`, and grouping context) suitable for CI baselining.
-- **`issues[].context`** is optional grouping metadata. For node-scoped findings in subgraphs, it includes `subgraph_id` and `subgraph_label`; it is omitted when no grouping applies.
+- **`issues[].fingerprint`** is a deterministic SHA-256 hash over normalized issue fields (`rule-id`, `severity`, `message`, `line`, `column`, and grouping context) suitable for CI baselining.
+- **`issues[].context`** is optional grouping metadata. For node-scoped findings in subgraphs, it includes `subgraph-id` and `subgraph-label`; it is omitted when no grouping applies.
   - `line` / `column` — Location in the diagram code
-  - **Ordering guarantee** — Issues are deterministically sorted before returning: by severity priority (`error` → `warning` → `info`), then `rule_id`, then `line`, then `column`, then `message`. If two rules produce the exact same issue signature, duplicates are removed.
+  - **Ordering guarantee** — Issues are deterministically sorted before returning: by severity priority (`error` → `warning` → `info`), then `rule-id`, then `line`, then `column`, then `message`. If two rules produce the exact same issue signature, duplicates are removed.
 - **`metrics`** — Statistics about the diagram structure
-  - `node_count` — Total nodes in the diagram
-  - `edge_count` — Total connections/edges
-  - `max_fanout` — Maximum outgoing edges from any single node
+  - `node-count` — Total nodes in the diagram
+  - `edge-count` — Total connections/edges
+  - `max-fanout` — Maximum outgoing edges from any single node
 
 ---
 
@@ -309,7 +309,7 @@ result = response.json()
 print(f"Valid: {result['valid']}")
 print(f"Issues: {len(result['issues'])}")
 for issue in result['issues']:
-    print(f"  - {issue['rule_id']}: {issue['message']}")
+    print(f"  - {issue['rule-id']}: {issue['message']}")
 ```
 
 #### JavaScript / Node.js
@@ -334,7 +334,7 @@ const data = await response.json();
 console.log(`Valid: ${data.valid}`);
 console.log(`Issues: ${data.issues.length}`);
 for (const issue of data.issues) {
-  console.log(`  - ${issue.rule_id}: ${issue.message}`);
+  console.log(`  - ${issue.rule-id}: ${issue.message}`);
 }
 ```
 
@@ -392,7 +392,7 @@ You can suppress lint findings directly in Mermaid source using comment directiv
 - `%% merm8-disable-next-line <rule-id>` or `%% merm8-ignore-next-line <rule-id>`
 - `%% merm8-disable-next-line all` or `%% merm8-ignore-next-line all`
 
-`all` suppresses every rule. Rule-specific suppressions only affect matching `rule_id` values.
+`all` suppresses every rule. Rule-specific suppressions only affect matching `rule-id` values.
 
 **Description:** Validate and lint a Mermaid diagram  
 **Request body:**
@@ -420,7 +420,7 @@ The merm8 engine includes three built-in lint rules:
 - **Example response:**
   ```json
   {
-    "rule_id": "no-duplicate-node-ids",
+    "rule-id": "no-duplicate-node-ids",
     "severity": "error",
     "message": "Duplicate node ID 'A'"
   }
@@ -433,7 +433,7 @@ The merm8 engine includes three built-in lint rules:
 - **Example response:**
   ```json
   {
-    "rule_id": "no-disconnected-nodes",
+    "rule-id": "no-disconnected-nodes",
     "severity": "error",
     "message": "Node 'isolated' is not connected"
   }
@@ -456,7 +456,7 @@ The merm8 engine includes three built-in lint rules:
 - **Example response:**
   ```json
   {
-    "rule_id": "max-fanout",
+    "rule-id": "max-fanout",
     "severity": "warning",
     "message": "Node 'A' has fanout of 6, exceeds limit of 5"
   }
@@ -470,7 +470,7 @@ Preferred format (versioned contract):
 {
   "code": "...",
   "config": {
-    "schema_version": "v1",
+    "schema-version": "v1",
     "rules": {
       "max-fanout": { "limit": 3 }
     }
@@ -524,13 +524,13 @@ const schemaResp = await fetch("http://localhost:8080/rules/schema").then(r => r
 const validate = ajv.compile(schemaResp.schema);
 
 const config = {
-  schema_version: "v1",
+  schema-version: "v1",
   rules: {
     "max-fanout": {
       enabled: true,
       severity: "warning",
       limit: 3,
-      suppression_selectors: ["node:A"]
+      suppression-selectors: ["node:A"]
     }
   }
 };
@@ -559,14 +559,14 @@ curl -X POST http://localhost:8080/analyze \
 ```json
 {
   "valid": true,
-  "diagram_type": "flowchart",
-  "lint_supported": true,
-  "syntax_error": null,
+  "diagram-type": "flowchart",
+  "lint-supported": true,
+  "syntax-error": null,
   "issues": [],
   "metrics": {
-    "node_count": 3,
-    "edge_count": 2,
-    "max_fanout": 1
+    "node-count": 3,
+    "edge-count": 2,
+    "max-fanout": 1
   }
 }
 ```
@@ -587,10 +587,10 @@ curl -X POST http://localhost:8080/analyze \
 ```json
 {
   "valid": true,
-  "syntax_error": null,
+  "syntax-error": null,
   "issues": [
     {
-      "rule_id": "max-fanout",
+      "rule-id": "max-fanout",
       "severity": "warning",
       "message": "Node 'A' has fanout of 6, exceeds limit of 4",
       "line": 2,
@@ -598,9 +598,9 @@ curl -X POST http://localhost:8080/analyze \
     }
   ],
   "metrics": {
-    "node_count": 7,
-    "edge_count": 6,
-    "max_fanout": 6
+    "node-count": 7,
+    "edge-count": 6,
+    "max-fanout": 6
   }
 }
 ```
@@ -620,18 +620,18 @@ curl -X POST http://localhost:8080/analyze \
 ```json
 {
   "valid": true,
-  "syntax_error": null,
+  "syntax-error": null,
   "issues": [
     {
-      "rule_id": "no-disconnected-nodes",
+      "rule-id": "no-disconnected-nodes",
       "severity": "error",
       "message": "Node 'D' is not connected to the graph"
     }
   ],
   "metrics": {
-    "node_count": 4,
-    "edge_count": 2,
-    "max_fanout": 1
+    "node-count": 4,
+    "edge-count": 2,
+    "max-fanout": 1
   }
 }
 ```
@@ -651,8 +651,8 @@ curl -X POST http://localhost:8080/analyze \
 ```json
 {
   "valid": false,
-  "lint_supported": false,
-  "syntax_error": {
+  "lint-supported": false,
+  "syntax-error": {
     "message": "No diagram type detected",
     "line": 0,
     "column": 0

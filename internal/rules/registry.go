@@ -19,8 +19,8 @@ type RuleMetadata struct {
 	ID                  string                 `json:"id"`
 	Severity            string                 `json:"severity"`
 	Description         string                 `json:"description"`
-	DefaultConfig       map[string]interface{} `json:"default_config"`
-	ConfigurableOptions []OptionMetadata       `json:"configurable_options"`
+	DefaultConfig       map[string]interface{} `json:"default-config"`
+	ConfigurableOptions []OptionMetadata       `json:"configurable-options"`
 	AllowedOptionKeys   []string               `json:"-"`
 }
 
@@ -48,7 +48,7 @@ var sharedOptionConstraints = map[string]optionConstraint{
 			return ok
 		},
 	},
-	"suppression_selectors": {
+	"suppression-selectors": {
 		validate: func(value any) bool {
 			switch selectors := value.(type) {
 			case []interface{}:
@@ -92,13 +92,13 @@ var builtInRuleMetadata = []RuleMetadata{
 		DefaultConfig: map[string]interface{}{
 			"enabled":               true,
 			"severity":              "warning",
-			"suppression_selectors": []string{},
+			"suppression-selectors": []string{},
 			"limit":                 defaultMaxFanout,
 		},
 		ConfigurableOptions: []OptionMetadata{
 			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
 			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warning, info."},
-			{Name: "suppression_selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
 			{Name: "limit", Type: "integer", Description: "Maximum allowed outgoing edges per node.", Constraints: "Must be an integer >= 1. Default is 5."},
 		},
 	},
@@ -109,12 +109,12 @@ var builtInRuleMetadata = []RuleMetadata{
 		DefaultConfig: map[string]interface{}{
 			"enabled":               true,
 			"severity":              "error",
-			"suppression_selectors": []string{},
+			"suppression-selectors": []string{},
 		},
 		ConfigurableOptions: []OptionMetadata{
 			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
 			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warning, info."},
-			{Name: "suppression_selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
 		},
 	},
 	{
@@ -124,12 +124,12 @@ var builtInRuleMetadata = []RuleMetadata{
 		DefaultConfig: map[string]interface{}{
 			"enabled":               true,
 			"severity":              "error",
-			"suppression_selectors": []string{},
+			"suppression-selectors": []string{},
 		},
 		ConfigurableOptions: []OptionMetadata{
 			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
 			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues.", Constraints: "One of: error, warning, info."},
-			{Name: "suppression_selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
 		},
 	},
 }
