@@ -1217,3 +1217,35 @@ func TestAnalyzeRateLimitMiddleware_Returns429(t *testing.T) {
 	}
 	assertExactErrorResponse(t, secondW.Body.Bytes(), "rate_limited", "rate limit exceeded")
 }
+
+func TestAnalyzeAuthMiddleware_PrecedesRateLimitQuotaConsumption(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{}, nil, nil
+	})
+
+	limiter := api.NewRateLimiter(1, time.Minute)
+	secured := api.AnalyzeBearerAuthMiddleware("s3cr3t", api.AnalyzeRateLimitMiddleware(limiter, mux))
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
+
+	unauthorizedReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	unauthorizedReq.Header.Set("Content-Type", "application/json")
+	unauthorizedReq.RemoteAddr = "127.0.0.1:1234"
+	unauthorizedW := httptest.NewRecorder()
+	secured.ServeHTTP(unauthorizedW, unauthorizedReq)
+
+	if unauthorizedW.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthorized request to be rejected before rate limiting, got %d", unauthorizedW.Code)
+	}
+
+	authorizedReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	authorizedReq.Header.Set("Content-Type", "application/json")
+	authorizedReq.Header.Set("Authorization", "Bearer s3cr3t")
+	authorizedReq.RemoteAddr = "127.0.0.1:5678"
+	authorizedW := httptest.NewRecorder()
+	secured.ServeHTTP(authorizedW, authorizedReq)
+
+	if authorizedW.Code != http.StatusOK {
+		t.Fatalf("expected first authorized request to succeed, got %d", authorizedW.Code)
+	}
+}

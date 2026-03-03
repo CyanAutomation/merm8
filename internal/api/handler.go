@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sync"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -99,6 +100,7 @@ type errorResponse struct {
 type Handler struct {
 	parser              ParserInterface
 	engine              *engine.Engine
+	mu                  sync.RWMutex
 	parserConcurrencyCh chan struct{}
 }
 
@@ -114,6 +116,9 @@ func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
 // SetParserConcurrencyLimit configures a limit for concurrent parser invocations.
 // A value <= 0 disables the limit.
 func (h *Handler) SetParserConcurrencyLimit(limit int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	if limit <= 0 {
 		h.parserConcurrencyCh = nil
 		return
@@ -191,10 +196,14 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.parserConcurrencyCh != nil {
+	h.mu.RLock()
+	parserConcurrencyCh := h.parserConcurrencyCh
+	h.mu.RUnlock()
+
+	if parserConcurrencyCh != nil {
 		select {
-		case h.parserConcurrencyCh <- struct{}{}:
-			defer func() { <-h.parserConcurrencyCh }()
+		case parserConcurrencyCh <- struct{}{}:
+			defer func() { <-parserConcurrencyCh }()
 		default:
 			writeError(w, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again")
 			return
