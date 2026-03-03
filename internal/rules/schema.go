@@ -9,7 +9,14 @@ const CurrentConfigSchemaVersion = "v1"
 // Canonical format:
 //   - Versioned format: {"schema-version":"v1","rules":{...}}
 func ConfigJSONSchema() map[string]any {
-	return ConfigV1JSONSchema()
+	return map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"title":   "merm8 Rule Configuration",
+		"oneOf": []any{
+			flatConfigSchema(),
+			ConfigV1JSONSchema(),
+		},
+	}
 }
 
 // ConfigV1JSONSchema returns the schema for the versioned config contract.

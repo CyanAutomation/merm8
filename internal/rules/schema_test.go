@@ -2,51 +2,40 @@ package rules
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestConfigJSONSchema_UsesCanonicalVersionedFormat(t *testing.T) {
+func TestConfigJSONSchema_UsesMigrationOneOfWithFlatAndVersionedForms(t *testing.T) {
 	schema := ConfigJSONSchema()
 
 	if schema["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
 		t.Fatalf("expected draft schema id, got %#v", schema["$schema"])
 	}
 
-	if _, ok := schema["oneOf"]; ok {
-		t.Fatalf("did not expect legacy oneOf variants in strict schema: %#v", schema["oneOf"])
+	oneOf, ok := schema["oneOf"].([]any)
+	if !ok {
+		t.Fatalf("expected oneOf variants in migration schema, got %#v", schema["oneOf"])
+	}
+	if len(oneOf) != 2 {
+		t.Fatalf("expected two oneOf variants (flat + versioned), got %d", len(oneOf))
 	}
 
-	required := schema["required"].([]string)
-	if len(required) != 2 || required[0] != "schema-version" || required[1] != "rules" {
-		t.Fatalf("unexpected required keys on schema: %#v", required)
+	versionedSchema, ok := oneOf[1].(map[string]any)
+	if !ok {
+		t.Fatalf("expected versioned variant to be an object schema, got %#v", oneOf[1])
 	}
-	if enumVals := schema["properties"].(map[string]any)["schema-version"].(map[string]any)["enum"].([]string); len(enumVals) != 1 || enumVals[0] != CurrentConfigSchemaVersion {
-		t.Fatalf("unexpected schema-version enum: %#v", enumVals)
-	}
-
-	rulesProperty := schema["properties"].(map[string]any)["rules"].(map[string]any)
-	rulesProps := rulesProperty["properties"].(map[string]any)
-	if _, ok := rulesProps["max-fanout"]; !ok {
-		t.Fatal("expected max-fanout in rules properties")
-	}
-	if _, ok := rulesProps["no-disconnected-nodes"]; !ok {
-		t.Fatal("expected no-disconnected-nodes in rules properties")
-	}
-	if _, ok := rulesProps["no-duplicate-node-ids"]; !ok {
-		t.Fatal("expected no-duplicate-node-ids in rules properties")
-	}
-	if _, ok := rulesProps["max-depth"]; !ok {
-		t.Fatal("expected max-depth in rules properties")
-	}
-	if _, ok := rulesProps["no-cycles"]; !ok {
-		t.Fatal("expected no-cycles in rules properties")
+	required, ok := versionedSchema["required"].([]string)
+	if !ok || len(required) != 2 || required[0] != "schema-version" || required[1] != "rules" {
+		t.Fatalf("unexpected required keys on versioned schema: %#v", versionedSchema["required"])
 	}
 }
 
 func TestConfigJSONSchema_EncodesAllowedOptionsAndConstraints(t *testing.T) {
-	schema := ConfigJSONSchema()
+	schema := ConfigV1JSONSchema()
 	rulesProps := schema["properties"].(map[string]any)["rules"].(map[string]any)["properties"].(map[string]any)
 
 	maxFanout := rulesProps["max-fanout"].(map[string]any)
@@ -75,7 +64,7 @@ func TestConfigJSONSchema_EncodesAllowedOptionsAndConstraints(t *testing.T) {
 }
 
 func TestConfigJSONSchema_SeverityEnumDoesNotIncludeWarnAlias(t *testing.T) {
-	schema := ConfigJSONSchema()
+	schema := ConfigV1JSONSchema()
 	rulesProps := schema["properties"].(map[string]any)["rules"].(map[string]any)["properties"].(map[string]any)
 	maxFanoutProps := rulesProps["max-fanout"].(map[string]any)["properties"].(map[string]any)
 	severity := maxFanoutProps["severity"].(map[string]any)
@@ -85,6 +74,192 @@ func TestConfigJSONSchema_SeverityEnumDoesNotIncludeWarnAlias(t *testing.T) {
 			t.Fatalf("warn alias should not appear in schema enum: %#v", enumVals)
 		}
 	}
+}
+
+func TestConfigJSONSchema_ValidationAcceptsFlatAndVersionedConfigs(t *testing.T) {
+	schema := ConfigJSONSchema()
+	validConfigs := []string{
+		`{"max-fanout":{"limit":1},"no-cycles":{"enabled":true}}`,
+		`{"schema-version":"v1","rules":{"max-fanout":{"limit":3},"no-cycles":{"enabled":false}}}`,
+	}
+
+	for _, cfg := range validConfigs {
+		cfg := cfg
+		t.Run(cfg, func(t *testing.T) {
+			if err := validateConfigJSON(schema, cfg); err != nil {
+				t.Fatalf("expected valid config, got error: %v", err)
+			}
+		})
+	}
+}
+
+func TestConfigJSONSchema_ValidationRejectsInvalidConfigs(t *testing.T) {
+	schema := ConfigJSONSchema()
+	invalidConfigs := []string{
+		`{"max-fanout":{"limit":-1}}`,
+		`{"schema-version":"v1","rules":{"max-fanout":{"limit":-1}}}`,
+		`{"max-fanout":{"limit":"3"}}`,
+		`{"schema-version":"v1","rules":{"max-fanout":{"limit":"3"}}}`,
+		`{"max-fanout":{"limit":0}}`,
+	}
+
+	for _, cfg := range invalidConfigs {
+		cfg := cfg
+		t.Run(cfg, func(t *testing.T) {
+			if err := validateConfigJSON(schema, cfg); err == nil {
+				t.Fatalf("expected validation error for config: %s", cfg)
+			}
+		})
+	}
+}
+
+func validateConfigJSON(schema map[string]any, configJSON string) error {
+	var instance any
+	if err := json.Unmarshal([]byte(configJSON), &instance); err != nil {
+		return fmt.Errorf("decode config: %w", err)
+	}
+	return validateSchemaNode(schema, instance)
+}
+
+func validateSchemaNode(schema map[string]any, instance any) error {
+	if oneOfRaw, ok := schema["oneOf"]; ok {
+		variants, ok := oneOfRaw.([]any)
+		if !ok {
+			return fmt.Errorf("schema oneOf is not []any")
+		}
+		matched := 0
+		for _, variant := range variants {
+			variantSchema, ok := variant.(map[string]any)
+			if !ok {
+				continue
+			}
+			if err := validateSchemaNode(variantSchema, instance); err == nil {
+				matched++
+			}
+		}
+		if matched != 1 {
+			return fmt.Errorf("oneOf mismatch: matched=%d", matched)
+		}
+		return nil
+	}
+
+	typeName, _ := schema["type"].(string)
+	switch typeName {
+	case "object":
+		obj, ok := instance.(map[string]any)
+		if !ok {
+			return fmt.Errorf("expected object")
+		}
+		required, err := stringSlice(schema["required"])
+		if err != nil {
+			return err
+		}
+		for _, key := range required {
+			if _, ok := obj[key]; !ok {
+				return fmt.Errorf("missing required key %q", key)
+			}
+		}
+		props, _ := schema["properties"].(map[string]any)
+		if schema["additionalProperties"] == false {
+			for key := range obj {
+				if _, ok := props[key]; !ok {
+					return fmt.Errorf("unexpected property %q", key)
+				}
+			}
+		}
+		for key, val := range obj {
+			if propSchemaRaw, ok := props[key]; ok {
+				propSchema, ok := propSchemaRaw.(map[string]any)
+				if !ok {
+					continue
+				}
+				if err := validateSchemaNode(propSchema, val); err != nil {
+					return fmt.Errorf("property %q: %w", key, err)
+				}
+			}
+		}
+	case "integer":
+		num, ok := instance.(float64)
+		if !ok {
+			return fmt.Errorf("expected integer")
+		}
+		if math.Mod(num, 1) != 0 {
+			return fmt.Errorf("expected integral number")
+		}
+		if minRaw, ok := schema["minimum"]; ok {
+			min, ok := minRaw.(float64)
+			if !ok {
+				if i, ok := minRaw.(int); ok {
+					min = float64(i)
+				} else {
+					return fmt.Errorf("invalid minimum type %T", minRaw)
+				}
+			}
+			if num < min {
+				return fmt.Errorf("number %v below minimum %v", num, min)
+			}
+		}
+	case "string":
+		str, ok := instance.(string)
+		if !ok {
+			return fmt.Errorf("expected string")
+		}
+		if enumRaw, ok := schema["enum"]; ok {
+			enumVals, err := stringSlice(enumRaw)
+			if err != nil {
+				return err
+			}
+			matched := false
+			for _, allowed := range enumVals {
+				if str == allowed {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return fmt.Errorf("string %q not in enum", str)
+			}
+		}
+	case "boolean":
+		if _, ok := instance.(bool); !ok {
+			return fmt.Errorf("expected boolean")
+		}
+	case "array":
+		arr, ok := instance.([]any)
+		if !ok {
+			return fmt.Errorf("expected array")
+		}
+		itemSchema, _ := schema["items"].(map[string]any)
+		for i, item := range arr {
+			if err := validateSchemaNode(itemSchema, item); err != nil {
+				return fmt.Errorf("array item %d: %w", i, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func stringSlice(raw any) ([]string, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	if vals, ok := raw.([]string); ok {
+		return vals, nil
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("expected []string/[]any, got %T", raw)
+	}
+	vals := make([]string, 0, len(items))
+	for _, item := range items {
+		str, ok := item.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected string item, got %T", item)
+		}
+		vals = append(vals, str)
+	}
+	return vals, nil
 }
 
 func TestConfigV1JSONSchema_MatchesVersionedArtifact(t *testing.T) {
