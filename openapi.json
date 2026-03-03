@@ -687,7 +687,7 @@
   "paths": {
     "/analyze": {
       "post": {
-        "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nSupports source comment suppressions such as `%% merm8-disable \u003crule-id\u003e`, `%% merm8-disable all`, and `%% merm8-disable-next-line \u003crule-id\u003e`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)",
+        "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nOperational note: tune `PARSER_CONCURRENCY_LIMIT` and `PARSER_MAX_OLD_SPACE_MB` (documented in API_GUIDE.md under Operational environment variables). When parser concurrency is exhausted, `/analyze` returns HTTP 503 with `error.code=server_busy`; parser subprocess heap is capped with Node `--max-old-space-size`.\n\nSupports source comment suppressions such as `%% merm8-disable \u003crule-id\u003e`, `%% merm8-disable all`, and `%% merm8-disable-next-line \u003crule-id\u003e`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)",
         "operationId": "analyzeCode",
         "requestBody": {
           "content": {
