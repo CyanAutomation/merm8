@@ -208,6 +208,27 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
+
+		"/diagram-types": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Linting"},
+				"summary":     "List parser-recognized and lint-supported diagram types",
+				"description": "Returns diagram families/types recognized by the parser and currently lint-supported by registered rules.",
+				"operationId": "listDiagramTypes",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Diagram type support matrix",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/DiagramTypesResponse",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"/analyze": map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
@@ -423,7 +444,7 @@ var openapi = map[string]interface{}{
 												"code":      "unknown_rule",
 												"message":   "unknown rule: unknown-rule",
 												"path":      "config.rules.unknown-rule",
-												"supported": []interface{}{"max-fanout", "no-disconnected-nodes", "no-duplicate-node-ids"},
+												"supported": []interface{}{"max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"},
 											},
 										},
 									},
@@ -718,6 +739,26 @@ var openapi = map[string]interface{}{
 				"description": sarif.SeverityMappingDoc,
 			},
 
+			"DiagramTypesResponse": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"parser-recognized", "lint-supported"},
+				"properties": map[string]interface{}{
+					"parser-recognized": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "string",
+							"enum": []string{"flowchart", "sequence", "class", "er", "state"},
+						},
+					},
+					"lint-supported": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "string",
+							"enum": []string{"flowchart", "sequence", "class", "er", "state"},
+						},
+					},
+				},
+			},
 			"RulesResponse": map[string]interface{}{
 				"type":     "object",
 				"required": []string{"rules"},

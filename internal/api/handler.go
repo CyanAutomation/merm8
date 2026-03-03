@@ -284,6 +284,11 @@ type ruleResponse struct {
 	ConfigurableOptions []ruleOptionResponse   `json:"configurable-options"`
 }
 
+type diagramTypesResponse struct {
+	ParserRecognized []model.DiagramType   `json:"parser-recognized"`
+	LintSupported    []model.DiagramFamily `json:"lint-supported"`
+}
+
 // apiErrorDetails holds machine-readable and human-readable error information.
 type apiErrorDetails struct {
 	Code      string   `json:"code"`
@@ -369,6 +374,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /metrics", h.Metrics)
 	mux.HandleFunc("GET /rules", h.ListRules)
 	mux.HandleFunc("GET /rules/schema", h.RuleConfigSchema)
+	mux.HandleFunc("GET /diagram-types", h.DiagramTypes)
 	mux.HandleFunc("POST /analyze", h.Analyze)
 	mux.HandleFunc("POST /analyze/sarif", h.AnalyzeSARIF)
 	mux.HandleFunc("GET /spec", h.ServeSpec)
@@ -418,6 +424,22 @@ func (h *Handler) ListRules(w http.ResponseWriter, _ *http.Request) {
 // RuleConfigSchema handles GET /rules/schema.
 func (h *Handler) RuleConfigSchema(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"schema": rules.ConfigJSONSchema()})
+}
+
+// DiagramTypes handles GET /diagram-types.
+func (h *Handler) DiagramTypes(w http.ResponseWriter, _ *http.Request) {
+	families := h.lintSupportedFamilies()
+	writeJSON(w, http.StatusOK, diagramTypesResponse{
+		ParserRecognized: model.RecognizedDiagramTypes(),
+		LintSupported:    families,
+	})
+}
+
+func (h *Handler) lintSupportedFamilies() []model.DiagramFamily {
+	if h.engine == nil {
+		return []model.DiagramFamily{}
+	}
+	return h.engine.DiagramFamilies()
 }
 
 // Healthz handles GET /healthz and reports process liveness.
