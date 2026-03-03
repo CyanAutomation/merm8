@@ -161,10 +161,24 @@ func ValidateConfig(cfg Config) error {
 
 // NodeSubgraphContext returns subgraph context for a node ID when available.
 func NodeSubgraphContext(d *model.Diagram, nodeID string) *model.IssueContext {
+	return NodeSubgraphContextForOccurrence(d, nodeID, 0)
+}
+
+// NodeSubgraphContextForOccurrence returns subgraph context for the Nth
+// occurrence (zero-based) of a node ID across subgraph declarations.
+func NodeSubgraphContextForOccurrence(d *model.Diagram, nodeID string, occurrence int) *model.IssueContext {
+	if occurrence < 0 {
+		return nil
+	}
+
+	seen := 0
 	for _, subgraph := range d.Subgraphs {
 		for _, id := range subgraph.Nodes {
 			if id == nodeID {
-				return &model.IssueContext{SubgraphID: subgraph.ID, SubgraphLabel: subgraph.Label}
+				if seen == occurrence {
+					return &model.IssueContext{SubgraphID: subgraph.ID, SubgraphLabel: subgraph.Label}
+				}
+				seen++
 			}
 		}
 	}
