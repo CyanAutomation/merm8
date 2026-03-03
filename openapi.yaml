@@ -92,6 +92,10 @@ paths:
 
         Maximum request body size is 1 MiB. Oversized payloads return HTTP 413.
         
+        Supported lint families: flowchart/graph.
+
+        Sequence/class/ER/state diagrams are parsed and reported with `lint_supported=false` and an informational `unsupported-diagram-type` issue until family-specific rule sets are rolled out.
+
         Returns syntax errors if parsing fails, or lint results if parsing succeeds.
       operationId: analyzeCode
       requestBody:
@@ -138,6 +142,8 @@ paths:
                   summary: Valid diagram with no issues
                   value:
                     valid: true
+                    diagram_type: flowchart
+                    lint_supported: true
                     syntax_error: null
                     issues: []
                     metrics:
@@ -148,6 +154,7 @@ paths:
                   summary: Syntax error response
                   value:
                     valid: false
+                    lint_supported: false
                     syntax_error:
                       message: "Unexpected token '>'"
                       line: 2
@@ -157,6 +164,8 @@ paths:
                   summary: Valid diagram with lint issues
                   value:
                     valid: true
+                    diagram_type: flowchart
+                    lint_supported: true
                     syntax_error: null
                     issues:
                       - rule_id: no-disconnected-nodes
@@ -304,6 +313,7 @@ components:
       type: object
       required:
         - valid
+        - lint_supported
         - issues
         - error
       properties:
@@ -337,11 +347,19 @@ components:
       type: object
       required:
         - valid
+        - lint_supported
         - issues
       properties:
         valid:
           type: boolean
           description: Whether the Mermaid code is syntactically valid
+        diagram_type:
+          type: string
+          description: Normalized Mermaid diagram type (flowchart, sequence, class, er, state, unknown).
+          example: flowchart
+        lint_supported:
+          type: boolean
+          description: Whether lint rules are currently implemented for the parsed diagram type.
         syntax_error:
           $ref: '#/components/schemas/SyntaxError'
           description: Syntax error details if `valid` is false. Null if valid.

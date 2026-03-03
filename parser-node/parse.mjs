@@ -41,8 +41,9 @@ try {
   const { parse, detectType, mermaidAPI } = mermaid;
 
   // detectType throws for completely unrecognised diagram types
+  let detectedType;
   try {
-    detectType(input, { suppressErrors: false });
+    detectedType = detectType(input, { suppressErrors: false });
   } catch (typeErr) {
     const base = String(typeErr?.message || typeErr);
     const hint = 'Hint: start the diagram with a Mermaid type keyword like "flowchart", "graph", "sequenceDiagram", "classDiagram", "stateDiagram", or "erDiagram".';
@@ -67,7 +68,8 @@ try {
   // Extract the structural AST after successful parse
   let ast;
   try {
-    ast = await extractAST(mermaidAPI, input);
+    const normalizedType = normalizeDiagramType(detectedType);
+    ast = await extractAST(mermaidAPI, input, normalizedType);
   } catch (err) {
     writeResult({
       valid: false,
@@ -92,8 +94,9 @@ try {
  * Extracts a simplified AST by calling getDiagramFromText.
  * Falls back to deriving nodes from edges when vertices are unavailable.
  */
-async function extractAST(mermaidAPI, source) {
+async function extractAST(mermaidAPI, source, diagramType) {
   const ast = {
+    type: diagramType,
     direction: 'TD',
     nodes: [],
     edges: [],
@@ -110,7 +113,14 @@ async function extractAST(mermaidAPI, source) {
   }
 
   if (!db) {
+    if (diagramType !== 'flowchart') {
+      return ast;
+    }
     throw new Error('AST extraction failed in parser runtime');
+  }
+
+  if (diagramType !== 'flowchart') {
+    return ast;
   }
 
   // Direction
@@ -155,6 +165,17 @@ async function extractAST(mermaidAPI, source) {
   return ast;
 }
 
+
+
+function normalizeDiagramType(detectedType) {
+  const raw = String(detectedType || '').toLowerCase();
+  if (raw.startsWith('flowchart') || raw === 'graph') return 'flowchart';
+  if (raw.startsWith('sequence')) return 'sequence';
+  if (raw.startsWith('class')) return 'class';
+  if (raw === 'er' || raw.startsWith('erd')) return 'er';
+  if (raw.startsWith('state')) return 'state';
+  return 'unknown';
+}
 
 function extractSuppressions(source) {
   const suppressions = [];
