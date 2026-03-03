@@ -1,136 +1,556 @@
-openapi: 3.0.0
+---
+components:
+  schemas:
+    AnalyzeRequest:
+      properties:
+        code:
+          description: Mermaid diagram code to analyze. Total request body must be 1 MiB or smaller. Supports suppression comments like `%% merm8-disable max-fanout` and `%% merm8-disable all`.
+          example: |-
+            graph TD
+              A[Start] --> B[Process]
+              B --> C[End]
+          type: string
+        config:
+          "$ref": "#/components/schemas/RuleConfigSchema"
+          description: 'Optional lint rule configuration. Preferred format is versioned: {"schema-version":"v1","rules":{...}}. Legacy flat and nested formats remain supported during migration.'
+          example:
+            rules:
+              max-fanout:
+                enabled: true
+                limit: 3
+                severity: error
+                suppression-selectors:
+                - node:A
+              no-disconnected-nodes:
+                enabled: false
+                severity: info
+            schema-version: v1
+      required:
+      - code
+      type: object
+    AnalyzeResponse:
+      properties:
+        diagram-type:
+          description: Normalized Mermaid diagram type (flowchart, sequence, class, er, state, unknown).
+          enum:
+          - flowchart
+          - sequence
+          - class
+          - er
+          - state
+          - unknown
+          example: flowchart
+          type: string
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+          description: API-level error details for non-200 responses.
+          nullable: true
+        issues:
+          description: Lint rule violations found in the diagram
+          items:
+            $ref: '#/components/schemas/Issue'
+          type: array
+        lint-supported:
+          description: Whether lint rules are currently implemented for the parsed diagram type.
+          type: boolean
+        metrics:
+          $ref: '#/components/schemas/Metrics'
+          description: Aggregate statistics about the diagram. Present if valid.
+          nullable: true
+        syntax-error:
+          $ref: '#/components/schemas/SyntaxError'
+          description: Syntax error details if `valid` is false. Null if valid.
+          nullable: true
+        valid:
+          description: Whether the Mermaid code is syntactically valid
+          type: boolean
+      required:
+      - valid
+      - lint-supported
+      - issues
+      type: object
+    ErrorDetail:
+      properties:
+        code:
+          description: Machine-readable error code
+          example: invalid_json
+          type: string
+        message:
+          description: Human-readable error message
+          example: invalid JSON body
+          type: string
+        path:
+          description: JSON path to the invalid config field when config validation fails
+          example: config.rules.max-fanout.limit
+          type: string
+        supported:
+          description: Supported values for unknown rule/option errors
+          items:
+            type: string
+          type: array
+      required:
+      - code
+      - message
+      type: object
+    Issue:
+      properties:
+        column:
+          description: 0-based column number where issue is located when known. Omitted when unknown.
+          example: 2
+          nullable: true
+          type: integer
+        context:
+          "$ref": "#/components/schemas/IssueContext"
+          description: Optional grouping context for node-scoped findings.
+          nullable: true
+        fingerprint:
+          description: Deterministic SHA-256 hash of the normalized issue signature for CI tracking and dedupe.
+          example: b57b8d8ac7c95f6e8f6e30a38ae2e6bcd2c6576d7f20d3155014a4f14f7a8f46
+          type: string
+        line:
+          description: 1-based line number where issue is located when known. Omitted when unknown.
+          example: 5
+          nullable: true
+          type: integer
+        message:
+          description: Human-readable description of the issue
+          example: Node 'isolated' is not connected to the graph
+          type: string
+        rule-id:
+          description: Identifier of the lint rule that triggered
+          example: no-disconnected-nodes
+          type: string
+        severity:
+          description: Severity level of the issue
+          enum:
+          - error
+          - warning
+          - info
+          type: string
+      required:
+      - rule-id
+      - severity
+      - message
+      type: object
+    IssueContext:
+      properties:
+        subgraph-id:
+          description: ID of the subgraph containing the affected node.
+          example: cluster-1
+          type: string
+        subgraph-label:
+          description: Human-readable label of the subgraph containing the affected node.
+          example: Core Services
+          type: string
+      type: object
+    IssueCounts:
+      properties:
+        by-rule:
+          additionalProperties:
+            type: integer
+          type: object
+        by-severity:
+          additionalProperties:
+            type: integer
+          type: object
+      required:
+      - by-severity
+      - by-rule
+      type: object
+    Metrics:
+      properties:
+        diagram-type:
+          description: Diagram type copied from parsed metadata
+          enum:
+          - flowchart
+          - sequence
+          - class
+          - er
+          - state
+          - unknown
+          example: flowchart
+          type: string
+        direction:
+          description: Diagram direction when provided by parser
+          example: TD
+          type: string
+        disconnected-node-count:
+          description: Number of nodes with neither incoming nor outgoing edges
+          example: 1
+          type: integer
+        duplicate-node-count:
+          description: Number of duplicate node declarations beyond first occurrences
+          example: 0
+          type: integer
+        edge-count:
+          description: Total number of edges (connections) in the diagram
+          example: 4
+          type: integer
+        issue-counts:
+          "$ref": "#/components/schemas/IssueCounts"
+          description: Issue count aggregations by severity and rule ID
+        max-fanin:
+          description: Maximum number of incoming edges to any single node
+          example: 3
+          type: integer
+        max-fanout:
+          description: Maximum number of outgoing edges from any single node
+          example: 2
+          type: integer
+        node-count:
+          description: Total number of nodes in the diagram
+          example: 5
+          type: integer
+      required:
+      - node-count
+      - edge-count
+      - disconnected-node-count
+      - duplicate-node-count
+      - max-fanin
+      - max-fanout
+      - diagram-type
+      type: object
+    RuleConfigSchema:
+      "$schema": https://json-schema.org/draft/2020-12/schema
+      oneOf:
+      - "$schema": https://json-schema.org/draft/2020-12/schema
+        additionalProperties: false
+        properties:
+          rules:
+            additionalProperties: false
+            properties:
+              max-fanout:
+                additionalProperties: false
+                properties:
+                  enabled:
+                    description: Enable or disable this rule.
+                    type: boolean
+                  limit:
+                    description: Maximum allowed outgoing edges per node.
+                    minimum: 1
+                    type: integer
+                  severity:
+                    description: Severity assigned to emitted issues.
+                    enum:
+                    - error
+                    - warning
+                    - info
+                    type: string
+                  suppression-selectors:
+                    description: Selectors that suppress matching issues.
+                    items:
+                      type: string
+                    type: array
+                type: object
+              no-disconnected-nodes:
+                additionalProperties: false
+                properties:
+                  enabled:
+                    description: Enable or disable this rule.
+                    type: boolean
+                  severity:
+                    description: Severity assigned to emitted issues.
+                    enum:
+                    - error
+                    - warning
+                    - info
+                    type: string
+                  suppression-selectors:
+                    description: Selectors that suppress matching issues.
+                    items:
+                      type: string
+                    type: array
+                type: object
+              no-duplicate-node-ids:
+                additionalProperties: false
+                properties:
+                  enabled:
+                    description: Enable or disable this rule.
+                    type: boolean
+                  severity:
+                    description: Severity assigned to emitted issues.
+                    enum:
+                    - error
+                    - warning
+                    - info
+                    type: string
+                  suppression-selectors:
+                    description: Selectors that suppress matching issues.
+                    items:
+                      type: string
+                    type: array
+                type: object
+            type: object
+          schema-version:
+            enum:
+            - v1
+            type: string
+        required:
+        - schema-version
+        - rules
+        title: merm8 Rule Configuration v1
+        type: object
+      - additionalProperties: false
+        properties:
+          max-fanout:
+            additionalProperties: false
+            properties:
+              enabled:
+                description: Enable or disable this rule.
+                type: boolean
+              limit:
+                description: Maximum allowed outgoing edges per node.
+                minimum: 1
+                type: integer
+              severity:
+                description: Severity assigned to emitted issues.
+                enum:
+                - error
+                - warning
+                - info
+                type: string
+              suppression-selectors:
+                description: Selectors that suppress matching issues.
+                items:
+                  type: string
+                type: array
+            type: object
+          no-disconnected-nodes:
+            additionalProperties: false
+            properties:
+              enabled:
+                description: Enable or disable this rule.
+                type: boolean
+              severity:
+                description: Severity assigned to emitted issues.
+                enum:
+                - error
+                - warning
+                - info
+                type: string
+              suppression-selectors:
+                description: Selectors that suppress matching issues.
+                items:
+                  type: string
+                type: array
+            type: object
+          no-duplicate-node-ids:
+            additionalProperties: false
+            properties:
+              enabled:
+                description: Enable or disable this rule.
+                type: boolean
+              severity:
+                description: Severity assigned to emitted issues.
+                enum:
+                - error
+                - warning
+                - info
+                type: string
+              suppression-selectors:
+                description: Selectors that suppress matching issues.
+                items:
+                  type: string
+                type: array
+            type: object
+        type: object
+      - additionalProperties: false
+        properties:
+          rules:
+            additionalProperties: false
+            properties:
+              max-fanout:
+                additionalProperties: false
+                properties:
+                  enabled:
+                    description: Enable or disable this rule.
+                    type: boolean
+                  limit:
+                    description: Maximum allowed outgoing edges per node.
+                    minimum: 1
+                    type: integer
+                  severity:
+                    description: Severity assigned to emitted issues.
+                    enum:
+                    - error
+                    - warning
+                    - info
+                    type: string
+                  suppression-selectors:
+                    description: Selectors that suppress matching issues.
+                    items:
+                      type: string
+                    type: array
+                type: object
+              no-disconnected-nodes:
+                additionalProperties: false
+                properties:
+                  enabled:
+                    description: Enable or disable this rule.
+                    type: boolean
+                  severity:
+                    description: Severity assigned to emitted issues.
+                    enum:
+                    - error
+                    - warning
+                    - info
+                    type: string
+                  suppression-selectors:
+                    description: Selectors that suppress matching issues.
+                    items:
+                      type: string
+                    type: array
+                type: object
+              no-duplicate-node-ids:
+                additionalProperties: false
+                properties:
+                  enabled:
+                    description: Enable or disable this rule.
+                    type: boolean
+                  severity:
+                    description: Severity assigned to emitted issues.
+                    enum:
+                    - error
+                    - warning
+                    - info
+                    type: string
+                  suppression-selectors:
+                    description: Selectors that suppress matching issues.
+                    items:
+                      type: string
+                    type: array
+                type: object
+            type: object
+        required:
+        - rules
+        type: object
+      title: merm8 Rule Configuration
+    RuleMetadata:
+      properties:
+        configurable-options:
+          items:
+            "$ref": "#/components/schemas/RuleOption"
+          type: array
+        default-config:
+          additionalProperties: true
+          type: object
+        description:
+          type: string
+        id:
+          example: max-fanout
+          type: string
+        severity:
+          enum:
+          - error
+          - warning
+          - info
+          type: string
+      required:
+      - id
+      - severity
+      - description
+      - default-config
+      - configurable-options
+      type: object
+    RuleOption:
+      properties:
+        constraints:
+          type: string
+        description:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+      required:
+      - name
+      - type
+      - description
+      type: object
+    RulesResponse:
+      properties:
+        rules:
+          items:
+            "$ref": "#/components/schemas/RuleMetadata"
+          type: array
+      required:
+      - rules
+      type: object
+    SyntaxError:
+      properties:
+        column:
+          description: 0-based column number where the error occurred
+          example: 12
+          type: integer
+        line:
+          description: 1-based line number where the error occurred
+          example: 2
+          type: integer
+        message:
+          description: Error message from the Mermaid parser
+          example: Unexpected token '>'
+          type: string
+      required:
+      - message
+      - line
+      - column
+      type: object
 info:
-  title: merm8 - Mermaid Lint API
-  description: |
+  contact:
+    name: merm8 Project
+    url: https://github.com/CyanAutomation/merm8
+  description: |-
     A deterministic Mermaid static analysis engine that validates and lints Mermaid diagrams.
-    
+
     - Accepts Mermaid code via HTTP POST
     - Validates syntax using the official Mermaid parser
     - Returns structured syntax errors if invalid
     - Runs deterministic lint rules on valid diagrams
     - Returns structured lint results with metrics
-  version: 1.0.0
-  contact:
-    name: merm8 Project
-    url: https://github.com/CyanAutomation/merm8
   license:
     name: License
     url: https://github.com/CyanAutomation/merm8/blob/main/LICENSE
-
-servers:
-  - url: http://localhost:8080
-    description: Local development server
-  - url: https://api.example.com
-    description: Production server (replace with actual URL)
-
-tags:
-  - name: Linting
-    description: Mermaid diagram analysis and linting
-  - name: Documentation
-    description: API documentation and specification
-  - name: Probes
-    description: Liveness and readiness probe endpoints
-
+  title: merm8 - Mermaid Lint API
+  version: 1.0.0
+openapi: 3.0.0
 paths:
-  /healthz:
-    get:
-      tags:
-        - Probes
-      summary: Liveness probe
-      description: Returns process liveness status.
-      operationId: getHealthz
-      responses:
-        '200':
-          description: Process is healthy
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-
-  /ready:
-    get:
-      tags:
-        - Probes
-      summary: Readiness probe
-      description: Returns readiness status, including parser dependency checks when available.
-      operationId: getReady
-      responses:
-        '200':
-          description: Service is ready
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ready
-        '503':
-          description: Service is not ready
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: not_ready
-                  error:
-                    type: string
-
-
-  /rules:
-    get:
-      tags:
-        - Linting
-      summary: List built-in lint rules
-      description: Returns centralized metadata for all built-in rules, including defaults and configurable options.
-      operationId: listRules
-      responses:
-        '200':
-          description: Built-in rule metadata
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RulesResponse'
-
   /analyze:
     post:
-      tags:
-        - Linting
-      summary: Analyze and lint a Mermaid diagram
-      description: |
+      description: |-
         Validates Mermaid code syntax and runs deterministic lint rules.
 
         Maximum request body size is 1 MiB. Oversized payloads return HTTP 413.
-        
-        Supported lint families: flowchart/graph.
 
-        Sequence/class/ER/state diagrams are parsed and reported with `lint-supported=false` and an informational `unsupported-diagram-type` issue until family-specific rule sets are rolled out.
+        Supports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.
 
-        Returns syntax errors if parsing fails, or lint results if parsing succeeds.
+        Returns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.
+
+        Parser infrastructure failures return machine-readable API error codes:
+        - `parser_subprocess_error`
+        - `parser_decode_error`
+        - `parser_contract_violation`
+        - `parser_timeout` (HTTP 504)
       operationId: analyzeCode
       requestBody:
-        required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/AnalyzeRequest'
             examples:
               simple:
                 summary: Simple graph
                 value:
-                  code: |
+                  code: |-
                     graph TD
                       A[Start] --> B[End]
+              syntaxError:
+                summary: Invalid Mermaid syntax
+                value:
+                  code: |-
+                    graph TD
+                      A --> B -->
               withConfig:
                 summary: With lint configuration
                 value:
-                  code: |
+                  code: |-
                     graph LR
                       A --> B
                       B --> C
@@ -141,529 +561,392 @@ paths:
                         limit: 2
                         severity: error
                         suppression-selectors:
-                          - node:A
-              syntaxError:
-                summary: Invalid Mermaid syntax
-                value:
-                  code: "graph TD\n  A --> B -->"
+                        - node:A
+            schema:
+              "$ref": "#/components/schemas/AnalyzeRequest"
+        required: true
       responses:
         '200':
-          description: Analysis completed (valid or syntax error)
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/AnalyzeResponse'
               examples:
-                validDiagram:
-                  summary: Valid diagram with no issues
-                  value:
-                    valid: true
-                    diagram-type: flowchart
-                    lint-supported: true
-                    syntax-error: null
-                    issues: []
-                    metrics:
-                      node-count: 2
-                      edge-count: 1
-                      disconnected-node-count: 0
-                      duplicate-node-count: 0
-                      max-fanin: 1
-                      max-fanout: 1
-                      diagram-type: flowchart
-                      direction: TD
-                      issue-counts:
-                        by-severity: {}
-                        by-rule: {}
-                syntaxError:
-                  summary: Syntax error response
-                  value:
-                    valid: false
-                    lint-supported: false
-                    syntax-error:
-                      message: "Unexpected token '>'"
-                      line: 2
-                      column: 12
-                    issues: []
                 sequenceDiagram:
                   summary: Valid sequence diagram (lint currently unsupported)
                   value:
-                    valid: true
                     diagram-type: sequence
-                    lint-supported: false
-                    syntax-error: null
                     issues: []
+                    lint-supported: false
                     metrics:
-                      node-count: 0
-                      edge-count: 0
+                      diagram-type: sequence
                       disconnected-node-count: 0
                       duplicate-node-count: 0
+                      edge-count: 0
+                      issue-counts:
+                        by-rule: {}
+                        by-severity: {}
                       max-fanin: 0
                       max-fanout: 0
-                      diagram-type: sequence
+                      node-count: 0
+                    syntax-error:
+                    valid: true
+                syntaxError:
+                  summary: Syntax error response
+                  value:
+                    issues: []
+                    lint-supported: false
+                    syntax-error:
+                      column: 12
+                      line: 2
+                      message: Unexpected token '>'
+                    valid: false
+                validDiagram:
+                  summary: Valid diagram with no issues
+                  value:
+                    diagram-type: flowchart
+                    issues: []
+                    lint-supported: true
+                    metrics:
+                      diagram-type: flowchart
+                      direction: TD
+                      disconnected-node-count: 0
+                      duplicate-node-count: 0
+                      edge-count: 1
                       issue-counts:
-                        by-severity: {}
                         by-rule: {}
+                        by-severity: {}
+                      max-fanin: 1
+                      max-fanout: 1
+                      node-count: 2
+                    syntax-error:
+                    valid: true
                 withIssues:
                   summary: Valid diagram with lint issues
                   value:
-                    valid: true
                     diagram-type: flowchart
-                    lint-supported: true
-                    syntax-error: null
                     issues:
-                      - rule-id: no-disconnected-nodes
-                        severity: error
-                        message: Node 'D' is not connected to the graph
-                      - rule-id: max-fanout
-                        severity: warning
-                        message: Node 'A' has fanout 6, exceeding limit of 5
-                        line: 2
-                        column: 2
+                    - message: Node 'D' is not connected to the graph
+                      rule-id: no-disconnected-nodes
+                      severity: error
+                    - column: 2
+                      line: 2
+                      message: Node 'A' has fanout 6, exceeding limit of 5
+                      rule-id: max-fanout
+                      severity: warning
+                    lint-supported: true
                     metrics:
-                      node-count: 4
-                      edge-count: 2
-                      disconnected-node-count: 1
-                      duplicate-node-count: 0
-                      max-fanin: 1
-                      max-fanout: 2
                       diagram-type: flowchart
                       direction: TD
+                      disconnected-node-count: 1
+                      duplicate-node-count: 0
+                      edge-count: 2
                       issue-counts:
+                        by-rule:
+                          max-fanout: 1
+                          no-disconnected-nodes: 1
                         by-severity:
                           error: 1
                           warning: 1
-                        by-rule:
-                          no-disconnected-nodes: 1
-                          max-fanout: 1
+                      max-fanin: 1
+                      max-fanout: 2
+                      node-count: 4
+                    syntax-error:
+                    valid: true
+              schema:
+                $ref: '#/components/schemas/AnalyzeResponse'
+          description: Analysis completed (valid or syntax error)
         '400':
-          description: Bad request (invalid JSON, missing required field, or invalid config)
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
               examples:
-                missingCode:
-                  summary: Missing 'code' field
-                  value:
-                    valid: false
-                    issues: []
-                    error:
-                      code: missing_code
-                      message: "field 'code' is required"
                 invalidJSON:
                   summary: Invalid JSON body
                   value:
-                    valid: false
-                    issues: []
                     error:
                       code: invalid_json
-                      message: "invalid JSON body"
-                unknownRule:
-                  summary: Unknown rule in config
-                  value:
-                    valid: false
+                      message: invalid JSON body
                     issues: []
-                    error:
-                      code: unknown_rule
-                      message: "unknown rule: unknown-rule"
-                      path: config.rules.unknown-rule
-                      supported:
-                        - max-fanout
-                        - no-disconnected-nodes
-                        - no-duplicate-node-ids
-                unknownOption:
-                  summary: Unknown option in rule config
-                  value:
+                    lint-supported: false
+                    syntax-error:
                     valid: false
-                    issues: []
-                    error:
-                      code: unknown_option
-                      message: "unknown option: threshold"
-                      path: config.rules.max-fanout.threshold
-                      supported:
-                        - enabled
-                        - limit
-                        - severity
-                        - suppression-selectors
                 invalidOption:
                   summary: Invalid option value
                   value:
-                    valid: false
-                    issues: []
                     error:
                       code: invalid_option
                       message: invalid option value for limit
                       path: config.rules.max-fanout.limit
+                    issues: []
+                    lint-supported: false
+                    syntax-error:
+                    valid: false
+                missingCode:
+                  summary: Missing 'code' field
+                  value:
+                    error:
+                      code: missing_code
+                      message: field 'code' is required
+                    issues: []
+                    lint-supported: false
+                    syntax-error:
+                    valid: false
+                unknownOption:
+                  summary: Unknown option in rule config
+                  value:
+                    error:
+                      code: unknown_option
+                      message: 'unknown option: threshold'
+                      path: config.rules.max-fanout.threshold
+                      supported:
+                      - enabled
+                      - limit
+                      - severity
+                      - suppression-selectors
+                    issues: []
+                    lint-supported: false
+                    syntax-error:
+                    valid: false
+                unknownRule:
+                  summary: Unknown rule in config
+                  value:
+                    error:
+                      code: unknown_rule
+                      message: 'unknown rule: unknown-rule'
+                      path: config.rules.unknown-rule
+                      supported:
+                      - max-fanout
+                      - no-disconnected-nodes
+                      - no-duplicate-node-ids
+                    issues: []
+                    lint-supported: false
+                    syntax-error:
+                    valid: false
+              schema:
+                $ref: '#/components/schemas/AnalyzeResponse'
+          description: Bad request (invalid JSON, missing required field, or invalid config)
         '413':
-          description: Request entity too large (body exceeds 1 MiB)
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
               example:
-                valid: false
-                issues: []
                 error:
                   code: request_too_large
                   message: request body exceeds 1 MiB limit
-        '500':
-          description: Internal server error
+                issues: []
+                lint-supported: false
+                syntax-error:
+                valid: false
+              schema:
+                $ref: '#/components/schemas/AnalyzeResponse'
+          description: Request entity too large (body exceeds 1 MiB)
+        '429':
           content:
             application/json:
+              example:
+                error:
+                  code: rate_limited
+                  message: rate limit exceeded
+                issues: []
+                lint-supported: false
+                syntax-error:
+                valid: false
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/AnalyzeResponse'
+          description: Rate limited
+        '500':
+          content:
+            application/json:
               examples:
-                parserTimeout:
-                  summary: Parser timeout
+                contract:
+                  summary: Parser contract violation
                   value:
-                    valid: false
-                    issues: []
                     error:
-                      code: parser_timeout
-                      message: parser timed out
+                      code: parser_contract_violation
+                      message: parser response violated service contract
+                    issues: []
+                    lint-supported: false
+                    syntax-error:
+                    valid: false
+                decode:
+                  summary: Parser malformed output
+                  value:
+                    error:
+                      code: parser_decode_error
+                      message: parser returned malformed output
+                    issues: []
+                    lint-supported: false
+                    syntax-error:
+                    valid: false
                 internal:
                   summary: Generic internal failure
                   value:
-                    valid: false
-                    issues: []
                     error:
                       code: internal_error
                       message: internal server error
-
-  /spec:
-    get:
-      tags:
-        - Documentation
-      summary: Get OpenAPI specification
-      description: Returns the OpenAPI 3.0 specification for this API in JSON format
-      operationId: getSpec
-      responses:
-        '200':
-          description: OpenAPI specification
+                    issues: []
+                    lint-supported: false
+                    syntax-error:
+                    valid: false
+                subprocess:
+                  summary: Parser subprocess failure
+                  value:
+                    error:
+                      code: parser_subprocess_error
+                      message: parser subprocess failed
+                    issues: []
+                    lint-supported: false
+                    syntax-error:
+                    valid: false
+              schema:
+                $ref: '#/components/schemas/AnalyzeResponse'
+          description: Internal server error
+        '503':
           content:
             application/json:
+              example:
+                error:
+                  code: server_busy
+                  message: parser concurrency limit reached; try again
+                issues: []
+                lint-supported: false
+                syntax-error:
+                valid: false
               schema:
-                type: object
-
+                $ref: '#/components/schemas/AnalyzeResponse'
+          description: Service unavailable
+        '504':
+          content:
+            application/json:
+              example:
+                error:
+                  code: parser_timeout
+                  message: parser timed out while validating Mermaid code
+                issues: []
+                lint-supported: false
+                syntax-error:
+                valid: false
+              schema:
+                $ref: '#/components/schemas/AnalyzeResponse'
+          description: Parser timeout
+      summary: Analyze and lint a Mermaid diagram
+      tags:
+      - Linting
   /docs:
     get:
-      tags:
-        - Documentation
-      summary: Interactive API documentation
       description: Serve Swagger UI for interactive API exploration and testing
       operationId: getDocs
       responses:
         '200':
-          description: Swagger UI HTML page
           content:
             text/html:
               schema:
                 type: string
-
-components:
-  schemas:
-    RulesResponse:
-      type: object
-      required:
-        - rules
-      properties:
-        rules:
-          type: array
-          items:
-            $ref: '#/components/schemas/RuleMetadata'
-
-    RuleMetadata:
-      type: object
-      required:
-        - id
-        - severity
-        - description
-        - default-config
-        - configurable-options
-      properties:
-        id:
-          type: string
-          example: max-fanout
-        severity:
-          type: string
-          enum:
-            - error
-            - warning
-            - info
-        description:
-          type: string
-        default-config:
-          type: object
-          additionalProperties: true
-        configurable-options:
-          type: array
-          items:
-            $ref: '#/components/schemas/RuleOption'
-
-    RuleOption:
-      type: object
-      required:
-        - name
-        - type
-        - description
-      properties:
-        name:
-          type: string
-        type:
-          type: string
-        description:
-          type: string
-        constraints:
-          type: string
-
-    RuleConfigSchema:
-      allOf:
-        - $ref: './schemas/config.v1.json'
-      description: |
-        Preferred versioned config schema for `POST /analyze` (`schema-version: v1`).
-        Legacy flat and nested formats are accepted during the migration window.
-
-    AnalyzeRequest:
-      type: object
-      required:
-        - code
-      properties:
-        code:
-          type: string
-          description: Mermaid diagram code to analyze. Total request body must be 1 MiB or smaller.
-          example: |
-            graph TD
-              A[Start] --> B[Process]
-              B --> C[End]
-        config:
-          $ref: '#/components/schemas/RuleConfigSchema'
-          description: |
-            Optional lint rule configuration.
-            Preferred format: `{"schema-version":"v1","rules":{"rule-id":{"option":"value"}}}`.
-            Legacy formats remain supported during migration:
-            - Flat: `{"rule-id":{"option":"value"}}`
-            - Nested: `{"rules":{"rule-id":{"option":"value"}}}`
-            Unsupported schema versions are rejected with `unsupported_schema_version`.
-          example:
-            schema-version: v1
-            rules:
-              max-fanout:
-                enabled: true
-                limit: 3
-                severity: error
-                suppression-selectors:
-                  - node:A
-              no-disconnected-nodes:
-                enabled: false
-                severity: info
-
-    ErrorResponse:
-      type: object
-      required:
-        - valid
-        - lint-supported
-        - issues
-        - error
-      properties:
-        valid:
-          type: boolean
-          description: Always false for non-200 responses
-        issues:
-          type: array
-          description: Always empty for API-level errors
-          items:
-            $ref: '#/components/schemas/Issue'
-        error:
-          $ref: '#/components/schemas/ErrorDetail'
-
-    ErrorDetail:
-      type: object
-      required:
-        - code
-        - message
-      properties:
-        code:
-          type: string
-          description: Machine-readable error code
-          example: invalid_json
-        message:
-          type: string
-          description: Human-readable error message
-          example: invalid JSON body
-        path:
-          type: string
-          description: JSON path to the invalid config field when config validation fails
-          example: config.rules.max-fanout.limit
-        supported:
-          type: array
-          description: Supported values for unknown rule/option errors
-          items:
-            type: string
-
-    AnalyzeResponse:
-      type: object
-      required:
-        - valid
-        - lint-supported
-        - issues
-      properties:
-        valid:
-          type: boolean
-          description: Whether the Mermaid code is syntactically valid
-        diagram-type:
-          type: string
-          description: Normalized Mermaid diagram type (flowchart, sequence, class, er, state, unknown).
-          enum: [flowchart, sequence, class, er, state, unknown]
-          example: flowchart
-        lint-supported:
-          type: boolean
-          description: Whether lint rules are currently implemented for the parsed diagram type.
-        syntax-error:
-          $ref: '#/components/schemas/SyntaxError'
-          description: Syntax error details if `valid` is false. Null if valid.
-          nullable: true
-        issues:
-          type: array
-          description: Lint rule violations found in the diagram
-          items:
-            $ref: '#/components/schemas/Issue'
-        metrics:
-          $ref: '#/components/schemas/Metrics'
-          description: Aggregate statistics about the diagram. Present if valid.
-          nullable: true
-
-    SyntaxError:
-      type: object
-      required:
-        - message
-        - line
-        - column
-      properties:
-        message:
-          type: string
-          description: Error message from the Mermaid parser
-          example: "Unexpected token '>'"
-        line:
-          type: integer
-          description: 1-based line number where the error occurred
-          example: 2
-        column:
-          type: integer
-          description: 0-based column number where the error occurred
-          example: 12
-
-    Issue:
-      type: object
-      required:
-        - rule-id
-        - severity
-        - message
-      properties:
-        rule-id:
-          type: string
-          description: Identifier of the lint rule that triggered
-          example: no-disconnected-nodes
-        severity:
-          type: string
-          enum:
-            - error
-            - warning
-            - info
-          description: Severity level of the issue
-        message:
-          type: string
-          description: Human-readable description of the issue
-          example: Node 'isolated' is not connected to the graph
-        line:
-          type: integer
-          description: 1-based line number where issue is located when known. Omitted when unknown.
-          example: 5
-          nullable: true
-        column:
-          type: integer
-          description: 0-based column number where issue is located when known. Omitted when unknown.
-          example: 2
-          nullable: true
-        fingerprint:
-          type: string
-          description: Deterministic SHA-256 hash of the normalized issue signature for CI tracking and dedupe.
-          example: b57b8d8ac7c95f6e8f6e30a38ae2e6bcd2c6576d7f20d3155014a4f14f7a8f46
-        context:
-          $ref: '#/components/schemas/IssueContext'
-          description: Optional grouping context for node-scoped findings.
-          nullable: true
-
-    IssueContext:
-      type: object
-      properties:
-        subgraph-id:
-          type: string
-          description: ID of the subgraph containing the affected node.
-          example: cluster-1
-        subgraph-label:
-          type: string
-          description: Human-readable label of the subgraph containing the affected node.
-          example: Core Services
-
-    Metrics:
-      type: object
-      required:
-        - node-count
-        - edge-count
-        - disconnected-node-count
-        - duplicate-node-count
-        - max-fanin
-        - max-fanout
-        - diagram-type
-      properties:
-        node-count:
-          type: integer
-          description: Total number of nodes in the diagram
-          example: 5
-        edge-count:
-          type: integer
-          description: Total number of edges (connections) in the diagram
-          example: 4
-        disconnected-node-count:
-          type: integer
-          description: Number of nodes with neither incoming nor outgoing edges
-          example: 1
-        duplicate-node-count:
-          type: integer
-          description: Number of duplicate node declarations beyond first occurrences
-          example: 0
-        max-fanin:
-          type: integer
-          description: Maximum number of incoming edges to any single node
-          example: 3
-        max-fanout:
-          type: integer
-          description: Maximum number of outgoing edges from any single node
-          example: 2
-        diagram-type:
-          type: string
-          description: Diagram type copied from parsed metadata
-          enum: [flowchart, sequence, class, er, state, unknown]
-          example: flowchart
-        direction:
-          type: string
-          description: Diagram direction when provided by parser
-          example: TD
-        issue-counts:
-          $ref: '#/components/schemas/IssueCounts'
-          description: Issue count aggregations by severity and rule ID
-
-    IssueCounts:
-      type: object
-      required:
-        - by-severity
-        - by-rule
-      properties:
-        by-severity:
-          type: object
-          additionalProperties:
-            type: integer
-        by-rule:
-          type: object
-          additionalProperties:
-            type: integer
+          description: Swagger UI HTML page
+      summary: Interactive API documentation
+      tags:
+      - Documentation
+  /healthz:
+    get:
+      description: Returns process liveness status.
+      operationId: getHealthz
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    example: ok
+                    type: string
+                type: object
+          description: Process is healthy
+      summary: Liveness probe
+      tags:
+      - Probes
+  /ready:
+    get:
+      description: Returns readiness status, including parser dependency checks when available.
+      operationId: getReady
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    example: ready
+                    type: string
+                type: object
+          description: Service is ready
+        '503':
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    type: string
+                  status:
+                    example: not_ready
+                    type: string
+                type: object
+          description: Service is not ready
+      summary: Readiness probe
+      tags:
+      - Probes
+  /rules:
+    get:
+      description: Returns centralized metadata for all built-in rules, including defaults and configurable options.
+      operationId: listRules
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RulesResponse"
+          description: Built-in rule metadata
+      summary: List built-in lint rules
+      tags:
+      - Linting
+  /rules/schema:
+    get:
+      description: Returns a JSON Schema generated from the rule config registry. The schema validates both flat and nested config payload formats.
+      operationId: getRuleConfigSchema
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                properties:
+                  schema:
+                    "$ref": "#/components/schemas/RuleConfigSchema"
+                required:
+                - schema
+                type: object
+          description: Rule configuration schema
+      summary: Get JSON Schema for lint rule configuration
+      tags:
+      - Linting
+  /spec:
+    get:
+      description: Returns the OpenAPI 3.0 specification for this API in JSON format
+      operationId: getSpec
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+          description: OpenAPI specification
+      summary: Get OpenAPI specification
+      tags:
+      - Documentation
+servers:
+- description: Local development server
+  url: http://localhost:8080
+- description: Production server (replace with actual URL)
+  url: https://api.example.com
+tags:
+- description: Mermaid diagram analysis and linting
+  name: Linting
+- description: API documentation and specification
+  name: Documentation
+- description: Liveness and readiness probe endpoints
+  name: Probes

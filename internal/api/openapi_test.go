@@ -124,12 +124,12 @@ func TestServeSpec_HasRequiredOpenAPIFieldsAndRefs(t *testing.T) {
 		{
 			name: "Analyze 400 response schema",
 			path: []string{"paths", "/analyze", "post", "responses", "400", "content", "application/json", "schema", "$ref"},
-			ref:  "#/components/schemas/ErrorResponse",
+			ref:  "#/components/schemas/AnalyzeResponse",
 		},
 		{
 			name: "Analyze 500 response schema",
 			path: []string{"paths", "/analyze", "post", "responses", "500", "content", "application/json", "schema", "$ref"},
-			ref:  "#/components/schemas/ErrorResponse",
+			ref:  "#/components/schemas/AnalyzeResponse",
 		},
 	}
 
@@ -197,6 +197,12 @@ func assertErrorShape(t *testing.T, payload map[string]interface{}, expectedCode
 	if payload["valid"] != false {
 		t.Fatalf("expected valid=false, got %#v", payload["valid"])
 	}
+	if payload["lint-supported"] != false {
+		t.Fatalf("expected lint-supported=false, got %#v", payload["lint-supported"])
+	}
+	if syntaxErr, ok := payload["syntax-error"]; !ok || syntaxErr != nil {
+		t.Fatalf("expected syntax-error=null, got %#v", payload["syntax-error"])
+	}
 	issues, ok := payload["issues"].([]interface{})
 	if !ok || len(issues) != 0 {
 		t.Fatalf("expected empty issues array, got %#v", payload["issues"])
@@ -243,7 +249,7 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 		"openapi: 3.0.0",
 		"/analyze:",
 		"operationId: analyzeCode",
-		"$ref: '#/components/schemas/ErrorResponse'",
+		"$ref: '#/components/schemas/AnalyzeResponse'",
 		"- error",
 		"- warning",
 		"- info",
