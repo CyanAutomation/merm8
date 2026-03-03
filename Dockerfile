@@ -3,38 +3,86 @@
 # ─────────────────────────────────────────────────────────────────
 FROM golang:1.24-alpine AS go-builder
 
+# Build arguments for version injection
+ARG VERSION=dev
+ARG BUILD_DATE
+ARG VCS_REF
+
 WORKDIR /src
 
-COPY go.mod go.sum ./
+# Copy dependency files first for better layer caching
+# Only go.mod is needed (go.sum doesn't exist in this repo)
+COPY go.mod ./
+
+# Copy third_party replacement module before go mod download
 COPY third_party ./third_party
+
+# Download dependencies with cached layers
 RUN go mod download
 
+# Copy all source code
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/mermaid-lint ./cmd/server
+
+# Build the binary with version information
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-X main.appVersion=${VERSION}" \
+    -o /app/mermaid-lint ./cmd/server
 
 # ─────────────────────────────────────────────────────────────────
 # Stage 2 – Lightweight runtime with Node + Mermaid
 # ─────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS runtime
+FROM node:20-alpine
+
+# Build arguments for labels
+ARG VERSION=dev
+ARG BUILD_DATE
+ARG VCS_REF
+
+# Set metadata labels following OCI Image Spec conventions
+LABEL org.opencontainers.image.title="merm8" \
+      org.opencontainers.image.description="Mermaid diagram linter with syntax validation" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.vendor="CyanAutomation"
 
 WORKDIR /app
 
-# Install Mermaid parser dependencies
+# Copy Node package files for caching
 COPY parser-node/package.json ./parser-node/
-RUN cd parser-node && npm install --omit=dev
 
-# Copy parser script
+# Install Mermaid parser dependencies
+# Using --omit=dev to exclude development dependencies
+RUN cd parser-node && npm install --omit=dev && npm cache clean --force
+
+# Copy parser entry point script
 COPY parser-node/parse.mjs ./parser-node/
 
-# Copy compiled Go binary
+# Copy compiled Go binary from builder stage
 COPY --from=go-builder /app/mermaid-lint .
 
 # Copy go.mod so parser can locate repository root
 COPY go.mod .
 
-ENV PARSER_SCRIPT=/app/parser-node/parse.mjs
-ENV PORT=8080
+# Create non-root user for security (UID 1000 is standard unprivileged user)
+RUN addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser && \
+    chown -R appuser:appuser /app
 
+# Switch to non-root user
+USER appuser
+
+# Set environment variables with defaults
+ENV PARSER_SCRIPT=/app/parser-node/parse.mjs \
+    PORT=8080
+
+# Expose the server port
 EXPOSE 8080
 
+# Health check to enable orchestration systems to detect readiness
+# Verifies the server is running on port 8080 using basic connectivity test
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+
+# Use exec form of ENTRYPOINT to properly receive signals (especially SIGTERM for graceful shutdown)
 ENTRYPOINT ["/app/mermaid-lint"]

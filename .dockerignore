@@ -1,0 +1,70 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Version control
+.hg
+.svn
+
+# IDEs and editors
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Build artifacts
+dist/
+build/
+*.test
+*.out
+mermaid-lint
+cmd/server/mermaid-lint
+
+# Go
+vendor/
+*.mod.bak
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm
+package-lock.json
+
+# Environment
+.env
+.env.local
+*.env
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# CI/CD
+.github
+.gitlab-ci.yml
+cloudbuild.yaml
+
+# Documentation
+README.md
+CHANGELOG.md
+LICENSE
+CONTRIBUTING.md
+
+# Tests and coverage
+*_test.go
+*.test
+coverage.out
+.coverage
+
+# Scripts
+scripts/
+smoke-test.sh
+
+# Misc
+.editorconfig
