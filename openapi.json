@@ -68,7 +68,7 @@
           },
           "metrics": {
             "$ref": "#/components/schemas/Metrics",
-            "description": "Aggregate statistics about the diagram. Present for successful analyze responses, including syntax errors (zeroed counters with fallback diagram-type).",
+            "description": "Aggregate statistics about the diagram. Present for successful analyze responses, including syntax errors (zeroed counters with fallback diagram-type) and parsed but lint-unsupported families.",
             "nullable": true
           },
           "syntax-error": {
@@ -77,7 +77,7 @@
             "nullable": true
           },
           "valid": {
-            "description": "Whether the Mermaid code is syntactically valid",
+            "description": "Whether the Mermaid code is syntactically valid and lint-supported (unsupported parsed families return valid=false).",
             "type": "boolean"
           }
         },
@@ -607,7 +607,7 @@
               "application/json": {
                 "examples": {
                   "sequenceDiagram": {
-                    "summary": "Valid sequence diagram (lint currently unsupported)",
+                    "summary": "Parsed sequence diagram (lint currently unsupported)",
                     "value": {
                       "diagram-type": "sequence",
                       "issues": [],
@@ -626,7 +626,7 @@
                         "node-count": 0
                       },
                       "syntax-error": null,
-                      "valid": true
+                      "valid": false
                     }
                   },
                   "syntaxError": {

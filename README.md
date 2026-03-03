@@ -256,7 +256,7 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 }
 ```
 
-**Response — unsupported diagram type (parsed but lint unsupported)**
+**Response — unsupported diagram type (parsed but lint unsupported; metrics are still populated)**
 
 ```json
 {
