@@ -1126,3 +1126,94 @@ func TestAnalyze_Integration_NonMatchingSuppressionDoesNotHideIssue(t *testing.T
 		t.Fatalf("expected max-fanout issue, got %#v", resp.Issues)
 	}
 }
+
+func TestAnalyze_ParserConcurrencyLimitReached_Returns503(t *testing.T) {
+	start := make(chan struct{})
+	release := make(chan struct{})
+
+	mockP := &mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		start <- struct{}{}
+		<-release
+		return &model.Diagram{}, nil, nil
+	}}
+
+	h := api.NewHandler(mockP, engine.New())
+	h.SetParserConcurrencyLimit(1)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
+
+	firstReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	firstReq.Header.Set("Content-Type", "application/json")
+	firstW := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		mux.ServeHTTP(firstW, firstReq)
+		close(done)
+	}()
+
+	<-start
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	secondReq.Header.Set("Content-Type", "application/json")
+	secondW := httptest.NewRecorder()
+	mux.ServeHTTP(secondW, secondReq)
+
+	if secondW.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when parser concurrency is exhausted, got %d", secondW.Code)
+	}
+	assertExactErrorResponse(t, secondW.Body.Bytes(), "server_busy", "parser concurrency limit reached; try again")
+
+	close(release)
+	<-done
+}
+
+func TestAnalyzeBearerAuthMiddleware_RequiresTokenInProduction(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{}, nil, nil
+	})
+	secured := api.AnalyzeBearerAuthMiddleware("s3cr3t", mux)
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	secured.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when token is missing, got %d", w.Code)
+	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "unauthorized", "missing or invalid bearer token")
+}
+
+func TestAnalyzeRateLimitMiddleware_Returns429(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{}, nil, nil
+	})
+	limited := api.AnalyzeRateLimitMiddleware(api.NewRateLimiter(1, time.Minute), mux)
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
+
+	firstReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	firstReq.Header.Set("Content-Type", "application/json")
+	firstReq.RemoteAddr = "127.0.0.1:1234"
+	firstW := httptest.NewRecorder()
+	limited.ServeHTTP(firstW, firstReq)
+
+	if firstW.Code != http.StatusOK {
+		t.Fatalf("expected first request to pass, got %d", firstW.Code)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	secondReq.Header.Set("Content-Type", "application/json")
+	secondReq.RemoteAddr = "127.0.0.1:5678"
+	secondW := httptest.NewRecorder()
+	limited.ServeHTTP(secondW, secondReq)
+
+	if secondW.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 when request rate is exceeded, got %d", secondW.Code)
+	}
+	assertExactErrorResponse(t, secondW.Body.Bytes(), "rate_limited", "rate limit exceeded")
+}

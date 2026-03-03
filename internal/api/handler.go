@@ -97,8 +97,9 @@ type errorResponse struct {
 
 // Handler holds the dependencies needed to serve HTTP requests.
 type Handler struct {
-	parser ParserInterface
-	engine *engine.Engine
+	parser              ParserInterface
+	engine              *engine.Engine
+	parserConcurrencyCh chan struct{}
 }
 
 // NewHandler creates a Handler with the given parser and engine.
@@ -108,6 +109,17 @@ func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
 		parser: p,
 		engine: e,
 	}
+}
+
+// SetParserConcurrencyLimit configures a limit for concurrent parser invocations.
+// A value <= 0 disables the limit.
+func (h *Handler) SetParserConcurrencyLimit(limit int) {
+	if limit <= 0 {
+		h.parserConcurrencyCh = nil
+		return
+	}
+
+	h.parserConcurrencyCh = make(chan struct{}, limit)
 }
 
 // NewHandlerWithScript creates a Handler wired with a real parser using the given script path.
@@ -177,6 +189,16 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
 		return
+	}
+
+	if h.parserConcurrencyCh != nil {
+		select {
+		case h.parserConcurrencyCh <- struct{}{}:
+			defer func() { <-h.parserConcurrencyCh }()
+		default:
+			writeError(w, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again")
+			return
+		}
 	}
 
 	diagram, syntaxErr, err := h.parser.Parse(req.Code)
