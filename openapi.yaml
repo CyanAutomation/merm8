@@ -584,6 +584,26 @@ components:
           description: 0-based column number where issue is located when known. Omitted when unknown.
           example: 2
           nullable: true
+        fingerprint:
+          type: string
+          description: Deterministic SHA-256 hash of the normalized issue signature for CI tracking and dedupe.
+          example: b57b8d8ac7c95f6e8f6e30a38ae2e6bcd2c6576d7f20d3155014a4f14f7a8f46
+        context:
+          $ref: '#/components/schemas/IssueContext'
+          description: Optional grouping context for node-scoped findings.
+          nullable: true
+
+    IssueContext:
+      type: object
+      properties:
+        subgraph_id:
+          type: string
+          description: ID of the subgraph containing the affected node.
+          example: cluster-1
+        subgraph_label:
+          type: string
+          description: Human-readable label of the subgraph containing the affected node.
+          example: Core Services
 
     Metrics:
       type: object

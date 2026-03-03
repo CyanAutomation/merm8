@@ -204,3 +204,43 @@ func TestEngine_NextLineSuppressionNonMatchingRuleDoesNotHideIssue(t *testing.T)
 		t.Fatalf("expected non-matching suppression to keep all issues, got %#v", issues)
 	}
 }
+
+func TestEngine_FingerprintStableAcrossRuns(t *testing.T) {
+	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
+		Edges: []model.Edge{{From: "A", To: "A"}},
+	}
+	e := engine.NewWithRules(rules.NoDisconnectedNodes{})
+	first := e.Run(d, rules.Config{})
+	if len(first) != 1 || first[0].Fingerprint == "" {
+		t.Fatalf("expected issue with fingerprint, got %#v", first)
+	}
+
+	for i := 0; i < 10; i++ {
+		next := e.Run(d, rules.Config{})
+		if len(next) != 1 {
+			t.Fatalf("expected one issue, got %#v", next)
+		}
+		if first[0].Fingerprint != next[0].Fingerprint {
+			t.Fatalf("expected stable fingerprint, run0=%s run%d=%s", first[0].Fingerprint, i+1, next[0].Fingerprint)
+		}
+	}
+}
+
+func TestEngine_FingerprintDiffersForMateriallyDifferentIssues(t *testing.T) {
+	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
+		Edges: []model.Edge{{From: "A", To: "A"}},
+	}
+	e := engine.NewWithRules(rules.NoDisconnectedNodes{})
+	issuesA := e.Run(d, rules.Config{})
+	issuesB := e.Run(d, rules.Config{"no-disconnected-nodes": {"severity": "info"}})
+	if len(issuesA) != 1 || len(issuesB) != 1 {
+		t.Fatalf("expected one issue in each run, got A=%#v B=%#v", issuesA, issuesB)
+	}
+	if issuesA[0].Fingerprint == issuesB[0].Fingerprint {
+		t.Fatalf("expected fingerprints to differ when severity changes, both=%s", issuesA[0].Fingerprint)
+	}
+}

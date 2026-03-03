@@ -308,3 +308,33 @@ func TestValidateOption_MaxFanoutLimit(t *testing.T) {
 		t.Fatal("expected invalid limit to fail validation")
 	}
 }
+
+func TestNoDisconnectedNodes_SubgraphContextPresentForMemberNode(t *testing.T) {
+	d := &model.Diagram{
+		Nodes:     []model.Node{{ID: "A"}, {ID: "B"}},
+		Edges:     []model.Edge{{From: "A", To: "A"}},
+		Subgraphs: []model.Subgraph{{ID: "cluster-1", Label: "Core", Nodes: []string{"B"}}},
+	}
+	issues := rules.NoDisconnectedNodes{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Context == nil || issues[0].Context.SubgraphID != "cluster-1" || issues[0].Context.SubgraphLabel != "Core" {
+		t.Fatalf("expected issue context with subgraph details, got %#v", issues[0].Context)
+	}
+}
+
+func TestNoDisconnectedNodes_SubgraphContextAbsentForNonMemberNode(t *testing.T) {
+	d := &model.Diagram{
+		Nodes:     []model.Node{{ID: "A"}, {ID: "B"}},
+		Edges:     []model.Edge{{From: "A", To: "A"}},
+		Subgraphs: []model.Subgraph{{ID: "cluster-1", Label: "Core", Nodes: []string{"A"}}},
+	}
+	issues := rules.NoDisconnectedNodes{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Context != nil {
+		t.Fatalf("expected no context for node outside subgraph, got %#v", issues[0].Context)
+	}
+}

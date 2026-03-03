@@ -25,6 +25,7 @@ func (r NoDuplicateNodeIDs) Run(d *model.Diagram, cfg Config) []model.Issue {
 				Message:  "duplicate node ID: " + n.ID,
 				Line:     n.Line,
 				Column:   n.Column,
+				Context:  NodeSubgraphContext(d, n.ID),
 			})
 			reported[n.ID] = true
 		}
