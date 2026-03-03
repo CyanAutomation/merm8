@@ -73,6 +73,77 @@ docker compose up --build
 
 The service listens on **port 8080**.
 
+## CLI (`cmd/merm8-cli`)
+
+A first-party CLI is available for local development and CI workflows.
+
+```bash
+go build -o merm8-cli ./cmd/merm8-cli
+```
+
+### Inputs
+
+- File paths: `./merm8-cli diagram1.mmd diagram2.mmd`
+- `stdin`: `cat diagram.mmd | ./merm8-cli --stdin`
+- If no files are passed, the CLI reads `stdin` by default.
+
+### Modes
+
+- **Local mode (default):** parses/lints in-process using the existing parser + engine (offline/CI friendly).
+- **Server mode:** pass `--url` to send each input to `POST /analyze`.
+
+```bash
+cat diagram.mmd | ./merm8-cli --stdin --url http://localhost:8080
+```
+
+### Output formats
+
+- Human-readable text (default): `--format text`
+- JSON: `--format json` (shape mirrors API response fields where practical: `valid`, `diagram-type`, `lint-supported`, `syntax-error`, `issues`, `error`).
+
+### Config passing
+
+Pass lint rule overrides via `--config <file>`:
+
+```bash
+./merm8-cli --config ./lint-config.json ./diagram.mmd
+```
+
+Versioned config shape is supported:
+
+```json
+{
+  "schema-version": "v1",
+  "rules": {
+    "max-fanout": { "enabled": true, "limit": 3 }
+  }
+}
+```
+
+### Exit codes
+
+- `0`: success (or findings not configured to fail)
+- `1`: syntax/lint findings when fail flags are enabled
+- `2`: local/internal/config/input failure
+- `3`: transport/server-call failure when running with `--url`
+
+Use `--fail-on-syntax` (default `true`) and `--fail-on-lint` (default `false`) to control CI behavior.
+
+### CI snippets
+
+```bash
+# Offline CI mode (no running API server required)
+PARSER_SCRIPT=./parser-node/parse.mjs ./merm8-cli \
+  --config ./lint-config.json \
+  --fail-on-lint \
+  diagrams/**/*.mmd
+```
+
+```bash
+# Server mode CI (calls an API deployment)
+./merm8-cli --url https://merm8.example.com --format json --fail-on-lint diagrams/**/*.mmd
+```
+
 ---
 
 ## Canonical JSON naming convention
