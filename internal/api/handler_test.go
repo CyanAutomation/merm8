@@ -2239,6 +2239,79 @@ func TestAnalyze_SeverityOverride(t *testing.T) {
 	}
 }
 
+func TestAnalyze_SeverityOverride_NormalizesCaseAndWhitespace(t *testing.T) {
+	diagram := &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "B"}}, Edges: []model.Edge{{From: "A", To: "B"}}}
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A; A",
+		"config": map[string]interface{}{
+			"schema-version": "v1",
+			"rules": map[string]interface{}{
+				"no-duplicate-node-ids": map[string]interface{}{"severity": "  Warning  "},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Issues []model.Issue `json:"issues"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Issues) != 1 {
+		t.Fatalf("expected one issue, got %#v", resp.Issues)
+	}
+	if resp.Issues[0].Severity != "warning" {
+		t.Fatalf("expected normalized severity warning, got %q", resp.Issues[0].Severity)
+	}
+}
+
+func TestAnalyze_WarnSeverityAliasRejected_Returns400(t *testing.T) {
+	parserCalled := false
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		parserCalled = true
+		return &model.Diagram{}, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"code": "graph TD; A-->B",
+		"config": map[string]interface{}{
+			"schema-version": "v1",
+			"rules": map[string]interface{}{
+				"max-fanout": map[string]interface{}{
+					"severity": "warn",
+				},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if parserCalled {
+		t.Fatal("expected parser not to be called when config validation fails")
+	}
+
+	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for severity", "config.rules.max-fanout.severity", nil)
+}
+
 func TestAnalyze_Integration_NonMatchingSuppressionDoesNotHideIssue(t *testing.T) {
 	scriptPath := getParserScriptPath(t)
 	mux := newTestMuxWithRealParser(t, scriptPath)

@@ -195,6 +195,47 @@ func TestNoDuplicateNodeIDs_SeverityOverride(t *testing.T) {
 	}
 }
 
+func TestSeverityOverride_NormalizesCaseAndWhitespace(t *testing.T) {
+	edges := make([]model.Edge, 6)
+	for i := range edges {
+		edges[i] = model.Edge{From: "A", To: string(rune('B' + i))}
+	}
+	d := &model.Diagram{Edges: edges}
+
+	tests := []struct {
+		name     string
+		severity string
+		want     string
+	}{
+		{name: "upper error", severity: "ERROR", want: "error"},
+		{name: "title warning", severity: "Warning", want: "warning"},
+		{name: "title info with spaces", severity: "  Info  ", want: "info"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := rules.Config{"max-fanout": {"severity": tt.severity}}
+			issues := rules.MaxFanout{}.Run(d, cfg)
+			if len(issues) != 1 {
+				t.Fatalf("expected 1 issue, got %d", len(issues))
+			}
+			if issues[0].Severity != tt.want {
+				t.Fatalf("expected severity %q, got %q", tt.want, issues[0].Severity)
+			}
+		})
+	}
+}
+
+func TestValidateConfig_RejectsWarnAlias(t *testing.T) {
+	err := rules.ValidateConfig(rules.Config{"max-fanout": {"severity": "warn"}})
+	if err == nil {
+		t.Fatal("expected warn severity alias to be rejected")
+	}
+	if !strings.Contains(err.Error(), "allowed: error, warning, info") {
+		t.Fatalf("expected allowed-values guidance in error, got %v", err)
+	}
+}
+
 func TestNoDuplicateNodeIDs_UsesDuplicateNodeLocation(t *testing.T) {
 	line := 4
 	col := 7

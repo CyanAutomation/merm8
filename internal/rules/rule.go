@@ -17,8 +17,8 @@ var allowedSeverities = map[string]struct{}{
 	"info":    {},
 }
 
-var severityAliases = map[string]string{
-	"warn": "warning",
+func normalizeSeverity(severity string) string {
+	return strings.ToLower(strings.TrimSpace(severity))
 }
 
 // resolveSeverity returns the configured severity for the given rule ID, or
@@ -41,9 +41,7 @@ func resolveSeverity(ruleID string, cfg Config, defaultSeverity string) (string,
 		return "", fmt.Errorf("invalid severity for rule %q: must be one of error, warning, info", ruleID)
 	}
 
-	if canonical, ok := severityAliases[severity]; ok {
-		severity = canonical
-	}
+	severity = normalizeSeverity(severity)
 
 	if _, ok := allowedSeverities[severity]; !ok {
 		return "", fmt.Errorf("invalid severity for rule %q: %q (allowed: error, warning, info)", ruleID, severity)

@@ -7,8 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Placeholder for upcoming changes.
+### Changed
+- Rule severity overrides are now normalized with case-insensitive, trimmed parsing, and only canonical values `error`, `warning`, and `info` are accepted; the legacy `warn` alias is now rejected.
+
 
 ## [0.1.0] - 2026-03-03
 
