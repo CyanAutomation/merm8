@@ -673,8 +673,18 @@ func TestAnalyze_UnsupportedDiagramType_ReturnsStructuredError(t *testing.T) {
 		t.Fatalf("expected diagram-type=sequence, got %v", resp["diagram-type"])
 	}
 	issues, ok := resp["issues"].([]interface{})
-	if !ok || len(issues) != 0 {
-		t.Fatalf("expected no lint issues, got %#v", resp["issues"])
+	if !ok {
+		t.Fatalf("expected issues array, got %#v", resp["issues"])
+	}
+	if len(issues) != 1 {
+		t.Fatalf("expected one unsupported-diagram-type issue, got %#v", issues)
+	}
+	issueMap, ok := issues[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected issue object, got %#v", issues[0])
+	}
+	if ruleID, ok := issueMap["rule-id"].(string); !ok || ruleID != "unsupported-diagram-type" {
+		t.Fatalf("expected rule-id=unsupported-diagram-type, got %#v", issueMap["rule-id"])
 	}
 	errorObj, ok := resp["error"].(map[string]interface{})
 	if !ok {
@@ -1832,6 +1842,81 @@ func TestAnalyze_Integration_GlobalSuppression(t *testing.T) {
 	}
 	if len(resp.Issues) != 0 {
 		t.Fatalf("expected all issues to be suppressed, got %#v", resp.Issues)
+	}
+}
+
+func TestAnalyze_Integration_UnsupportedDiagramTypes(t *testing.T) {
+	scriptPath := getParserScriptPath(t)
+	mux := newTestMuxWithRealParser(t, scriptPath)
+
+	tests := []struct {
+		name         string
+		code         string
+		expectedType string
+	}{
+		{
+			name:         "class diagram",
+			code:         "classDiagram\nClass01 <|-- AveryLongClass : Cool",
+			expectedType: "class",
+		},
+		{
+			name:         "state diagram",
+			code:         "stateDiagram-v2\n[*] --> Still\nStill --> [*]",
+			expectedType: "state",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, err := json.Marshal(map[string]string{"code": tt.code})
+			if err != nil {
+				t.Fatalf("failed to marshal request: %v", err)
+			}
+
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", w.Code)
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			if valid, ok := resp["valid"].(bool); !ok || valid {
+				t.Fatalf("expected valid=false for parsed but unsupported diagrams, got %#v", resp["valid"])
+			}
+			if lintSupported, ok := resp["lint-supported"].(bool); !ok || lintSupported {
+				t.Fatalf("expected lint-supported=false, got %#v", resp["lint-supported"])
+			}
+			if diagramType, ok := resp["diagram-type"].(string); !ok || diagramType != tt.expectedType {
+				t.Fatalf("expected diagram-type=%s, got %#v", tt.expectedType, resp["diagram-type"])
+			}
+
+			issues, ok := resp["issues"].([]interface{})
+			if !ok {
+				t.Fatalf("expected issues array, got %#v", resp["issues"])
+			}
+
+			foundUnsupportedIssue := false
+			for _, issue := range issues {
+				issueMap, ok := issue.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if ruleID, ok := issueMap["rule-id"].(string); ok && ruleID == "unsupported-diagram-type" {
+					foundUnsupportedIssue = true
+					break
+				}
+			}
+			if !foundUnsupportedIssue {
+				t.Fatalf("expected issues to contain rule-id=unsupported-diagram-type, got %#v", issues)
+			}
+		})
 	}
 }
 
