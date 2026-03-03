@@ -41,9 +41,9 @@ try {
   const { parse, detectType, mermaidAPI } = mermaid;
 
   // detectType throws for completely unrecognised diagram types
-  let detectedType;
+  let diagramType;
   try {
-    detectedType = detectType(input, { suppressErrors: false });
+    diagramType = detectType(input, { suppressErrors: false });
   } catch (typeErr) {
     const base = String(typeErr?.message || typeErr);
     const hint = 'Hint: start the diagram with a Mermaid type keyword like "flowchart", "graph", "sequenceDiagram", "classDiagram", "stateDiagram", or "erDiagram".';
@@ -68,7 +68,7 @@ try {
   // Extract the structural AST after successful parse
   let ast;
   try {
-    const normalizedType = normalizeDiagramType(detectedType);
+    const normalizedType = normalizeDiagramType(diagramType);
     ast = await extractAST(mermaidAPI, input, normalizedType);
   } catch (err) {
     writeResult({
@@ -77,7 +77,7 @@ try {
     });
     process.exit(0);
   }
-  writeResult({ valid: true, ast });
+  writeResult({ valid: true, diagram_type: normalizeDiagramType(diagramType), ast });
 } catch (err) {
   writeResult({
     valid: false,
