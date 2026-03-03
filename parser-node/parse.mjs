@@ -4,15 +4,10 @@
  *
  * Reads Mermaid diagram source from stdin, validates it using the official
  * Mermaid library, and writes a structured JSON result to stdout.
- *
- * Security constraints:
- *  - Stateless: no file system writes
- *  - Input via stdin only
- *  - Output via stdout only
- *  - Terminated by the Go parent process after timeout
  */
 
 import { readFileSync } from 'fs';
+import parserPkg from './package.json' with { type: 'json' };
 
 // Set up a minimal DOM environment so that mermaid's DOMPurify dependency
 // initialises correctly in Node.js (it requires a window/document object).
@@ -25,6 +20,29 @@ global.HTMLElement      = _win.HTMLElement;
 global.DocumentFragment = _win.DocumentFragment;
 global.NodeFilter       = _win.NodeFilter;
 global.Node             = _win.Node;
+
+const versionInfoMode = process.argv.includes('--version-info');
+
+if (versionInfoMode) {
+  try {
+    const mermaid = (await import('mermaid/dist/mermaid.core.mjs')).default;
+    const mermaidRuntimeVersion = String(mermaid?.version || '').trim();
+    const mermaidDependencyVersion = String(parserPkg?.dependencies?.mermaid || '').trim();
+    writeResult({
+      parser_version: String(parserPkg?.version || '').trim(),
+      mermaid_version: mermaidRuntimeVersion || mermaidDependencyVersion,
+    });
+    process.exit(0);
+  } catch (err) {
+    const mermaidDependencyVersion = String(parserPkg?.dependencies?.mermaid || '').trim();
+    writeResult({
+      parser_version: String(parserPkg?.version || '').trim(),
+      mermaid_version: mermaidDependencyVersion,
+      error: 'internal parser error: ' + String(err?.message || err),
+    });
+    process.exit(1);
+  }
+}
 
 // Read all stdin synchronously (Go sends the full payload before reading output)
 const input = readFileSync('/dev/stdin', 'utf8').trim();
@@ -90,10 +108,6 @@ try {
 // AST extraction helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Extracts a simplified AST by calling getDiagramFromText.
- * Falls back to deriving nodes from edges when vertices are unavailable.
- */
 async function extractAST(mermaidAPI, source, diagramType) {
   const ast = {
     type: diagramType,
@@ -111,7 +125,6 @@ async function extractAST(mermaidAPI, source, diagramType) {
     const diagram = await mermaidAPI.getDiagramFromText(source);
     db = diagram?.db ?? null;
   } catch (_) {
-    // getDiagramFromText can fail in parser runtime under Node.js.
   }
 
   if (!db) {
@@ -125,10 +138,8 @@ async function extractAST(mermaidAPI, source, diagramType) {
     return ast;
   }
 
-  // Direction
   ast.direction = db.direction ?? 'TD';
 
-  // Edges (reliably populated even without a DOM)
   const rawEdges = Array.isArray(db.edges) ? db.edges : [];
   for (const e of rawEdges) {
     const from = String(e.start ?? e.from ?? '');
@@ -142,7 +153,6 @@ async function extractAST(mermaidAPI, source, diagramType) {
     });
   }
 
-  // Vertices (may be empty when labels use DOMPurify; fall back to edge IDs)
   const rawVertices = db.vertices ?? {};
   const explicitNodes = Object.entries(rawVertices);
   if (explicitNodes.length > 0) {
@@ -151,7 +161,6 @@ async function extractAST(mermaidAPI, source, diagramType) {
       ast.nodes.push({ id, label: extractLabel(v), ...(nodeLoc || {}) });
     }
   } else {
-    // Derive unique node IDs from edge endpoints
     const seen = new Set();
     for (const e of ast.edges) {
       if (e.from && !seen.has(e.from)) {
@@ -167,7 +176,6 @@ async function extractAST(mermaidAPI, source, diagramType) {
     }
   }
 
-  // Subgraphs
   const rawSubs = Array.isArray(db.subGraphs) ? db.subGraphs : [];
   for (const s of rawSubs) {
     ast.subgraphs.push({
@@ -180,13 +188,10 @@ async function extractAST(mermaidAPI, source, diagramType) {
   return ast;
 }
 
-
-
-
 function findNodeLocation(lines, id) {
   const escaped = escapeRegExp(id);
   const patterns = [
-    new RegExp(`(^|\\s)${escaped}(?=\\s*[\[({])`),
+    new RegExp(`(^|\\s)${escaped}(?=\\s*[\\[({])`),
     new RegExp(`(^|\\s)${escaped}(?=\\s*[-.=xo]+>)`),
     new RegExp(`(^|\\s)${escaped}(?=\\s*$)`),
   ];
@@ -230,7 +235,6 @@ function findEdgeLocation(lines, from, to) {
 
   return null;
 }
-
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
