@@ -103,3 +103,13 @@ func TestEngine_DeduplicatesEquivalentIssues(t *testing.T) {
 		t.Fatalf("expected duplicate issues to be deduplicated; got %d issues: %v", len(issues), issues)
 	}
 }
+
+func TestEngine_DisabledRuleIsSkipped(t *testing.T) {
+	d := &model.Diagram{Nodes: []model.Node{{ID: "A"}, {ID: "A"}}}
+	e := engine.NewWithRules(rules.NoDuplicateNodeIDs{})
+
+	issues := e.Run(d, rules.Config{"no-duplicate-node-ids": {"enabled": false}})
+	if len(issues) != 0 {
+		t.Fatalf("expected no issues when rule is disabled, got %v", issues)
+	}
+}

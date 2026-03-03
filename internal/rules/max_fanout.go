@@ -16,10 +16,7 @@ type MaxFanout struct{}
 func (r MaxFanout) ID() string { return "max-fanout" }
 
 func (r MaxFanout) Run(d *model.Diagram, cfg Config) []model.Issue {
-	severity, err := resolveSeverity(r.ID(), cfg, "warn")
-	if err != nil {
-		severity = "warn"
-	}
+	severity := EffectiveSeverity(r.ID(), cfg, "warn")
 
 	limit := defaultMaxFanout
 	if rc, ok := cfg[r.ID()]; ok {
