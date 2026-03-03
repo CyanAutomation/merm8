@@ -370,7 +370,7 @@
 "paths":
   "/analyze":
     "post":
-      "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nResponse semantics matrix for HTTP 200:\n\n| Case | valid | lint-supported | metrics | issues |\n|---|---|---|---|---|\n| Parsed flowchart (lint runs) | true | true | Present, computed from parsed diagram and issues | Rule findings (possibly empty) |\n| Parsed non-flowchart (lint unsupported) | false | false | Present, computed from parsed diagram with empty issue counts | Always [] |\n| Syntax error with flowchart prefix | false | true | Present, zeroed counters and fallback `diagram-type=flowchart` | Always [] |\n| Syntax error with non-flowchart prefix | false | false | Present, zeroed counters and fallback detected `diagram-type` | Always [] |\n| Syntax error with unknown prefix | false | false | Present, zeroed counters and fallback `diagram-type=unknown` | Always [] |\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)"
+      "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)"
       "operationId": "analyzeCode"
       "requestBody":
         "content":
@@ -405,12 +405,9 @@
             "application/json":
               "examples":
                 "sequenceDiagram":
-                  "summary": "Unsupported diagram response (parsed, lint unsupported)"
+                  "summary": "Valid sequence diagram (lint currently unsupported)"
                   "value":
                     "diagram-type": "sequence"
-                    "error":
-                      "code": "unsupported_diagram_type"
-                      "message": "diagram type is parsed but linting is not supported"
                     "issues":
                     "lint-supported": false
                     "metrics":
@@ -425,7 +422,7 @@
                       "max-fanout": 0
                       "node-count": 0
                     "syntax-error": null
-                    "valid": false
+                    "valid": true
                 "syntaxError":
                   "summary": "Syntax error response"
                   "value":
@@ -728,6 +725,26 @@
                 "type": "object"
           "description": "Process is healthy"
       "summary": "Liveness probe (canonical)"
+      "tags":
+        - "Probes"
+  "/metrics":
+    "get":
+      "description": "Returns service metrics in Prometheus text exposition format."
+      "operationId": "getMetrics"
+      "responses":
+        "200":
+          "content":
+            "text/plain":
+              "schema":
+                "type": "string"
+          "description": "Metrics in Prometheus text format"
+        "501":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalyzeErrorResponse"
+          "description": "Metrics exporter not configured"
+      "summary": "Prometheus metrics"
       "tags":
         - "Probes"
   "/ready":
