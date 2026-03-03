@@ -18,7 +18,7 @@ The easiest way to explore and test the API is through the interactive Swagger U
 
 2. **Open in your browser**:
    ```
-   http://localhost:8080/docs
+   http://localhost:8080/v1/docs
    ```
 
 You should see a professional API documentation page with all available endpoints.
@@ -29,12 +29,17 @@ For deployment sizing and overload behavior, the parser runtime exposes two key 
 
 | Variable | Default | Behavior |
 |---|---|---|
-| `PARSER_CONCURRENCY_LIMIT` | `8` | Caps in-flight parser subprocesses. When the limit is reached, the server does **not queue indefinitely**; additional `POST /analyze` requests are rejected with `503` and `error.code=server_busy` (`parser concurrency limit reached; try again`). |
+| `PARSER_CONCURRENCY_LIMIT` | `8` | Caps in-flight parser subprocesses. When the limit is reached, the server does **not queue indefinitely**; additional `POST /v1/analyze` requests are rejected with `503` and `error.code=server_busy` (`parser concurrency limit reached; try again`). |
 | `PARSER_MAX_OLD_SPACE_MB` | `512` | Sets the Node.js parser subprocess V8 old-space heap cap (`--max-old-space-size=<MB>`), limiting parser memory growth per parse process. |
 
 Use these together with your platform CPU/memory limits to tune throughput versus memory headroom in production.
 
 ---
+
+
+## Endpoint versioning and deprecation
+
+Canonical endpoints are versioned under `/v1`. Legacy unversioned routes are still served as migration aliases and are deprecated, with planned removal in **v1.2.0 (Q2 2026)**.
 
 ## Interactive API Testing with Swagger UI
 
@@ -42,7 +47,7 @@ Use these together with your platform CPU/memory limits to tune throughput versu
 
 The Swagger UI provides:
 
-- **Left sidebar** — List of all available endpoints (currently `/healthz`, `/ready`, `/rules`, `/analyze`, `/analyze/sarif`, `/spec`, `/docs`)
+- **Left sidebar** — List of all available endpoints (now `/v1/healthz`, `/v1/ready`, `/v1/rules`, `/v1/analyze`, `/v1/analyze/sarif`, `/v1/spec`, `/v1/docs` (with deprecated unversioned aliases))
 - **Main panel** — Detailed endpoint documentation with parameters and response schemas
 - **Try it out button** — Execute requests directly from the browser
 - **Example requests** — Pre-filled request templates for common scenarios
@@ -83,7 +88,7 @@ This is the recommended source for integrations and generated docs.
 
 #### Step 1: Click "Try it out"
 
-1. Navigate to the **`POST /analyze`** section
+1. Navigate to the **`POST /v1/analyze`** section
 2. Click the blue **"Try it out"** button
 
 #### Step 2: Enter a Mermaid Diagram
@@ -409,7 +414,7 @@ curl -i http://localhost:8080/ready
 
 **Description:** Interactive Swagger UI dashboard for API exploration  
 **Response:** HTML page that loads Swagger UI from CDN  
-**Usage:** Open in browser: `http://localhost:8080/docs`
+**Usage:** Open in browser: `http://localhost:8080/v1/docs`
 
 ### GET `/spec`
 
@@ -840,7 +845,7 @@ done
 You can run merm8 via a CLI in two modes:
 
 1. **Local/offline mode (default)** — parse + lint in-process (good for CI runners without API connectivity).
-2. **Server mode (`--url`)** — send code to `POST /analyze`.
+2. **Server mode (`--url`)** — send code to `POST /v1/analyze`.
 
 Build:
 
