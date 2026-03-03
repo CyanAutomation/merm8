@@ -50,6 +50,7 @@ type ParseResult struct {
 
 // parsedAST mirrors the simplified AST returned by parser-node/parse.mjs.
 type parsedAST struct {
+	Type         string              `json:"type"`
 	Direction    string              `json:"direction"`
 	Nodes        []parsedNode        `json:"nodes"`
 	Edges        []parsedEdge        `json:"edges"`
@@ -282,12 +283,32 @@ func readMaxOldSpaceMB() int {
 	return value
 }
 
+func normalizeDiagramType(rawType string) model.DiagramType {
+	switch strings.ToLower(strings.TrimSpace(rawType)) {
+	case string(model.DiagramTypeFlowchart):
+		return model.DiagramTypeFlowchart
+	case string(model.DiagramTypeSequence):
+		return model.DiagramTypeSequence
+	case string(model.DiagramTypeClass):
+		return model.DiagramTypeClass
+	case string(model.DiagramTypeER):
+		return model.DiagramTypeER
+	case string(model.DiagramTypeState):
+		return model.DiagramTypeState
+	default:
+		return model.DiagramTypeUnknown
+	}
+}
+
 // toDiagram converts the raw AST into the internal model.
 func toDiagram(ast *parsedAST) *model.Diagram {
 	if ast == nil {
 		return &model.Diagram{}
 	}
-	d := &model.Diagram{Direction: ast.Direction}
+	d := &model.Diagram{
+		Type:      normalizeDiagramType(ast.Type),
+		Direction: ast.Direction,
+	}
 
 	for _, n := range ast.Nodes {
 		d.Nodes = append(d.Nodes, model.Node{ID: n.ID, Label: n.Label})

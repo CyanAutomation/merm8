@@ -119,6 +119,8 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 ```json
 {
   "valid": true,
+  "diagram_type": "flowchart",
+  "lint_supported": true,
   "syntax_error": null,
   "issues": [],
   "metrics": {
@@ -153,6 +155,7 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 ```json
 {
   "valid": false,
+  "lint_supported": false,
   "syntax_error": {
     "message": "No diagram type detected",
     "line": 0,
@@ -183,7 +186,13 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 
 ### Response Fields Explained
 
+**Current type support behavior:**
+- `flowchart`/`graph` diagrams are linted by built-in rules.
+- `sequence`, `class`, `er`, and `state` diagrams are parsed, and return `lint_supported=false` plus an informational `unsupported-diagram-type` issue.
+
 - **`valid`** — Boolean indicating if the Mermaid syntax is syntactically correct
+- **`diagram_type`** — Normalized Mermaid type for valid diagrams (`flowchart`, `sequence`, `class`, `er`, `state`, `unknown`)
+- **`lint_supported`** — Whether the parsed diagram type currently has active lint rule coverage
 - **`syntax_error`** — Object with parsing error details (only present if `valid` is false)
   - `message` — Human-readable error description
   - `line` — 1-based line number where error occurred
@@ -483,6 +492,8 @@ curl -X POST http://localhost:8080/analyze \
 ```json
 {
   "valid": true,
+  "diagram_type": "flowchart",
+  "lint_supported": true,
   "syntax_error": null,
   "issues": [],
   "metrics": {
@@ -573,6 +584,7 @@ curl -X POST http://localhost:8080/analyze \
 ```json
 {
   "valid": false,
+  "lint_supported": false,
   "syntax_error": {
     "message": "No diagram type detected",
     "line": 0,
