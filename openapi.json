@@ -10,7 +10,7 @@
           },
           "config": {
             "$ref": "#/components/schemas/RuleConfigSchema",
-            "description": "Optional lint rule configuration. Canonical and required format: {\"schema-version\":\"v1\",\"rules\":{...}}. Legacy flat, nested, and snake_case keys are no longer accepted.",
+            "description": "Optional lint rule configuration. Canonical format is {\"schema-version\":\"v1\",\"rules\":{...}}. Phase 1 accepts legacy flat/nested/snake_case config with deprecation warnings; Phase 2 rejects legacy config with 400 deprecated_config_format.",
             "example": {
               "rules": {
                 "max-fanout": {
@@ -79,6 +79,13 @@
           "valid": {
             "description": "Whether the Mermaid code is syntactically valid and lint-supported (unsupported parsed families return valid=false).",
             "type": "boolean"
+          },
+          "warnings": {
+            "description": "Deprecation warnings emitted when legacy config keys/shapes are used.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [

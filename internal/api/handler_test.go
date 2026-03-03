@@ -52,6 +52,14 @@ func newTestMux(mockParseFn func(string) (*model.Diagram, *parser.SyntaxError, e
 	return mux
 }
 
+func setStrictConfigSchemaForTest(t *testing.T, strict bool) {
+	t.Helper()
+	api.SetStrictConfigSchemaForTesting(strict)
+	t.Cleanup(func() {
+		api.SetStrictConfigSchemaForTesting(false)
+	})
+}
+
 // newTestMuxWithRealParser creates a test mux that uses the real parser subprocess.
 // Used for integration tests. Returns nil mux if parser script doesn't exist.
 func newTestMuxWithRealParser(t *testing.T, scriptPath string) *http.ServeMux {
@@ -830,7 +838,7 @@ func TestAnalyze_ConfigParsing(t *testing.T) {
 	}
 }
 
-func TestAnalyze_ConfigLegacySnakeCaseKeysRejected(t *testing.T) {
+func TestAnalyze_ConfigLegacySnakeCaseKeysAcceptedWithWarning(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}, {ID: "B"}}, Edges: []model.Edge{{From: "A", To: "B"}}}, nil, nil
 	})
@@ -852,10 +860,48 @@ func TestAnalyze_ConfigLegacySnakeCaseKeysRejected(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for legacy snake_case config keys in strict mode, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for legacy snake_case config keys in phase 1, got %d body=%s", w.Code, w.Body.String())
 	}
-	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "config.schema-version is required", "config.schema-version", nil)
+	if got := w.Header().Get("Deprecation"); got != "true" {
+		t.Fatalf("expected Deprecation header true, got %q", got)
+	}
+	if got := w.Header().Get("Warning"); got == "" {
+		t.Fatal("expected Warning header to be present")
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	warnings, ok := resp["warnings"].([]any)
+	if !ok || len(warnings) == 0 {
+		t.Fatalf("expected warnings array in response, got %#v", resp["warnings"])
+	}
+}
+
+func TestAnalyze_ConfigLegacySnakeCaseKeysRejectedWhenPhaseFlips(t *testing.T) {
+	setStrictConfigSchemaForTest(t, true)
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	bodyJSON, _ := json.Marshal(map[string]any{
+		"code": "graph TD\n  A --> B",
+		"config": map[string]any{
+			"schema_version": "v1",
+			"rules":          map[string]any{},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(bodyJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 in strict phase, got %d body=%s", w.Code, w.Body.String())
+	}
+	assertValidationErrorResponse(t, w.Body.Bytes(), "deprecated_config_format", "config.schema_version is deprecated; use config.schema-version", "config.schema_version", nil)
 }
 
 func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
@@ -916,6 +962,7 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 	})
 
 	t.Run("legacy formats are rejected in strict mode", func(t *testing.T) {
+		setStrictConfigSchemaForTest(t, true)
 		for _, config := range []map[string]any{
 			{"max-fanout": map[string]any{"limit": 2}},
 			{"rules": map[string]any{"max-fanout": map[string]any{"limit": 2}}},
@@ -936,7 +983,7 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 			if parserCalled {
 				t.Fatal("expected parser not to be called when strict config validation fails")
 			}
-			assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "config.schema-version is required", "config.schema-version", nil)
+			assertValidationErrorResponse(t, w.Body.Bytes(), "deprecated_config_format", "legacy unversioned config shape is deprecated; use config.schema-version and config.rules", "config", nil)
 		}
 	})
 }
@@ -1949,7 +1996,7 @@ func TestAnalyze_InvalidUnknownRuleConfigWithoutSchemaVersion_Returns400(t *test
 	if parserCalled {
 		t.Fatal("expected parser not to be called when config validation fails")
 	}
-	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "config.schema-version is required", "config.schema-version", nil)
+	assertValidationErrorResponse(t, w.Body.Bytes(), "unknown_rule", "unknown rule: no-cycles-v2", "config.no-cycles-v2", []string{"max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"})
 }
 
 func TestAnalyze_InvalidUnknownOptionConfig_Returns400(t *testing.T) {

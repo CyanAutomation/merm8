@@ -18,7 +18,13 @@ import (
 )
 
 const maxAnalyzeBodyBytes int64 = 1 << 20 // 1 MiB
-const strictConfigSchema = true
+
+const (
+	legacyConfigDeprecationMessage = "legacy config format is deprecated; migrate to {\"schema-version\":\"v1\",\"rules\":{...}} with kebab-case keys"
+	legacyConfigDeprecationHeader  = "299 - \"legacy config format is deprecated and will be rejected in a future phase\""
+)
+
+var strictConfigSchema = false
 
 //go:embed swagger.html
 var swaggerHTML []byte
@@ -51,55 +57,64 @@ type validationError struct {
 // parseConfig validates config payloads.
 // In strict mode, only canonical versioned payloads are accepted:
 // {"schema-version":"v1","rules":{...}}.
-func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict bool) (rules.Config, *validationError) {
+func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict bool) (rules.Config, []string, *validationError) {
 	if len(raw) == 0 {
-		return rules.Config{}, nil
+		return rules.Config{}, nil, nil
 	}
 
 	var configValue any
 	if err := json.Unmarshal(raw, &configValue); err != nil {
-		return rules.Config{}, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
+		return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 	}
 
 	asMap, ok := configValue.(map[string]any)
 	if !ok {
-		return rules.Config{}, &validationError{Code: "invalid_option", Path: "config", Message: "config must be object"}
+		return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "config must be object"}
 	}
 
 	cfgRaw := raw
 	rulePathPrefix := "config"
+	deprecations := make([]string, 0, 2)
 
 	schemaVersionValue, hasSchemaVersion := asMap["schema-version"]
-	if !hasSchemaVersion && !strict {
-		schemaVersionValue, hasSchemaVersion = asMap["schema_version"]
+	if legacySchemaVersionValue, hasLegacySchemaVersion := asMap["schema_version"]; hasLegacySchemaVersion {
+		if strict {
+			return rules.Config{}, nil, &validationError{Code: "deprecated_config_format", Path: "config.schema_version", Message: "config.schema_version is deprecated; use config.schema-version"}
+		}
+		schemaVersionValue = legacySchemaVersionValue
+		hasSchemaVersion = true
+		deprecations = append(deprecations, legacyConfigDeprecationMessage)
 	}
+
 	if strict && !hasSchemaVersion {
-		return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.schema-version", Message: "config.schema-version is required"}
+		return rules.Config{}, nil, &validationError{Code: "deprecated_config_format", Path: "config", Message: "legacy unversioned config shape is deprecated; use config.schema-version and config.rules"}
 	}
+
 	if hasSchemaVersion {
 		schemaVersion, ok := schemaVersionValue.(string)
 		if !ok {
-			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.schema-version", Message: "config.schema-version must be string"}
+			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config.schema-version", Message: "config.schema-version must be string"}
 		}
 		if schemaVersion != rules.CurrentConfigSchemaVersion {
-			return rules.Config{}, &validationError{
+			return rules.Config{}, nil, &validationError{
 				Code:      "unsupported_schema_version",
 				Path:      "config.schema-version",
 				Message:   "unsupported config schema-version: " + schemaVersion,
 				Supported: []string{rules.CurrentConfigSchemaVersion},
 			}
 		}
+
 		rulesValue, hasRules := asMap["rules"]
 		if !hasRules {
-			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules is required when config.schema-version is set"}
+			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules is required when config.schema-version is set"}
 		}
 		rulesMap, ok := rulesValue.(map[string]any)
 		if !ok {
-			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
+			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
 		}
 		for topLevelKey := range asMap {
 			if topLevelKey != "schema-version" && topLevelKey != "rules" && !(topLevelKey == "schema_version" && !strict) {
-				return rules.Config{}, &validationError{
+				return rules.Config{}, nil, &validationError{
 					Code:      "unknown_option",
 					Path:      "config." + topLevelKey,
 					Message:   "unknown option: " + topLevelKey,
@@ -109,37 +124,40 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		}
 		rawRules, err := json.Marshal(rulesMap)
 		if err != nil {
-			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
+			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 		}
 		cfgRaw = rawRules
 		asMap = rulesMap
 		rulePathPrefix = "config.rules"
 	} else if rulesValue, hasRules := asMap["rules"]; hasRules {
 		if strict {
-			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.schema-version", Message: "config.schema-version is required"}
+			return rules.Config{}, nil, &validationError{Code: "deprecated_config_format", Path: "config", Message: "legacy unversioned config shape is deprecated; use config.schema-version and config.rules"}
 		}
+		deprecations = append(deprecations, legacyConfigDeprecationMessage)
 		rulesMap, ok := rulesValue.(map[string]any)
 		if !ok {
-			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
+			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
 		}
 		rulePathPrefix = "config.rules"
 		ruleMapRaw, err := json.Marshal(rulesMap)
 		if err != nil {
-			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
+			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 		}
 		cfgRaw = ruleMapRaw
 		asMap = rulesMap
 	} else if strict {
-		return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.schema-version", Message: "config.schema-version is required"}
+		return rules.Config{}, nil, &validationError{Code: "deprecated_config_format", Path: "config", Message: "legacy unversioned config shape is deprecated; use config.schema-version and config.rules"}
+	} else {
+		deprecations = append(deprecations, legacyConfigDeprecationMessage)
 	}
 
 	for ruleID, ruleConfig := range asMap {
 		ruleConfigMap, ok := ruleConfig.(map[string]any)
 		if !ok {
-			return rules.Config{}, &validationError{Code: "invalid_option", Path: rulePathPrefix + "." + ruleID, Message: rulePathPrefix + "." + ruleID + " must be object"}
+			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: rulePathPrefix + "." + ruleID, Message: rulePathPrefix + "." + ruleID + " must be object"}
 		}
 		if _, known := knownRuleIDs[ruleID]; !known {
-			return rules.Config{}, &validationError{
+			return rules.Config{}, nil, &validationError{
 				Code:      "unknown_rule",
 				Path:      rulePathPrefix + "." + ruleID,
 				Message:   "unknown rule: " + ruleID,
@@ -149,7 +167,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 
 		registry, ok := rules.ConfigRegistry()[ruleID]
 		if !ok {
-			return rules.Config{}, &validationError{
+			return rules.Config{}, nil, &validationError{
 				Code:      "unknown_rule",
 				Path:      rulePathPrefix + "." + ruleID,
 				Message:   "unknown rule: " + ruleID,
@@ -160,7 +178,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		for optionKey, optionValue := range ruleConfigMap {
 			canonicalOptionKey := rules.NormalizeOptionKey(optionKey)
 			if !contains(registry.AllowedOptionKeys, canonicalOptionKey) {
-				return rules.Config{}, &validationError{
+				return rules.Config{}, nil, &validationError{
 					Code:      "unknown_option",
 					Path:      rulePathPrefix + "." + ruleID + "." + optionKey,
 					Message:   "unknown option: " + optionKey,
@@ -168,7 +186,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 				}
 			}
 			if err := rules.ValidateOption(ruleID, optionKey, optionValue); err != nil {
-				return rules.Config{}, &validationError{
+				return rules.Config{}, nil, &validationError{
 					Code:    "invalid_option",
 					Path:    rulePathPrefix + "." + ruleID + "." + optionKey,
 					Message: "invalid option value for " + optionKey,
@@ -178,16 +196,16 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 
 		ruleConfigRaw, err := json.Marshal(ruleConfigMap)
 		if err != nil {
-			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
+			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 		}
 		asMap[ruleID] = json.RawMessage(ruleConfigRaw)
 	}
 
 	var cfg rules.Config
 	if err := json.Unmarshal(cfgRaw, &cfg); err != nil {
-		return rules.Config{}, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
+		return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 	}
-	return cfg, nil
+	return cfg, deprecations, nil
 }
 
 func sortedRuleIDs(knownRuleIDs map[string]struct{}) []string {
@@ -241,6 +259,7 @@ type analyzeResponse struct {
 	LintSupported bool                 `json:"lint-supported"`
 	SyntaxError   *syntaxErrorResponse `json:"syntax-error"`
 	Issues        []model.Issue        `json:"issues"`
+	Warnings      []string             `json:"warnings,omitempty"`
 	Error         *apiErrorDetails     `json:"error,omitempty"`
 	Metrics       *metricsResponse     `json:"metrics,omitempty"`
 }
@@ -322,6 +341,12 @@ func NewHandlerWithScript(scriptPath string) (*Handler, error) {
 		p,
 		engine.New(),
 	), nil
+}
+
+// SetStrictConfigSchemaForTesting toggles strict config schema enforcement.
+// It is intended for tests that need to validate future rejection behavior.
+func SetStrictConfigSchemaForTesting(strict bool) {
+	strictConfigSchema = strict
 }
 
 // RegisterRoutes attaches all routes to mux.
@@ -421,10 +446,16 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchema)
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchema)
 	if configValidationErr != nil {
 		writeConfigValidationError(w, configValidationErr)
 		return
+	}
+
+	deprecationWarnings = uniqueStrings(deprecationWarnings)
+	if len(deprecationWarnings) > 0 {
+		w.Header().Set("Deprecation", "true")
+		w.Header().Set("Warning", legacyConfigDeprecationHeader)
 	}
 
 	normalizedCfg, err := h.engine.NormalizeConfig(cfg)
@@ -459,6 +490,7 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 			Valid:         false,
 			DiagramType:   diagramType,
 			LintSupported: diagramType.Family() == model.DiagramFamilyFlowchart,
+			Warnings:      deprecationWarnings,
 			SyntaxError: &syntaxErrorResponse{
 				Message: syntaxErr.Message,
 				Line:    syntaxErr.Line,
@@ -486,6 +518,7 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 			LintSupported: false,
 			SyntaxError:   nil,
 			Issues:        []model.Issue{},
+			Warnings:      deprecationWarnings,
 			Error: &apiErrorDetails{
 				Code:    "unsupported_diagram_type",
 				Message: "diagram type is parsed but linting is not supported",
@@ -504,9 +537,26 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		LintSupported: diagram.Type.Family() == model.DiagramFamilyFlowchart,
 		SyntaxError:   nil,
 		Issues:        issues,
+		Warnings:      deprecationWarnings,
 		Metrics:       computeMetrics(diagram, issues),
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func uniqueStrings(values []string) []string {
+	if len(values) == 0 {
+		return values
+	}
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func defaultDiagramTypeForSyntaxError(code string) model.DiagramType {

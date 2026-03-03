@@ -482,9 +482,8 @@ Accepted canonical format (versioned contract):
 
 Legacy migration timeline:
 
-1. **Announce**: legacy snake_case keys and legacy shapes documented as deprecated.
-2. **Warn**: during grace window, legacy inputs accepted but clients should emit migration warnings.
-3. **Enforce (current)**: only canonical versioned config is accepted; legacy keys/shapes are rejected with `400 invalid_option`.
+1. **Phase 1 (current)**: legacy snake_case keys/shapes are still accepted, but responses include deprecation signals (`Deprecation: true`, `Warning` header, and response `warnings`).
+2. **Phase 2 (planned)**: legacy keys/shapes are rejected with machine-readable `400 deprecated_config_format` errors.
 
 Unsupported versions are rejected with `400 unsupported_schema_version` and include a `supported` list.
 
