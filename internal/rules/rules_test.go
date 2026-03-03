@@ -309,6 +309,44 @@ func TestValidateOption_MaxFanoutLimit(t *testing.T) {
 	}
 }
 
+func TestNoDuplicateNodeIDs_SubgraphContextUsesDuplicateOccurrence(t *testing.T) {
+	d := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "A"}},
+		Subgraphs: []model.Subgraph{
+			{ID: "cluster-1", Label: "First", Nodes: []string{"A"}},
+			{ID: "cluster-2", Label: "Second", Nodes: []string{"A"}},
+		},
+	}
+
+	issues := rules.NoDuplicateNodeIDs{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Context == nil {
+		t.Fatal("expected context for duplicate occurrence")
+	}
+	if issues[0].Context.SubgraphID != "cluster-2" || issues[0].Context.SubgraphLabel != "Second" {
+		t.Fatalf("expected second occurrence context, got %#v", issues[0].Context)
+	}
+}
+
+func TestNoDuplicateNodeIDs_SubgraphContextAbsentWhenDuplicateOutsideSubgraph(t *testing.T) {
+	d := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "A"}},
+		Subgraphs: []model.Subgraph{
+			{ID: "cluster-1", Label: "First", Nodes: []string{"A"}},
+		},
+	}
+
+	issues := rules.NoDuplicateNodeIDs{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Context != nil {
+		t.Fatalf("expected no context for second occurrence outside subgraph, got %#v", issues[0].Context)
+	}
+}
+
 func TestNoDisconnectedNodes_SubgraphContextPresentForMemberNode(t *testing.T) {
 	d := &model.Diagram{
 		Nodes:     []model.Node{{ID: "A"}, {ID: "B"}},
