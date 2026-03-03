@@ -228,12 +228,13 @@ func analyzeRemote(name, code string, cfgRaw json.RawMessage, opts cliOptions) (
 	if !strings.HasSuffix(endpoint, "/analyze") {
 		endpoint += "/analyze"
 	}
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	ctx, cancel := context.WithTimeout(context.Background(), opts.Timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return outputResult{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: opts.Timeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return outputResult{}, err
