@@ -63,7 +63,7 @@
             "type": "array"
           },
           "lint-supported": {
-          "description": "Whether lint rules are currently implemented for the reported diagram type. Syntax-error responses use parser-detected type fallback when available.",
+            "description": "Whether lint rules are currently implemented for the reported diagram type. Syntax-error responses use parser-detected type fallback when available.",
             "type": "boolean"
           },
           "metrics": {

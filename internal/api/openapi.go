@@ -884,3 +884,8 @@ var openapi = map[string]interface{}{
 		},
 	},
 }
+
+// OpenAPISpec returns the canonical OpenAPI spec used by /spec.
+func OpenAPISpec() map[string]interface{} {
+	return openapi
+}
