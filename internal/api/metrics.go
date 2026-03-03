@@ -61,6 +61,24 @@ func (e *PrometheusMetricsExporter) ServeHTTP(w http.ResponseWriter, _ *http.Req
 	for key := range e.requestCounts {
 		requestKeys = append(requestKeys, key)
 	}
+	requestCountsCopy := make(map[routeMetricKey]uint64, len(e.requestCounts))
+	for _, key := range requestKeys {
+		requestCountsCopy[key] = e.requestCounts[key]
+	}
+
+	durationKeys := make([]durationMetricKey, 0, len(e.durationCount))
+	for key := range e.durationCount {
+		durationKeys = append(durationKeys, key)
+	}
+	durationSumsCopy := make(map[durationMetricKey]float64, len(e.durationSums))
+	durationCountCopy := make(map[durationMetricKey]uint64, len(e.durationCount))
+	for _, key := range durationKeys {
+		durationSumsCopy[key] = e.durationSums[key]
+		durationCountCopy[key] = e.durationCount[key]
+	}
+
+	e.mu.RUnlock()
+
 	sort.Slice(requestKeys, func(i, j int) bool {
 		if requestKeys[i].route != requestKeys[j].route {
 			return requestKeys[i].route < requestKeys[j].route
@@ -71,25 +89,8 @@ func (e *PrometheusMetricsExporter) ServeHTTP(w http.ResponseWriter, _ *http.Req
 		return requestKeys[i].status < requestKeys[j].status
 	})
 	for _, key := range requestKeys {
-		fmt.Fprintf(&b, "merm8_http_requests_total{route=%q,method=%q,status=%q} %d\n", key.route, key.method, strconv.Itoa(key.status), e.requestCounts[key])
+		fmt.Fprintf(&b, "merm8_http_requests_total{route=%q,method=%q,status=%q} %d\n", key.route, key.method, strconv.Itoa(key.status), requestCountsCopy[key])
 	}
-
-	b.WriteString("# HELP merm8_http_request_duration_seconds Request latency in seconds by route and method.\n")
-	b.WriteString("# TYPE merm8_http_request_duration_seconds summary\n")
-
-	durationKeys := make([]durationMetricKey, 0, len(e.durationCount))
-	for key := range e.durationCount {
-		durationKeys = append(durationKeys, key)
-	}
-	sort.Slice(durationKeys, func(i, j int) bool {
-		if durationKeys[i].route != durationKeys[j].route {
-			return durationKeys[i].route < durationKeys[j].route
-		}
-		return durationKeys[i].method < durationKeys[j].method
-	})
-	for _, key := range durationKeys {
-		fmt.Fprintf(&b, "merm8_http_request_duration_seconds_sum{route=%q,method=%q} %g\n", key.route, key.method, e.durationSums[key])
-		fmt.Fprintf(&b, "merm8_http_request_duration_seconds_count{route=%q,method=%q} %d\n", key.route, key.method, e.durationCount[key])
 	}
 
 	_, _ = w.Write([]byte(b.String()))
