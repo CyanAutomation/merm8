@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/CyanAutomation/merm8/internal/model"
 	"github.com/CyanAutomation/merm8/internal/rules"
@@ -18,6 +19,7 @@ import (
 // Engine holds a set of rules and runs them in order.
 type Engine struct {
 	rules []rules.Rule
+	sink  InstrumentationSink
 }
 
 // New returns an Engine pre-loaded with the default rule set.
@@ -33,11 +35,31 @@ func New() *Engine {
 
 // NewWithRules returns an Engine configured with the provided rule set.
 func NewWithRules(registeredRules ...rules.Rule) *Engine {
-	return &Engine{rules: registeredRules}
+	return &Engine{rules: registeredRules, sink: NoopInstrumentationSink{}}
+}
+
+// SetInstrumentationSink configures an optional metrics sink used for rule
+// execution instrumentation.
+func (e *Engine) SetInstrumentationSink(sink InstrumentationSink) {
+	if sink == nil {
+		e.sink = NoopInstrumentationSink{}
+		return
+	}
+	e.sink = sink
 }
 
 // Run executes every rule against d and returns all issues found.
 func (e *Engine) Run(d *model.Diagram, cfg rules.Config) []model.Issue {
+	return e.RunWithInstrumentation(d, cfg, e.sink)
+}
+
+// RunWithInstrumentation executes rules and emits per-rule metrics into sink.
+// A nil sink uses a no-op implementation.
+func (e *Engine) RunWithInstrumentation(d *model.Diagram, cfg rules.Config, sink InstrumentationSink) []model.Issue {
+	if sink == nil {
+		sink = NoopInstrumentationSink{}
+	}
+
 	normalizedCfg, err := e.NormalizeConfig(cfg)
 	if err != nil {
 		log.Printf("warn: invalid lint config ignored: %v", err)
@@ -57,7 +79,18 @@ func (e *Engine) Run(d *model.Diagram, cfg rules.Config) []model.Issue {
 		if !rules.RuleEnabled(r.ID(), normalizedCfg) {
 			continue
 		}
-		issues = append(issues, r.Run(d, normalizedCfg)...)
+
+		ruleStart := time.Now()
+		ruleIssues := r.Run(d, normalizedCfg)
+		ruleDuration := time.Since(ruleStart)
+		sink.RecordRuleMetrics(RuleMetrics{
+			RuleID:          r.ID(),
+			Executions:      1,
+			IssuesEmitted:   len(ruleIssues),
+			TotalDurationNS: ruleDuration.Nanoseconds(),
+		})
+
+		issues = append(issues, ruleIssues...)
 	}
 
 	if len(issues) == 0 {
