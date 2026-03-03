@@ -74,13 +74,13 @@ type Parser struct {
 }
 
 // New returns a Parser that will invoke the given Node.js script path.
-func New(scriptPath string) *Parser {
+func New(scriptPath string) (*Parser, error) {
 	root, err := findRepoRoot()
 	if err != nil {
-		root = ""
+		return nil, fmt.Errorf("failed to initialize parser: %w", err)
 	}
 
-	return &Parser{scriptPath: scriptPath, timeout: defaultTimeout, repoRoot: root}
+	return &Parser{scriptPath: scriptPath, timeout: defaultTimeout, repoRoot: root}, nil
 }
 
 // Ready performs lightweight dependency checks used by readiness probes.
