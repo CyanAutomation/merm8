@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -39,8 +38,11 @@ func main() {
 	mux := http.NewServeMux()
 	handler, err := api.NewHandlerWithScript(scriptPath)
 	if err != nil {
-		log.Fatalf("failed to initialize handler: %v", err)
+		panic(fmt.Sprintf("failed to initialize handler: %v", err))
 	}
+
+	logger := api.NewLogger("server")
+	handler.SetLogger(api.NewLogger("api"))
 
 	parserConcurrencyLimit := envInt("PARSER_CONCURRENCY_LIMIT", defaultParserConcurrencyLimit)
 	handler.SetParserConcurrencyLimit(parserConcurrencyLimit)
@@ -53,6 +55,7 @@ func main() {
 	handler.RegisterRoutes(mux)
 
 	rootHandler := http.Handler(mux)
+	rootHandler = api.RequestIDMiddleware(rootHandler)
 
 	authToken := strings.TrimSpace(os.Getenv("ANALYZE_AUTH_TOKEN"))
 	rateLimitPerMinute := envInt("ANALYZE_RATE_LIMIT_PER_MINUTE", 0)
@@ -77,11 +80,13 @@ func main() {
 		"POST /analyze": "/analyze",
 	}
 	rootHandler = api.MetricsMiddleware(rootHandler, routePatterns, metrics)
+	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, logger)
 
 	addr := fmt.Sprintf(":%s", port)
-	log.Printf("mermaid-lint listening on %s (parser: %s, mode: %s, parser_concurrency_limit: %d, analyze_rate_limit_per_minute: %d, analyze_auth_enabled: %t)", addr, scriptPath, deploymentMode, parserConcurrencyLimit, rateLimitPerMinute, authToken != "")
+	logger.Info("server starting", "addr", addr, "parser", scriptPath, "mode", deploymentMode, "parser_concurrency_limit", parserConcurrencyLimit, "analyze_rate_limit_per_minute", rateLimitPerMinute, "analyze_auth_enabled", authToken != "")
 	if err := http.ListenAndServe(addr, rootHandler); err != nil {
-		log.Fatalf("server error: %v", err)
+		logger.Error("server error", "error", err.Error())
+		panic(fmt.Sprintf("server error: %v", err))
 	}
 }
 

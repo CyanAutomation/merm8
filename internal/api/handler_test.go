@@ -2836,3 +2836,36 @@ func TestAnalyze_ConfigSuppressionSelectors_MalformedIgnored(t *testing.T) {
 		t.Fatalf("expected malformed selectors to be ignored and issue retained")
 	}
 }
+
+func TestAnalyze_RequestIDHeaderPropagation(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+	handler := api.RequestIDMiddleware(mux)
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(`{"code":"graph TD;A-->B"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Request-Id", "req-123")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if got := w.Header().Get("X-Request-Id"); got != "req-123" {
+		t.Fatalf("expected propagated request id, got %q", got)
+	}
+}
+
+func TestAnalyze_RequestIDHeaderGeneratedWhenMissing(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, errors.New("boom")
+	})
+	handler := api.RequestIDMiddleware(mux)
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(`{"code":"graph TD;A-->B"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if got := w.Header().Get("X-Request-Id"); got == "" {
+		t.Fatal("expected generated request id header")
+	}
+}
