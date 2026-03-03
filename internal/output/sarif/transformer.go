@@ -80,6 +80,64 @@ type Region struct {
 	StartColumn int `json:"startColumn,omitempty"`
 }
 
+// ErrorInfo describes an error for SARIF transformation.
+type ErrorInfo struct {
+	Code    string // Error code (e.g., "parser_timeout", "invalid_json", "request_too_large")
+	Message string // Human-readable error message
+}
+
+// TransformError converts an API error into SARIF 2.1.0 error report.
+func TransformError(errInfo ErrorInfo, meta RequestMetadata) Report {
+	if meta.ArtifactURI == "" {
+		meta.ArtifactURI = "request://mermaid"
+	}
+
+	// Map error codes to SARIF severity levels
+	level := SARIFLevelWarning
+	switch errInfo.Code {
+	case "parser_timeout", "parser_subprocess_error", "parser_contract_violation", "parser_decode_error":
+		level = SARIFLevelError
+	case "invalid_json", "invalid_config", "invalid_option", "unknown_option", "unknown_rule", "deprecated_config_format", "unsupported_schema_version", "missing_code":
+		level = SARIFLevelWarning
+	case "request_too_large":
+		level = SARIFLevelWarning
+	case "rate_limited":
+		level = SARIFLevelWarning
+	case "server_busy":
+		level = SARIFLevelWarning
+	}
+
+	result := Result{
+		RuleID:  "merm8-api",
+		Level:   level,
+		Message: MessageText{Text: errInfo.Message},
+	}
+
+	run := Run{
+		Tool: Tool{Driver: Driver{
+			Name:           "merm8",
+			InformationURI: "https://github.com/CyanAutomation/merm8",
+		}},
+		Results: []Result{result},
+	}
+
+	if meta.RequestURI != "" {
+		run.Invocations = []Invocation{{
+			ExecutionSuccessful: false,
+			Properties: map[string]string{
+				"request-uri": meta.RequestURI,
+				"error-code":  errInfo.Code,
+			},
+		}}
+	}
+
+	return Report{
+		Version: "2.1.0",
+		Schema:  "https://json.schemastore.org/sarif-2.1.0.json",
+		Runs:    []Run{run},
+	}
+}
+
 // Transform converts lint issues and request metadata into SARIF 2.1.0.
 func Transform(issues []model.Issue, meta RequestMetadata) Report {
 	if meta.ArtifactURI == "" {
@@ -139,5 +197,18 @@ func Transform(issues []model.Issue, meta RequestMetadata) Report {
 		Version: "2.1.0",
 		Schema:  "https://json.schemastore.org/sarif-2.1.0.json",
 		Runs:    []Run{run},
+	}
+}
+
+
+// mapErrorCodeToLevel maps API error codes to SARIF result levels.
+func mapErrorCodeToLevel(code string) string {
+	switch code {
+	case "parser_timeout", "parser_subprocess_error", "parser_decode_error", "parser_contract_violation", "internal_error", "server_busy":
+		return SARIFLevelError
+	case "invalid_json", "invalid_config", "missing_code", "request_too_large", "deprecated_config_format", "invalid_option", "unknown_option", "unknown_rule", "unsupported_diagram_type", "syntax_error":
+		return SARIFLevelWarning
+	default:
+		return SARIFLevelWarning
 	}
 }

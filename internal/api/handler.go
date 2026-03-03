@@ -44,6 +44,11 @@ type VersionInfoProvider interface {
 	VersionInfo() (*parser.VersionInfo, error)
 }
 
+// TimeoutProvider can be implemented by parser dependencies that expose configured timeout.
+type TimeoutProvider interface {
+	Timeout() time.Duration
+}
+
 // ReadinessChecker can be implemented by parser dependencies that support
 // lightweight readiness validation (e.g., binary/script availability checks).
 type ReadinessChecker interface {
@@ -366,11 +371,12 @@ func (s *requestRuleMetricsSink) Snapshot() []engine.RuleMetrics {
 }
 
 type infoResponse struct {
-	ServiceVersion   string                `json:"service_version,omitempty"`
-	ParserVersion    string                `json:"parser_version,omitempty"`
-	MermaidVersion   string                `json:"mermaid_version,omitempty"`
-	ParserRecognized []model.DiagramType   `json:"parser_recognized"`
-	LintSupported    []model.DiagramFamily `json:"lint_supported"`
+	ServiceVersion         string                `json:"service_version,omitempty"`
+	ParserVersion          string                `json:"parser_version,omitempty"`
+	MermaidVersion         string                `json:"mermaid_version,omitempty"`
+	ParserTimeoutSeconds   int                   `json:"parser_timeout_seconds,omitempty"`
+	ParserRecognized       []model.DiagramType   `json:"parser_recognized"`
+	LintSupported          []model.DiagramFamily `json:"lint_supported"`
 }
 
 // NewHandler creates a Handler with the given parser and engine.
@@ -623,6 +629,10 @@ func (h *Handler) Info(w http.ResponseWriter, _ *http.Request) {
 			resp.MermaidVersion = info.MermaidVersion
 		}
 	}
+	// Retrieve parser timeout if available
+	if timeoutProvider, ok := h.parser.(TimeoutProvider); ok {
+		resp.ParserTimeoutSeconds = int(timeoutProvider.Timeout().Seconds())
+	}
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -826,18 +836,227 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 }
 
 // AnalyzeSARIF handles POST /analyze/sarif.
+// Differs from Analyze in that all responses (including errors) are returned
+// in SARIF 2.1.0 format with appropriate HTTP status codes.
 func (h *Handler) AnalyzeSARIF(w http.ResponseWriter, r *http.Request) {
-	h.analyzeWithCallback(w, r, func(resp analyzeResponse) {
-		requestURI := "/analyze/sarif"
-		if r.URL != nil {
-			requestURI = r.URL.Path
+	analyzeForSARIF(w, r, h)
+}
+
+// analyzeForSARIF is the SARIF-specific analyzer that mirrors analyzeWithCallback
+// but returns SARIF-formatted errors instead of JSON errors.
+func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
+	observeAnalyzeOutcome := func(outcome string) {
+		h.mu.RLock()
+		metrics := h.telemetryMetrics
+		h.mu.RUnlock()
+		if metrics != nil {
+			metrics.ObserveAnalyzeOutcome(outcome)
 		}
-		report := sarif.Transform(resp.Issues, sarif.RequestMetadata{
-			RequestURI:  requestURI,
-			ArtifactURI: "",
-		})
+		h.incrementAnalyzeOutcomeCounter(outcome)
+	}
+
+	h.mu.RLock()
+	logger := normalizeLogger(h.logger)
+	h.mu.RUnlock()
+
+	requestURI := "/analyze/sarif"
+	if r.URL != nil {
+		requestURI = r.URL.Path
+	}
+	meta := sarif.RequestMetadata{
+		RequestURI:  requestURI,
+		ArtifactURI: "",
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxAnalyzeBodyBytes)
+
+	var req analyzeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			observeAnalyzeOutcome("request_too_large")
+			report := sarif.TransformError(sarif.ErrorInfo{
+				Code:    "request_too_large",
+				Message: "request body exceeds 1 MiB limit",
+			}, meta)
+			writeSARIF(w, http.StatusRequestEntityTooLarge, report)
+			return
+		}
+		observeAnalyzeOutcome("invalid_json")
+		report := sarif.TransformError(sarif.ErrorInfo{
+			Code:    "invalid_json",
+			Message: "invalid JSON body",
+		}, meta)
+		writeSARIF(w, http.StatusBadRequest, report)
+		return
+	}
+	if req.Code == "" {
+		observeAnalyzeOutcome("missing_code")
+		report := sarif.TransformError(sarif.ErrorInfo{
+			Code:    "missing_code",
+			Message: "field 'code' is required",
+		}, meta)
+		writeSARIF(w, http.StatusBadRequest, report)
+		return
+	}
+
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchema)
+	if configValidationErr != nil {
+		observeAnalyzeOutcome(configValidationErr.Code)
+		statusCode := http.StatusBadRequest
+		if configValidationErr.Code == "deprecated_config_format" {
+			statusCode = http.StatusBadRequest
+		}
+		report := sarif.TransformError(sarif.ErrorInfo{
+			Code:    configValidationErr.Code,
+			Message: configValidationErr.Message,
+		}, meta)
+		writeSARIF(w, statusCode, report)
+		return
+	}
+
+	deprecationWarnings = uniqueStrings(deprecationWarnings)
+	if len(deprecationWarnings) > 0 {
+		w.Header().Set("Deprecation", "true")
+		w.Header().Set("Warning", legacyConfigDeprecationHeader)
+	}
+
+	normalizedCfg, err := h.engine.NormalizeConfig(cfg)
+	if err != nil {
+		observeAnalyzeOutcome("invalid_config")
+		report := sarif.TransformError(sarif.ErrorInfo{
+			Code:    "invalid_config",
+			Message: err.Error(),
+		}, meta)
+		writeSARIF(w, http.StatusBadRequest, report)
+		return
+	}
+
+	h.mu.RLock()
+	parserConcurrencyCh := h.parserConcurrencyCh
+	h.mu.RUnlock()
+
+	if parserConcurrencyCh != nil {
+		select {
+		case parserConcurrencyCh <- struct{}{}:
+			defer func() { <-parserConcurrencyCh }()
+		default:
+			observeAnalyzeOutcome("server_busy")
+			report := sarif.TransformError(sarif.ErrorInfo{
+				Code:    "server_busy",
+				Message: "parser concurrency limit reached; try again",
+			}, meta)
+			writeSARIF(w, http.StatusServiceUnavailable, report)
+			return
+		}
+	}
+
+	parseStart := time.Now()
+	diagram, syntaxErr, err := h.parser.Parse(req.Code)
+	parseDuration := time.Since(parseStart)
+	if err != nil {
+		outcome := parserFailureOutcome(err)
+		h.mu.RLock()
+		metrics := h.telemetryMetrics
+		h.mu.RUnlock()
+		if metrics != nil {
+			metrics.ObserveParserDuration(outcome, parseDuration)
+		}
+		observeAnalyzeOutcome(outcome)
+		setAnalyzeLogFields(r.Context(), outcome, string(model.DiagramTypeUnknown))
+		logger.Error("parser failure", "request_id", RequestIDFromContext(r.Context()), "route", r.URL.Path, "method", r.Method, "parser_outcome", outcome, "error", err.Error())
+		statusCode, errorCode, errorMsg := parserFailureDetails(err)
+		report := sarif.TransformError(sarif.ErrorInfo{
+			Code:    errorCode,
+			Message: errorMsg,
+		}, meta)
+		writeSARIF(w, statusCode, report)
+		return
+	}
+
+	if syntaxErr != nil {
+		h.mu.RLock()
+		metrics := h.telemetryMetrics
+		h.mu.RUnlock()
+		if metrics != nil {
+			metrics.ObserveParserDuration(telemetry.OutcomeSyntaxError, parseDuration)
+		}
+		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
+		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
+		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
+		
+		// For syntax errors, include the error in SARIF format
+		report := sarif.TransformError(sarif.ErrorInfo{
+			Code:    "syntax_error",
+			Message: syntaxErr.Message,
+		}, meta)
 		writeSARIF(w, http.StatusOK, report)
+		return
+	}
+
+	if diagram == nil {
+		h.mu.RLock()
+		metrics := h.telemetryMetrics
+		h.mu.RUnlock()
+		if metrics != nil {
+			metrics.ObserveParserDuration(telemetry.OutcomeInternalError, parseDuration)
+		}
+		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
+		setAnalyzeLogFields(r.Context(), telemetry.OutcomeInternalError, string(model.DiagramTypeUnknown))
+		logger.Error("parser returned nil diagram", "request_id", RequestIDFromContext(r.Context()), "route", r.URL.Path, "method", r.Method)
+		report := sarif.TransformError(sarif.ErrorInfo{
+			Code:    "internal_error",
+			Message: "parser returned nil diagram",
+		}, meta)
+		writeSARIF(w, http.StatusInternalServerError, report)
+		return
+	}
+
+	h.mu.RLock()
+	metrics := h.telemetryMetrics
+	h.mu.RUnlock()
+	if metrics != nil {
+		metrics.ObserveParserDuration(telemetry.OutcomeLintSuccess, parseDuration)
+	}
+
+	family := diagram.Type.Family()
+	if family != model.DiagramFamilyFlowchart {
+		observeAnalyzeOutcome("unsupported_diagram_type")
+		setAnalyzeLogFields(r.Context(), "unsupported_diagram_type", string(diagram.Type))
+		// For unsupported diagram types, return an error in SARIF format
+		report := sarif.TransformError(sarif.ErrorInfo{
+			Code:    "unsupported_diagram_type",
+			Message: "diagram type \"" + string(diagram.Type) + "\" is parsed but lint rules are not available yet",
+		}, meta)
+		writeSARIF(w, http.StatusOK, report)
+		return
+	}
+
+	ruleMetricsSink := newRequestRuleMetricsSink()
+	issues := h.engine.RunWithInstrumentation(diagram, normalizedCfg, ruleMetricsSink)
+	for _, ruleMetrics := range ruleMetricsSink.Snapshot() {
+		logger.Info(
+			"engine rule metrics",
+			"request_id", RequestIDFromContext(r.Context()),
+			"rule_id", ruleMetrics.RuleID,
+			"executions", ruleMetrics.Executions,
+			"issues_emitted", ruleMetrics.IssuesEmitted,
+			"total_duration_ns", ruleMetrics.TotalDurationNS,
+		)
+	}
+	observeAnalyzeOutcome(telemetry.OutcomeLintSuccess)
+	setAnalyzeLogFields(r.Context(), telemetry.OutcomeLintSuccess, string(diagram.Type))
+
+	// For successful analysis, return SARIF with lint results
+	requestURI = "/analyze/sarif"
+	if r.URL != nil {
+		requestURI = r.URL.Path
+	}
+	report := sarif.Transform(issues, sarif.RequestMetadata{
+		RequestURI:  requestURI,
+		ArtifactURI: "",
 	})
+	writeSARIF(w, http.StatusOK, report)
 }
 
 func uniqueStrings(values []string) []string {
@@ -1056,5 +1275,22 @@ func parserFailureOutcome(err error) string {
 		return telemetry.OutcomeParserContractErr
 	default:
 		return telemetry.OutcomeInternalError
+	}
+}
+
+// parserFailureDetails returns HTTP status code, error code, and error message
+// for a given parser error.
+func parserFailureDetails(err error) (statusCode int, errorCode, errorMsg string) {
+	switch {
+	case errors.Is(err, parser.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
+		return http.StatusGatewayTimeout, "parser_timeout", "parser timed out while validating Mermaid code"
+	case errors.Is(err, parser.ErrSubprocess):
+		return http.StatusInternalServerError, "parser_subprocess_error", "parser subprocess failed"
+	case errors.Is(err, parser.ErrDecode):
+		return http.StatusInternalServerError, "parser_decode_error", "parser returned malformed output"
+	case errors.Is(err, parser.ErrContract):
+		return http.StatusInternalServerError, "parser_contract_violation", "parser response violated service contract"
+	default:
+		return http.StatusInternalServerError, "internal_error", "internal server error"
 	}
 }
