@@ -195,6 +195,62 @@ func TestNoDuplicateNodeIDs_SeverityOverride(t *testing.T) {
 	}
 }
 
+func TestNoDuplicateNodeIDs_UsesDuplicateNodeLocation(t *testing.T) {
+	line := 4
+	col := 7
+	d := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "A", Line: &line, Column: &col}},
+	}
+	issues := rules.NoDuplicateNodeIDs{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Line == nil || *issues[0].Line != line {
+		t.Fatalf("expected duplicate issue line=%d, got %v", line, issues[0].Line)
+	}
+	if issues[0].Column == nil || *issues[0].Column != col {
+		t.Fatalf("expected duplicate issue column=%d, got %v", col, issues[0].Column)
+	}
+}
+
+func TestNoDisconnectedNodes_UsesNodeLocation(t *testing.T) {
+	line := 5
+	col := 2
+	d := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "B", Line: &line, Column: &col}},
+		Edges: []model.Edge{{From: "A", To: "A"}},
+	}
+	issues := rules.NoDisconnectedNodes{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Line == nil || *issues[0].Line != line {
+		t.Fatalf("expected disconnected issue line=%d, got %v", line, issues[0].Line)
+	}
+	if issues[0].Column == nil || *issues[0].Column != col {
+		t.Fatalf("expected disconnected issue column=%d, got %v", col, issues[0].Column)
+	}
+}
+
+func TestMaxFanout_UsesNodeLocation(t *testing.T) {
+	line := 6
+	col := 4
+	d := &model.Diagram{
+		Nodes: []model.Node{{ID: "A", Line: &line, Column: &col}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}, {From: "A", To: "E"}, {From: "A", To: "F"}, {From: "A", To: "G"}},
+	}
+	issues := rules.MaxFanout{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Line == nil || *issues[0].Line != line {
+		t.Fatalf("expected fanout issue line=%d, got %v", line, issues[0].Line)
+	}
+	if issues[0].Column == nil || *issues[0].Column != col {
+		t.Fatalf("expected fanout issue column=%d, got %v", col, issues[0].Column)
+	}
+}
+
 func TestRuleEnabled_DefaultAndConfigured(t *testing.T) {
 	if !rules.RuleEnabled("max-fanout", rules.Config{}) {
 		t.Fatal("expected rule to be enabled by default")

@@ -23,6 +23,8 @@ func (r NoDuplicateNodeIDs) Run(d *model.Diagram, cfg Config) []model.Issue {
 				RuleID:   r.ID(),
 				Severity: severity,
 				Message:  "duplicate node ID: " + n.ID,
+				Line:     n.Line,
+				Column:   n.Column,
 			})
 			reported[n.ID] = true
 		}
