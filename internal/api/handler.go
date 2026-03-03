@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"sync"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
@@ -40,19 +41,28 @@ type analyzeRequest struct {
 
 // parseConfig validates and accepts both flat {"rule-id": {...}} and nested
 // {"rules": {"rule-id": {...}}} config formats.
-func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.Config, error) {
+type validationError struct {
+	Code      string
+	Path      string
+	Message   string
+	Supported []string
+}
+
+// parseConfig validates and accepts both flat {"rule-id": {...}} and nested
+// {"rules": {"rule-id": {...}}} config formats.
+func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.Config, *validationError) {
 	if len(raw) == 0 {
 		return rules.Config{}, nil
 	}
 
 	var configValue any
 	if err := json.Unmarshal(raw, &configValue); err != nil {
-		return rules.Config{}, errors.New("invalid config object")
+		return rules.Config{}, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 	}
 
 	asMap, ok := configValue.(map[string]any)
 	if !ok {
-		return rules.Config{}, errors.New("config must be object")
+		return rules.Config{}, &validationError{Code: "invalid_option", Path: "config", Message: "config must be object"}
 	}
 
 	cfgRaw := raw
@@ -60,12 +70,12 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.C
 	if rulesValue, hasRules := asMap["rules"]; hasRules {
 		rulesMap, ok := rulesValue.(map[string]any)
 		if !ok {
-			return rules.Config{}, errors.New("config.rules must be object")
+			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
 		}
 		rulePathPrefix = "config.rules"
 		ruleMapRaw, err := json.Marshal(rulesMap)
 		if err != nil {
-			return rules.Config{}, errors.New("invalid config object")
+			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 		}
 		cfgRaw = ruleMapRaw
 		asMap = rulesMap
@@ -74,24 +84,76 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.C
 	for ruleID, ruleConfig := range asMap {
 		ruleConfigMap, ok := ruleConfig.(map[string]any)
 		if !ok {
-			return rules.Config{}, errors.New(rulePathPrefix + "." + ruleID + " must be object")
+			return rules.Config{}, &validationError{Code: "invalid_option", Path: rulePathPrefix + "." + ruleID, Message: rulePathPrefix + "." + ruleID + " must be object"}
 		}
 		if _, known := knownRuleIDs[ruleID]; !known {
-			return rules.Config{}, errors.New("unknown rule: " + ruleID)
+			return rules.Config{}, &validationError{
+				Code:      "unknown_rule",
+				Path:      rulePathPrefix + "." + ruleID,
+				Message:   "unknown rule: " + ruleID,
+				Supported: sortedRuleIDs(knownRuleIDs),
+			}
+		}
+
+		registry, ok := rules.ConfigRegistry()[ruleID]
+		if !ok {
+			return rules.Config{}, &validationError{
+				Code:      "unknown_rule",
+				Path:      rulePathPrefix + "." + ruleID,
+				Message:   "unknown rule: " + ruleID,
+				Supported: sortedRuleIDs(knownRuleIDs),
+			}
+		}
+
+		for optionKey, optionValue := range ruleConfigMap {
+			canonicalOptionKey := rules.NormalizeOptionKey(optionKey)
+			if !contains(registry.AllowedOptionKeys, canonicalOptionKey) {
+				return rules.Config{}, &validationError{
+					Code:      "unknown_option",
+					Path:      rulePathPrefix + "." + ruleID + "." + optionKey,
+					Message:   "unknown option: " + optionKey,
+					Supported: registry.AllowedOptionKeys,
+				}
+			}
+			if err := rules.ValidateOption(ruleID, optionKey, optionValue); err != nil {
+				return rules.Config{}, &validationError{
+					Code:    "invalid_option",
+					Path:    rulePathPrefix + "." + ruleID + "." + optionKey,
+					Message: "invalid option value for " + optionKey,
+				}
+			}
 		}
 
 		ruleConfigRaw, err := json.Marshal(ruleConfigMap)
 		if err != nil {
-			return rules.Config{}, errors.New("invalid config object")
+			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 		}
 		asMap[ruleID] = json.RawMessage(ruleConfigRaw)
 	}
 
 	var cfg rules.Config
 	if err := json.Unmarshal(cfgRaw, &cfg); err != nil {
-		return rules.Config{}, errors.New("invalid config object")
+		return rules.Config{}, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 	}
 	return cfg, nil
+}
+
+func sortedRuleIDs(knownRuleIDs map[string]struct{}) []string {
+	supported := make([]string, 0, len(knownRuleIDs))
+	for ruleID := range knownRuleIDs {
+		supported = append(supported, ruleID)
+	}
+	sort.Strings(supported)
+	return supported
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 // syntaxErrorResponse mirrors parser.SyntaxError for the JSON response.
@@ -132,8 +194,10 @@ type analyzeResponse struct {
 
 // apiErrorDetails holds machine-readable and human-readable error information.
 type apiErrorDetails struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code      string   `json:"code"`
+	Message   string   `json:"message"`
+	Path      string   `json:"path,omitempty"`
+	Supported []string `json:"supported,omitempty"`
 }
 
 // errorResponse is returned for non-200 responses.
@@ -236,9 +300,9 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg, err := parseConfig(req.Config, h.engine.KnownRuleIDs())
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+	cfg, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs())
+	if configValidationErr != nil {
+		writeConfigValidationError(w, configValidationErr)
 		return
 	}
 
@@ -299,6 +363,19 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		Metrics:       computeMetrics(diagram, issues),
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func writeConfigValidationError(w http.ResponseWriter, configValidationErr *validationError) {
+	writeJSON(w, http.StatusBadRequest, errorResponse{
+		Valid:  false,
+		Issues: []model.Issue{},
+		Error: apiErrorDetails{
+			Code:      configValidationErr.Code,
+			Message:   configValidationErr.Message,
+			Path:      configValidationErr.Path,
+			Supported: configValidationErr.Supported,
+		},
+	})
 }
 
 // computeMetrics derives aggregate metrics from the diagram.
