@@ -7,51 +7,43 @@ import (
 	"testing"
 )
 
-func TestConfigJSONSchema_SupportsFlatAndNestedFormats(t *testing.T) {
+func TestConfigJSONSchema_UsesCanonicalVersionedFormat(t *testing.T) {
 	schema := ConfigJSONSchema()
 
 	if schema["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
 		t.Fatalf("expected draft schema id, got %#v", schema["$schema"])
 	}
 
-	variants, ok := schema["oneOf"].([]any)
-	if !ok || len(variants) != 3 {
-		t.Fatalf("expected oneOf with versioned+legacy variants, got %#v", schema["oneOf"])
+	if _, ok := schema["oneOf"]; ok {
+		t.Fatalf("did not expect legacy oneOf variants in strict schema: %#v", schema["oneOf"])
 	}
 
-	versioned := variants[0].(map[string]any)
-	if got := versioned["required"].([]string); len(got) != 2 || got[0] != "schema-version" || got[1] != "rules" {
-		t.Fatalf("unexpected required keys on versioned schema: %#v", got)
+	required := schema["required"].([]string)
+	if len(required) != 2 || required[0] != "schema-version" || required[1] != "rules" {
+		t.Fatalf("unexpected required keys on schema: %#v", required)
 	}
-	if enumVals := versioned["properties"].(map[string]any)["schema-version"].(map[string]any)["enum"].([]string); len(enumVals) != 1 || enumVals[0] != CurrentConfigSchemaVersion {
-		t.Fatalf("unexpected schema_version enum: %#v", enumVals)
-	}
-
-	flat := variants[1].(map[string]any)
-	flatProps := flat["properties"].(map[string]any)
-	if _, ok := flatProps["max-fanout"]; !ok {
-		t.Fatal("expected max-fanout in flat properties")
-	}
-	if _, ok := flatProps["no-disconnected-nodes"]; !ok {
-		t.Fatal("expected no-disconnected-nodes in flat properties")
+	if enumVals := schema["properties"].(map[string]any)["schema-version"].(map[string]any)["enum"].([]string); len(enumVals) != 1 || enumVals[0] != CurrentConfigSchemaVersion {
+		t.Fatalf("unexpected schema-version enum: %#v", enumVals)
 	}
 
-	nested := variants[2].(map[string]any)
-	nestedProps := nested["properties"].(map[string]any)
-	rulesProperty := nestedProps["rules"].(map[string]any)
+	rulesProperty := schema["properties"].(map[string]any)["rules"].(map[string]any)
 	rulesProps := rulesProperty["properties"].(map[string]any)
+	if _, ok := rulesProps["max-fanout"]; !ok {
+		t.Fatal("expected max-fanout in rules properties")
+	}
+	if _, ok := rulesProps["no-disconnected-nodes"]; !ok {
+		t.Fatal("expected no-disconnected-nodes in rules properties")
+	}
 	if _, ok := rulesProps["no-duplicate-node-ids"]; !ok {
-		t.Fatal("expected no-duplicate-node-ids in nested rules properties")
+		t.Fatal("expected no-duplicate-node-ids in rules properties")
 	}
 }
 
 func TestConfigJSONSchema_EncodesAllowedOptionsAndConstraints(t *testing.T) {
 	schema := ConfigJSONSchema()
-	variants := schema["oneOf"].([]any)
-	flat := variants[1].(map[string]any)
-	flatProps := flat["properties"].(map[string]any)
+	rulesProps := schema["properties"].(map[string]any)["rules"].(map[string]any)["properties"].(map[string]any)
 
-	maxFanout := flatProps["max-fanout"].(map[string]any)
+	maxFanout := rulesProps["max-fanout"].(map[string]any)
 	maxFanoutProps := maxFanout["properties"].(map[string]any)
 
 	if got := maxFanout["additionalProperties"]; got != false {
@@ -69,7 +61,7 @@ func TestConfigJSONSchema_EncodesAllowedOptionsAndConstraints(t *testing.T) {
 		t.Fatalf("unexpected max-fanout limit schema: %#v", limit)
 	}
 
-	nonMaxFanout := flatProps["no-disconnected-nodes"].(map[string]any)
+	nonMaxFanout := rulesProps["no-disconnected-nodes"].(map[string]any)
 	nonMaxFanoutProps := nonMaxFanout["properties"].(map[string]any)
 	if _, ok := nonMaxFanoutProps["limit"]; ok {
 		t.Fatal("did not expect limit option on no-disconnected-nodes")

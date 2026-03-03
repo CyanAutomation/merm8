@@ -697,6 +697,7 @@ func TestAnalyze_ConfigApplied_MaxFanout(t *testing.T) {
 
 	// Config with max-fanout limit of 2
 	config := map[string]interface{}{
+		"schema-version": "v1",
 		"rules": map[string]interface{}{
 			"max-fanout": map[string]interface{}{
 				"limit": 2,
@@ -749,19 +750,18 @@ func TestAnalyze_ConfigApplied_MaxFanout(t *testing.T) {
 	}
 }
 
-// TestAnalyze_ConfigParsing tests that both flat and nested config formats are accepted and applied.
+// TestAnalyze_ConfigParsing tests canonical versioned config handling.
 func TestAnalyze_ConfigParsing(t *testing.T) {
 	tests := []struct {
 		name   string
 		config map[string]interface{}
 	}{
 		{
-			name:   "flat format",
-			config: map[string]interface{}{"max-fanout": map[string]interface{}{"limit": 2}},
-		},
-		{
-			name:   "nested format",
-			config: map[string]interface{}{"rules": map[string]interface{}{"max-fanout": map[string]interface{}{"limit": 2}}},
+			name: "canonical versioned format",
+			config: map[string]interface{}{
+				"schema-version": "v1",
+				"rules":          map[string]interface{}{"max-fanout": map[string]interface{}{"limit": 2}},
+			},
 		},
 	}
 
@@ -827,7 +827,7 @@ func TestAnalyze_ConfigParsing(t *testing.T) {
 	}
 }
 
-func TestAnalyze_ConfigLegacySnakeCaseKeysRemainSupported(t *testing.T) {
+func TestAnalyze_ConfigLegacySnakeCaseKeysRejected(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}, {ID: "B"}}, Edges: []model.Edge{{From: "A", To: "B"}}}, nil, nil
 	})
@@ -849,9 +849,10 @@ func TestAnalyze_ConfigLegacySnakeCaseKeysRemainSupported(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 for legacy snake_case config keys, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for legacy snake_case config keys in strict mode, got %d body=%s", w.Code, w.Body.String())
 	}
+	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "config.schema-version is required", "config.schema-version", nil)
 }
 
 func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
@@ -911,12 +912,14 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 		assertValidationErrorResponse(t, w.Body.Bytes(), "unsupported_schema_version", "unsupported config schema-version: v9", "config.schema-version", []string{"v1"})
 	})
 
-	t.Run("legacy formats remain supported", func(t *testing.T) {
+	t.Run("legacy formats are rejected in strict mode", func(t *testing.T) {
 		for _, config := range []map[string]any{
 			{"max-fanout": map[string]any{"limit": 2}},
 			{"rules": map[string]any{"max-fanout": map[string]any{"limit": 2}}},
 		} {
+			parserCalled := false
 			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				parserCalled = true
 				return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 			})
 			body, _ := json.Marshal(map[string]any{"code": "graph TD; A-->B", "config": config})
@@ -924,9 +927,13 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
-			if w.Code != http.StatusOK {
-				t.Fatalf("expected legacy config to remain supported, got %d", w.Code)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for legacy config in strict mode, got %d", w.Code)
 			}
+			if parserCalled {
+				t.Fatal("expected parser not to be called when strict config validation fails")
+			}
+			assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "config.schema-version is required", "config.schema-version", nil)
 		}
 	})
 }
@@ -1352,6 +1359,7 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 		body, _ := json.Marshal(map[string]interface{}{
 			"code": fmt.Sprintf("HIGH_FANOUT_%d", i),
 			"config": map[string]interface{}{
+				"schema-version": "v1",
 				"rules": map[string]interface{}{
 					"max-fanout": map[string]interface{}{"limit": 3},
 				},
@@ -1565,7 +1573,7 @@ func TestAnalyze_Integration_SingleRuleSuppression(t *testing.T) {
 
 	body := `{
 		"code": "graph TD\n%% merm8-disable max-fanout\nA-->B\nA-->C\nA-->D",
-		"config": {"rules": {"max-fanout": {"limit": 1}}}
+		"config": {"schema-version":"v1","rules": {"max-fanout": {"limit": 1}}}
 	}`
 
 	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
@@ -1598,7 +1606,7 @@ func TestAnalyze_Integration_GlobalSuppression(t *testing.T) {
 
 	body := `{
 		"code": "graph TD\n%% merm8-disable all\nA-->B\nA-->C\nA-->D\nE",
-		"config": {"rules": {"max-fanout": {"limit": 1}}}
+		"config": {"schema-version":"v1","rules": {"max-fanout": {"limit": 1}}}
 	}`
 
 	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
@@ -1742,22 +1750,27 @@ func TestAnalyze_MalformedConfigObjects_Returns400(t *testing.T) {
 		{
 			name: "config rules must be object",
 			config: map[string]interface{}{
-				"rules": []interface{}{"max-fanout"},
+				"schema-version": "v1",
+				"rules":          []interface{}{"max-fanout"},
 			},
 			wantMessage: "config.rules must be object",
 			wantPath:    "config.rules",
 		},
 		{
-			name: "flat rule config must be object",
+			name: "rule config must be object",
 			config: map[string]interface{}{
-				"max-fanout": 1,
+				"schema-version": "v1",
+				"rules": map[string]interface{}{
+					"max-fanout": 1,
+				},
 			},
-			wantMessage: "config.max-fanout must be object",
-			wantPath:    "config.max-fanout",
+			wantMessage: "config.rules.max-fanout must be object",
+			wantPath:    "config.rules.max-fanout",
 		},
 		{
 			name: "nested rule config must be object",
 			config: map[string]interface{}{
+				"schema-version": "v1",
 				"rules": map[string]interface{}{
 					"max-fanout": false,
 				},
@@ -1807,8 +1820,11 @@ func TestAnalyze_InvalidSeverityConfig_Returns400(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"code": "graph TD; A-->B",
 		"config": map[string]interface{}{
-			"max-fanout": map[string]interface{}{
-				"severity": "warnx",
+			"schema-version": "v1",
+			"rules": map[string]interface{}{
+				"max-fanout": map[string]interface{}{
+					"severity": "warnx",
+				},
 			},
 		},
 	})
@@ -1825,7 +1841,7 @@ func TestAnalyze_InvalidSeverityConfig_Returns400(t *testing.T) {
 		t.Fatal("expected parser not to be called when config validation fails")
 	}
 
-	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for severity", "config.max-fanout.severity", nil)
+	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for severity", "config.rules.max-fanout.severity", nil)
 }
 
 func TestAnalyze_InvalidUnknownRuleConfigNested_Returns400(t *testing.T) {
@@ -1838,6 +1854,7 @@ func TestAnalyze_InvalidUnknownRuleConfigNested_Returns400(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"code": "graph TD; A-->B",
 		"config": map[string]interface{}{
+			"schema-version": "v1",
 			"rules": map[string]interface{}{
 				"no-cycles": map[string]interface{}{"enabled": false},
 			},
@@ -1858,7 +1875,7 @@ func TestAnalyze_InvalidUnknownRuleConfigNested_Returns400(t *testing.T) {
 	assertValidationErrorResponse(t, w.Body.Bytes(), "unknown_rule", "unknown rule: no-cycles", "config.rules.no-cycles", []string{"max-fanout", "no-disconnected-nodes", "no-duplicate-node-ids"})
 }
 
-func TestAnalyze_InvalidUnknownRuleConfigFlat_Returns400(t *testing.T) {
+func TestAnalyze_InvalidUnknownRuleConfigWithoutSchemaVersion_Returns400(t *testing.T) {
 	parserCalled := false
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		parserCalled = true
@@ -1883,7 +1900,7 @@ func TestAnalyze_InvalidUnknownRuleConfigFlat_Returns400(t *testing.T) {
 	if parserCalled {
 		t.Fatal("expected parser not to be called when config validation fails")
 	}
-	assertValidationErrorResponse(t, w.Body.Bytes(), "unknown_rule", "unknown rule: no-cycles", "config.no-cycles", []string{"max-fanout", "no-disconnected-nodes", "no-duplicate-node-ids"})
+	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "config.schema-version is required", "config.schema-version", nil)
 }
 
 func TestAnalyze_InvalidUnknownOptionConfig_Returns400(t *testing.T) {
@@ -1896,6 +1913,7 @@ func TestAnalyze_InvalidUnknownOptionConfig_Returns400(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"code": "graph TD; A-->B",
 		"config": map[string]interface{}{
+			"schema-version": "v1",
 			"rules": map[string]interface{}{
 				"max-fanout": map[string]interface{}{"unknown": true},
 			},
@@ -1926,6 +1944,7 @@ func TestAnalyze_InvalidMaxFanoutLimitConfig_Returns400(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"code": "graph TD; A-->B",
 		"config": map[string]interface{}{
+			"schema-version": "v1",
 			"rules": map[string]interface{}{
 				"max-fanout": map[string]interface{}{"limit": 0},
 			},
@@ -1960,6 +1979,7 @@ func TestAnalyze_DisableRuleViaConfig(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"code": "graph TD; A; A",
 		"config": map[string]interface{}{
+			"schema-version": "v1",
 			"rules": map[string]interface{}{
 				"no-duplicate-node-ids": map[string]interface{}{"enabled": false},
 			},
@@ -1995,7 +2015,10 @@ func TestAnalyze_SeverityOverride(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"code": "graph TD; A; A",
 		"config": map[string]interface{}{
-			"no-duplicate-node-ids": map[string]interface{}{"severity": "info"},
+			"schema-version": "v1",
+			"rules": map[string]interface{}{
+				"no-duplicate-node-ids": map[string]interface{}{"severity": "info"},
+			},
 		},
 	})
 
@@ -2028,7 +2051,7 @@ func TestAnalyze_Integration_NonMatchingSuppressionDoesNotHideIssue(t *testing.T
 
 	body := `{
 		"code": "graph TD\n%% merm8-disable no-duplicate-node-ids\nA-->B\nA-->C\nA-->D",
-		"config": {"rules": {"max-fanout": {"limit": 1}}}
+		"config": {"schema-version":"v1","rules": {"max-fanout": {"limit": 1}}}
 	}`
 
 	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
@@ -2200,14 +2223,14 @@ func TestRuleConfigSchema_ResponseShape(t *testing.T) {
 		t.Fatalf("expected draft schema id, got %#v", resp.Schema["$schema"])
 	}
 
-	variants, ok := resp.Schema["oneOf"].([]any)
-	if !ok || len(variants) != 3 {
-		t.Fatalf("expected schema.oneOf with versioned+legacy variants, got %#v", resp.Schema["oneOf"])
+	required, ok := resp.Schema["required"].([]any)
+	if !ok || len(required) != 2 || required[0] != "schema-version" || required[1] != "rules" {
+		t.Fatalf("expected canonical required fields [schema-version rules], got %#v", resp.Schema["required"])
 	}
 
-	flat := variants[1].(map[string]any)
-	flatProps := flat["properties"].(map[string]any)
-	maxFanout := flatProps["max-fanout"].(map[string]any)
+	rulesSchema := resp.Schema["properties"].(map[string]any)["rules"].(map[string]any)
+	rulesProps := rulesSchema["properties"].(map[string]any)
+	maxFanout := rulesProps["max-fanout"].(map[string]any)
 	maxFanoutProps := maxFanout["properties"].(map[string]any)
 	if got := maxFanoutProps["limit"].(map[string]any)["minimum"]; got != float64(1) {
 		t.Fatalf("expected max-fanout.limit minimum=1, got %#v", got)

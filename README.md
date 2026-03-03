@@ -79,9 +79,15 @@ The service listens on **port 8080**.
 
 All API JSON field names use **kebab-case** as the canonical contract for request/response payloads and rule option keys (for example: `diagram-type`, `lint-supported`, `rule-id`, `schema-version`, `suppression-selectors`).
 
-### Migration compatibility
+### Deprecation policy for legacy config keys/shapes
 
-During the transition window, legacy snake_case config keys such as `schema_version` and `suppression_selectors` are still accepted for backward compatibility, but are deprecated and should be migrated to kebab-case.
+Canonical config format is `{"schema-version":"v1","rules":{...}}` and canonical key style is kebab-case.
+
+- **Phase 1 (announce)**: legacy snake_case keys (for example `schema_version`, `suppression_selectors`) and legacy shapes (flat `{"rule-id":{...}}` / unversioned nested `{"rules":{...}}`) were supported and documented as deprecated.
+- **Phase 2 (warn)**: while legacy inputs were still accepted, clients should surface a migration warning whenever they send legacy keys/shapes.
+- **Phase 3 (enforce, current)**: legacy keys/shapes are rejected with `400 invalid_option`; clients must send canonical versioned config only.
+
+Warning behavior expectation during any future grace window: emit one warning per request that identifies whether migration is needed for key style, object shape, or both.
 
 ## API
 
@@ -128,8 +134,7 @@ The schema includes:
 - allowed rule IDs,
 - allowed options per rule (`enabled`, `severity`, `limit`, `suppression-selectors`),
 - option types/constraints (e.g. `max-fanout.limit` must be an integer `>= 1`), and
-- preferred versioned format (`{"schema-version":"v1","rules": {"rule-id": {...}}}`), and
-- legacy accepted formats during migration (`{"rule-id": {...}}` and `{"rules": {"rule-id": {...}}}`).
+- canonical versioned format only (`{"schema-version":"v1","rules": {"rule-id": {...}}}`).
 
 You can use this endpoint so clients pre-validate config before calling `/analyze`.
 
@@ -160,9 +165,9 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 }
 ```
 
-> `config` is optional. Preferred format is versioned: `{"schema-version":"v1","rules":{"max-fanout": {...}}}`.
+> `config` is optional. Accepted format is canonical versioned config only: `{"schema-version":"v1","rules":{"max-fanout": {...}}}`.
 >
-> Migration window: legacy flat `{"max-fanout": {...}}` and nested `{"rules": {"max-fanout": {...}}}` formats remain accepted for backward compatibility.
+> Legacy flat/nested shapes and snake_case keys are no longer accepted.
 >
 > Unknown rule IDs in config are rejected with `400 invalid_config`. Unsupported versions are rejected with `400 unsupported_schema_version` and `supported: ["v1"]`.
 >
