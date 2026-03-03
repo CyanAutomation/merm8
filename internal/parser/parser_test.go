@@ -595,3 +595,36 @@ process.exit(0);
 		t.Fatalf("expected ready check to pass for local script path, got %v", err)
 	}
 }
+
+func TestParser_RepoRootCachedAcrossWorkingDirectoryChange(t *testing.T) {
+	script := getParserScript(t)
+	p := parser.New(script)
+
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+
+	outside := t.TempDir()
+	if err := os.Chdir(outside); err != nil {
+		t.Fatalf("failed to chdir to outside temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	if err := p.Ready(); err != nil {
+		t.Fatalf("expected Ready to use cached repo root after chdir, got %v", err)
+	}
+
+	diagram, syntaxErr, err := p.Parse("graph TD\nA-->B")
+	if err != nil {
+		t.Fatalf("expected Parse to use cached repo root after chdir, got %v", err)
+	}
+	if syntaxErr != nil {
+		t.Fatalf("unexpected syntax error: %+v", syntaxErr)
+	}
+	if diagram == nil {
+		t.Fatal("expected diagram, got nil")
+	}
+}

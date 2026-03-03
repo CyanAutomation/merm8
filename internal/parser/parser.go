@@ -70,16 +70,27 @@ type parsedSuppression struct {
 type Parser struct {
 	scriptPath string
 	timeout    time.Duration
+	repoRoot   string
 }
 
 // New returns a Parser that will invoke the given Node.js script path.
 func New(scriptPath string) *Parser {
-	return &Parser{scriptPath: scriptPath, timeout: defaultTimeout}
+	root, err := findRepoRoot()
+	if err != nil {
+		root = ""
+	}
+
+	return &Parser{scriptPath: scriptPath, timeout: defaultTimeout, repoRoot: root}
 }
 
 // Ready performs lightweight dependency checks used by readiness probes.
 func (p *Parser) Ready() error {
-	scriptPath, err := validateScriptPath(p.scriptPath)
+	root, err := p.getRepoRoot()
+	if err != nil {
+		return err
+	}
+
+	scriptPath, err := validateScriptPath(p.scriptPath, root)
 	if err != nil {
 		return err
 	}
@@ -96,7 +107,7 @@ func (p *Parser) Ready() error {
 	return nil
 }
 
-func validateScriptPath(scriptPath string) (string, error) {
+func validateScriptPath(scriptPath, root string) (string, error) {
 	if scriptPath == "" {
 		return "", fmt.Errorf("parser script path is empty")
 	}
@@ -106,11 +117,6 @@ func validateScriptPath(scriptPath string) (string, error) {
 	absPath, err := filepath.Abs(filepath.Clean(scriptPath))
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve parser script path: %w", err)
-	}
-
-	root, err := repoRoot()
-	if err != nil {
-		return "", err
 	}
 
 	rel, err := filepath.Rel(root, absPath)
@@ -146,7 +152,15 @@ func validateScriptPath(scriptPath string) (string, error) {
 	return absPath, nil
 }
 
-func repoRoot() (string, error) {
+func (p *Parser) getRepoRoot() (string, error) {
+	if p.repoRoot == "" {
+		return "", fmt.Errorf("failed to locate repository root")
+	}
+
+	return p.repoRoot, nil
+}
+
+func findRepoRoot() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve working directory: %w", err)
@@ -171,7 +185,12 @@ func repoRoot() (string, error) {
 // Parse sends mermaidCode to the Node parser and returns either a Diagram or a
 // SyntaxError. A non-nil error means an unexpected failure (e.g. timeout).
 func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error) {
-	scriptPath, err := validateScriptPath(p.scriptPath)
+	root, err := p.getRepoRoot()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	scriptPath, err := validateScriptPath(p.scriptPath, root)
 	if err != nil {
 		return nil, nil, err
 	}
