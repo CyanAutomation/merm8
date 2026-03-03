@@ -184,6 +184,25 @@ paths:
                       line: 2
                       column: 12
                     issues: []
+                sequenceDiagram:
+                  summary: Valid sequence diagram (lint currently unsupported)
+                  value:
+                    valid: true
+                    diagram_type: sequence
+                    lint_supported: false
+                    syntax_error: null
+                    issues: []
+                    metrics:
+                      node_count: 0
+                      edge_count: 0
+                      disconnected_node_count: 0
+                      duplicate_node_count: 0
+                      max_fanin: 0
+                      max_fanout: 0
+                      diagram_type: sequence
+                      issue_counts:
+                        by_severity: {}
+                        by_rule: {}
                 withIssues:
                   summary: Valid diagram with lint issues
                   value:
@@ -497,6 +516,7 @@ components:
         diagram_type:
           type: string
           description: Normalized Mermaid diagram type (flowchart, sequence, class, er, state, unknown).
+          enum: [flowchart, sequence, class, er, state, unknown]
           example: flowchart
         lint_supported:
           type: boolean
@@ -606,6 +626,7 @@ components:
         diagram_type:
           type: string
           description: Diagram type copied from parsed metadata
+          enum: [flowchart, sequence, class, er, state, unknown]
           example: flowchart
         direction:
           type: string

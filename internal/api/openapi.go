@@ -215,6 +215,29 @@ var openapi = map[string]interface{}{
 											"issues": []interface{}{},
 										},
 									},
+									"sequenceDiagram": map[string]interface{}{
+										"summary": "Valid sequence diagram (lint currently unsupported)",
+										"value": map[string]interface{}{
+											"valid":          true,
+											"diagram_type":   "sequence",
+											"lint_supported": false,
+											"syntax_error":   nil,
+											"issues":         []interface{}{},
+											"metrics": map[string]interface{}{
+												"node_count":              0,
+												"edge_count":              0,
+												"disconnected_node_count": 0,
+												"duplicate_node_count":    0,
+												"max_fanin":               0,
+												"max_fanout":              0,
+												"diagram_type":            "sequence",
+												"issue_counts": map[string]interface{}{
+													"by_severity": map[string]interface{}{},
+													"by_rule":     map[string]interface{}{},
+												},
+											},
+										},
+									},
 									"withIssues": map[string]interface{}{
 										"summary": "Valid diagram with lint issues",
 										"value": map[string]interface{}{
@@ -593,6 +616,7 @@ var openapi = map[string]interface{}{
 					"diagram_type": map[string]interface{}{
 						"type":        "string",
 						"description": "Normalized Mermaid diagram type (flowchart, sequence, class, er, state, unknown).",
+						"enum":        []string{"flowchart", "sequence", "class", "er", "state", "unknown"},
 						"example":     "flowchart",
 					},
 					"lint_supported": map[string]interface{}{
@@ -709,6 +733,7 @@ var openapi = map[string]interface{}{
 					"diagram_type": map[string]interface{}{
 						"type":        "string",
 						"description": "Diagram type copied from parsed metadata",
+						"enum":        []string{"flowchart", "sequence", "class", "er", "state", "unknown"},
 						"example":     "flowchart",
 					},
 					"direction": map[string]interface{}{
