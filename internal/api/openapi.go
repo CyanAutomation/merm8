@@ -102,6 +102,27 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
+
+		"/rules": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Linting"},
+				"summary":     "List built-in lint rules",
+				"description": "Returns centralized metadata for all built-in rules, including defaults and configurable options.",
+				"operationId": "listRules",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Built-in rule metadata",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/RulesResponse",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"/analyze": map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
@@ -446,6 +467,45 @@ var openapi = map[string]interface{}{
 	},
 	"components": map[string]interface{}{
 		"schemas": map[string]interface{}{
+
+			"RulesResponse": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"rules"},
+				"properties": map[string]interface{}{
+					"rules": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"$ref": "#/components/schemas/RuleMetadata",
+						},
+					},
+				},
+			},
+			"RuleMetadata": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"id", "severity", "description", "default_config", "configurable_options"},
+				"properties": map[string]interface{}{
+					"id": map[string]interface{}{"type": "string", "example": "max-fanout"},
+					"severity": map[string]interface{}{"type": "string", "enum": []string{"error", "warn", "info"}},
+					"description": map[string]interface{}{"type": "string"},
+					"default_config": map[string]interface{}{"type": "object", "additionalProperties": true},
+					"configurable_options": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"$ref": "#/components/schemas/RuleOption",
+						},
+					},
+				},
+			},
+			"RuleOption": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"name", "type", "description"},
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{"type": "string"},
+					"type": map[string]interface{}{"type": "string"},
+					"description": map[string]interface{}{"type": "string"},
+					"constraints": map[string]interface{}{"type": "string"},
+				},
+			},
 			"AnalyzeRequest": map[string]interface{}{
 				"type":     "object",
 				"required": []string{"code"},
