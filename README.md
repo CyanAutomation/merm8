@@ -120,9 +120,12 @@ The schema includes:
 - allowed rule IDs,
 - allowed options per rule (`enabled`, `severity`, `limit`, `suppression_selectors`),
 - option types/constraints (e.g. `max-fanout.limit` must be an integer `>= 1`), and
-- both accepted formats (`{"rule-id": {...}}` and `{"rules": {"rule-id": {...}}}`).
+- preferred versioned format (`{"schema_version":"v1","rules": {"rule-id": {...}}}`), and
+- legacy accepted formats during migration (`{"rule-id": {...}}` and `{"rules": {"rule-id": {...}}}`).
 
 You can use this endpoint so clients pre-validate config before calling `/analyze`.
+
+A versioned schema artifact is also published at `schemas/config.v1.json` for tooling and CI workflows.
 
 ```bash
 curl -s http://localhost:8080/rules/schema | jq '.schema'
@@ -136,6 +139,7 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 {
   "code": "graph TD\n  A-->B\n  B-->C",
   "config": {
+    "schema_version": "v1",
     "rules": {
       "max-fanout": {
         "enabled": true,
@@ -148,9 +152,11 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 }
 ```
 
-> `config` is optional. Both flat `{"max-fanout": {...}}` and nested `{"rules": {"max-fanout": {...}}}` formats are accepted.
+> `config` is optional. Preferred format is versioned: `{"schema_version":"v1","rules":{"max-fanout": {...}}}`.
 >
-> Unknown rule IDs in config are rejected with `400 invalid_config`.
+> Migration window: legacy flat `{"max-fanout": {...}}` and nested `{"rules": {"max-fanout": {...}}}` formats remain accepted for backward compatibility.
+>
+> Unknown rule IDs in config are rejected with `400 invalid_config`. Unsupported versions are rejected with `400 unsupported_schema_version` and `supported: ["v1"]`.
 >
 > Tip: fetch `GET /rules/schema` and validate config client-side before sending requests.
 

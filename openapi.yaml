@@ -416,6 +416,13 @@ components:
         constraints:
           type: string
 
+    RuleConfigSchema:
+      allOf:
+        - $ref: './schemas/config.v1.json'
+      description: |
+        Preferred versioned config schema for `POST /analyze` (`schema_version: v1`).
+        Legacy flat and nested formats are accepted during the migration window.
+
     AnalyzeRequest:
       type: object
       required:
@@ -429,36 +436,26 @@ components:
               A[Start] --> B[Process]
               B --> C[End]
         config:
-          type: object
+          $ref: '#/components/schemas/RuleConfigSchema'
           description: |
-            Optional lint rule configuration. Supports both flat and nested formats:
-            - Flat format: `{"rule-id": {"option": "value"}}`
-            - Nested format: `{"rules": {"rule-id": {"option": "value"}}}`
-            `config` and `config.rules` (when present) must be objects.
-            Each per-rule config value must be an object.
-            Unknown rule IDs/options and invalid option values are rejected with HTTP 400 and
-            structured error codes (`unknown_rule`, `unknown_option`, `invalid_option`).
-          oneOf:
-            - type: object
-              additionalProperties:
-                type: object
-            - type: object
-              properties:
-                rules:
-                  type: object
-                  additionalProperties:
-                    type: object
-              additionalProperties: true
+            Optional lint rule configuration.
+            Preferred format: `{"schema_version":"v1","rules":{"rule-id":{"option":"value"}}}`.
+            Legacy formats remain supported during migration:
+            - Flat: `{"rule-id":{"option":"value"}}`
+            - Nested: `{"rules":{"rule-id":{"option":"value"}}}`
+            Unsupported schema versions are rejected with `unsupported_schema_version`.
           example:
-            max-fanout:
-              enabled: true
-              limit: 3
-              severity: error
-              suppression_selectors:
-                - node:A
-            no-disconnected-nodes:
-              enabled: false
-              severity: info
+            schema_version: v1
+            rules:
+              max-fanout:
+                enabled: true
+                limit: 3
+                severity: error
+                suppression_selectors:
+                  - node:A
+              no-disconnected-nodes:
+                enabled: false
+                severity: info
 
     ErrorResponse:
       type: object

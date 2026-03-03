@@ -67,7 +67,46 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}) (rules.C
 
 	cfgRaw := raw
 	rulePathPrefix := "config"
-	if rulesValue, hasRules := asMap["rules"]; hasRules {
+
+	if schemaVersionValue, hasSchemaVersion := asMap["schema_version"]; hasSchemaVersion {
+		schemaVersion, ok := schemaVersionValue.(string)
+		if !ok {
+			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.schema_version", Message: "config.schema_version must be string"}
+		}
+		if schemaVersion != rules.CurrentConfigSchemaVersion {
+			return rules.Config{}, &validationError{
+				Code:      "unsupported_schema_version",
+				Path:      "config.schema_version",
+				Message:   "unsupported config schema_version: " + schemaVersion,
+				Supported: []string{rules.CurrentConfigSchemaVersion},
+			}
+		}
+		rulesValue, hasRules := asMap["rules"]
+		if !hasRules {
+			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules is required when config.schema_version is set"}
+		}
+		rulesMap, ok := rulesValue.(map[string]any)
+		if !ok {
+			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
+		}
+		for topLevelKey := range asMap {
+			if topLevelKey != "schema_version" && topLevelKey != "rules" {
+				return rules.Config{}, &validationError{
+					Code:      "unknown_option",
+					Path:      "config." + topLevelKey,
+					Message:   "unknown option: " + topLevelKey,
+					Supported: []string{"schema_version", "rules"},
+				}
+			}
+		}
+		rawRules, err := json.Marshal(rulesMap)
+		if err != nil {
+			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
+		}
+		cfgRaw = rawRules
+		asMap = rulesMap
+		rulePathPrefix = "config.rules"
+	} else if rulesValue, hasRules := asMap["rules"]; hasRules {
 		rulesMap, ok := rulesValue.(map[string]any)
 		if !ok {
 			return rules.Config{}, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
