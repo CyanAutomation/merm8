@@ -83,11 +83,8 @@ All API JSON field names use **kebab-case** as the canonical contract for reques
 
 Canonical config format is `{"schema-version":"v1","rules":{...}}` and canonical key style is kebab-case.
 
-- **Phase 1 (announce)**: legacy snake_case keys (for example `schema_version`, `suppression_selectors`) and legacy shapes (flat `{"rule-id":{...}}` / unversioned nested `{"rules":{...}}`) were supported and documented as deprecated.
-- **Phase 2 (warn)**: while legacy inputs were still accepted, clients should surface a migration warning whenever they send legacy keys/shapes.
-- **Phase 3 (enforce, current)**: legacy keys/shapes are rejected with `400 invalid_option`; clients must send canonical versioned config only.
-
-Warning behavior expectation during any future grace window: emit one warning per request that identifies whether migration is needed for key style, object shape, or both.
+- **Phase 1 (current)**: legacy snake_case keys (for example `schema_version`, `suppression_selectors`) and legacy shapes (flat `{"rule-id":{...}}` / unversioned nested `{"rules":{...}}`) are accepted **with runtime deprecation signals** (`Deprecation: true`, `Warning` header, and response `warnings`).
+- **Phase 2 (planned)**: legacy keys/shapes will be rejected with machine-readable `400 deprecated_config_format` errors.
 
 ## API
 
@@ -190,11 +187,11 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 }
 ```
 
-> `config` is optional. Accepted format is canonical versioned config only: `{"schema-version":"v1","rules":{"max-fanout": {...}}}`.
+> `config` is optional. Canonical format is `{"schema-version":"v1","rules":{"max-fanout": {...}}}`.
 >
-> Legacy flat/nested shapes and snake_case keys are no longer accepted.
+> During Phase 1, legacy flat/nested shapes and snake_case keys are still accepted with deprecation signals (`Deprecation`/`Warning` headers and response `warnings`).
 >
-> Unknown rule IDs in config are rejected with `400 invalid_config`. Unsupported versions are rejected with `400 unsupported_schema_version` and `supported: ["v1"]`.
+> Unknown rule IDs in config are rejected with machine-readable `400 unknown_rule`. Unsupported versions are rejected with `400 unsupported_schema_version` and `supported: ["v1"]`.
 >
 > Tip: fetch `GET /rules/schema` and validate config client-side before sending requests.
 
