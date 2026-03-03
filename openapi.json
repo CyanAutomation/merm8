@@ -846,6 +846,255 @@
   "paths": {
     "/analyze": {
       "post": {
+        "deprecated": true,
+        "description": "Deprecated compatibility alias for POST /v1/analyze. Scheduled for removal in v1.2.0 (Q2 2026).",
+        "operationId": "analyzeCodeLegacy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Request too large"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Parser/service internal failure"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Parser timeout"
+          }
+        },
+        "summary": "Analyze and lint a Mermaid diagram (legacy alias)",
+        "tags": [
+          "Linting"
+        ]
+      }
+    },
+    "/diagram-types": {
+      "get": {
+        "description": "Returns diagram families/types recognized by the parser and currently lint-supported by registered rules.",
+        "operationId": "listDiagramTypes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagramTypesResponse"
+                }
+              }
+            },
+            "description": "Diagram type support matrix"
+          }
+        },
+        "summary": "List parser-recognized and lint-supported diagram types",
+        "tags": [
+          "Linting"
+        ]
+      }
+    },
+    "/docs": {
+      "get": {
+        "deprecated": true,
+        "description": "Deprecated compatibility alias for GET /v1/docs. Scheduled for removal in v1.2.0 (Q2 2026).",
+        "operationId": "getDocsLegacy",
+        "responses": {
+          "200": {
+            "description": "Swagger UI HTML page"
+          }
+        },
+        "summary": "Interactive API documentation (legacy alias)",
+        "tags": [
+          "Documentation"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "deprecated": true,
+        "description": "Legacy alias for canonical /v1/healthz; scheduled for removal in v1.2.0 (Q2 2026). Returns process liveness status (dependency checks are handled by /v1/ready).",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Process is healthy"
+          }
+        },
+        "summary": "Liveness probe alias",
+        "tags": [
+          "Probes"
+        ]
+      }
+    },
+    "/info": {
+      "get": {
+        "description": "Returns service/app version metadata (when configured), parser and Mermaid versions, plus parser-recognized and lint-supported diagram families.",
+        "operationId": "getInfo",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoResponse"
+                }
+              }
+            },
+            "description": "Service metadata"
+          }
+        },
+        "summary": "Service and parser runtime metadata",
+        "tags": [
+          "Probes"
+        ]
+      }
+    },
+    "/metrics": {
+      "get": {
+        "description": "Returns service metrics in Prometheus text exposition format. Includes request_total, request_duration_seconds, analyze_requests_total, and parser_duration_seconds metric families.",
+        "operationId": "getMetrics",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Metrics in Prometheus text format"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeErrorResponse"
+                }
+              }
+            },
+            "description": "Metrics exporter not configured"
+          }
+        },
+        "summary": "Prometheus metrics",
+        "tags": [
+          "Probes"
+        ]
+      }
+    },
+    "/rules": {
+      "get": {
+        "deprecated": true,
+        "description": "Deprecated compatibility alias for GET /v1/rules. Scheduled for removal in v1.2.0 (Q2 2026).",
+        "operationId": "listRulesLegacy",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RulesResponse"
+                }
+              }
+            },
+            "description": "Built-in rule metadata"
+          }
+        },
+        "summary": "List built-in lint rules (legacy alias)",
+        "tags": [
+          "Linting"
+        ]
+      }
+    },
+    "/rules/schema": {
+      "get": {
+        "deprecated": true,
+        "description": "Deprecated compatibility alias for GET /v1/rules/schema. Scheduled for removal in v1.2.0 (Q2 2026).",
+        "operationId": "getRuleConfigSchemaLegacy",
+        "responses": {
+          "200": {
+            "description": "Rule configuration schema"
+          }
+        },
+        "summary": "Get JSON Schema for lint rule configuration (legacy alias)",
+        "tags": [
+          "Linting"
+        ]
+      }
+    },
+    "/spec": {
+      "get": {
+        "deprecated": true,
+        "description": "Deprecated compatibility alias for GET /v1/spec. Scheduled for removal in v1.2.0 (Q2 2026).",
+        "operationId": "getSpecLegacy",
+        "responses": {
+          "200": {
+            "description": "OpenAPI specification"
+          }
+        },
+        "summary": "Get OpenAPI specification (legacy alias)",
+        "tags": [
+          "Documentation"
+        ]
+      }
+    },
+    "/v1/analyze": {
+      "post": {
         "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nOperational note: tune `PARSER_CONCURRENCY_LIMIT` and `PARSER_MAX_OLD_SPACE_MB` (documented in API_GUIDE.md under Operational environment variables). When parser concurrency is exhausted, `/analyze` returns HTTP 503 with `error.code=server_busy`; parser subprocess heap is capped with Node `--max-old-space-size`.\n\nSupports source comment suppressions such as `%% merm8-disable \u003crule-id\u003e`, `%% merm8-disable all`, and `%% merm8-disable-next-line \u003crule-id\u003e`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)",
         "operationId": "analyzeCode",
         "requestBody": {
@@ -1606,9 +1855,9 @@
         ]
       }
     },
-    "/analyze/sarif": {
+    "/v1/analyze/sarif": {
       "post": {
-        "description": "Runs the same analysis pipeline as POST /analyze, returning SARIF 2.1.0 when analysis is valid.",
+        "description": "Runs the same analysis pipeline as POST /v1/analyze, returning SARIF 2.1.0 when analysis is valid.",
         "operationId": "analyzeCodeSARIF",
         "requestBody": {
           "content": {
@@ -1727,29 +1976,7 @@
         ]
       }
     },
-    "/diagram-types": {
-      "get": {
-        "description": "Returns diagram families/types recognized by the parser and currently lint-supported by registered rules.",
-        "operationId": "listDiagramTypes",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DiagramTypesResponse"
-                }
-              }
-            },
-            "description": "Diagram type support matrix"
-          }
-        },
-        "summary": "List parser-recognized and lint-supported diagram types",
-        "tags": [
-          "Linting"
-        ]
-      }
-    },
-    "/docs": {
+    "/v1/docs": {
       "get": {
         "description": "Serve Swagger UI for interactive API exploration and testing",
         "operationId": "getDocs",
@@ -1771,37 +1998,9 @@
         ]
       }
     },
-    "/health": {
+    "/v1/healthz": {
       "get": {
-        "description": "Alias for the canonical /healthz liveness-only probe. Returns process liveness status (dependency checks are handled by /ready).",
-        "operationId": "getHealth",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "status": {
-                      "example": "ok",
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Process is healthy"
-          }
-        },
-        "summary": "Liveness probe alias",
-        "tags": [
-          "Probes"
-        ]
-      }
-    },
-    "/healthz": {
-      "get": {
-        "description": "Canonical process liveness-only probe. Returns process liveness status (dependency checks are handled by /ready).",
+        "description": "Canonical v1 process liveness-only probe. Returns process liveness status (dependency checks are handled by /ready).",
         "operationId": "getHealthz",
         "responses": {
           "200": {
@@ -1821,67 +2020,13 @@
             "description": "Process is healthy"
           }
         },
-        "summary": "Liveness probe (canonical)",
+        "summary": "Liveness probe (canonical v1)",
         "tags": [
           "Probes"
         ]
       }
     },
-    "/info": {
-      "get": {
-        "description": "Returns service/app version metadata (when configured), parser and Mermaid versions, plus parser-recognized and lint-supported diagram families.",
-        "operationId": "getInfo",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InfoResponse"
-                }
-              }
-            },
-            "description": "Service metadata"
-          }
-        },
-        "summary": "Service and parser runtime metadata",
-        "tags": [
-          "Probes"
-        ]
-      }
-    },
-    "/metrics": {
-      "get": {
-        "description": "Returns service metrics in Prometheus text exposition format. Includes request_total, request_duration_seconds, analyze_requests_total, and parser_duration_seconds metric families.",
-        "operationId": "getMetrics",
-        "responses": {
-          "200": {
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Metrics in Prometheus text format"
-          },
-          "501": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AnalyzeErrorResponse"
-                }
-              }
-            },
-            "description": "Metrics exporter not configured"
-          }
-        },
-        "summary": "Prometheus metrics",
-        "tags": [
-          "Probes"
-        ]
-      }
-    },
-    "/ready": {
+    "/v1/ready": {
       "get": {
         "description": "Dependency/readiness-only probe. Returns readiness status for required dependencies (including parser checks when available) and may return 503 when not ready.",
         "operationId": "getReady",
@@ -1922,7 +2067,7 @@
         ]
       }
     },
-    "/rules": {
+    "/v1/rules": {
       "get": {
         "description": "Returns centralized metadata for all built-in rules, including defaults and configurable options.",
         "operationId": "listRules",
@@ -1944,7 +2089,7 @@
         ]
       }
     },
-    "/rules/schema": {
+    "/v1/rules/schema": {
       "get": {
         "description": "Returns a JSON Schema generated from the rule config registry. The schema validates only the canonical versioned config payload format.",
         "operationId": "getRuleConfigSchema",
@@ -1974,7 +2119,7 @@
         ]
       }
     },
-    "/spec": {
+    "/v1/spec": {
       "get": {
         "description": "Returns the OpenAPI 3.0 specification for this API in JSON format",
         "operationId": "getSpec",

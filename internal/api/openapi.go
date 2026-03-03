@@ -51,8 +51,9 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Liveness probe alias",
-				"description": "Alias for the canonical /healthz liveness-only probe. Returns process liveness status (dependency checks are handled by /ready).",
+				"description": "Legacy alias for canonical /v1/healthz; scheduled for removal in v1.2.0 (Q2 2026). Returns process liveness status (dependency checks are handled by /v1/ready).",
 				"operationId": "getHealth",
+				"deprecated":  true,
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
 						"description": "Process is healthy",
@@ -70,11 +71,11 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
-		"/healthz": map[string]interface{}{
+		"/v1/healthz": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
-				"summary":     "Liveness probe (canonical)",
-				"description": "Canonical process liveness-only probe. Returns process liveness status (dependency checks are handled by /ready).",
+				"summary":     "Liveness probe (canonical v1)",
+				"description": "Canonical v1 process liveness-only probe. Returns process liveness status (dependency checks are handled by /ready).",
 				"operationId": "getHealthz",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
@@ -93,7 +94,7 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
-		"/ready": map[string]interface{}{
+		"/v1/ready": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Readiness probe",
@@ -180,7 +181,7 @@ var openapi = map[string]interface{}{
 			},
 		},
 
-		"/rules": map[string]interface{}{
+		"/v1/rules": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "List built-in lint rules",
@@ -200,7 +201,7 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
-		"/rules/schema": map[string]interface{}{
+		"/v1/rules/schema": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Get JSON Schema for lint rule configuration",
@@ -247,7 +248,7 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
-		"/analyze": map[string]interface{}{
+		"/v1/analyze": map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Analyze and lint a Mermaid diagram",
@@ -949,11 +950,11 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
-		"/analyze/sarif": map[string]interface{}{
+		"/v1/analyze/sarif": map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Analyze and lint a Mermaid diagram (SARIF output)",
-				"description": "Runs the same analysis pipeline as POST /analyze, returning SARIF 2.1.0 when analysis is valid.",
+				"description": "Runs the same analysis pipeline as POST /v1/analyze, returning SARIF 2.1.0 when analysis is valid.",
 				"operationId": "analyzeCodeSARIF",
 				"requestBody": map[string]interface{}{
 					"required": true,
@@ -1024,7 +1025,7 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
-		"/spec": map[string]interface{}{
+		"/v1/spec": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Documentation"},
 				"summary":     "Get OpenAPI specification",
@@ -1044,7 +1045,7 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
-		"/docs": map[string]interface{}{
+		"/v1/docs": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Documentation"},
 				"summary":     "Interactive API documentation",
@@ -1063,6 +1064,61 @@ var openapi = map[string]interface{}{
 					},
 				},
 			},
+		},
+
+		"/analyze": map[string]interface{}{
+			"post": map[string]interface{}{
+				"tags":        []string{"Linting"},
+				"summary":     "Analyze and lint a Mermaid diagram (legacy alias)",
+				"description": "Deprecated compatibility alias for POST /v1/analyze. Scheduled for removal in v1.2.0 (Q2 2026).",
+				"operationId": "analyzeCodeLegacy",
+				"deprecated":  true,
+				"requestBody": map[string]interface{}{
+					"required": true,
+					"content": map[string]interface{}{
+						"application/json": map[string]interface{}{
+							"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeRequest"},
+						},
+					},
+				},
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{"description": "Success", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
+					"400": map[string]interface{}{"description": "Bad request", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
+					"413": map[string]interface{}{"description": "Request too large", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
+					"500": map[string]interface{}{"description": "Parser/service internal failure", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
+					"504": map[string]interface{}{"description": "Parser timeout", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
+				},
+			},
+		},
+		"/rules": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Linting"},
+				"summary":     "List built-in lint rules (legacy alias)",
+				"description": "Deprecated compatibility alias for GET /v1/rules. Scheduled for removal in v1.2.0 (Q2 2026).",
+				"operationId": "listRulesLegacy",
+				"deprecated":  true,
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{"description": "Built-in rule metadata", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/RulesResponse"}}}},
+				},
+			},
+		},
+		"/rules/schema": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Linting"},
+				"summary":     "Get JSON Schema for lint rule configuration (legacy alias)",
+				"description": "Deprecated compatibility alias for GET /v1/rules/schema. Scheduled for removal in v1.2.0 (Q2 2026).",
+				"operationId": "getRuleConfigSchemaLegacy",
+				"deprecated":  true,
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{"description": "Rule configuration schema"},
+				},
+			},
+		},
+		"/spec": map[string]interface{}{
+			"get": map[string]interface{}{"tags": []string{"Documentation"}, "summary": "Get OpenAPI specification (legacy alias)", "description": "Deprecated compatibility alias for GET /v1/spec. Scheduled for removal in v1.2.0 (Q2 2026).", "operationId": "getSpecLegacy", "deprecated": true, "responses": map[string]interface{}{"200": map[string]interface{}{"description": "OpenAPI specification"}}},
+		},
+		"/docs": map[string]interface{}{
+			"get": map[string]interface{}{"tags": []string{"Documentation"}, "summary": "Interactive API documentation (legacy alias)", "description": "Deprecated compatibility alias for GET /v1/docs. Scheduled for removal in v1.2.0 (Q2 2026).", "operationId": "getDocsLegacy", "deprecated": true, "responses": map[string]interface{}{"200": map[string]interface{}{"description": "Swagger UI HTML page"}}},
 		},
 	},
 	"components": map[string]interface{}{
