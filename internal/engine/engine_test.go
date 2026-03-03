@@ -9,6 +9,15 @@ import (
 	"github.com/CyanAutomation/merm8/internal/rules"
 )
 
+func TestEngine_DiagramFamilies_FromRegisteredRules(t *testing.T) {
+	e := engine.New()
+	got := e.DiagramFamilies()
+	want := []model.DiagramFamily{model.DiagramFamilyFlowchart}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("expected diagram families %v, got %v", want, got)
+	}
+}
+
 func TestEngine_CleanDiagram(t *testing.T) {
 	d := &model.Diagram{
 		Type:  model.DiagramTypeFlowchart,
