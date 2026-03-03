@@ -1807,19 +1807,7 @@ setTimeout(() => {
 	if w.Code != http.StatusGatewayTimeout {
 		t.Fatalf("expected 504 when parser times out, got %d", w.Code)
 	}
-
-	var resp map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode timeout response: %v", err)
-	}
-	errObj, ok := resp["error"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected error object, got %#v", resp["error"])
-	}
-	msg, _ := errObj["message"].(string)
-	if !strings.Contains(strings.ToLower(msg), "timed out") {
-		t.Fatalf("expected timeout wording in error message, got %q", msg)
-	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "parser_timeout", "parser timed out while validating Mermaid code")
 
 	healthReq := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	healthW := httptest.NewRecorder()
