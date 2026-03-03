@@ -701,7 +701,7 @@ var openapi = map[string]interface{}{
 					},
 					"config": map[string]interface{}{
 						"$ref":        "#/components/schemas/RuleConfigSchema",
-						"description": "Optional lint rule configuration. Canonical and required format: {\"schema-version\":\"v1\",\"rules\":{...}}. Legacy flat, nested, and snake_case keys are no longer accepted.",
+						"description": "Optional lint rule configuration. Canonical format is {\"schema-version\":\"v1\",\"rules\":{...}}. Phase 1 accepts legacy flat/nested/snake_case config with deprecation warnings; Phase 2 rejects legacy config with 400 deprecated_config_format.",
 						"example": map[string]interface{}{
 							"schema-version": "v1",
 							"rules": map[string]interface{}{
@@ -778,6 +778,11 @@ var openapi = map[string]interface{}{
 						"items": map[string]interface{}{
 							"$ref": "#/components/schemas/Issue",
 						},
+					},
+					"warnings": map[string]interface{}{
+						"type":        "array",
+						"description": "Deprecation warnings emitted when legacy config keys/shapes are used.",
+						"items":       map[string]interface{}{"type": "string"},
 					},
 					"error": map[string]interface{}{
 						"$ref":        "#/components/schemas/ErrorDetail",
