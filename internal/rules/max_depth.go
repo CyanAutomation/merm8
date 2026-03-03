@@ -3,6 +3,7 @@ package rules
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -61,17 +62,22 @@ func (r MaxDepth) Run(d *model.Diagram, cfg Config) []model.Issue {
 		}
 	}
 	if len(starts) == 0 {
-		for nodeID := range indegree {
-			starts = append(starts, nodeID)
-		}
+		starts = sccRepresentatives(adj, indegree)
 	}
 
 	issues := make([]model.Issue, 0)
+	seenPaths := make(map[string]struct{})
 	for _, start := range starts {
 		depth, path := longestPathFrom(start, adj, map[string]bool{})
 		if depth <= limit {
 			continue
 		}
+
+		pathKey := strings.Join(path, "->")
+		if _, exists := seenPaths[pathKey]; exists {
+			continue
+		}
+		seenPaths[pathKey] = struct{}{}
 
 		issue := model.Issue{
 			RuleID:   r.ID(),
@@ -114,4 +120,62 @@ func longestPathFrom(nodeID string, adj map[string][]string, visited map[string]
 	}
 
 	return bestDepth, bestPath
+}
+
+func sccRepresentatives(adj map[string][]string, indegree map[string]int) []string {
+	index := 0
+	indices := map[string]int{}
+	lowlink := map[string]int{}
+	onStack := map[string]bool{}
+	stack := make([]string, 0)
+	representatives := make([]string, 0)
+
+	var strongConnect func(string)
+	strongConnect = func(v string) {
+		indices[v] = index
+		lowlink[v] = index
+		index++
+		stack = append(stack, v)
+		onStack[v] = true
+
+		for _, w := range adj[v] {
+			if _, seen := indices[w]; !seen {
+				strongConnect(w)
+				if lowlink[w] < lowlink[v] {
+					lowlink[v] = lowlink[w]
+				}
+			} else if onStack[w] && indices[w] < lowlink[v] {
+				lowlink[v] = indices[w]
+			}
+		}
+
+		if lowlink[v] == indices[v] {
+			component := make([]string, 0)
+			for {
+				w := stack[len(stack)-1]
+				stack = stack[:len(stack)-1]
+				onStack[w] = false
+				component = append(component, w)
+				if w == v {
+					break
+				}
+			}
+			sort.Strings(component)
+			representatives = append(representatives, component[0])
+		}
+	}
+
+	nodes := make([]string, 0, len(indegree))
+	for nodeID := range indegree {
+		nodes = append(nodes, nodeID)
+	}
+	sort.Strings(nodes)
+	for _, nodeID := range nodes {
+		if _, seen := indices[nodeID]; !seen {
+			strongConnect(nodeID)
+		}
+	}
+
+	sort.Strings(representatives)
+	return representatives
 }
