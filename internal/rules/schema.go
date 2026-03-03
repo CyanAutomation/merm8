@@ -2,27 +2,52 @@ package rules
 
 import "sort"
 
+const CurrentConfigSchemaVersion = "v1"
+
 // ConfigJSONSchema returns a JSON Schema that validates lint configuration.
 //
-// The schema accepts both supported payload formats:
-//   - Flat: {"rule-id": {...}}
-//   - Nested: {"rules": {"rule-id": {...}}}
+// During the migration window, this schema accepts both:
+//   - Versioned format: {"schema_version":"v1","rules":{...}}
+//   - Legacy formats: {"rule-id": {...}} and {"rules": {"rule-id": {...}}}
 func ConfigJSONSchema() map[string]any {
-	flatConfig := flatConfigSchema()
+	legacyFlat := flatConfigSchema()
+	legacyNested := map[string]any{
+		"type":                 "object",
+		"required":             []string{"rules"},
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"rules": legacyFlat,
+		},
+	}
+
 	return map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
 		"title":   "merm8 Rule Configuration",
-		"type":    "object",
 		"oneOf": []any{
-			flatConfig,
-			map[string]any{
-				"type":                 "object",
-				"required":             []string{"rules"},
-				"additionalProperties": false,
-				"properties": map[string]any{
-					"rules": flatConfig,
-				},
+			ConfigV1JSONSchema(),
+			legacyFlat,
+			legacyNested,
+		},
+	}
+}
+
+// ConfigV1JSONSchema returns the schema for the versioned config contract.
+func ConfigV1JSONSchema() map[string]any {
+	return map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"title":   "merm8 Rule Configuration v1",
+		"type":    "object",
+		"required": []string{
+			"schema_version",
+			"rules",
+		},
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"schema_version": map[string]any{
+				"type": "string",
+				"enum": []string{CurrentConfigSchemaVersion},
 			},
+			"rules": flatConfigSchema(),
 		},
 	}
 }
@@ -37,7 +62,7 @@ func flatConfigSchema() map[string]any {
 
 	properties := make(map[string]any, len(ruleIDs))
 	for _, ruleID := range ruleIDs {
-		properties[ruleID] = ruleOptionsSchema(ruleID)
+		properties[ruleID] = ruleOptionsSchema(registry[ruleID])
 	}
 
 	return map[string]any{
@@ -47,32 +72,10 @@ func flatConfigSchema() map[string]any {
 	}
 }
 
-func ruleOptionsSchema(ruleID string) map[string]any {
-	properties := map[string]any{
-		"enabled": map[string]any{
-			"type":        "boolean",
-			"description": "Enable or disable this rule.",
-		},
-		"severity": map[string]any{
-			"type":        "string",
-			"enum":        []string{"error", "warning", "info"},
-			"description": "Severity assigned to emitted issues.",
-		},
-		"suppression_selectors": map[string]any{
-			"type":        "array",
-			"description": "Selectors that suppress matching issues.",
-			"items": map[string]any{
-				"type": "string",
-			},
-		},
-	}
-
-	if ruleID == "max-fanout" {
-		properties["limit"] = map[string]any{
-			"type":        "integer",
-			"minimum":     1,
-			"description": "Maximum allowed outgoing edges per node.",
-		}
+func ruleOptionsSchema(metadata RuleMetadata) map[string]any {
+	properties := make(map[string]any, len(metadata.ConfigurableOptions))
+	for _, option := range metadata.ConfigurableOptions {
+		properties[option.Name] = optionSchema(option.Name, option.Description)
 	}
 
 	return map[string]any{
@@ -80,4 +83,26 @@ func ruleOptionsSchema(ruleID string) map[string]any {
 		"additionalProperties": false,
 		"properties":           properties,
 	}
+}
+
+func optionSchema(name, description string) map[string]any {
+	schema := map[string]any{"description": description}
+
+	switch name {
+	case "enabled":
+		schema["type"] = "boolean"
+	case "severity":
+		schema["type"] = "string"
+		schema["enum"] = []string{"error", "warning", "info"}
+	case "suppression_selectors":
+		schema["type"] = "array"
+		schema["items"] = map[string]any{"type": "string"}
+	case "limit":
+		schema["type"] = "integer"
+		schema["minimum"] = 1
+	default:
+		schema["type"] = "string"
+	}
+
+	return schema
 }

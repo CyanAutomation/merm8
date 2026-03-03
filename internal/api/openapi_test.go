@@ -336,11 +336,11 @@ func TestServeSpec_ExposesRuleConfigSchemaAndEndpoint(t *testing.T) {
 
 	ruleSchema := lookup(t, spec, "components", "schemas", "RuleConfigSchema").(map[string]interface{})
 	variants := ruleSchema["oneOf"].([]interface{})
-	if len(variants) != 2 {
-		t.Fatalf("expected RuleConfigSchema.oneOf to have two variants, got %d", len(variants))
+	if len(variants) != 3 {
+		t.Fatalf("expected RuleConfigSchema.oneOf to have three variants, got %d", len(variants))
 	}
 
-	flat := variants[0].(map[string]interface{})
+	flat := variants[1].(map[string]interface{})
 	flatProps := lookup(t, flat, "properties").(map[string]interface{})
 	maxFanout := flatProps["max-fanout"].(map[string]interface{})
 	limit := lookup(t, maxFanout, "properties", "limit").(map[string]interface{})
