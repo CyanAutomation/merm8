@@ -1491,9 +1491,9 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 }
 
 func TestHealthz_ReturnsOK(t *testing.T) {
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return nil, nil, nil
-	})
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{readyError: errors.New("parser is unavailable")}, engine.New())
+	h.RegisterRoutes(mux)
 
 	tests := []struct {
 		name string

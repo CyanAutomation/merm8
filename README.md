@@ -93,7 +93,7 @@ Warning behavior expectation during any future grace window: emit one warning pe
 
 ### `GET /healthz` (canonical) and `GET /health`
 
-Liveness endpoints for process-up checks. `GET /healthz` is the canonical probe path, and `GET /health` is supported as an alias.
+Liveness-only endpoints for process-up checks. `GET /healthz` is the canonical probe path, and `GET /health` is supported as an alias.
 
 **Response**
 
@@ -103,7 +103,7 @@ Liveness endpoints for process-up checks. `GET /healthz` is the canonical probe 
 
 ### `GET /ready`
 
-Readiness endpoint for dependency checks (including parser runtime/script availability when supported).
+Dependency/readiness-only endpoint (including parser runtime/script availability when supported). This endpoint may return `503` when dependencies are not ready.
 
 **Response (ready)**
 
@@ -633,5 +633,6 @@ Workflow summary:
 - [x] Per-rule suppression comments in diagram source
 - [ ] Configurable rule severity overrides
 - [ ] SARIF output format for CI integration
-- [ ] Health-check endpoints (`GET /healthz` canonical, `GET /health` alias)
+- [x] Liveness endpoints (`GET /healthz` canonical, `GET /health` alias)
+- [x] Dependency readiness endpoint (`GET /ready`, returns `503` when not ready)
 - [ ] Metrics endpoint (Prometheus-compatible)
