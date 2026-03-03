@@ -213,6 +213,25 @@ type Rule interface {
 
 Default `max-fanout` limit: **5**.
 
+### Suppressing lint issues in diagram source
+
+The parser recognizes Mermaid line comments with `merm8` suppression tags:
+
+- `%% merm8-disable <rule-id>`: suppresses that rule for the rest of the file.
+- `%% merm8-disable all`: suppresses all rules for the rest of the file.
+- `%% merm8-disable-next-line <rule-id>`: suppresses that rule only for the next source line.
+- `%% merm8-disable-next-line all`: suppresses all rules only for the next source line.
+
+Example:
+
+```mermaid
+graph TD
+  %% merm8-disable max-fanout
+  A --> B
+  A --> C
+  A --> D
+```
+
 ### Adding a New Rule
 
 1. Create `internal/rules/my_rule.go`:
@@ -380,7 +399,7 @@ See test comments for rationale behind each skipped test.
 - [ ] Support additional diagram types (sequence, class, ER, state)
 - [ ] `no-cycles` rule for flowcharts
 - [ ] `max-depth` rule
-- [ ] Per-rule suppression comments in diagram source
+- [x] Per-rule suppression comments in diagram source
 - [ ] Configurable rule severity overrides
 - [ ] SARIF output format for CI integration
 - [ ] Health-check endpoint (`GET /healthz`)

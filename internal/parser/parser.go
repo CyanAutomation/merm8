@@ -35,10 +35,11 @@ type ParseResult struct {
 
 // parsedAST mirrors the simplified AST returned by parser-node/parse.mjs.
 type parsedAST struct {
-	Direction string           `json:"direction"`
-	Nodes     []parsedNode     `json:"nodes"`
-	Edges     []parsedEdge     `json:"edges"`
-	Subgraphs []parsedSubgraph `json:"subgraphs"`
+	Direction    string              `json:"direction"`
+	Nodes        []parsedNode        `json:"nodes"`
+	Edges        []parsedEdge        `json:"edges"`
+	Subgraphs    []parsedSubgraph    `json:"subgraphs"`
+	Suppressions []parsedSuppression `json:"suppressions"`
 }
 
 type parsedNode struct {
@@ -56,6 +57,13 @@ type parsedSubgraph struct {
 	ID    string   `json:"id"`
 	Label string   `json:"label"`
 	Nodes []string `json:"nodes"`
+}
+
+type parsedSuppression struct {
+	RuleID     string `json:"ruleId"`
+	Scope      string `json:"scope"`
+	Line       int    `json:"line"`
+	TargetLine int    `json:"targetLine"`
 }
 
 // Parser wraps the Node subprocess invocation.
@@ -229,6 +237,14 @@ func toDiagram(ast *parsedAST) *model.Diagram {
 			ID:    s.ID,
 			Label: s.Label,
 			Nodes: s.Nodes,
+		})
+	}
+	for _, suppression := range ast.Suppressions {
+		d.Suppressions = append(d.Suppressions, model.SuppressionDirective{
+			RuleID:     suppression.RuleID,
+			Scope:      suppression.Scope,
+			Line:       suppression.Line,
+			TargetLine: suppression.TargetLine,
 		})
 	}
 	return d
