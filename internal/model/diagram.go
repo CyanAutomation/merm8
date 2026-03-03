@@ -64,15 +64,19 @@ type SuppressionDirective struct {
 
 // Node represents a single node in the diagram.
 type Node struct {
-	ID    string
-	Label string
+	ID     string
+	Label  string
+	Line   *int
+	Column *int
 }
 
 // Edge represents a directed connection between two nodes.
 type Edge struct {
-	From string
-	To   string
-	Type string
+	From   string
+	To     string
+	Type   string
+	Line   *int
+	Column *int
 }
 
 // Subgraph represents a named cluster of nodes.

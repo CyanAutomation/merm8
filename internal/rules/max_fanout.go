@@ -39,18 +39,34 @@ func (r MaxFanout) Run(d *model.Diagram, cfg Config) []model.Issue {
 	}
 
 	fanout := make(map[string]int, len(d.Nodes))
+	nodeLocations := make(map[string]model.Node, len(d.Nodes))
+	for _, node := range d.Nodes {
+		nodeLocations[node.ID] = node
+	}
+	edgeLocations := make(map[string]model.Edge)
 	for _, e := range d.Edges {
 		fanout[e.From]++
+		if _, exists := edgeLocations[e.From]; !exists {
+			edgeLocations[e.From] = e
+		}
 	}
 
 	var issues []model.Issue
 	for nodeID, count := range fanout {
 		if count > limit {
-			issues = append(issues, model.Issue{
+			issue := model.Issue{
 				RuleID:   r.ID(),
 				Severity: severity,
 				Message:  fmt.Sprintf("node %q has fanout %d, exceeding limit of %d", nodeID, count, limit),
-			})
+			}
+			if node, ok := nodeLocations[nodeID]; ok {
+				issue.Line = node.Line
+				issue.Column = node.Column
+			} else if edge, ok := edgeLocations[nodeID]; ok {
+				issue.Line = edge.Line
+				issue.Column = edge.Column
+			}
+			issues = append(issues, issue)
 		}
 	}
 	return issues

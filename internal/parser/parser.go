@@ -60,14 +60,18 @@ type parsedAST struct {
 }
 
 type parsedNode struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Line   *int   `json:"line,omitempty"`
+	Column *int   `json:"column,omitempty"`
 }
 
 type parsedEdge struct {
-	From string `json:"from"`
-	To   string `json:"to"`
-	Type string `json:"type"`
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Type   string `json:"type"`
+	Line   *int   `json:"line,omitempty"`
+	Column *int   `json:"column,omitempty"`
 }
 
 type parsedSubgraph struct {
@@ -318,10 +322,21 @@ func toDiagram(result ParseResult) *model.Diagram {
 	}
 
 	for _, n := range ast.Nodes {
-		d.Nodes = append(d.Nodes, model.Node{ID: n.ID, Label: n.Label})
+		d.Nodes = append(d.Nodes, model.Node{
+			ID:     n.ID,
+			Label:  n.Label,
+			Line:   n.Line,
+			Column: n.Column,
+		})
 	}
 	for _, e := range ast.Edges {
-		d.Edges = append(d.Edges, model.Edge{From: e.From, To: e.To, Type: e.Type})
+		d.Edges = append(d.Edges, model.Edge{
+			From:   e.From,
+			To:     e.To,
+			Type:   e.Type,
+			Line:   e.Line,
+			Column: e.Column,
+		})
 	}
 	for _, s := range ast.Subgraphs {
 		d.Subgraphs = append(d.Subgraphs, model.Subgraph{
