@@ -240,8 +240,8 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	assertErrorShape(t, missingCode, "missing_code")
 	unknownRule := lookup(t, examples400, "unknownRule", "value").(map[string]interface{})
 	assertErrorShape(t, unknownRule, "unknown_rule")
-	if path := lookup(t, unknownRule, "error", "path").(string); path != "config.rules.unknown-rule" {
-		t.Fatalf("expected unknownRule path, got %q", path)
+	if path := lookup(t, unknownRule, "error", "details", "path").(string); path != "config.rules.unknown-rule" {
+		t.Fatalf("expected unknownRule details.path, got %q", path)
 	}
 
 	examples500 := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "500", "content", "application/json", "examples").(map[string]interface{})
@@ -286,6 +286,23 @@ func assertErrorShape(t *testing.T, payload map[string]interface{}, expectedCode
 	}
 	if msg := lookup(t, payload, "error", "message"); msg == "" {
 		t.Fatal("expected non-empty error.message")
+	}
+}
+
+func TestServeSpec_Non2xxResponsesUseSharedErrorSchema(t *testing.T) {
+	spec := loadServedSpec(t)
+
+	if got := lookup(t, spec, "components", "schemas", "AnalyzeResponse", "properties", "error", "$ref"); got != "#/components/schemas/Error" {
+		t.Fatalf("expected AnalyzeResponse.error to reference Error schema, got %#v", got)
+	}
+	if got := lookup(t, spec, "paths", "/v1/ready", "get", "responses", "503", "content", "application/json", "schema", "$ref"); got != "#/components/schemas/ReadyErrorResponse" {
+		t.Fatalf("expected /v1/ready 503 schema ReadyErrorResponse, got %#v", got)
+	}
+	if got := lookup(t, spec, "components", "schemas", "ReadyErrorResponse", "properties", "error", "$ref"); got != "#/components/schemas/Error" {
+		t.Fatalf("expected ReadyErrorResponse.error to reference Error schema, got %#v", got)
+	}
+	if got := lookup(t, spec, "paths", "/metrics", "get", "responses", "501", "content", "application/json", "schema", "$ref"); got != "#/components/schemas/AnalyzeResponse" {
+		t.Fatalf("expected /v1/metrics 501 schema AnalyzeResponse, got %#v", got)
 	}
 }
 
