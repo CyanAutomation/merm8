@@ -490,12 +490,18 @@ func TestServeSpec_ExposesRuleConfigSchemaAndEndpoint(t *testing.T) {
 	}
 
 	ruleSchema := lookup(t, spec, "components", "schemas", "RuleConfigSchema").(map[string]interface{})
-	required := lookup(t, ruleSchema, "required").([]interface{})
-	if len(required) != 2 || required[0] != "schema-version" || required[1] != "rules" {
-		t.Fatalf("expected RuleConfigSchema.required to be [schema-version rules], got %#v", required)
+	oneOf := lookup(t, ruleSchema, "oneOf").([]interface{})
+	if len(oneOf) != 2 {
+		t.Fatalf("expected RuleConfigSchema.oneOf to contain flat and versioned variants, got %#v", oneOf)
 	}
 
-	rulesProps := lookup(t, ruleSchema, "properties", "rules", "properties").(map[string]interface{})
+	versioned := oneOf[1].(map[string]interface{})
+	required := lookup(t, versioned, "required").([]interface{})
+	if len(required) != 2 || required[0] != "schema-version" || required[1] != "rules" {
+		t.Fatalf("expected versioned required to be [schema-version rules], got %#v", required)
+	}
+
+	rulesProps := lookup(t, versioned, "properties", "rules", "properties").(map[string]interface{})
 	maxFanout := rulesProps["max-fanout"].(map[string]interface{})
 	limit := lookup(t, maxFanout, "properties", "limit").(map[string]interface{})
 	if limit["type"] != "integer" || limit["minimum"] != float64(1) {
