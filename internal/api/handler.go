@@ -309,6 +309,7 @@ func NewHandlerWithScript(scriptPath string) (*Handler, error) {
 
 // RegisterRoutes attaches all routes to mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /health", h.Healthz)
 	mux.HandleFunc("GET /healthz", h.Healthz)
 	mux.HandleFunc("GET /ready", h.Ready)
 	mux.HandleFunc("GET /rules", h.ListRules)

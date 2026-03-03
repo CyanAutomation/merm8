@@ -46,11 +46,34 @@ var openapi = map[string]interface{}{
 		},
 	},
 	"paths": map[string]interface{}{
+		"/health": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Liveness probe alias",
+				"description": "Alias for the canonical /healthz liveness probe. Returns process liveness status.",
+				"operationId": "getHealth",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Process is healthy",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"status": map[string]interface{}{"type": "string", "example": "ok"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"/healthz": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
-				"summary":     "Liveness probe",
-				"description": "Returns process liveness status.",
+				"summary":     "Liveness probe (canonical)",
+				"description": "Canonical process liveness probe. Returns process liveness status.",
 				"operationId": "getHealthz",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
