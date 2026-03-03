@@ -6,29 +6,10 @@ const CurrentConfigSchemaVersion = "v1"
 
 // ConfigJSONSchema returns a JSON Schema that validates lint configuration.
 //
-// During the migration window, this schema accepts both:
+// Canonical format:
 //   - Versioned format: {"schema-version":"v1","rules":{...}}
-//   - Legacy formats: {"rule-id": {...}} and {"rules": {"rule-id": {...}}}
 func ConfigJSONSchema() map[string]any {
-	legacyFlat := flatConfigSchema()
-	legacyNested := map[string]any{
-		"type":                 "object",
-		"required":             []string{"rules"},
-		"additionalProperties": false,
-		"properties": map[string]any{
-			"rules": legacyFlat,
-		},
-	}
-
-	return map[string]any{
-		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"title":   "merm8 Rule Configuration",
-		"oneOf": []any{
-			ConfigV1JSONSchema(),
-			legacyFlat,
-			legacyNested,
-		},
-	}
+	return ConfigV1JSONSchema()
 }
 
 // ConfigV1JSONSchema returns the schema for the versioned config contract.

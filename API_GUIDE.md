@@ -464,9 +464,9 @@ The merm8 engine includes three built-in lint rules:
   }
   ```
 
-### Configuration Formats
+### Configuration Format and Deprecation Policy
 
-Preferred format (versioned contract):
+Accepted canonical format (versioned contract):
 
 ```json
 {
@@ -480,29 +480,11 @@ Preferred format (versioned contract):
 }
 ```
 
-Migration window compatibility (still accepted):
+Legacy migration timeline:
 
-**Flat legacy format:**
-```json
-{
-  "code": "...",
-  "config": {
-    "max-fanout": { "limit": 3 }
-  }
-}
-```
-
-**Nested legacy format:**
-```json
-{
-  "code": "...",
-  "config": {
-    "rules": {
-      "max-fanout": { "limit": 3 }
-    }
-  }
-}
-```
+1. **Announce**: legacy snake_case keys and legacy shapes documented as deprecated.
+2. **Warn**: during grace window, legacy inputs accepted but clients should emit migration warnings.
+3. **Enforce (current)**: only canonical versioned config is accepted; legacy keys/shapes are rejected with `400 invalid_option`.
 
 Unsupported versions are rejected with `400 unsupported_schema_version` and include a `supported` list.
 
