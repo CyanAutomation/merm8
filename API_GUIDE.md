@@ -31,7 +31,7 @@ You should see a professional API documentation page with all available endpoint
 
 The Swagger UI provides:
 
-- **Left sidebar** — List of all available endpoints (currently `/healthz`, `/ready`, `/rules`, `/analyze`, `/spec`, `/docs`)
+- **Left sidebar** — List of all available endpoints (currently `/healthz`, `/ready`, `/rules`, `/analyze`, `/analyze/sarif`, `/spec`, `/docs`)
 - **Main panel** — Detailed endpoint documentation with parameters and response schemas
 - **Try it out button** — Execute requests directly from the browser
 - **Example requests** — Pre-filled request templates for common scenarios
@@ -501,7 +501,16 @@ Accepted canonical format (versioned contract):
 Legacy migration timeline:
 
 1. **Phase 1 (current)**: legacy snake_case keys/shapes are still accepted, but responses include deprecation signals (`Deprecation: true`, `Warning` header, and response `warnings`).
-2. **Phase 2 (planned)**: legacy keys/shapes are rejected with machine-readable `400 deprecated_config_format` errors.
+2. **Phase 2 (implemented, toggleable)**: legacy keys/shapes can be rejected with machine-readable `400 deprecated_config_format` errors when strict schema mode is enabled.
+
+### SARIF Output (`POST /analyze/sarif`)
+
+Use `POST /analyze/sarif` with the same request body as `/analyze` to receive SARIF 2.1.0 (`Content-Type: application/sarif+json`) for valid analyses.
+
+Canonical severity mapping is defined in code at `internal/output/sarif` and used by API docs:
+- `error -> error`
+- `warning/warn -> warning`
+- `info -> note`
 
 Unsupported versions are rejected with `400 unsupported_schema_version` and include a `supported` list.
 

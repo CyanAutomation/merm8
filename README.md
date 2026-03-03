@@ -84,7 +84,7 @@ All API JSON field names use **kebab-case** as the canonical contract for reques
 Canonical config format is `{"schema-version":"v1","rules":{...}}` and canonical key style is kebab-case.
 
 - **Phase 1 (current)**: legacy snake_case keys (for example `schema_version`, `suppression_selectors`) and legacy shapes (flat `{"rule-id":{...}}` / unversioned nested `{"rules":{...}}`) are accepted **with runtime deprecation signals** (`Deprecation: true`, `Warning` header, and response `warnings`).
-- **Phase 2 (planned)**: legacy keys/shapes will be rejected with machine-readable `400 deprecated_config_format` errors.
+- **Phase 2 (implemented, toggleable)**: legacy keys/shapes can be rejected with machine-readable `400 deprecated_config_format` errors when strict schema mode is enabled.
 
 ## API
 
@@ -629,8 +629,8 @@ Workflow summary:
 - [ ] `no-cycles` rule for flowcharts
 - [ ] `max-depth` rule
 - [x] Per-rule suppression comments in diagram source
-- [ ] Configurable rule severity overrides
-- [ ] SARIF output format for CI integration
+- [x] Configurable rule severity overrides
+- [x] SARIF output format for CI integration (`POST /analyze/sarif`)
 - [x] Liveness endpoints (`GET /healthz` canonical, `GET /health` alias)
 - [x] Dependency readiness endpoint (`GET /ready`, returns `503` when not ready)
 - [ ] Metrics endpoint (Prometheus-compatible)

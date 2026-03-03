@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"sort"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/CyanAutomation/merm8/internal/engine"
 	"github.com/CyanAutomation/merm8/internal/model"
+	"github.com/CyanAutomation/merm8/internal/output/sarif"
 	"github.com/CyanAutomation/merm8/internal/parser"
 	"github.com/CyanAutomation/merm8/internal/rules"
 	"github.com/CyanAutomation/merm8/internal/telemetry"
@@ -369,6 +371,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /rules", h.ListRules)
 	mux.HandleFunc("GET /rules/schema", h.RuleConfigSchema)
 	mux.HandleFunc("POST /analyze", h.Analyze)
+	mux.HandleFunc("POST /analyze/sarif", h.AnalyzeSARIF)
 	mux.HandleFunc("GET /spec", h.ServeSpec)
 	mux.HandleFunc("GET /docs", h.ServeSwagger)
 }
@@ -602,6 +605,37 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// AnalyzeSARIF handles POST /analyze/sarif.
+func (h *Handler) AnalyzeSARIF(w http.ResponseWriter, r *http.Request) {
+	recorder := httptest.NewRecorder()
+	h.Analyze(recorder, r)
+
+	for key, values := range recorder.Header() {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	if recorder.Code != http.StatusOK {
+		w.WriteHeader(recorder.Code)
+		_, _ = w.Write(recorder.Body.Bytes())
+		return
+	}
+
+	var resp analyzeResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &resp); err != nil || !resp.Valid {
+		w.WriteHeader(recorder.Code)
+		_, _ = w.Write(recorder.Body.Bytes())
+		return
+	}
+
+	report := sarif.Transform(resp.Issues, sarif.RequestMetadata{
+		RequestURI:  r.URL.Path,
+		ArtifactURI: "request://analyze",
+	})
+	writeSARIF(w, http.StatusOK, report)
+}
+
 func uniqueStrings(values []string) []string {
 	if len(values) == 0 {
 		return values
@@ -749,6 +783,12 @@ func (h *Handler) ServeSwagger(w http.ResponseWriter, r *http.Request) {
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeSARIF(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/sarif+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
