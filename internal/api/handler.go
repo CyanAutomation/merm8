@@ -704,18 +704,23 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		setAnalyzeLogFields(r.Context(), "unsupported_diagram_type", string(diagram.Type))
 		// Keep metrics in the response for parsed diagrams, even when linting is
 		// not currently supported for that Mermaid family.
+		unsupportedIssue := model.Issue{
+			RuleID:   "unsupported-diagram-type",
+			Severity: "info",
+			Message:  "diagram type \"" + string(diagram.Type) + "\" is parsed but lint rules are not available yet",
+		}
 		resp := analyzeResponse{
 			Valid:         false,
 			DiagramType:   diagram.Type,
 			LintSupported: false,
 			SyntaxError:   nil,
-			Issues:        []model.Issue{},
+			Issues:        []model.Issue{unsupportedIssue},
 			Warnings:      deprecationWarnings,
 			Error: &apiErrorDetails{
 				Code:    "unsupported_diagram_type",
 				Message: "diagram type is parsed but linting is not supported",
 			},
-			Metrics: computeMetrics(diagram, []model.Issue{}),
+			Metrics: computeMetrics(diagram, []model.Issue{unsupportedIssue}),
 		}
 		writeJSON(w, http.StatusOK, resp)
 		return
