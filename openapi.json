@@ -187,13 +187,6 @@
             },
             "type": "array"
           },
-          "parser_timeout_seconds": {
-            "description": "Parser timeout in seconds (1-60). Configurable via PARSER_TIMEOUT_SECONDS environment variable.",
-            "format": "int32",
-            "maximum": 60,
-            "minimum": 1,
-            "type": "integer"
-          },
           "parser_version": {
             "type": "string"
           },
@@ -2192,7 +2185,7 @@
     },
     "/v1/rules": {
       "get": {
-        "description": "Returns centralized metadata for all built-in rules, including defaults and configurable options.",
+        "description": "Returns metadata for rules implemented by the currently registered runtime rule set, including defaults and configurable options.",
         "operationId": "listRules",
         "responses": {
           "200": {
@@ -2203,7 +2196,7 @@
                 }
               }
             },
-            "description": "Built-in rule metadata"
+            "description": "Implemented rule metadata"
           }
         },
         "summary": "List built-in lint rules",
@@ -2214,7 +2207,7 @@
     },
     "/v1/rules/schema": {
       "get": {
-        "description": "Returns a JSON Schema generated from the rule config registry. The schema validates only the canonical versioned config payload format.",
+        "description": "Returns a JSON Schema generated from the currently implemented rule config registry. The schema validates only the canonical versioned config payload format and excludes unimplemented rules.",
         "operationId": "getRuleConfigSchema",
         "responses": {
           "200": {
