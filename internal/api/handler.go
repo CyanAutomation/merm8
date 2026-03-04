@@ -1014,18 +1014,11 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
 		suggestions := suggestionsForSyntaxError(syntaxErr, req.Code)
-		// On syntax errors, only set lint-supported=true if we detected a diagram type
-		// AND that type's family supports linting. If no type detected, always false.
-		var lintSupported bool
-		if diagramType == model.DiagramTypeUnknown {
-			lintSupported = false
-		} else {
-			lintSupported = h.isLintSupported(diagramType.Family())
-		}
+		// On syntax errors, lint-supported is always false because the diagram cannot be linted
 		resp := analyzeResponse{
 			Valid:         false,
 			DiagramType:   diagramType,
-			LintSupported: lintSupported,
+			LintSupported: false,
 			Suggestions:   suggestions,
 			Warnings:      deprecationWarnings,
 			Meta:          responseMetaForWarnings(deprecationWarnings),
