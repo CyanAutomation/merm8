@@ -679,6 +679,215 @@ func TestAnalyze_SyntaxError_UsesDetectedDiagramTypeForDefaults(t *testing.T) {
 	}
 }
 
+// TestAnalyze_SyntaxError_SuggestionsGraphvizDetection tests suggestions for Graphviz syntax.
+func TestAnalyze_SyntaxError_SuggestionsGraphvizDetection(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{
+		Message: "No diagram type detected",
+		Line:    0,
+		Column:  0,
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+
+	body, _ := json.Marshal(map[string]string{"code": "digraph G {\n  A -> B\n}"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	suggestions, ok := resp["suggestions"].([]interface{})
+	if !ok {
+		t.Fatalf("expected suggestions array, got %#v", resp["suggestions"])
+	}
+	if len(suggestions) == 0 {
+		t.Errorf("expected at least one suggestion for Graphviz syntax")
+	}
+
+	found := false
+	for _, s := range suggestions {
+		if str, ok := s.(string); ok && strings.Contains(str, "Graphviz") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected Graphviz suggestion, got %v", suggestions)
+	}
+}
+
+// TestAnalyze_SyntaxError_SuggestionsTabDetection tests suggestions for tab indentation.
+func TestAnalyze_SyntaxError_SuggestionsTabDetection(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{
+		Message: "Unexpected token",
+		Line:    2,
+		Column:  0,
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+
+	codeWithTab := "flowchart TD\n\tA --> B"
+	body, _ := json.Marshal(map[string]string{"code": codeWithTab})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	suggestions, ok := resp["suggestions"].([]interface{})
+	if !ok {
+		t.Fatalf("expected suggestions array, got %#v", resp["suggestions"])
+	}
+
+	found := false
+	for _, s := range suggestions {
+		if str, ok := s.(string); ok && (strings.Contains(str, "tab") || strings.Contains(str, "space")) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected tab/space suggestion, got %v", suggestions)
+	}
+}
+
+// TestAnalyze_SyntaxError_SuggestionsArrowSyntax tests suggestions for arrow syntax.
+func TestAnalyze_SyntaxError_SuggestionsArrowSyntax(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{
+		Message: "Unexpected token",
+		Line:    2,
+		Column:  5,
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+
+	codeWithWrongArrow := "flowchart TD\n  A -> B"
+	body, _ := json.Marshal(map[string]string{"code": codeWithWrongArrow})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	suggestions, ok := resp["suggestions"].([]interface{})
+	if !ok {
+		t.Fatalf("expected suggestions array, got %#v", resp["suggestions"])
+	}
+
+	found := false
+	for _, s := range suggestions {
+		if str, ok := s.(string); ok && strings.Contains(str, "-->") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected arrow syntax suggestion, got %v", suggestions)
+	}
+}
+
+// TestAnalyze_SyntaxError_SuggestionsMissingDiagramType tests suggestions for missing diagram type.
+func TestAnalyze_SyntaxError_SuggestionsMissingDiagramType(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{
+		Message: "No diagram type detected",
+		Line:    0,
+		Column:  0,
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+
+	unclearCode := "A --> B"
+	body, _ := json.Marshal(map[string]string{"code": unclearCode})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+
+	suggestions, ok := resp["suggestions"].([]interface{})
+	if !ok {
+		t.Fatalf("expected suggestions array, got %#v", resp["suggestions"])
+	}
+
+	found := false
+	for _, s := range suggestions {
+		if str, ok := s.(string); ok && strings.Contains(str, "diagram") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected diagram-type suggestion, got %v", suggestions)
+	}
+}
+
+// TestAnalyzeHelp_Returns200 tests that /analyze/help endpoint returns proper help data.
+func TestAnalyzeHelp_Returns200(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/analyze/help", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	// Verify response structure
+	if _, hasTypes := resp["diagram-types"]; !hasTypes {
+		t.Errorf("expected diagram-types field")
+	}
+	if _, hasErrors := resp["common-errors"]; !hasErrors {
+		t.Errorf("expected common-errors field")
+	}
+	if _, hasArrows := resp["arrow-syntax"]; !hasArrows {
+		t.Errorf("expected arrow-syntax field")
+	}
+	if _, hasResources := resp["resources"]; !hasResources {
+		t.Errorf("expected resources field")
+	}
+
+	// Verify diagram-types contains examples
+	if types, ok := resp["diagram-types"].(map[string]interface{}); ok {
+		if len(types) == 0 {
+			t.Errorf("expected diagram-types to have content")
+		}
+		if flowchart, ok := types["flowchart"]; ok {
+			if fcMap, ok := flowchart.(map[string]interface{}); ok {
+				if _, hasDesc := fcMap["description"]; !hasDesc {
+					t.Errorf("expected description in flowchart template")
+				}
+				if _, hasExample := fcMap["example"]; !hasExample {
+					t.Errorf("expected example in flowchart template")
+				}
+			}
+		}
+	}
+}
+
 func TestAnalyze_UnsupportedDiagramType_ReturnsStructuredError(t *testing.T) {
 	diagram := &model.Diagram{Type: model.DiagramTypeSequence}
 

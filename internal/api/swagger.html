@@ -29,6 +29,105 @@
         #swagger-ui {
             margin-top: 0;
         }
+        .interactive-tester {
+            background-color: #f5f8fb;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 20px 40px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .interactive-tester h2 {
+            margin-top: 0;
+            color: #1f5385;
+            font-size: 18px;
+        }
+        .interactive-tester .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #ddd;
+        }
+        .interactive-tester .tab-btn {
+            padding: 10px 20px;
+            background: white;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+        .interactive-tester .tab-btn.active {
+            background-color: #1f5385;
+            color: white;
+            border-color: #1f5385;
+        }
+        .interactive-tester .tab-btn:hover {
+            background-color: #2c5282;
+            color: white;
+        }
+        .interactive-tester .tab-content {
+            display: none;
+        }
+        .interactive-tester .tab-content.active {
+            display: block;
+        }
+        .interactive-tester textarea {
+            width: 100%;
+            height: 180px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+        .interactive-tester button {
+            padding: 10px 20px;
+            background-color: #1f5385;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .interactive-tester button:hover {
+            background-color: #2c5282;
+        }
+        .interactive-tester .output {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+        .interactive-tester .output.show {
+            display: block;
+        }
+        .interactive-tester .valid {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .interactive-tester .invalid {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .interactive-tester .suggestion {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 8px 12px;
+            margin: 8px 0;
+            border-radius: 4px;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -36,11 +135,176 @@
         <h1>merm8 - Mermaid Lint API</h1>
         <p>Interactive API documentation and testing interface</p>
     </div>
+
+    <div class="interactive-tester">
+        <h2>🚀 Try It Now: Interactive Diagram Tester</h2>
+        <p style="margin: 10px 0; color: #666; font-size: 13px;">Validate your Mermaid diagrams instantly. See syntax errors and suggestions in real time.</p>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="templates">Templates</button>
+            <button class="tab-btn" data-tab="custom">Test Your Diagram</button>
+            <button class="tab-btn" data-tab="help">Help & Examples</button>
+        </div>
+
+        <!-- Templates Tab -->
+        <div class="tab-content active" id="templates">
+            <p style="margin-top: 0; color: #666; font-size: 13px;">Select a template to see working examples:</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div>
+                    <label style="font-weight: bold; font-size: 13px;">Flowchart</label>
+                    <textarea id="template-flowchart" readonly>flowchart TD
+    Start([Start]) --> Process[Process]
+    Process --> Decision{Is OK?}
+    Decision -->|Yes| End([End])
+    Decision -->|No| Process</textarea>
+                    <button onclick="testDiagram('template-flowchart')">Test Flowchart</button>
+                </div>
+                <div>
+                    <label style="font-weight: bold; font-size: 13px;">Sequence Diagram</label>
+                    <textarea id="template-sequence" readonly>sequenceDiagram
+    Alice->>Bob: Hello Bob!
+    Bob-->>Alice: Hi Alice!
+    Alice->>Bob: How are you?</textarea>
+                    <button onclick="testDiagram('template-sequence')">Test Sequence</button>
+                </div>
+                <div>
+                    <label style="font-weight: bold; font-size: 13px;">Class Diagram</label>
+                    <textarea id="template-class" readonly>classDiagram
+    class Animal {
+        +name: string
+        +eat()
+    }
+    class Dog {
+        +bark()
+    }</textarea>
+                    <button onclick="testDiagram('template-class')">Test Class</button>
+                </div>
+                <div>
+                    <label style="font-weight: bold; font-size: 13px;">State Diagram</label>
+                    <textarea id="template-state" readonly>stateDiagram-v2
+    [*] --> Active
+    Active --> Inactive
+    Inactive --> [*]</textarea>
+                    <button onclick="testDiagram('template-state')">Test State</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom Diagram Tab -->
+        <div class="tab-content" id="custom">
+            <p style="margin: 0 0 10px 0; color: #666; font-size: 13px;">Paste your Mermaid code here to validate:</p>
+            <textarea id="custom-input" placeholder="graph TD&#10;  A[Start] --> B[End]"></textarea>
+            <button onclick="testDiagram('custom-input')">Validate Diagram</button>
+            <div id="custom-output" class="output"></div>
+        </div>
+
+        <!-- Help Tab -->
+        <div class="tab-content" id="help">
+            <p style="margin-top: 0; color: #666; font-size: 13px;">Get diagrams templates and error help from our API:</p>
+            <button onclick="loadHelp()" style="margin-bottom: 15px;">Load Help & Templates from /v1/analyze/help</button>
+            <div id="help-output"></div>
+        </div>
+    </div>
+
     <div id="swagger-ui"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui-bundle.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@4/swagger-ui-standalone-preset.js"></script>
     <script>
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabName = btn.getAttribute('data-tab');
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(tabName).classList.add('active');
+            });
+        });
+
+        // Test diagram function
+        async function testDiagram(textareaId) {
+            const code = document.getElementById(textareaId).value;
+            const baseUrl = window.location.origin;
+
+            try {
+                const response = await fetch(baseUrl + '/v1/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                const result = await response.json();
+
+                // Find output element (handle both custom and template cases)
+                let outputEl = document.getElementById('custom-output');
+                if (!outputEl || outputEl.parentElement.parentElement.classList.contains('active') === false) {
+                    // Not in custom tab, don't show output
+                    return;
+                }
+
+                outputEl.innerHTML = '';
+                outputEl.classList.add('show');
+
+                if (result.valid) {
+                    outputEl.innerHTML = `<div class="valid">✅ Valid Diagram!</div>`;
+                    if (result['diagram-type']) {
+                        outputEl.innerHTML += `<div>Type: ${result['diagram-type']}</div>`;
+                    }
+                    if (result.issues && result.issues.length > 0) {
+                        outputEl.innerHTML += `<div>Found ${result.issues.length} lint issue(s)</div>`;
+                    }
+                } else if (result['syntax-error']) {
+                    const err = result['syntax-error'];
+                    outputEl.innerHTML = `<div class="invalid">❌ Syntax Error</div>`;
+                    outputEl.innerHTML += `<div>Line ${err.line}, Column ${err.column}: ${err.message}</div>`;
+                    
+                    if (result.suggestions && result.suggestions.length > 0) {
+                        outputEl.innerHTML += `<div style="margin-top: 10px;"><strong>Suggestions:</strong></div>`;
+                        result.suggestions.forEach(suggestion => {
+                            outputEl.innerHTML += `<div class="suggestion">💡 ${suggestion}</div>`;
+                        });
+                    }
+                } else if (result.error) {
+                    outputEl.innerHTML = `<div class="invalid">❌ Error: ${result.error.message}</div>`;
+                }
+            } catch (err) {
+                document.getElementById('custom-output').innerHTML = `<div class="invalid">❌ Failed to analyze: ${err.message}</div>`;
+                document.getElementById('custom-output').classList.add('show');
+            }
+        }
+
+        // Load help endpoint
+        async function loadHelp() {
+            const baseUrl = window.location.origin;
+            try {
+                const response = await fetch(baseUrl + '/v1/analyze/help');
+                const help = await response.json();
+
+                let html = '<h3 style="color: #1f5385; margin-top: 0;">Diagram Types</h3>';
+                for (const [type, data] of Object.entries(help['diagram-types'] || {})) {
+                    html += `<div style="margin-bottom: 15px;">
+                        <h4 style="margin: 5px 0; color: #333;">${type}</h4>
+                        <p style="margin: 5px 0; font-size: 12px; color: #666;">${data.description}</p>
+                        <pre style="background: #f0f0f0; padding: 8px; border-radius: 3px; font-size: 11px; overflow-x: auto;">${data.example}</pre>
+                    </div>`;
+                }
+
+                html += '<h3 style="color: #1f5385;">Common Errors & Fixes</h3>';
+                (help['common-errors'] || []).forEach(err => {
+                    html += `<div style="margin-bottom: 12px; border-left: 3px solid #ffc107; padding-left: 10px;">
+                        <div style="font-weight: bold; color: #dc3545;">${err.pattern}</div>
+                        <div style="font-size: 12px; color: #666; margin: 3px 0;">Fix: ${err.fix}</div>
+                        <pre style="background: #f0f0f0; padding: 6px; border-radius: 3px; font-size: 11px; margin: 5px 0; overflow-x: auto;">${err.example}</pre>
+                    </div>`;
+                });
+
+                document.getElementById('help-output').innerHTML = html;
+            } catch (err) {
+                document.getElementById('help-output').innerHTML = `<div class="invalid">Failed to load help: ${err.message}</div>`;
+            }
+        }
+
+        // Swagger UI
         const ui = SwaggerUIBundle({
             url: "/spec",
             dom_id: '#swagger-ui',
