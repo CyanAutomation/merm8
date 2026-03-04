@@ -489,3 +489,60 @@ func TestEngine_ConfigSuppressionSelectors_MalformedIgnored(t *testing.T) {
 		t.Fatalf("expected malformed selectors to be ignored, got %#v", issues)
 	}
 }
+
+func TestEngine_ConfigSuppressionSelectors_NegationRequiresInclude(t *testing.T) {
+	e := engine.NewWithRules(rules.MaxFanout{})
+	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+	}
+
+	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"!rule:max-fanout"}}})
+	if len(issues) != 1 {
+		t.Fatalf("expected negation-only selectors to keep issue, got %#v", issues)
+	}
+}
+
+func TestEngine_ConfigSuppressionSelectors_NegationOverridesInclude(t *testing.T) {
+	e := engine.NewWithRules(rules.MaxFanout{})
+	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+	}
+
+	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:max-fanout", "!node:A"}}})
+	if len(issues) != 1 {
+		t.Fatalf("expected negated match to keep issue even when include matches, got %#v", issues)
+	}
+}
+
+func TestEngine_ConfigSuppressionSelectors_UnknownRuleSelectorDoesNotMatch(t *testing.T) {
+	e := engine.NewWithRules(rules.MaxFanout{})
+	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+	}
+
+	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:unknown-rule"}}})
+	if len(issues) != 1 {
+		t.Fatalf("expected unknown rule selector value to not suppress issue, got %#v", issues)
+	}
+}
+
+func TestEngine_ConfigSuppressionSelectors_EscapedColonInNodeID(t *testing.T) {
+	line := 2
+	e := engine.NewWithRules(rules.MaxFanout{})
+	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "team:alpha", Line: &line}, {ID: "B"}, {ID: "C"}, {ID: "D"}},
+		Edges: []model.Edge{{From: "team:alpha", To: "B"}, {From: "team:alpha", To: "C"}, {From: "team:alpha", To: "D"}},
+	}
+
+	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{`node:team\:alpha`}}})
+	if len(issues) != 0 {
+		t.Fatalf("expected escaped colon selector to suppress node issue, got %#v", issues)
+	}
+}

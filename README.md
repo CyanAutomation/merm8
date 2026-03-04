@@ -529,6 +529,53 @@ graph TD
   A --> D
 ```
 
+### Config `suppression-selectors` grammar and evaluation
+
+Rule config can also suppress lint issues by selector (for example `"suppression-selectors": ["node:A"]`).
+
+Selectors are parsed with this grammar:
+
+```ebnf
+selectors      = selector , { selector } ;
+selector       = [ negation ] , prefix , ":" , value ;
+negation       = "!" ;
+prefix         = "node" | "subgraph" | "rule" ;
+value          = { escaped-char | unescaped-char } ;
+escaped-char   = "\\" , any-char ;
+unescaped-char = any-char - ":" ;
+```
+
+Notes:
+- Parsing trims surrounding whitespace from the full selector, prefix, and value.
+- Prefix matching is case-insensitive (`NoDe:A` is treated as `node:A`).
+- The first unescaped `:` splits prefix/value; `\:` is a literal colon inside `value`.
+- Unknown prefixes and empty values are ignored.
+
+Evaluation for a single issue uses include/exclude matching:
+
+- Non-negated selectors are **includes**.
+- Negated selectors (`!…`) are **excludes**.
+- An issue is suppressed iff **(at least one include matches) AND (no exclude matches)**.
+- Selector order does not matter (set-style evaluation).
+
+Truth-table style examples (`M+` = any include matched, `M-` = any exclude matched):
+
+| Selectors | M+ | M- | Suppressed? | Example |
+|---|---:|---:|---:|---|
+| `[]` | false | false | No | nothing configured |
+| `["rule:max-fanout"]` | true | false | Yes | hide `max-fanout` issues |
+| `["!rule:max-fanout"]` | false | true | No | negation-only never suppresses |
+| `["rule:max-fanout", "!node:A"]` | true | true | No | exclude overrides include |
+| `["node:team\:alpha"]` | true | false | Yes | escaped colon node ID |
+| `["rule:unknown-rule"]` | false | false | No | unknown rule ID value simply does not match |
+
+Common and edge-case examples:
+
+- Multiple selectors combine with OR within include/exclude groups, then exclude wins globally.
+- Conflicting include/exclude selectors keep issues visible when both groups match.
+- Unknown rule IDs in `rule:<id>` selectors are not config errors; they just never match emitted issues.
+- Malformed selectors (`"node"`, `"subgraph:"`, `"unknown:A"`) are ignored.
+
 ### Adding a New Rule
 
 1. Create `internal/rules/my_rule.go`:
