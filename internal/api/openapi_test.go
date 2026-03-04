@@ -336,9 +336,16 @@ func TestServeSpec_AnalyzeDescriptionDocumentsOperationalEnvVars(t *testing.T) {
 	spec := loadServedSpec(t)
 
 	desc := lookup(t, spec, "paths", "/v1/analyze", "post", "description").(string)
-	for _, snippet := range []string{"PARSER_CONCURRENCY_LIMIT", "PARSER_MAX_OLD_SPACE_MB", "error.code=server_busy", "--max-old-space-size", "Operational environment variables"} {
+	for _, snippet := range []string{"PARSER_CONCURRENCY_LIMIT", "PARSER_MAX_OLD_SPACE_MB", "error.code=server_busy", "--max-old-space-size", "Operational environment variables", "Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned)", "deprecated_config_format"} {
 		if !strings.Contains(desc, snippet) {
 			t.Fatalf("expected /analyze description to contain %q, got %q", snippet, desc)
+		}
+	}
+
+	sarifDesc := lookup(t, spec, "paths", "/v1/analyze/sarif", "post", "description").(string)
+	for _, snippet := range []string{"Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned)", "deprecated_config_format"} {
+		if !strings.Contains(sarifDesc, snippet) {
+			t.Fatalf("expected /v1/analyze/sarif description to contain %q, got %q", snippet, sarifDesc)
 		}
 	}
 }
@@ -368,6 +375,23 @@ func TestServeSpec_Analyze503DocumentsRetryAfterHeader(t *testing.T) {
 
 	if got := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "503", "headers", "Retry-After", "schema", "type"); got != "string" {
 		t.Fatalf("expected /v1/analyze 503 Retry-After header schema type string, got %#v", got)
+	}
+}
+
+func TestServeSpec_AnalyzeAndSARIF200DocumentDeprecationHeaders(t *testing.T) {
+	spec := loadServedSpec(t)
+
+	for _, path := range [][]string{{"paths", "/v1/analyze", "post", "responses", "200", "headers"}, {"paths", "/v1/analyze/sarif", "post", "responses", "200", "headers"}} {
+		headers := lookup(t, spec, path...).(map[string]interface{})
+		for _, header := range []string{"Warning", "Deprecation"} {
+			h, ok := headers[header].(map[string]interface{})
+			if !ok {
+				t.Fatalf("expected %s header docs at %v, got %#v", header, path, headers[header])
+			}
+			if got := lookup(t, h, "schema", "type"); got != "string" {
+				t.Fatalf("expected %s header schema type string at %v, got %#v", header, path, got)
+			}
+		}
 	}
 }
 
