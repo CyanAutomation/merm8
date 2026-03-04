@@ -373,8 +373,22 @@ func TestServeSpec_AnalyzeResponseDescriptionsDocumentModeSemantics(t *testing.T
 func TestServeSpec_Analyze503DocumentsRetryAfterHeader(t *testing.T) {
 	spec := loadServedSpec(t)
 
+	desc := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "503", "description").(string)
+	for _, snippet := range []string{"Retry-After", "Retry-After: 1", "Wed, 21 Oct 2015 07:28:00 GMT"} {
+		if !strings.Contains(desc, snippet) {
+			t.Fatalf("expected /v1/analyze 503 description to include %q, got %q", snippet, desc)
+		}
+	}
+
 	if got := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "503", "headers", "Retry-After", "schema", "type"); got != "string" {
 		t.Fatalf("expected /v1/analyze 503 Retry-After header schema type string, got %#v", got)
+	}
+
+	if got := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "503", "headers", "Retry-After", "examples", "deltaSeconds", "value"); got != "1" {
+		t.Fatalf("expected /v1/analyze 503 Retry-After deltaSeconds example '1', got %#v", got)
+	}
+	if got := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "503", "headers", "Retry-After", "examples", "httpDate", "value"); got != "Wed, 21 Oct 2015 07:28:00 GMT" {
+		t.Fatalf("expected /v1/analyze 503 Retry-After httpDate example, got %#v", got)
 	}
 }
 
