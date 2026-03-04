@@ -3766,3 +3766,248 @@ func TestAnalyze_InvalidParserOverrideValidation(t *testing.T) {
 		t.Fatalf("error.code=%v want invalid_option", errObj["code"])
 	}
 }
+
+// TestAnalyzeRaw_ValidDiagram_PlainText tests /analyze/raw with raw mermaid text.
+func TestAnalyzeRaw_ValidDiagram_PlainText(t *testing.T) {
+	validDiagram := &model.Diagram{
+		Type:      model.DiagramTypeFlowchart,
+		Direction: "TD",
+		Nodes: []model.Node{
+			{ID: "A", Label: "Start"},
+			{ID: "B", Label: "End"},
+		},
+		Edges: []model.Edge{
+			{From: "A", To: "B", Type: "arrow"},
+		},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return validDiagram, nil, nil
+	})
+
+	rawCode := "graph TD\n  A[Start] --> B[End]"
+	req := httptest.NewRequest(http.MethodPost, "/analyze/raw", strings.NewReader(rawCode))
+	req.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if valid, ok := resp["valid"].(bool); !ok || !valid {
+		t.Error("expected valid=true")
+	}
+	if diagramType, ok := resp["diagram-type"].(string); !ok || diagramType != "flowchart" {
+		t.Errorf("expected diagram-type=flowchart, got %v", resp["diagram-type"])
+	}
+}
+
+// TestAnalyzeRaw_ValidDiagram_JSON tests /analyze/raw with JSON auto-detection.
+func TestAnalyzeRaw_ValidDiagram_JSON(t *testing.T) {
+	validDiagram := &model.Diagram{
+		Type:      model.DiagramTypeFlowchart,
+		Direction: "LR",
+		Nodes: []model.Node{
+			{ID: "X", Label: "Input"},
+			{ID: "Y", Label: "Output"},
+		},
+		Edges: []model.Edge{
+			{From: "X", To: "Y", Type: "arrow"},
+		},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		if strings.Contains(code, "graph LR") {
+			return validDiagram, nil, nil
+		}
+		return nil, nil, errors.New("unexpected code")
+	})
+
+	jsonPayload, _ := json.Marshal(map[string]string{"code": "graph LR\n  X[Input] --> Y[Output]"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze/raw", bytes.NewReader(jsonPayload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if valid, ok := resp["valid"].(bool); !ok || !valid {
+		t.Error("expected valid=true")
+	}
+}
+
+// TestAnalyzeRaw_EmptyRequest tests /analyze/raw with empty body.
+func TestAnalyzeRaw_EmptyRequest(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze/raw", strings.NewReader(""))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if errDetail, ok := resp["error"].(map[string]interface{}); !ok {
+		t.Error("expected error field in response")
+	} else if code, ok := errDetail["code"].(string); !ok || code != "missing_code" {
+		t.Errorf("expected error.code=missing_code, got %v", errDetail["code"])
+	}
+}
+
+// TestAnalyzeRaw_RequestBodyTooLarge tests /analyze/raw with oversized body.
+func TestAnalyzeRaw_RequestBodyTooLarge(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, nil
+	})
+
+	// Create a body larger than 1 MiB
+	largeBody := strings.Repeat("a", 1<<20+1)
+	req := httptest.NewRequest(http.MethodPost, "/analyze/raw", strings.NewReader(largeBody))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if errDetail, ok := resp["error"].(map[string]interface{}); !ok {
+		t.Error("expected error field in response")
+	} else if code, ok := errDetail["code"].(string); !ok || code != "request_too_large" {
+		t.Errorf("expected error.code=request_too_large, got %v", errDetail["code"])
+	}
+}
+
+// TestAnalyzeRaw_SyntaxError tests /analyze/raw with syntax errors.
+func TestAnalyzeRaw_SyntaxError(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, &parser.SyntaxError{
+			Message: "Unexpected token",
+			Line:    1,
+			Column:  5,
+		}, nil
+	})
+
+	rawCode := "invalid mermaid code"
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", strings.NewReader(rawCode))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if valid, ok := resp["valid"].(bool); !ok || valid {
+		t.Error("expected valid=false for syntax error")
+	}
+
+	if syntaxErr, ok := resp["syntax-error"].(map[string]interface{}); !ok {
+		t.Error("expected syntax-error field in response")
+	} else {
+		if msg, ok := syntaxErr["message"].(string); !ok || msg != "Unexpected token" {
+			t.Errorf("expected message=Unexpected token, got %v", syntaxErr["message"])
+		}
+		if line, ok := syntaxErr["line"].(float64); !ok || line != 1 {
+			t.Errorf("expected line=1, got %v", syntaxErr["line"])
+		}
+		if col, ok := syntaxErr["column"].(float64); !ok || col != 5 {
+			t.Errorf("expected column=5, got %v", syntaxErr["column"])
+		}
+	}
+}
+
+// TestAnalyzeRaw_SequenceDiagram tests /analyze/raw with sequence diagram text.
+func TestAnalyzeRaw_SequenceDiagram(t *testing.T) {
+	sequenceDiagram := &model.Diagram{
+		Type: model.DiagramTypeSequence,
+		Nodes: []model.Node{
+			{ID: "Alice", Label: "Alice"},
+			{ID: "Bob", Label: "Bob"},
+		},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		if strings.HasPrefix(code, "sequenceDiagram") {
+			return sequenceDiagram, nil, nil
+		}
+		return nil, nil, errors.New("wrong diagram type")
+	})
+
+	rawCode := "sequenceDiagram\n  Alice ->> Bob: Hello"
+	req := httptest.NewRequest(http.MethodPost, "/analyze/raw", strings.NewReader(rawCode))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if diagramType, ok := resp["diagram-type"].(string); !ok || diagramType != "sequence" {
+		t.Errorf("expected diagram-type=sequence, got %v", resp["diagram-type"])
+	}
+	if lintSupported, ok := resp["lint-supported"].(bool); !ok || lintSupported {
+		t.Errorf("expected lint-supported=false for sequence diagram, got %v", resp["lint-supported"])
+	}
+}
+
+// TestAnalyzeRaw_ParserTimeout tests /analyze/raw with timeout error.
+func TestAnalyzeRaw_ParserTimeout(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, parser.ErrTimeout
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze/raw", strings.NewReader("graph TD; A-->B"))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusGatewayTimeout {
+		t.Fatalf("expected 504, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if errDetail, ok := resp["error"].(map[string]interface{}); !ok {
+		t.Error("expected error field in response")
+	} else if code, ok := errDetail["code"].(string); !ok || code != "parser_timeout" {
+		t.Errorf("expected error.code=parser_timeout, got %v", errDetail["code"])
+	}
+}
+

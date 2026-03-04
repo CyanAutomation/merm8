@@ -337,7 +337,85 @@ Add jitter (for example ±20% randomization) per attempt to avoid synchronized r
 
 ---
 
-## Direct HTTP Requests
+## Testing the `/v1/analyze/raw` Endpoint (Raw Mermaid Text)
+
+The `/v1/analyze/raw` endpoint allows you to send raw Mermaid code directly without JSON wrapping. This is simpler for quick testing but does **not** support lint rule configuration (use `/v1/analyze` if you need that).
+
+### Format Auto-Detection
+
+The endpoint auto-detects the input format:
+- **Plain text** (Content-Type: `text/plain`) — Entire body is treated as raw Mermaid code
+- **JSON** (Content-Type: `application/json`) — Attempts to parse `{"code": "..."}` structure, falls back to raw text if parsing fails
+
+### Using the Swagger UI
+
+1. Navigate to **`POST /v1/analyze/raw`** (or `/analyze/raw` for legacy unversioned)
+2. Click **"Try it out"**
+3. In the request body, enter raw Mermaid code:
+   ```
+   graph TD
+     A[Start] --> B[Process]
+     B --> C[End]
+   ```
+4. Click **"Execute"**
+
+### Using curl
+
+#### Plain Text Request
+
+```bash
+curl -X POST http://localhost:8080/v1/analyze/raw \
+  -H "Content-Type: text/plain" \
+  --data 'graph TD
+  A[Start] --> B[Process]
+  B --> C[End]'
+```
+
+Or more simply:
+
+```bash
+curl -X POST http://localhost:8080/v1/analyze/raw \
+  -d 'graph TD
+  A[Start] --> B[Process]
+  B --> C[End]'
+```
+
+#### Sequence Diagram Example
+
+```bash
+curl -X POST http://localhost:8080/v1/analyze/raw \
+  -d 'sequenceDiagram
+  Alice ->> Bob: Hello Bob, how are you?
+  Bob-->>Alice: I am good thanks!'
+```
+
+#### Using `curl` with a File
+
+```bash
+curl -X POST http://localhost:8080/v1/analyze/raw \
+  --data-binary @diagram.mmd
+```
+
+#### JSON Format (Auto-Detected)
+
+If you prefer JSON, the endpoint auto-detects it:
+
+```bash
+curl -X POST http://localhost:8080/v1/analyze/raw \
+  -H "Content-Type: application/json" \
+  -d '{"code": "graph TD\n  A --> B"}'
+```
+
+### Response
+
+The response has the same structure as `/v1/analyze`:
+- Successful analysis with no lint issues
+- Lint violations (if linting is supported for the diagram type)
+- Syntax error details
+
+**Note:** Since `/v1/analyze/raw` does not accept configuration, all lint rules use their defaults.
+
+---
 
 ### Using `curl`
 

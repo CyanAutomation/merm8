@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strconv"
@@ -261,6 +262,22 @@ func contains(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// readBody reads the entire request body into a byte slice.
+func readBody(body io.ReadCloser) ([]byte, error) {
+	defer body.Close()
+	return io.ReadAll(body)
+}
+
+// parseRawMermaidInput attempts to parse JSON first, falling back to treating the entire input as raw mermaid code.
+func parseRawMermaidInput(body []byte) (string, error) {
+	var req analyzeRequest
+	if err := json.Unmarshal(body, &req); err == nil && req.Code != "" {
+		return req.Code, nil
+	}
+	// Not JSON or missing code field - treat entire body as raw mermaid code
+	return string(body), nil
 }
 
 // syntaxErrorResponse mirrors parser.SyntaxError for the JSON response.
@@ -531,6 +548,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/rules/schema", h.RuleConfigSchema)
 	mux.HandleFunc("GET /v1/diagram-types", h.DiagramTypes)
 	mux.HandleFunc("POST /v1/analyze", h.Analyze)
+	mux.HandleFunc("POST /v1/analyze/raw", h.AnalyzeRaw)
 	mux.HandleFunc("POST /v1/analyze/sarif", h.AnalyzeSARIF)
 	mux.HandleFunc("GET /v1/spec", h.ServeSpec)
 	mux.HandleFunc("GET /v1/docs", h.ServeSwagger)
@@ -546,6 +564,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /rules/schema", h.RuleConfigSchema)
 	mux.HandleFunc("GET /diagram-types", h.DiagramTypes)
 	mux.HandleFunc("POST /analyze", h.Analyze)
+	mux.HandleFunc("POST /analyze/raw", h.AnalyzeRaw)
 	mux.HandleFunc("POST /analyze/sarif", h.AnalyzeSARIF)
 	mux.HandleFunc("GET /spec", h.ServeSpec)
 	mux.HandleFunc("GET /docs", h.ServeSwagger)
@@ -902,6 +921,199 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		Issues:        issues,
 		Warnings:      deprecationWarnings,
 		Meta:          responseMetaForWarnings(deprecationWarnings),
+		Metrics:       computeMetrics(diagram, issues),
+	}
+	onValid(resp)
+}
+
+// AnalyzeRaw handles POST /analyze/raw.
+// Accepts raw mermaid code (plain text) directly in the request body.
+// Auto-detects format: tries JSON with "code" field first, falls back to treating body as raw mermaid.
+// Does NOT support lint configuration; use /analyze for that.
+func (h *Handler) AnalyzeRaw(w http.ResponseWriter, r *http.Request) {
+	h.analyzeRawWithCallback(w, r, func(resp analyzeResponse) {
+		writeJSON(w, http.StatusOK, resp)
+	})
+}
+
+func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request, onValid func(resp analyzeResponse)) {
+	observeAnalyzeOutcome := func(outcome string) {
+		h.mu.RLock()
+		metrics := h.telemetryMetrics
+		h.mu.RUnlock()
+		if metrics != nil {
+			metrics.ObserveAnalyzeOutcome(outcome)
+		}
+		h.incrementAnalyzeOutcomeCounter(outcome)
+	}
+
+	h.mu.RLock()
+	logger := normalizeLogger(h.logger)
+	h.mu.RUnlock()
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxAnalyzeBodyBytes)
+
+	body, err := readBody(r.Body)
+	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			observeAnalyzeOutcome("request_too_large")
+			writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "request body exceeds 1 MiB limit")
+			return
+		}
+		observeAnalyzeOutcome("invalid_json")
+		writeError(w, http.StatusBadRequest, "invalid_json", "failed to read request body")
+		return
+	}
+
+	code, err := parseRawMermaidInput(body)
+	if err != nil || code == "" {
+		observeAnalyzeOutcome("missing_code")
+		writeError(w, http.StatusBadRequest, "missing_code", "request body is empty or does not contain mermaid code")
+		return
+	}
+
+	// Create a minimal analyzeRequest for parseWithRequestSettings
+	req := analyzeRequest{Code: code}
+
+	h.mu.RLock()
+	parserConcurrencyCh := h.parserConcurrencyCh
+	h.mu.RUnlock()
+
+	if parserConcurrencyCh != nil {
+		select {
+		case parserConcurrencyCh <- struct{}{}:
+			defer func() { <-parserConcurrencyCh }()
+		default:
+			observeAnalyzeOutcome("server_busy")
+			setServerBusyRetryAfterHeader(w)
+			writeError(w, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again")
+			return
+		}
+	}
+
+	parseStart := time.Now()
+	diagram, syntaxErr, err := h.parseWithRequestSettings(req)
+	parseDuration := time.Since(parseStart)
+	if err != nil {
+		if errors.Is(err, errInvalidRequest) {
+			observeAnalyzeOutcome("invalid_option")
+			writeError(w, http.StatusBadRequest, "invalid_option", strings.TrimPrefix(err.Error(), errInvalidRequest.Error()+": "))
+			return
+		}
+		outcome := parserFailureOutcome(err)
+		h.mu.RLock()
+		metrics := h.telemetryMetrics
+		h.mu.RUnlock()
+		if metrics != nil {
+			metrics.ObserveParserDuration(outcome, parseDuration)
+		}
+		observeAnalyzeOutcome(outcome)
+		setAnalyzeLogFields(r.Context(), outcome, string(model.DiagramTypeUnknown))
+		logger.Error("parser failure", "request_id", RequestIDFromContext(r.Context()), "route", r.URL.Path, "method", r.Method, "parser_outcome", outcome, "error", err.Error())
+		writeParserFailure(w, r.Context(), logger, err)
+		return
+	}
+
+	if syntaxErr != nil {
+		h.mu.RLock()
+		metrics := h.telemetryMetrics
+		h.mu.RUnlock()
+		if metrics != nil {
+			metrics.ObserveParserDuration(telemetry.OutcomeSyntaxError, parseDuration)
+		}
+		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
+		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
+		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
+		resp := analyzeResponse{
+			Valid:         false,
+			DiagramType:   diagramType,
+			LintSupported: diagramType.Family() == model.DiagramFamilyFlowchart,
+			Warnings:      nil,
+			Meta:          nil,
+			SyntaxError: &syntaxErrorResponse{
+				Message: syntaxErr.Message,
+				Line:    syntaxErr.Line,
+				Column:  syntaxErr.Column,
+			},
+			Issues:  []model.Issue{},
+			Metrics: defaultMetrics(diagramType),
+		}
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+
+	if diagram == nil {
+		h.mu.RLock()
+		metrics := h.telemetryMetrics
+		h.mu.RUnlock()
+		if metrics != nil {
+			metrics.ObserveParserDuration(telemetry.OutcomeInternalError, parseDuration)
+		}
+		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
+		setAnalyzeLogFields(r.Context(), telemetry.OutcomeInternalError, string(model.DiagramTypeUnknown))
+		logger.Error("parser returned nil diagram", "request_id", RequestIDFromContext(r.Context()), "route", r.URL.Path, "method", r.Method)
+		writeError(w, http.StatusInternalServerError, "internal_error", "parser returned nil diagram")
+		return
+	}
+
+	h.mu.RLock()
+	metrics := h.telemetryMetrics
+	h.mu.RUnlock()
+	if metrics != nil {
+		metrics.ObserveParserDuration(telemetry.OutcomeLintSuccess, parseDuration)
+	}
+
+	family := diagram.Type.Family()
+	if family != model.DiagramFamilyFlowchart {
+		observeAnalyzeOutcome("unsupported_diagram_type")
+		setAnalyzeLogFields(r.Context(), "unsupported_diagram_type", string(diagram.Type))
+		unsupportedIssue := model.Issue{
+			RuleID:   "unsupported-diagram-type",
+			Severity: "info",
+			Message:  "diagram type \"" + string(diagram.Type) + "\" is parsed but lint rules are not available yet",
+		}
+		resp := analyzeResponse{
+			Valid:         false,
+			DiagramType:   diagram.Type,
+			LintSupported: false,
+			SyntaxError:   nil,
+			Issues:        []model.Issue{unsupportedIssue},
+			Warnings:      nil,
+			Meta:          nil,
+			Error: &apiErrorDetails{
+				Code:    "unsupported_diagram_type",
+				Message: "diagram type is parsed but linting is not supported",
+			},
+			Metrics: computeMetrics(diagram, []model.Issue{unsupportedIssue}),
+		}
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+
+	ruleMetricsSink := newRequestRuleMetricsSink()
+	issues := h.engine.RunWithInstrumentation(diagram, rules.Config{}, ruleMetricsSink)
+	for _, ruleMetrics := range ruleMetricsSink.Snapshot() {
+		logger.Info(
+			"engine rule metrics",
+			"request_id", RequestIDFromContext(r.Context()),
+			"rule_id", ruleMetrics.RuleID,
+			"executions", ruleMetrics.Executions,
+			"issues_emitted", ruleMetrics.IssuesEmitted,
+			"total_duration_ns", ruleMetrics.TotalDurationNS,
+		)
+	}
+	observeAnalyzeOutcome(telemetry.OutcomeLintSuccess)
+	setAnalyzeLogFields(r.Context(), telemetry.OutcomeLintSuccess, string(diagram.Type))
+
+	resp := analyzeResponse{
+		Valid:         true,
+		DiagramType:   diagram.Type,
+		LintSupported: diagram.Type.Family() == model.DiagramFamilyFlowchart,
+		SyntaxError:   nil,
+		Issues:        issues,
+		Warnings:      nil,
+		Meta:          nil,
 		Metrics:       computeMetrics(diagram, issues),
 	}
 	onValid(resp)
