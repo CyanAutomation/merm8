@@ -19,6 +19,7 @@ import (
 	"github.com/CyanAutomation/merm8/internal/api"
 	"github.com/CyanAutomation/merm8/internal/engine"
 	"github.com/CyanAutomation/merm8/internal/model"
+	"github.com/CyanAutomation/merm8/internal/output/sarif"
 	"github.com/CyanAutomation/merm8/internal/parser"
 	"github.com/CyanAutomation/merm8/internal/rules"
 )
@@ -2748,6 +2749,17 @@ func TestAnalyzeSARIF_ParserConcurrencyLimitReached_Returns503WithRetryAfter(t *
 	}
 	if got := secondW.Header().Get("Retry-After"); got != "5" {
 		t.Fatalf("expected Retry-After header value 5, got %q", got)
+	}
+
+	var report sarif.Report
+	if err := json.Unmarshal(secondW.Body.Bytes(), &report); err != nil {
+		t.Fatalf("failed to decode SARIF response: %v", err)
+	}
+	if len(report.Runs) == 0 || len(report.Runs[0].Invocations) == 0 {
+		t.Fatalf("expected SARIF invocations with error details, got %#v", report)
+	}
+	if got := report.Runs[0].Invocations[0].Properties["error-code"]; got != "server_busy" {
+		t.Fatalf("expected SARIF error-code=server_busy, got %q", got)
 	}
 
 	close(release)
