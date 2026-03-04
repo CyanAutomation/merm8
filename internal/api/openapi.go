@@ -298,11 +298,11 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "List built-in lint rules",
-				"description": "Returns metadata for rules implemented by the currently registered runtime rule set, including defaults and configurable options.",
+				"description": "Returns lifecycle metadata for built-in rule IDs, including implemented and planned rules, defaults, and configurable options.",
 				"operationId": "listRules",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
-						"description": "Implemented rule metadata",
+						"description": "Rule metadata (implemented and planned)",
 						"content": map[string]interface{}{
 							"application/json": map[string]interface{}{
 								"schema": map[string]interface{}{
@@ -315,6 +315,7 @@ var openapi = map[string]interface{}{
 											"rules": []interface{}{
 												map[string]interface{}{
 													"id":          "max-depth",
+													"state":       "implemented",
 													"severity":    "warning",
 													"description": "Flags root-to-leaf traversals whose depth exceeds a configurable limit.",
 													"default-config": map[string]interface{}{
@@ -332,6 +333,7 @@ var openapi = map[string]interface{}{
 												},
 												map[string]interface{}{
 													"id":          "max-fanout",
+													"state":       "implemented",
 													"severity":    "warning",
 													"description": "Flags nodes whose outgoing edge count exceeds a configurable limit.",
 													"default-config": map[string]interface{}{
@@ -349,6 +351,7 @@ var openapi = map[string]interface{}{
 												},
 												map[string]interface{}{
 													"id":          "no-cycles",
+													"state":       "implemented",
 													"severity":    "error",
 													"description": "Flags directed cycles in flowcharts.",
 													"default-config": map[string]interface{}{
@@ -366,6 +369,7 @@ var openapi = map[string]interface{}{
 												},
 												map[string]interface{}{
 													"id":          "no-disconnected-nodes",
+													"state":       "implemented",
 													"severity":    "error",
 													"description": "Flags nodes that are not connected by any incoming or outgoing edge.",
 													"default-config": map[string]interface{}{
@@ -381,11 +385,29 @@ var openapi = map[string]interface{}{
 												},
 												map[string]interface{}{
 													"id":          "no-duplicate-node-ids",
+													"state":       "implemented",
 													"severity":    "error",
 													"description": "Flags diagrams containing more than one node with the same ID.",
 													"default-config": map[string]interface{}{
 														"enabled":               true,
 														"severity":              "error",
+														"suppression-selectors": []interface{}{},
+													},
+													"configurable-options": []interface{}{
+														map[string]interface{}{"name": "enabled", "type": "boolean", "description": "Enable or disable this rule.", "constraints": "Must be true or false."},
+														map[string]interface{}{"name": "severity", "type": "string", "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", "constraints": "Accepted values (canonical): error, warning, info."},
+														map[string]interface{}{"name": "suppression-selectors", "type": "array[string]", "description": "Selectors that suppress matching issues.", "constraints": "Each entry must be a string selector."},
+													},
+												},
+												map[string]interface{}{
+													"id":           "sequence-max-participants",
+													"state":        "planned",
+													"availability": "Planned for sequence diagram linting expansion.",
+													"severity":     "info",
+													"description":  "Will flag sequence diagrams that exceed a configurable participant count.",
+													"default-config": map[string]interface{}{
+														"enabled":               false,
+														"severity":              "info",
 														"suppression-selectors": []interface{}{},
 													},
 													"configurable-options": []interface{}{
@@ -1640,9 +1662,11 @@ var openapi = map[string]interface{}{
 			},
 			"RuleMetadata": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"id", "severity", "description", "default-config", "configurable-options"},
+				"required": []string{"id", "state", "severity", "description", "default-config", "configurable-options"},
 				"properties": map[string]interface{}{
 					"id":             map[string]interface{}{"type": "string", "example": "max-fanout"},
+					"state":          map[string]interface{}{"type": "string", "enum": []string{"implemented", "planned"}, "example": "implemented"},
+					"availability":   map[string]interface{}{"type": "string", "example": "Planned for sequence diagram linting expansion."},
 					"severity":       map[string]interface{}{"type": "string", "enum": []string{"error", "warning", "info"}},
 					"description":    map[string]interface{}{"type": "string"},
 					"default-config": map[string]interface{}{"type": "object", "additionalProperties": true},

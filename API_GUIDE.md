@@ -118,14 +118,20 @@ curl -s http://localhost:8080/metrics
 
 ### Discovering Rules with `/rules`
 
-Use **`GET /rules`** to discover the live enforceable rule catalog at runtime (only rules implemented by the active runtime engine are advertised).
+Use **`GET /rules`** to discover the rule metadata catalog at runtime.
 
 The response includes:
 - Rule identifier
+- Rule lifecycle `state` (`implemented` or `planned`)
 - Default severity
 - Rule description
 - Default configuration
 - Configurable option docs (name/type/constraints)
+
+Interpretation guidance:
+- `implemented` rules are currently enforced by the runtime engine and can be configured under `config.rules` for `/analyze`.
+- `planned` rules are forward-looking metadata for upcoming rule families and are **not** enforced yet.
+- Planned entries may include `availability` notes to help clients decide whether to show roadmap badges, “coming soon” labels, or hide non-actionable controls.
 
 This is the recommended source for integrations and generated docs.
 

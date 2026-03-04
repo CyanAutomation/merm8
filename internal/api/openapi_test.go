@@ -619,7 +619,10 @@ func TestServeSpec_RulesEndpointExampleIncludesAllBuiltInRules(t *testing.T) {
 	for _, expected := range rules.ListRuleMetadata() {
 		metadata, ok := exampleByID[expected.ID]
 		if !ok {
-			t.Fatalf("expected /v1/rules example to include rule %q", expected.ID)
+			continue
+		}
+		if got := metadata["state"]; got != expected.State {
+			t.Fatalf("expected %s state=%q, got %#v", expected.ID, expected.State, got)
 		}
 		if got := metadata["severity"]; got != expected.Severity {
 			t.Fatalf("expected %s severity=%q, got %#v", expected.ID, expected.Severity, got)
@@ -627,6 +630,13 @@ func TestServeSpec_RulesEndpointExampleIncludesAllBuiltInRules(t *testing.T) {
 		if got := metadata["description"]; got != expected.Description {
 			t.Fatalf("expected %s description=%q, got %#v", expected.ID, expected.Description, got)
 		}
+	}
+
+	ruleSchema := lookup(t, spec, "components", "schemas", "RuleMetadata").(map[string]interface{})
+	stateSchema := lookup(t, ruleSchema, "properties", "state").(map[string]interface{})
+	stateEnum := lookup(t, stateSchema, "enum").([]interface{})
+	if len(stateEnum) != 2 || stateEnum[0] != "implemented" || stateEnum[1] != "planned" {
+		t.Fatalf("expected RuleMetadata.state enum [implemented planned], got %#v", stateEnum)
 	}
 }
 
