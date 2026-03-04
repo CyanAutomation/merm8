@@ -95,7 +95,7 @@ func TransformError(errInfo ErrorInfo, meta RequestMetadata) Report {
 	// Map error codes to SARIF severity levels
 	level := SARIFLevelWarning
 	switch errInfo.Code {
-	case "parser_timeout", "parser_subprocess_error", "parser_contract_violation", "parser_decode_error":
+	case "parser_timeout", "parser_memory_limit", "parser_subprocess_error", "parser_contract_violation", "parser_decode_error":
 		level = SARIFLevelError
 	case "invalid_json", "invalid_config", "invalid_option", "unknown_option", "unknown_rule", "deprecated_config_format", "unsupported_schema_version", "missing_code":
 		level = SARIFLevelWarning
@@ -203,7 +203,7 @@ func Transform(issues []model.Issue, meta RequestMetadata) Report {
 // mapErrorCodeToLevel maps API error codes to SARIF result levels.
 func mapErrorCodeToLevel(code string) string {
 	switch code {
-	case "parser_timeout", "parser_subprocess_error", "parser_decode_error", "parser_contract_violation", "internal_error", "server_busy":
+	case "parser_timeout", "parser_memory_limit", "parser_subprocess_error", "parser_decode_error", "parser_contract_violation", "internal_error", "server_busy":
 		return SARIFLevelError
 	case "invalid_json", "invalid_config", "missing_code", "request_too_large", "deprecated_config_format", "invalid_option", "unknown_option", "unknown_rule", "unsupported_diagram_type", "syntax_error":
 		return SARIFLevelWarning

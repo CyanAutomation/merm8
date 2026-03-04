@@ -35,6 +35,50 @@ For deployment sizing and overload behavior, the parser runtime exposes three ke
 
 Use these together with your platform CPU/memory limits to tune throughput versus memory headroom in production.
 
+#### Per-request parser overrides (optional)
+
+`POST /v1/analyze` also accepts an optional `parser` object for bounded overrides:
+
+```json
+{
+  "code": "graph TD
+A-->B",
+  "parser": {
+    "timeout_seconds": 8,
+    "max_old_space_mb": 768
+  }
+}
+```
+
+Validation bounds are enforced server-side:
+- `parser.timeout_seconds`: **1–60**
+- `parser.max_old_space_mb`: **128–4096**
+
+Out-of-range values return `400` with `error.code=invalid_option`.
+
+#### Parser failure remediation payloads
+
+Timeout and parser-memory failures include structured remediation details under `error.details` when safe:
+- `suggestion`: actionable mitigation (reduce diagram size, batch requests, raise limits)
+- `limit`: effective timeout or memory cap that was hit
+- `observed_size`: request code size in bytes (memory-limit errors)
+
+Parser execution error codes:
+- `parser_timeout` (HTTP 504)
+- `parser_memory_limit` (HTTP 500)
+- `parser_subprocess_error` (HTTP 500)
+- `parser_decode_error` (HTTP 500)
+- `parser_contract_violation` (HTTP 500)
+
+#### Tuning guidance
+
+For production stability:
+- Start with defaults (`timeout=5s`, `max_old_space=512MB`, `concurrency=8`).
+- If timeouts occur, first reduce diagram complexity (split large diagrams into smaller subgraphs) before increasing timeout.
+- If memory-limit errors occur, batch large analysis jobs and/or raise `PARSER_MAX_OLD_SPACE_MB` conservatively.
+- Prefer tiered limits by environment (e.g., lower defaults on shared/dev tiers, higher caps on dedicated/prod tiers).
+
+
 ---
 
 
