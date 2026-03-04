@@ -241,8 +241,26 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 - `missing_code` — `code` field is missing or empty (HTTP 400)
 - `invalid_json` — body is not valid JSON (HTTP 400)
 - `request_too_large` — request body exceeds 1 MiB (HTTP 413)
+- `server_busy` — parser concurrency is saturated; retry later (HTTP 503, includes `Retry-After`)
 - `parser_timeout` — parser timed out (HTTP 504)
 - `internal_error` — unexpected internal parser/service failure (HTTP 500)
+
+### Retry Strategy for `503 server_busy`
+
+When the API returns `503` with `error.code=server_busy`, check the `Retry-After` header first:
+
+- If `Retry-After` is an integer, treat it as delay seconds.
+- If `Retry-After` is an HTTP-date, wait until that timestamp.
+- If the header is missing or invalid, use a conservative fallback delay (for example, 5 seconds).
+
+Recommended retry policy for clients:
+
+1. Retry only on transient statuses (`503`, optionally `429`/`504` depending on workload).
+2. Use exponential backoff with jitter.
+3. Cap retries to a finite budget (for example, max 5 attempts total).
+
+Example backoff schedule (before jitter): `1s`, `2s`, `4s`, `8s`, `16s`.
+Add jitter (for example ±20% randomization) per attempt to avoid synchronized retry bursts.
 
 ### Response Fields Explained
 
@@ -336,8 +354,12 @@ curl -X POST http://localhost:8080/analyze \
 #### Python `requests`
 
 ```python
-import requests
 import json
+import random
+import time
+from email.utils import parsedate_to_datetime
+
+import requests
 
 url = "http://localhost:8080/analyze"
 payload = {
@@ -349,7 +371,37 @@ payload = {
     }
 }
 
-response = requests.post(url, json=payload)
+def retry_after_seconds(value: str | None) -> float | None:
+    if not value:
+        return None
+    value = value.strip()
+    if value.isdigit():
+        return float(value)
+    try:
+        dt = parsedate_to_datetime(value)
+        return max(0.0, dt.timestamp() - time.time())
+    except Exception:
+        return None
+
+
+max_attempts = 5
+base_delay = 1.0
+
+for attempt in range(1, max_attempts + 1):
+    response = requests.post(url, json=payload)
+    if response.status_code != 503:
+        break
+
+    result = response.json()
+    if result.get("error", {}).get("code") != "server_busy":
+        break
+
+    header_delay = retry_after_seconds(response.headers.get("Retry-After"))
+    backoff_delay = base_delay * (2 ** (attempt - 1))
+    jitter = random.uniform(0, backoff_delay * 0.2)
+    sleep_for = header_delay if header_delay is not None else (backoff_delay + jitter)
+    time.sleep(sleep_for)
+
 result = response.json()
 
 print(f"Valid: {result['valid']}")
@@ -370,17 +422,43 @@ const payload = {
   }
 };
 
-const response = await fetch('http://localhost:8080/analyze', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(payload)
-});
+const maxAttempts = 5;
+const baseDelayMs = 1000;
+
+const retryAfterToMs = (value) => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed) * 1000;
+  const at = Date.parse(trimmed);
+  if (Number.isNaN(at)) return null;
+  return Math.max(0, at - Date.now());
+};
+
+let response;
+for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+  response = await fetch('http://localhost:8080/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (response.status !== 503) break;
+
+  const body = await response.clone().json();
+  if (body?.error?.code !== 'server_busy') break;
+
+  const retryAfterMs = retryAfterToMs(response.headers.get('Retry-After'));
+  const expBackoffMs = baseDelayMs * (2 ** (attempt - 1));
+  const jitterMs = Math.random() * expBackoffMs * 0.2;
+  const sleepMs = retryAfterMs ?? (expBackoffMs + jitterMs);
+  await new Promise((resolve) => setTimeout(resolve, sleepMs));
+}
 
 const data = await response.json();
 console.log(`Valid: ${data.valid}`);
 console.log(`Issues: ${data.issues.length}`);
 for (const issue of data.issues) {
-  console.log(`  - ${issue.rule-id}: ${issue.message}`);
+  console.log(`  - ${issue['rule-id']}: ${issue.message}`);
 }
 ```
 
