@@ -343,11 +343,26 @@
             "deprecated": true,
             "description": "Deprecated alias for service-version; remove usage before next major version.",
             "type": "string"
+          },
+          "supported-rules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "supported_rules": {
+            "deprecated": true,
+            "description": "Deprecated alias for supported-rules; remove usage before next major version.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
           "parser-recognized",
-          "lint-supported"
+          "lint-supported",
+          "supported-rules"
         ],
         "type": "object"
       },
@@ -627,6 +642,7 @@
                   "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
+                      "pattern": "^!?(node|subgraph|rule):.+$",
                       "type": "string"
                     },
                     "type": "array"
@@ -658,6 +674,7 @@
                   "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
+                      "pattern": "^!?(node|subgraph|rule):.+$",
                       "type": "string"
                     },
                     "type": "array"
@@ -688,6 +705,7 @@
                   "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
+                      "pattern": "^!?(node|subgraph|rule):.+$",
                       "type": "string"
                     },
                     "type": "array"
@@ -714,6 +732,7 @@
                   "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
+                      "pattern": "^!?(node|subgraph|rule):.+$",
                       "type": "string"
                     },
                     "type": "array"
@@ -740,6 +759,7 @@
                   "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
+                      "pattern": "^!?(node|subgraph|rule):.+$",
                       "type": "string"
                     },
                     "type": "array"
@@ -781,6 +801,7 @@
                       "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
+                          "pattern": "^!?(node|subgraph|rule):.+$",
                           "type": "string"
                         },
                         "type": "array"
@@ -812,6 +833,7 @@
                       "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
+                          "pattern": "^!?(node|subgraph|rule):.+$",
                           "type": "string"
                         },
                         "type": "array"
@@ -842,6 +864,7 @@
                       "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
+                          "pattern": "^!?(node|subgraph|rule):.+$",
                           "type": "string"
                         },
                         "type": "array"
@@ -868,6 +891,7 @@
                       "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
+                          "pattern": "^!?(node|subgraph|rule):.+$",
                           "type": "string"
                         },
                         "type": "array"
@@ -894,6 +918,7 @@
                       "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
+                          "pattern": "^!?(node|subgraph|rule):.+$",
                           "type": "string"
                         },
                         "type": "array"
@@ -1322,7 +1347,7 @@
     },
     "/info": {
       "get": {
-        "description": "Returns service/app version metadata (when configured), parser and Mermaid versions, plus parser-recognized and lint-supported diagram families.",
+        "description": "Returns service/app version metadata (when configured), parser and Mermaid versions, plus parser-recognized/lint-supported diagram families and supported lint rule IDs.",
         "operationId": "getInfo",
         "responses": {
           "200": {

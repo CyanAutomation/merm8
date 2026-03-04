@@ -269,10 +269,16 @@ func TestServeSpec_InfoResponseUsesKebabCaseWithDeprecatedSnakeCaseAliases(t *te
 	if !slices.Contains(required, interface{}("lint-supported")) {
 		t.Fatalf("expected InfoResponse.required to include lint-supported, got %#v", required)
 	}
+	if !slices.Contains(required, interface{}("supported-rules")) {
+		t.Fatalf("expected InfoResponse.required to include supported-rules, got %#v", required)
+	}
 
 	properties := infoSchema["properties"].(map[string]interface{})
 	if _, ok := properties["lint-supported"]; !ok {
 		t.Fatalf("expected canonical lint-supported in InfoResponse properties, got %#v", properties)
+	}
+	if _, ok := properties["supported-rules"]; !ok {
+		t.Fatalf("expected canonical supported-rules in InfoResponse properties, got %#v", properties)
 	}
 
 	legacyLint, ok := properties["lint_supported"].(map[string]interface{})
@@ -281,6 +287,14 @@ func TestServeSpec_InfoResponseUsesKebabCaseWithDeprecatedSnakeCaseAliases(t *te
 	}
 	if legacyLint["deprecated"] != true {
 		t.Fatalf("expected lint_supported to be marked deprecated=true, got %#v", legacyLint["deprecated"])
+	}
+
+	legacySupportedRules, ok := properties["supported_rules"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected legacy supported_rules alias property, got %#v", properties["supported_rules"])
+	}
+	if legacySupportedRules["deprecated"] != true {
+		t.Fatalf("expected supported_rules to be marked deprecated=true, got %#v", legacySupportedRules["deprecated"])
 	}
 }
 
