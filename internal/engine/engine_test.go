@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
@@ -508,13 +509,44 @@ func TestEngine_ConfigSuppressionSelectors_NegationOverridesInclude(t *testing.T
 	e := engine.NewWithRules(rules.MaxFanout{})
 	d := &model.Diagram{
 		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}, {ID: "D"}, {ID: "E"}, {ID: "F"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "D", To: "E"}, {From: "D", To: "F"}},
+	}
+
+	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"node:A", "!node:D"}}})
+	if len(issues) != 1 {
+		t.Fatalf("expected mixed selectors to suppress node A issue and keep node D issue, got %#v", issues)
+	}
+	if !strings.Contains(issues[0].Message, `node "D" has fanout 2`) {
+		t.Fatalf("expected unsuppressed issue for node D, got %#v", issues[0])
+	}
+}
+
+func TestEngine_ConfigSuppressionSelectors_NegatedRuleSelectorBehavior(t *testing.T) {
+	e := engine.NewWithRules(rules.MaxFanout{})
+	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
 		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
 	}
 
-	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:max-fanout", "!node:A"}}})
+	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:max-fanout", "!rule:max-fanout"}}})
 	if len(issues) != 1 {
-		t.Fatalf("expected negated match to keep issue even when include matches, got %#v", issues)
+		t.Fatalf("expected negated rule selector to override matching include rule selector, got %#v", issues)
+	}
+}
+
+func TestEngine_ConfigSuppressionSelectors_MalformedNegationIgnored(t *testing.T) {
+	e := engine.NewWithRules(rules.MaxFanout{})
+	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+	}
+
+	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:max-fanout", "! node:A", "!", "!\tnode:A"}}})
+	if len(issues) != 0 {
+		t.Fatalf("expected malformed negated selectors to be ignored safely, got %#v", issues)
 	}
 }
 

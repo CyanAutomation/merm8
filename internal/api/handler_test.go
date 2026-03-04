@@ -942,7 +942,7 @@ func TestAnalyze_ConfigLegacySnakeCaseKeysAcceptedWithWarning(t *testing.T) {
 
 func TestAnalyze_LegacyConfigShapesWarnAndStillApplyConfig(t *testing.T) {
 	diagram := &model.Diagram{
-		Type: model.DiagramTypeFlowchart,
+		Type:  model.DiagramTypeFlowchart,
 		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
 		Edges: []model.Edge{
 			{From: "A", To: "B"},
@@ -3480,6 +3480,81 @@ func TestAnalyze_ConfigSuppressionSelectors_Node(t *testing.T) {
 	}
 	if len(resp.Issues) != 0 {
 		t.Fatalf("expected node selector suppression to hide issue, got %#v", resp.Issues)
+	}
+}
+
+func TestAnalyze_MetricsIssueCountsReflectUnsuppressedIssuesOnly(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		lineA := 2
+		lineD := 3
+		return &model.Diagram{
+			Type: model.DiagramTypeFlowchart,
+			Nodes: []model.Node{
+				{ID: "A", Line: &lineA}, {ID: "B"}, {ID: "C"},
+				{ID: "D", Line: &lineD}, {ID: "E"}, {ID: "F"},
+			},
+			Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "D", To: "E"}, {From: "D", To: "F"}},
+		}, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]any{
+		"code": "graph TD\nA-->B\nA-->C\nD-->E\nD-->F",
+		"config": map[string]any{
+			"schema-version": "v1",
+			"rules": map[string]any{
+				"max-fanout": map[string]any{
+					"limit":                 1,
+					"suppression-selectors": []string{"node:A"},
+				},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	issues, ok := resp["issues"].([]any)
+	if !ok {
+		t.Fatalf("expected issues array, got %T", resp["issues"])
+	}
+	if len(issues) != 1 {
+		t.Fatalf("expected exactly one unsuppressed issue, got %d (%#v)", len(issues), issues)
+	}
+
+	metrics, ok := resp["metrics"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected metrics object, got %T", resp["metrics"])
+	}
+	issueCounts, ok := metrics["issue-counts"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected issue-counts object, got %T", metrics["issue-counts"])
+	}
+
+	bySeverity, ok := issueCounts["by-severity"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected by-severity object, got %T", issueCounts["by-severity"])
+	}
+	if bySeverity["warning"] != float64(1) {
+		t.Fatalf("expected by-severity.warning=1 after suppression, got %v", bySeverity["warning"])
+	}
+
+	byRule, ok := issueCounts["by-rule"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected by-rule object, got %T", issueCounts["by-rule"])
+	}
+	if byRule["max-fanout"] != float64(1) {
+		t.Fatalf("expected by-rule.max-fanout=1 after suppression, got %v", byRule["max-fanout"])
 	}
 }
 
