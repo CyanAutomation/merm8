@@ -227,8 +227,8 @@ async function extractAST(mermaidAPI, source, diagramType) {
 
   const rawEdges = Array.isArray(db.edges) ? db.edges : [];
   for (const e of rawEdges) {
-    const from = String(e.start ?? e.from ?? '');
-    const to = String(e.end ?? e.to ?? '');
+    const from = normalizeNodeID(String(e.start ?? e.from ?? ''));
+    const to = normalizeNodeID(String(e.end ?? e.to ?? ''));
     const edgeLoc = findEdgeLocation(sourceLines, from, to);
     ast.edges.push({
       from,
@@ -242,8 +242,9 @@ async function extractAST(mermaidAPI, source, diagramType) {
   const explicitNodes = Object.entries(rawVertices);
   if (explicitNodes.length > 0) {
     for (const [id, v] of explicitNodes) {
+      const normalizedID = normalizeNodeID(id);
       const nodeLoc = findNodeLocation(sourceLines, id);
-      ast.nodes.push({ id, label: extractLabel(v), ...(nodeLoc || {}) });
+      ast.nodes.push({ id: normalizedID, label: extractLabel(v), ...(nodeLoc || {}) });
     }
   } else {
     const seen = new Set();
@@ -266,7 +267,7 @@ async function extractAST(mermaidAPI, source, diagramType) {
     ast.subgraphs.push({
       id: String(s.id ?? s.title ?? ''),
       label: String(s.title ?? s.id ?? ''),
-      nodes: Array.isArray(s.nodes) ? s.nodes.map(String) : [],
+      nodes: Array.isArray(s.nodes) ? s.nodes.map(n => normalizeNodeID(n)) : [],
     });
   }
 
@@ -323,6 +324,12 @@ function findEdgeLocation(lines, from, to) {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeNodeID(id) {
+  // Normalize node IDs by trimming whitespace and converting to lowercase.
+  // This ensures that "A", " A", "  A", "a", etc. are all treated as the same node ID.
+  return String(id).trim().toLowerCase();
 }
 
 function normalizeDiagramType(detectedType) {

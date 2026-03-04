@@ -533,6 +533,48 @@ func TestNoDuplicateNodeIDs_SubgraphContextAbsentWhenDuplicateOutsideSubgraph(t 
 	}
 }
 
+func TestNoDuplicateNodeIDs_DetectsWhitespaceNormalizedDuplicates(t *testing.T) {
+	// Simulates what happens after the parser normalizes whitespace:
+	// Input: "A" and " A " -> Parser normalizes both to "a"
+	// The rule should detect this as a duplicate.
+	line1, col1 := 1, 1
+	line2, col2 := 2, 1
+	d := &model.Diagram{
+		Nodes: []model.Node{
+			{ID: "a", Line: &line1, Column: &col1},
+			{ID: "a", Line: &line2, Column: &col2}, // Both normalized to same ID
+		},
+	}
+	issues := rules.NoDuplicateNodeIDs{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue for normalized duplicates, got %d", len(issues))
+	}
+	if issues[0].Line == nil || *issues[0].Line != line2 {
+		t.Fatalf("expected duplicate to be reported on line %d, got %v", line2, issues[0].Line)
+	}
+}
+
+func TestNoDuplicateNodeIDs_DetectsCaseInsensitiveDuplicates(t *testing.T) {
+	// Simulates what happens after the parser normalizes case:
+	// Input: "NodeA" and "nodea" -> Parser normalizes both to "nodea"
+	// The rule should detect this as a duplicate.
+	line1, col1 := 1, 1
+	line2, col2 := 2, 1
+	d := &model.Diagram{
+		Nodes: []model.Node{
+			{ID: "mynode", Line: &line1, Column: &col1},
+			{ID: "mynode", Line: &line2, Column: &col2}, // Both normalized to same ID
+		},
+	}
+	issues := rules.NoDuplicateNodeIDs{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue for case-normalized duplicates, got %d", len(issues))
+	}
+	if issues[0].Line == nil || *issues[0].Line != line2 {
+		t.Fatalf("expected duplicate to be reported on line %d, got %v", line2, issues[0].Line)
+	}
+}
+
 func TestNoDisconnectedNodes_SubgraphContextPresentForMemberNode(t *testing.T) {
 	d := &model.Diagram{
 		Nodes:     []model.Node{{ID: "A"}, {ID: "B"}},
