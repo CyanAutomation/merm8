@@ -337,6 +337,14 @@ func TestServeSpec_AnalyzeResponseDescriptionsDocumentModeSemantics(t *testing.T
 	}
 }
 
+func TestServeSpec_Analyze503DocumentsRetryAfterHeader(t *testing.T) {
+	spec := loadServedSpec(t)
+
+	if got := lookup(t, spec, "paths", "/v1/analyze", "post", "responses", "503", "headers", "Retry-After", "schema", "type"); got != "string" {
+		t.Fatalf("expected /v1/analyze 503 Retry-After header schema type string, got %#v", got)
+	}
+}
+
 func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 	servedSpec := loadServedSpec(t)
 	jsonSpec := loadOpenAPIJSON(t)

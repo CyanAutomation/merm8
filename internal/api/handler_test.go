@@ -2700,7 +2700,55 @@ func TestAnalyze_ParserConcurrencyLimitReached_Returns503(t *testing.T) {
 	if secondW.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 when parser concurrency is exhausted, got %d", secondW.Code)
 	}
+	if got := secondW.Header().Get("Retry-After"); got != "5" {
+		t.Fatalf("expected Retry-After header value 5, got %q", got)
+	}
 	assertExactErrorResponse(t, secondW.Body.Bytes(), "server_busy", "parser concurrency limit reached; try again")
+
+	close(release)
+	<-done
+}
+
+func TestAnalyzeSARIF_ParserConcurrencyLimitReached_Returns503WithRetryAfter(t *testing.T) {
+	start := make(chan struct{})
+	release := make(chan struct{})
+
+	mockP := &mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		start <- struct{}{}
+		<-release
+		return &model.Diagram{}, nil, nil
+	}}
+
+	h := api.NewHandler(mockP, engine.New())
+	h.SetParserConcurrencyLimit(1)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
+
+	firstReq := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	firstReq.Header.Set("Content-Type", "application/json")
+	firstW := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		mux.ServeHTTP(firstW, firstReq)
+		close(done)
+	}()
+
+	<-start
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	secondReq.Header.Set("Content-Type", "application/json")
+	secondW := httptest.NewRecorder()
+	mux.ServeHTTP(secondW, secondReq)
+
+	if secondW.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when parser concurrency is exhausted, got %d", secondW.Code)
+	}
+	if got := secondW.Header().Get("Retry-After"); got != "5" {
+		t.Fatalf("expected Retry-After header value 5, got %q", got)
+	}
 
 	close(release)
 	<-done

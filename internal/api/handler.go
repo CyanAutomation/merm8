@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,6 +24,7 @@ import (
 )
 
 const maxAnalyzeBodyBytes int64 = 1 << 20 // 1 MiB
+const serverBusyRetryAfterSeconds = 5
 
 const (
 	legacySchemaVersionWarningMessage = `legacy key config.schema_version is deprecated; use config.schema-version. Example: {"config":{"schema-version":"v1","rules":{"max-fanout":{"limit":3}}}}`
@@ -725,6 +727,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			defer func() { <-parserConcurrencyCh }()
 		default:
 			observeAnalyzeOutcome("server_busy")
+			setServerBusyRetryAfterHeader(w)
 			writeError(w, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again")
 			return
 		}
@@ -958,6 +961,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 			defer func() { <-parserConcurrencyCh }()
 		default:
 			observeAnalyzeOutcome("server_busy")
+			setServerBusyRetryAfterHeader(w)
 			report := sarif.TransformError(sarif.ErrorInfo{
 				Code:    "server_busy",
 				Message: "parser concurrency limit reached; try again",
@@ -1285,6 +1289,10 @@ func writeSARIF(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/sarif+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func setServerBusyRetryAfterHeader(w http.ResponseWriter) {
+	w.Header().Set("Retry-After", strconv.Itoa(serverBusyRetryAfterSeconds))
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
