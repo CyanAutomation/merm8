@@ -74,7 +74,7 @@ curl -s http://localhost:8080/metrics
 
 ### Discovering Rules with `/rules`
 
-Use **`GET /rules`** to discover the live built-in rule catalog at runtime.
+Use **`GET /rules`** to discover the live enforceable rule catalog at runtime (only rules implemented by the active runtime engine are advertised).
 
 The response includes:
 - Rule identifier

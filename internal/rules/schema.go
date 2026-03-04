@@ -9,18 +9,30 @@ const CurrentConfigSchemaVersion = "v1"
 // Canonical format:
 //   - Versioned format: {"schema-version":"v1","rules":{...}}
 func ConfigJSONSchema() map[string]any {
+	return ConfigJSONSchemaForRuleIDs(nil)
+}
+
+// ConfigJSONSchemaForRuleIDs returns a JSON Schema restricted to the provided
+// implemented rule IDs. A nil/empty ruleIDs set includes all built-in rules.
+func ConfigJSONSchemaForRuleIDs(ruleIDs map[string]struct{}) map[string]any {
 	return map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
 		"title":   "merm8 Rule Configuration",
 		"oneOf": []any{
-			flatConfigSchema(),
-			ConfigV1JSONSchema(),
+			flatConfigSchemaForRuleIDs(ruleIDs),
+			ConfigV1JSONSchemaForRuleIDs(ruleIDs),
 		},
 	}
 }
 
 // ConfigV1JSONSchema returns the schema for the versioned config contract.
 func ConfigV1JSONSchema() map[string]any {
+	return ConfigV1JSONSchemaForRuleIDs(nil)
+}
+
+// ConfigV1JSONSchemaForRuleIDs returns the versioned config schema restricted
+// to the provided implemented rule IDs.
+func ConfigV1JSONSchemaForRuleIDs(ruleIDs map[string]struct{}) map[string]any {
 	return map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
 		"title":   "merm8 Rule Configuration v1",
@@ -35,21 +47,25 @@ func ConfigV1JSONSchema() map[string]any {
 				"type": "string",
 				"enum": []string{CurrentConfigSchemaVersion},
 			},
-			"rules": flatConfigSchema(),
+			"rules": flatConfigSchemaForRuleIDs(ruleIDs),
 		},
 	}
 }
 
 func flatConfigSchema() map[string]any {
-	registry := ConfigRegistry()
-	ruleIDs := make([]string, 0, len(registry))
-	for ruleID := range registry {
-		ruleIDs = append(ruleIDs, ruleID)
-	}
-	sort.Strings(ruleIDs)
+	return flatConfigSchemaForRuleIDs(nil)
+}
 
-	properties := make(map[string]any, len(ruleIDs))
-	for _, ruleID := range ruleIDs {
+func flatConfigSchemaForRuleIDs(ruleIDs map[string]struct{}) map[string]any {
+	registry := ConfigRegistryForRuleIDs(ruleIDs)
+	ruleIDList := make([]string, 0, len(registry))
+	for ruleID := range registry {
+		ruleIDList = append(ruleIDList, ruleID)
+	}
+	sort.Strings(ruleIDList)
+
+	properties := make(map[string]any, len(ruleIDList))
+	for _, ruleID := range ruleIDList {
 		properties[ruleID] = ruleOptionsSchema(registry[ruleID])
 	}
 

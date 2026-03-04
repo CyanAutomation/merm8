@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test coverage for timeout configurability, SARIF error response format, and concurrent error handling.
 
 ### Changed
+- `GET /rules` and `GET /rules/schema` now advertise only rules implemented by the active runtime registry; configs that reference non-implemented/planned rules return `400 unknown_rule` without implying enforceability.
 - Rule severity overrides are now normalized with case-insensitive, trimmed parsing, and only canonical values `error`, `warning`, and `info` are accepted; the legacy `warn` alias is now rejected.
 - `POST /analyze/sarif` error responses now return proper HTTP status codes instead of 200 OK with embedded errors.
   - Invalid JSON: `400 Bad Request`

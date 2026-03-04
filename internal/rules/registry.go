@@ -200,10 +200,42 @@ func ListRuleMetadata() []RuleMetadata {
 	return metadata
 }
 
+// ListRuleMetadataForRuleIDs returns built-in metadata for the provided
+// implemented rule IDs, sorted by rule ID.
+func ListRuleMetadataForRuleIDs(ruleIDs map[string]struct{}) []RuleMetadata {
+	if len(ruleIDs) == 0 {
+		return []RuleMetadata{}
+	}
+
+	metadata := make([]RuleMetadata, 0, len(ruleIDs))
+	for _, rule := range builtInRuleMetadata {
+		if _, ok := ruleIDs[rule.ID]; !ok {
+			continue
+		}
+		metadata = append(metadata, cloneRuleMetadata(rule))
+	}
+
+	sort.Slice(metadata, func(i, j int) bool {
+		return metadata[i].ID < metadata[j].ID
+	})
+	return metadata
+}
+
 // ConfigRegistry returns rule metadata keyed by rule ID.
 func ConfigRegistry() map[string]RuleMetadata {
+	return ConfigRegistryForRuleIDs(nil)
+}
+
+// ConfigRegistryForRuleIDs returns rule metadata keyed by rule ID for the
+// provided implemented rule IDs. A nil/empty ruleIDs set returns all metadata.
+func ConfigRegistryForRuleIDs(ruleIDs map[string]struct{}) map[string]RuleMetadata {
+	filtered := ListRuleMetadata()
+	if len(ruleIDs) > 0 {
+		filtered = ListRuleMetadataForRuleIDs(ruleIDs)
+	}
+
 	registry := map[string]RuleMetadata{}
-	for _, metadata := range ListRuleMetadata() {
+	for _, metadata := range filtered {
 		allowed := make([]string, 0, len(sharedOptionConstraints)+len(ruleSpecificConstraints[metadata.ID]))
 		for key := range sharedOptionConstraints {
 			allowed = append(allowed, key)

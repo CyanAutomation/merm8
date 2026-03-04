@@ -3362,3 +3362,82 @@ func TestAnalyzeRateLimitMiddleware_AppliesOnV1Endpoint(t *testing.T) {
 		t.Fatalf("expected 429 when request rate is exceeded, got %d", secondW.Code)
 	}
 }
+
+func TestRuleAdvertisement_OnlyImplementedRulesExposedAndConfigurable(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	}}, engine.NewWithRules(rules.NoDuplicateNodeIDs{}, rules.MaxFanout{}))
+	h.RegisterRoutes(mux)
+
+	listReq := httptest.NewRequest(http.MethodGet, "/rules", nil)
+	listW := httptest.NewRecorder()
+	mux.ServeHTTP(listW, listReq)
+	if listW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /rules, got %d", listW.Code)
+	}
+
+	var listResp struct {
+		Rules []struct {
+			ID string `json:"id"`
+		} `json:"rules"`
+	}
+	if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("failed to decode /rules response: %v", err)
+	}
+
+	got := map[string]struct{}{}
+	for _, rule := range listResp.Rules {
+		got[rule.ID] = struct{}{}
+	}
+	for _, id := range []string{"no-duplicate-node-ids", "max-fanout"} {
+		if _, ok := got[id]; !ok {
+			t.Fatalf("expected implemented rule %q in /rules response", id)
+		}
+	}
+	for _, id := range []string{"no-cycles", "max-depth", "no-disconnected-nodes"} {
+		if _, ok := got[id]; ok {
+			t.Fatalf("did not expect unimplemented rule %q in /rules response", id)
+		}
+	}
+
+	schemaReq := httptest.NewRequest(http.MethodGet, "/rules/schema", nil)
+	schemaW := httptest.NewRecorder()
+	mux.ServeHTTP(schemaW, schemaReq)
+	if schemaW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /rules/schema, got %d", schemaW.Code)
+	}
+	var schemaResp struct {
+		Schema map[string]any `json:"schema"`
+	}
+	if err := json.Unmarshal(schemaW.Body.Bytes(), &schemaResp); err != nil {
+		t.Fatalf("failed to decode /rules/schema response: %v", err)
+	}
+	oneOf := schemaResp.Schema["oneOf"].([]any)
+	flat := oneOf[0].(map[string]any)
+	ruleProps := flat["properties"].(map[string]any)
+	if _, ok := ruleProps["max-fanout"]; !ok {
+		t.Fatal("expected max-fanout in schema properties")
+	}
+	if _, ok := ruleProps["no-cycles"]; ok {
+		t.Fatal("did not expect no-cycles in schema properties")
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"code": "flowchart TD\nA-->B",
+		"config": map[string]any{
+			"schema-version": "v1",
+			"rules": map[string]any{
+				"no-cycles": map[string]any{"enabled": false},
+			},
+		},
+	})
+	analyzeReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	analyzeReq.Header.Set("Content-Type", "application/json")
+	analyzeW := httptest.NewRecorder()
+	mux.ServeHTTP(analyzeW, analyzeReq)
+	if analyzeW.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unimplemented rule config, got %d body=%s", analyzeW.Code, analyzeW.Body.String())
+	}
+	assertValidationErrorResponse(t, analyzeW.Body.Bytes(), "unknown_rule", "unknown rule: no-cycles", "config.rules.no-cycles", []string{"max-fanout", "no-duplicate-node-ids"})
+}
