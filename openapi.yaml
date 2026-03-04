@@ -2,6 +2,56 @@
 # This file is generated from internal/api/openapi.go and may be removed in a future release.
 "components":
   "schemas":
+    "AnalyzeHelpResponse":
+      "properties":
+        "arrow-syntax":
+          "additionalProperties":
+            "properties":
+              "description":
+                "description": "Description of arrow syntax for this diagram type"
+                "type": "string"
+              "valid":
+                "description": "Valid arrow styles"
+                "items":
+                  "type": "string"
+                "type": "array"
+            "type": "object"
+          "description": "Arrow syntax for different diagram types"
+          "type": "object"
+        "common-errors":
+          "description": "List of common syntax errors and how to fix them"
+          "items":
+            "properties":
+              "example":
+                "description": "Example of the error and correct code"
+                "type": "string"
+              "fix":
+                "description": "How to fix this error"
+                "type": "string"
+              "pattern":
+                "description": "Name or pattern of the common mistake"
+                "type": "string"
+            "type": "object"
+          "type": "array"
+        "diagram-types":
+          "additionalProperties":
+            "properties":
+              "description":
+                "description": "What this diagram type is used for"
+                "type": "string"
+              "example":
+                "description": "Example Mermaid code for this diagram type"
+                "type": "string"
+            "type": "object"
+          "description": "Map of supported diagram types with descriptions and examples"
+          "type": "object"
+        "resources":
+          "additionalProperties":
+            "description": "URL to resource"
+            "type": "string"
+          "description": "Helpful links and documentation"
+          "type": "object"
+      "type": "object"
     "AnalyzeRequest":
       "properties":
         "code":
@@ -24,13 +74,17 @@
                 "severity": "info"
             "schema-version": "v1"
         "parser":
-          "description": "Optional per-request parser execution limits. Values are bounded and validated before parsing."
+          "description": "Optional per-request parser execution limits. Server-side bounds are enforced regardless of requested values. Defaults: timeout_seconds=5, max_old_space_mb=512. For very large diagrams, split into smaller diagrams/subgraphs and batch requests where possible."
           "properties":
             "max_old_space_mb":
+              "default": 512
+              "description": "Node parser max old-space heap in MiB. Min 128, max 4096."
               "maximum": 4096
               "minimum": 128
               "type": "integer"
             "timeout_seconds":
+              "default": 5
+              "description": "Parser timeout in seconds. Min 1, max 60."
               "maximum": 60
               "minimum": 1
               "type": "integer"
@@ -67,6 +121,11 @@
           "$ref": "#/components/schemas/Metrics"
           "description": "Aggregate statistics about the diagram. Present for successful analyze responses, including syntax errors (zeroed counters with fallback diagram-type) and parsed but lint-unsupported families."
           "nullable": true
+        "suggestions":
+          "description": "Actionable hints for fixing syntax errors in the Mermaid diagram. Provided when valid=false."
+          "items":
+            "type": "string"
+          "type": "array"
         "syntax-error":
           "$ref": "#/components/schemas/SyntaxError"
           "description": "Syntax error details if `valid` is false. Null if valid."
@@ -780,18 +839,6 @@
               "schema":
                 "$ref": "#/components/schemas/AnalyzeResponse"
           "description": "Parser/service internal failure"
-        "503":
-          "content":
-            "application/json":
-              "schema":
-                "$ref": "#/components/schemas/AnalyzeResponse"
-          "description": "Service unavailable (parser concurrency saturated, `server_busy`)."
-          "headers":
-            "Retry-After":
-              "description": "Minimum delay before retrying a `server_busy` response. Current stable contract is delta-seconds `1`; clients should apply jittered exponential backoff and may also accept HTTP-date values for forward compatibility."
-              "example": "1"
-              "schema":
-                "type": "string"
         "504":
           "content":
             "application/json":
@@ -989,7 +1036,7 @@
         - "Documentation"
   "/v1/analyze":
     "post":
-      "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nLegacy config acceptance: Phase 1 accepts legacy flat/nested/snake_case config and emits deprecation signals. Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned), where legacy config is rejected with HTTP 400 `deprecated_config_format`.\n\nOperational note: tune `PARSER_CONCURRENCY_LIMIT` and `PARSER_MAX_OLD_SPACE_MB` (documented in API_GUIDE.md under Operational environment variables). When parser concurrency is exhausted, `/analyze` returns HTTP 503 with `error.code=server_busy` and `Retry-After: 1`; clients should apply jittered exponential backoff using this as the minimum delay floor. Parser subprocess heap is capped with Node `--max-old-space-size`.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)\n- `parser_memory_limit` (HTTP 500)"
+      "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nLegacy config acceptance: Phase 1 accepts legacy flat/nested/snake_case config and emits deprecation signals. Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned), where legacy config is rejected with HTTP 400 `deprecated_config_format`.\n\nOperational note: tune `PARSER_CONCURRENCY_LIMIT` and `PARSER_MAX_OLD_SPACE_MB` (documented in API_GUIDE.md under Operational environment variables). When parser concurrency is exhausted, `/analyze` returns HTTP 503 with `error.code=server_busy`; parser subprocess heap is capped with Node `--max-old-space-size`. Per-request parser overrides remain bounded (timeout 1-60s, memory 128-4096 MiB). For oversized/complex diagrams, split work into smaller diagrams and batch requests.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)\n- `parser_memory_limit` (HTTP 500)"
       "operationId": "analyzeCode"
       "requestBody":
         "content":
@@ -1532,7 +1579,7 @@
           "description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array. `server_busy` responses include a `Retry-After` hint (for example `Retry-After: 1` or `Retry-After: Wed, 21 Oct 2015 07:28:00 GMT`)."
           "headers":
             "Retry-After":
-              "description": "Minimum delay before retrying a `server_busy` response. Current stable contract is delta-seconds `1`; clients should apply jittered exponential backoff and may also accept HTTP-date values for forward compatibility."
+              "description": "Suggested delay before retrying a `server_busy` response. Value is either delta-seconds or an HTTP-date."
               "examples":
                 "deltaSeconds":
                   "value": "1"
@@ -1583,9 +1630,23 @@
       "summary": "Analyze and lint a Mermaid diagram"
       "tags":
         - "Linting"
+  "/v1/analyze/help":
+    "get":
+      "description": "Returns diagram type templates, common error patterns with fixes, arrow syntax reference, and links to documentation."
+      "operationId": "getAnalyzeHelp"
+      "responses":
+        "200":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalyzeHelpResponse"
+          "description": "Help guide with templates and error resolution"
+      "summary": "Get diagram templates and error guidance"
+      "tags":
+        - "Documentation"
   "/v1/analyze/raw":
     "post":
-      "description": "Accepts raw mermaid code (plain text) directly in the request body. Auto-detects format: attempts to parse as JSON first (looks for {\"code\": \"...\"} structure), then falls back to treating the entire body as raw mermaid syntax.\n\nDoes NOT support lint configuration; use POST /v1/analyze if you need to configure rules. Maximum request body size is 1 MiB.\n\nReturns the same structured analysis as /v1/analyze, including syntax errors and lint results."
+      "description": "Accepts raw mermaid code (plain text) directly in the request body. Auto-detects format: attempts to parse as JSON first (looks for {\"code\": \"...\"} structure), then falls back to treating the entire body as raw mermaid syntax.\n\nDoes NOT support lint configuration; use POST /v1/analyze if you need to configure rules. Maximum request body size is 1 MiB.\n\nReturns the same structured analysis as /v1/analyze, including syntax errors, actionable suggestions for fixing errors, and lint results. When syntax errors occur, the 'suggestions' field contains smart hints for common mistakes (e.g., Graphviz syntax, tab indentation, arrow operators)."
       "operationId": "analyzeCodeRaw"
       "requestBody":
         "content":
@@ -1641,7 +1702,7 @@
         - "Linting"
   "/v1/analyze/sarif":
     "post":
-      "description": "Runs the same analysis pipeline as POST /v1/analyze, returning SARIF 2.1.0 when analysis is valid. Legacy config acceptance follows the same deprecation lifecycle: Phase 1 accepts legacy flat/nested/snake_case config with deprecation signals, and Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned) with HTTP 400 `deprecated_config_format` for legacy config. When parser concurrency is exhausted, this endpoint returns HTTP 503 with `error.code=server_busy` and `Retry-After: 1`; clients should apply jittered exponential backoff using that value as the minimum delay floor."
+      "description": "Runs the same analysis pipeline as POST /v1/analyze, returning SARIF 2.1.0 when analysis is valid. Legacy config acceptance follows the same deprecation lifecycle: Phase 1 accepts legacy flat/nested/snake_case config with deprecation signals, and Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned) with HTTP 400 `deprecated_config_format` for legacy config."
       "operationId": "analyzeCodeSARIF"
       "requestBody":
         "content":
@@ -1716,18 +1777,6 @@
               "schema":
                 "$ref": "#/components/schemas/AnalyzeResponse"
           "description": "Parser/service internal failure"
-        "503":
-          "content":
-            "application/json":
-              "schema":
-                "$ref": "#/components/schemas/AnalyzeResponse"
-          "description": "Service unavailable (parser concurrency saturated, `server_busy`)."
-          "headers":
-            "Retry-After":
-              "description": "Minimum delay before retrying a `server_busy` response. Current stable contract is delta-seconds `1`; clients should apply jittered exponential backoff and may also accept HTTP-date values for forward compatibility."
-              "example": "1"
-              "schema":
-                "type": "string"
         "504":
           "content":
             "application/json":

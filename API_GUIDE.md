@@ -50,11 +50,11 @@ A-->B",
 }
 ```
 
-Validation bounds are enforced server-side:
-- `parser.timeout_seconds`: **1–60**
-- `parser.max_old_space_mb`: **128–4096**
+Validation bounds are enforced server-side regardless of requested value:
+- `parser.timeout_seconds`: default **5**, accepted range **1–60** seconds
+- `parser.max_old_space_mb`: default **512**, accepted range **128–4096** MiB
 
-Out-of-range values return `400` with `error.code=invalid_option`.
+Out-of-range values are rejected with `400` and `error.code=invalid_option`. If diagrams are very large/complex, prefer splitting them into smaller diagrams (or batched requests) before raising limits.
 
 #### Parser failure remediation payloads
 

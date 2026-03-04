@@ -51,11 +51,23 @@ func (c Config) EffectiveConfig() Config {
 		Timeout:           defaultTimeout,
 		NodeMaxOldSpaceMB: defaultNodeMaxOldSpaceSizeMB,
 	}
-	if c.Timeout >= minTimeout && c.Timeout <= maxTimeout {
+	if c.Timeout > 0 {
 		effective.Timeout = c.Timeout
+		if effective.Timeout < minTimeout {
+			effective.Timeout = minTimeout
+		}
+		if effective.Timeout > maxTimeout {
+			effective.Timeout = maxTimeout
+		}
 	}
-	if c.NodeMaxOldSpaceMB >= minNodeMaxOldSpaceSizeMB && c.NodeMaxOldSpaceMB <= maxNodeMaxOldSpaceSizeMB {
+	if c.NodeMaxOldSpaceMB > 0 {
 		effective.NodeMaxOldSpaceMB = c.NodeMaxOldSpaceMB
+		if effective.NodeMaxOldSpaceMB < minNodeMaxOldSpaceSizeMB {
+			effective.NodeMaxOldSpaceMB = minNodeMaxOldSpaceSizeMB
+		}
+		if effective.NodeMaxOldSpaceMB > maxNodeMaxOldSpaceSizeMB {
+			effective.NodeMaxOldSpaceMB = maxNodeMaxOldSpaceSizeMB
+		}
 	}
 	return effective
 }
