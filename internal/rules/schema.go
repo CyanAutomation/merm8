@@ -100,7 +100,7 @@ func optionSchema(name, description string) map[string]any {
 		schema["enum"] = []string{"error", "warning", "info"}
 	case "suppression-selectors":
 		schema["type"] = "array"
-		schema["items"] = map[string]any{"type": "string"}
+		schema["items"] = map[string]any{"type": "string", "pattern": SuppressionSelectorPattern}
 	case "limit":
 		schema["type"] = "integer"
 		schema["minimum"] = 1

@@ -140,17 +140,27 @@ func ValidateConfig(cfg Config) error {
 		}
 
 		if rawSelectors, ok := ruleConfig["suppression-selectors"]; ok {
-			switch selectors := rawSelectors.(type) {
+			var selectors []string
+			switch typedSelectors := rawSelectors.(type) {
 			case []interface{}:
-				for _, selector := range selectors {
-					if _, ok := selector.(string); !ok {
+				selectors = make([]string, 0, len(typedSelectors))
+				for _, selector := range typedSelectors {
+					selectorValue, ok := selector.(string)
+					if !ok {
 						return fmt.Errorf("invalid suppression selectors for rule %q: must be an array of strings", ruleID)
 					}
+					selectors = append(selectors, selectorValue)
 				}
 			case []string:
-				// Already valid.
+				selectors = typedSelectors
 			default:
 				return fmt.Errorf("invalid suppression selectors for rule %q: must be an array of strings", ruleID)
+			}
+
+			for _, selector := range selectors {
+				if _, ok := ParseSuppressionSelector(selector); !ok {
+					return fmt.Errorf("invalid suppression selector for rule %q: %q (expected %s)", ruleID, selector, SuppressionSelectorPattern)
+				}
 			}
 		}
 	}
