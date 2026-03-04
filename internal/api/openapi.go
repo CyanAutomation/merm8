@@ -47,6 +47,31 @@ var openapi = map[string]interface{}{
 		},
 	},
 	"paths": map[string]interface{}{
+
+		"/": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Root liveness probe alias",
+				"description": "Legacy root alias for canonical /v1/healthz. Intended for platform probes that require '/'. Returns process liveness only.",
+				"operationId": "getRootHealth",
+				"deprecated":  true,
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Process is healthy",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"status": map[string]interface{}{"type": "string", "example": "ok"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"/health": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
@@ -153,6 +178,49 @@ var openapi = map[string]interface{}{
 			},
 		},
 
+		"/v1/version": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Version and build metadata",
+				"description": "Informational endpoint that returns service version/build metadata (when configured) and parser runtime versions. Suitable for diagnostics; not a readiness signal.",
+				"operationId": "getVersionV1",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Version metadata",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type":                 "object",
+									"additionalProperties": map[string]interface{}{"type": "string"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"/version": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Version and build metadata alias",
+				"description": "Legacy alias for /v1/version. Returns informational service/build metadata.",
+				"operationId": "getVersion",
+				"deprecated":  true,
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Version metadata",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type":                 "object",
+									"additionalProperties": map[string]interface{}{"type": "string"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"/metrics": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},

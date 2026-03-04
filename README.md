@@ -175,13 +175,13 @@ For migration details, see [docs/migration-guide.md](docs/migration-guide.md) an
 
 ## API
 
-Canonical API endpoints are now versioned under `/v1` (for example: `/v1/analyze`, `/v1/rules`, `/v1/rules/schema`, `/v1/spec`, `/v1/docs`, `/v1/healthz`, `/v1/ready`).
+Canonical API endpoints are now versioned under `/v1` (for example: `/v1/analyze`, `/v1/rules`, `/v1/rules/schema`, `/v1/spec`, `/v1/docs`, `/v1/healthz`, `/v1/ready`, `/v1/version`).
 
 Unversioned endpoints remain available as compatibility aliases during migration and are **deprecated**. Planned removal is **v1.2.0 (Q2 2026)**.
 
-### `GET /v1/healthz` (canonical) and legacy aliases `GET /healthz`, `GET /health`
+### `GET /v1/healthz` (canonical) and legacy aliases `GET /healthz`, `GET /health`, `GET /`
 
-Liveness-only endpoints for process-up checks. `GET /healthz` is the canonical probe path, and `GET /health` is supported as an alias.
+Liveness-only endpoints for process-up checks. `GET /healthz` is the canonical probe path. `GET /` is available as a minimal unauthenticated alias for platforms that expect a root probe path.
 
 **Response**
 
@@ -203,6 +203,16 @@ Dependency/readiness-only endpoint (including parser runtime/script availability
 
 ```json
 {"status":"not_ready","error":"..."}
+```
+
+### `GET /v1/version` (canonical) and legacy alias `GET /version`
+
+Informational-only endpoint for app/build metadata (for example deploy version, build commit/time, parser/runtime versions). This endpoint is intentionally unauthenticated and stable for external diagnostics, but **must not** be used as a readiness signal.
+
+**Response (example)**
+
+```json
+{"version":"1.2.3","build_commit":"abc1234","build_time":"2026-03-04T00:00:00Z","parser_version":"1.0.0","mermaid_version":"11.12.3"}
 ```
 
 ### `GET /metrics`
@@ -489,6 +499,26 @@ At deployment time, use the built-in limits plus infrastructure-level controls:
 3. Run containers with explicit CPU and memory limits so parser workloads cannot starve host resources.
 4. Enable structured logging and alerting on `429`, `503`, and parser timeout spikes.
 5. Rotate `ANALYZE_AUTH_TOKEN` and store it in a secrets manager.
+
+### Health probe configuration (common platforms)
+
+- **Liveness path:** `/v1/healthz` (or `/` where only root probes are supported).
+- **Readiness path:** `/v1/ready`.
+- **Do not use `/version` for readiness/liveness decisions**; treat it as informational only.
+- **Kubernetes example:**
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /v1/healthz
+    port: 8080
+readinessProbe:
+  httpGet:
+    path: /v1/ready
+    port: 8080
+```
+
+- **Cloud Run / ALB / other HTTP health checks:** point to `/v1/healthz` (or `/` if required by the platform) and keep readiness checks, when available, on `/v1/ready`.
 
 ### Security-related environment variables
 

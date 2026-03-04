@@ -588,14 +588,15 @@ for (const issue of data.issues) {
 
 ## API Endpoints Reference
 
-### GET `/healthz`
+### GET `/healthz` (canonical probe) and aliases `/health`, `/`
 
-**Description:** Liveness-only endpoint for process-up probes  
+**Description:** Liveness-only endpoint for process-up probes. `/` is provided as a minimal alias for platforms that require root health checks.  
 **Response:** JSON status payload (`{"status":"ok"}`)  
 **Usage:**
 
 ```bash
 curl http://localhost:8080/healthz
+curl http://localhost:8080/
 ```
 
 ### GET `/ready`
@@ -609,6 +610,17 @@ curl http://localhost:8080/healthz
 
 ```bash
 curl -i http://localhost:8080/ready
+```
+
+### GET `/version`
+
+**Description:** Informational-only endpoint for service/build metadata (service version, build commit/time, parser/runtime versions when available). This endpoint is stable and unauthenticated for probe tooling and diagnostics, but should not be used as readiness gating.  
+**Response:** JSON object of string metadata fields (keys present when values are configured).  
+
+**Usage:**
+
+```bash
+curl http://localhost:8080/version
 ```
 
 ### GET `/docs`
@@ -650,6 +662,28 @@ You can suppress lint findings directly in Mermaid source using comment directiv
 ```
 
 **Response:** Analysis results with validity, syntax errors (if any), lint issues, and metrics
+
+
+### Deployment probe settings
+
+Recommended defaults for common platforms:
+
+- Liveness: `GET /healthz` (or `GET /` for platforms that only support root probes)
+- Readiness: `GET /ready`
+- Informational metadata: `GET /version` (diagnostics only; not a readiness/liveness signal)
+
+Kubernetes example:
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+```
 
 ---
 
