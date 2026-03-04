@@ -541,6 +541,22 @@ type Rule interface {
 }
 ```
 
+### Rule ID namespace policy
+
+Rule IDs now follow a namespace policy at registration time:
+
+- Built-in rules use the `core/<id>` namespace (for example `core/max-fanout`).
+- External/plugin rules must use `custom/<provider>/<id>` (for example `custom/acme/max-depth-guard`).
+- The `core/` prefix is reserved and rejected for non-built-in IDs.
+- Unknown namespace prefixes (for example `vendor/<id>`) are rejected.
+
+Compatibility migration for existing plugins:
+
+- Legacy unnamespaced custom IDs (for example `acme-max-depth`) are still accepted during the transition window.
+- The server logs a deprecation warning and canonicalizes those IDs as `custom/legacy/<id>` for collision detection.
+- Legacy acceptance is planned to be removed in `v1.4.0`; plugin authors should migrate to `custom/<provider>/<id>`.
+- See `docs/rule-id-namespaces.md` for plugin-focused examples and migration guidance.
+
 ### Built-in Rules
 
 | Rule ID                  | Severity | Description                                          |
@@ -630,7 +646,7 @@ import "github.com/CyanAutomation/merm8/internal/model"
 
 type MyRule struct{}
 
-func (r MyRule) ID() string { return "my-rule" }
+func (r MyRule) ID() string { return "custom/acme/my-rule" }
 
 func (r MyRule) Run(d *model.Diagram, cfg Config) []model.Issue {
     // your logic here

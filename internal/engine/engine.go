@@ -35,7 +35,27 @@ func New() *Engine {
 
 // NewWithRules returns an Engine configured with the provided rule set.
 func NewWithRules(registeredRules ...rules.Rule) *Engine {
-	return &Engine{rules: registeredRules, sink: NoopInstrumentationSink{}}
+	normalizedRules := make([]rules.Rule, 0, len(registeredRules))
+	seenRuleIDs := map[string]string{}
+	for _, registeredRule := range registeredRules {
+		ruleID := registeredRule.ID()
+		warning, err := rules.ValidateRegisteredRuleID(ruleID)
+		if err != nil {
+			panic(fmt.Sprintf("invalid rule registration for %q: %v", ruleID, err))
+		}
+		if warning != "" {
+			log.Printf("warn: %s", warning)
+		}
+
+		canonicalID := rules.CanonicalRuleRegistrationID(ruleID)
+		if existing, exists := seenRuleIDs[canonicalID]; exists {
+			panic(fmt.Sprintf("duplicate rule registration: %q conflicts with %q (canonical: %q)", existing, ruleID, canonicalID))
+		}
+		seenRuleIDs[canonicalID] = ruleID
+		normalizedRules = append(normalizedRules, registeredRule)
+	}
+
+	return &Engine{rules: normalizedRules, sink: NoopInstrumentationSink{}}
 }
 
 // SetInstrumentationSink configures an optional metrics sink used for rule

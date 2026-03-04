@@ -30,6 +30,30 @@ func (supportedRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 	return []model.Issue{{RuleID: "supported-rule", Severity: "warning", Message: "supported issue"}}
 }
 
+type namespacedCoreRule struct{}
+
+func (namespacedCoreRule) ID() string { return "core/not-a-built-in" }
+
+func (namespacedCoreRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue { return nil }
+
+type namespacedCustomRule struct{}
+
+func (namespacedCustomRule) ID() string { return "custom/acme/max-fanout" }
+
+func (namespacedCustomRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue { return nil }
+
+type legacyCustomRule struct{}
+
+type collidingLegacyRule struct{}
+
+func (collidingLegacyRule) ID() string { return "max-fanout" }
+
+func (collidingLegacyRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue { return nil }
+
+func (legacyCustomRule) ID() string { return "acme-custom" }
+
+func (legacyCustomRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue { return nil }
+
 type unsupportedRule struct{}
 
 func (unsupportedRule) ID() string { return "unsupported-rule" }
@@ -40,6 +64,41 @@ func (unsupportedRule) Families() []model.DiagramFamily {
 
 func (unsupportedRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 	return []model.Issue{{RuleID: "unsupported-rule", Severity: "warning", Message: "unsupported issue"}}
+}
+
+func TestEngine_NewWithRules_RejectsReservedCoreNamespaceMisuse(t *testing.T) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("expected panic for invalid core namespace registration")
+		}
+		if !strings.Contains(recovered.(string), "core/ namespace is reserved") {
+			t.Fatalf("expected reserved core namespace panic message, got %v", recovered)
+		}
+	}()
+
+	engine.NewWithRules(namespacedCoreRule{})
+}
+
+func TestEngine_NewWithRules_RejectsCanonicalCollisions(t *testing.T) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("expected panic for duplicate canonical rule id")
+		}
+		if !strings.Contains(recovered.(string), "duplicate rule registration") {
+			t.Fatalf("expected duplicate registration panic message, got %v", recovered)
+		}
+	}()
+
+	engine.NewWithRules(rules.MaxFanout{}, collidingLegacyRule{})
+}
+
+func TestEngine_NewWithRules_AllowsLegacyCustomRuleDuringTransition(t *testing.T) {
+	e := engine.NewWithRules(legacyCustomRule{})
+	if len(e.KnownRuleIDs()) != 1 {
+		t.Fatalf("expected one registered rule, got %d", len(e.KnownRuleIDs()))
+	}
 }
 
 func TestEngine_DiagramFamilies_FromRegisteredRules(t *testing.T) {
