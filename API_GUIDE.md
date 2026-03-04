@@ -285,7 +285,7 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 - `missing_code` — `code` field is missing or empty (HTTP 400)
 - `invalid_json` — body is not valid JSON (HTTP 400)
 - `request_too_large` — request body exceeds 1 MiB (HTTP 413)
-- `server_busy` — parser concurrency is saturated; retry later (HTTP 503, includes `Retry-After`)
+- `server_busy` — parser concurrency is saturated; retry later (HTTP 503, includes `Retry-After`; clients should back off and honor the header before retrying)
 - `parser_timeout` — parser timed out (HTTP 504)
 - `internal_error` — unexpected internal parser/service failure (HTTP 500)
 

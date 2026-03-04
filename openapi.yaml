@@ -1529,11 +1529,15 @@
                 "valid": false
               "schema":
                 "$ref": "#/components/schemas/AnalyzeResponse"
-          "description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
+          "description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array. `server_busy` responses include a `Retry-After` hint (for example `Retry-After: 1` or `Retry-After: Wed, 21 Oct 2015 07:28:00 GMT`)."
           "headers":
             "Retry-After":
               "description": "Minimum delay before retrying a `server_busy` response. Current stable contract is delta-seconds `1`; clients should apply jittered exponential backoff and may also accept HTTP-date values for forward compatibility."
-              "example": "1"
+              "examples":
+                "deltaSeconds":
+                  "value": "1"
+                "httpDate":
+                  "value": "Wed, 21 Oct 2015 07:28:00 GMT"
               "schema":
                 "type": "string"
             "X-RateLimit-Limit":
