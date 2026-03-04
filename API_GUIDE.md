@@ -105,18 +105,69 @@ The Swagger UI provides:
 
 The API exposes Prometheus metrics at `GET /metrics` in text exposition format.
 
-Metric families:
-- `request_total{route,method,status}`
-- `request_duration_seconds{route,method}` histogram
-- `analyze_requests_total{outcome}`
-- `parser_duration_seconds{outcome}` histogram
+Exported metric families and labels:
 
-Common `outcome` values include `syntax_error`, `lint_success`, `parser_timeout`, `parser_subprocess_error`, `parser_decode_error`, `parser_contract_violation`, and `internal_error`.
+| Metric family | Type | Labels | Semantics |
+|---|---|---|---|
+| `request_total` | Counter | `route`, `method`, `status` | Total HTTP requests observed by middleware. `route` is the normalized registered pattern (for example `GET /v1/analyze/help`), or `unknown` if not mapped. `status` is the numeric HTTP status code as a string label. |
+| `request_duration_seconds` | Histogram | `route`, `method` | End-to-end HTTP request duration in seconds, measured in middleware with default Prometheus histogram buckets. |
+| `analyze_requests_total` | Counter | `outcome` | Analyze request outcomes. Outcome label values are: `lint_success`, `syntax_error`, `parser_timeout`, `parser_subprocess_error`, `parser_decode_error`, `parser_contract_violation`, `internal_error`. |
+| `parser_duration_seconds` | Histogram | `outcome` | Parser invocation duration in seconds by parse/lint outcome (same `outcome` values as above) with default Prometheus histogram buckets. |
+
+Notes:
+- `request_*` metrics are emitted for all routes wrapped by API metrics middleware, not only analyze endpoints.
+- `analyze_requests_total` and `parser_duration_seconds` are emitted only from analyze code paths.
 
 Example:
 ```bash
 curl -s http://localhost:8080/metrics
 ```
+
+### Inspecting Internal Outcome Counters (`GET /v1/internal/metrics`)
+
+The API exposes a lightweight JSON counter view at `GET /v1/internal/metrics` for direct service/operator inspection.
+
+Response shape:
+- `analyze.valid_success`: count of analyze requests that completed parse+lint successfully (`outcome=lint_success`).
+- `analyze.syntax_error`: count of analyze requests where Mermaid parsing returned a syntax error (`outcome=syntax_error`).
+- `parser.timeout`: parser timeout failures (`outcome=parser_timeout`).
+- `parser.subprocess`: parser subprocess execution failures (`outcome=parser_subprocess_error`).
+- `parser.decode`: parser output decode failures (`outcome=parser_decode_error`).
+- `parser.contract`: parser contract/payload shape violations (`outcome=parser_contract_violation`).
+- `parser.internal`: internal parser/service failures (`outcome=internal_error`).
+
+All fields are cumulative process counters (monotonic for process lifetime; reset on restart).
+
+Example:
+```json
+{
+  "analyze": {
+    "valid_success": 1280,
+    "syntax_error": 93
+  },
+  "parser": {
+    "timeout": 12,
+    "subprocess": 4,
+    "decode": 1,
+    "contract": 0,
+    "internal": 2
+  }
+}
+```
+
+Example interpretation:
+- `valid_success` is the dominant bucket, so the service is mostly healthy.
+- `syntax_error` is non-zero and often reflects client diagram input quality rather than server instability.
+- `timeout` growth suggests parse pressure/complex diagrams; review parser timeout and request complexity.
+- `subprocess`/`decode`/`contract`/`internal` indicate infrastructure/runtime quality issues and should typically remain near zero.
+
+### Security and Production Exposure Recommendations
+
+- Treat both `/metrics` and `/v1/internal/metrics` as operator-facing endpoints.
+- Require authentication and/or network-layer restrictions (private ingress, service mesh policy, VPN, or IP allowlists) before exposing metrics outside cluster-internal networks.
+- Scope scraping to trusted observability systems only (for example Prometheus/agent identities) and avoid broad internet exposure.
+- In production, prefer exposing `/metrics` on private infrastructure for centralized scrape pipelines, and keep `/v1/internal/metrics` restricted to internal diagnostics and on-call tooling.
+- If public API gateways are unavoidable, deny anonymous access by default and explicitly opt-in only the minimum principals that need telemetry data.
 
 ### Discovering Rules with `/rules`
 
