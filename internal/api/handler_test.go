@@ -4077,6 +4077,79 @@ func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
 
 }
 
+func TestLegacyAnalyzeAliases_EmitDeprecationHeaders(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	for _, tc := range []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{name: "analyze", method: http.MethodPost, path: "/analyze", body: `{"code":"graph TD;A-->B"}`},
+		{name: "analyze raw", method: http.MethodPost, path: "/analyze/raw", body: `graph TD
+A-->B`},
+		{name: "analyze sarif", method: http.MethodPost, path: "/analyze/sarif", body: `{"code":"graph TD;A-->B"}`},
+		{name: "analyze help", method: http.MethodGet, path: "/analyze/help"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			if tc.method == http.MethodPost && tc.path != "/analyze/raw" {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if got := w.Header().Get("Deprecation"); got != "true" {
+				t.Fatalf("expected Deprecation header true, got %q", got)
+			}
+			if got := w.Header().Get("Sunset"); got == "" {
+				t.Fatal("expected Sunset header to be present")
+			}
+			if got := w.Header().Get("Link"); !strings.Contains(got, "/v1/docs#/Linting/post_v1_analyze") {
+				t.Fatalf("expected Link header to point to v1 analyze docs, got %q", got)
+			}
+		})
+	}
+}
+
+func TestCanonicalAnalyzeRoutes_DoNotEmitLegacyDeprecationHeaders(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	for _, tc := range []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{name: "v1 analyze", method: http.MethodPost, path: "/v1/analyze", body: `{"code":"graph TD;A-->B"}`},
+		{name: "v1 analyze raw", method: http.MethodPost, path: "/v1/analyze/raw", body: `graph TD
+A-->B`},
+		{name: "v1 analyze sarif", method: http.MethodPost, path: "/v1/analyze/sarif", body: `{"code":"graph TD;A-->B"}`},
+		{name: "v1 analyze help", method: http.MethodGet, path: "/v1/analyze/help"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			if tc.method == http.MethodPost && tc.path != "/v1/analyze/raw" {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if got := w.Header().Get("Sunset"); got != "" {
+				t.Fatalf("expected no Sunset header on canonical routes, got %q", got)
+			}
+			if got := w.Header().Get("Link"); got != "" {
+				t.Fatalf("expected no Link header on canonical routes, got %q", got)
+			}
+		})
+	}
+}
+
 func TestAnalyzeBearerAuthMiddleware_RequiresTokenOnV1Endpoint(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{}, nil, nil
