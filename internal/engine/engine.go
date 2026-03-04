@@ -260,51 +260,118 @@ func suppressionSelectorsForRule(cfg rules.Config, ruleID string) []string {
 }
 
 func issueMatchesAnySelector(issue model.Issue, selectors []string, nodeLineIndex map[int][]string) bool {
+	matchedInclude := false
+	matchedExclude := false
+
 	for _, raw := range selectors {
-		prefix, value, ok := parseSelector(raw)
+		parsed, ok := parseSelector(raw)
 		if !ok {
 			continue
 		}
 
-		switch prefix {
+		matched := false
+		switch parsed.Prefix {
 		case "rule":
-			if issue.RuleID == value {
-				return true
-			}
+			matched = issue.RuleID == parsed.Value
 		case "subgraph":
-			if issue.Context != nil && issue.Context.SubgraphID == value {
-				return true
-			}
+			matched = issue.Context != nil && issue.Context.SubgraphID == parsed.Value
 		case "node":
 			for _, nodeID := range linkedNodeIDs(issue, nodeLineIndex) {
-				if nodeID == value {
-					return true
+				if nodeID == parsed.Value {
+					matched = true
+					break
 				}
 			}
 		}
+
+		if !matched {
+			continue
+		}
+
+		if parsed.Negated {
+			matchedExclude = true
+			continue
+		}
+
+		matchedInclude = true
 	}
 
-	return false
+	return matchedInclude && !matchedExclude
 }
 
-func parseSelector(raw string) (prefix string, value string, ok bool) {
+type suppressionSelector struct {
+	Negated bool
+	Prefix  string
+	Value   string
+}
+
+func parseSelector(raw string) (suppressionSelector, bool) {
 	selector := strings.TrimSpace(raw)
-	parts := strings.SplitN(selector, ":", 2)
-	if len(parts) != 2 {
-		return "", "", false
+	if selector == "" {
+		return suppressionSelector{}, false
 	}
 
-	prefix = strings.ToLower(strings.TrimSpace(parts[0]))
+	negated := false
+	if strings.HasPrefix(selector, "!") {
+		negated = true
+		selector = strings.TrimSpace(strings.TrimPrefix(selector, "!"))
+	}
+
+	prefixRaw, valueRaw, ok := splitSelector(selector)
+	if !ok {
+		return suppressionSelector{}, false
+	}
+
+	prefix := strings.ToLower(strings.TrimSpace(prefixRaw))
 	if _, valid := suppressionSelectorPrefixes[prefix]; !valid {
-		return "", "", false
+		return suppressionSelector{}, false
 	}
 
-	value = strings.TrimSpace(parts[1])
+	value := strings.TrimSpace(unescapeSelectorValue(valueRaw))
 	if value == "" {
-		return "", "", false
+		return suppressionSelector{}, false
 	}
 
-	return prefix, value, true
+	return suppressionSelector{Negated: negated, Prefix: prefix, Value: value}, true
+}
+
+func splitSelector(selector string) (prefix string, value string, ok bool) {
+	var prev rune
+	for i, r := range selector {
+		if r == ':' && prev != '\\' {
+			return selector[:i], selector[i+1:], true
+		}
+		prev = r
+	}
+
+	return "", "", false
+}
+
+func unescapeSelectorValue(value string) string {
+	var b strings.Builder
+	b.Grow(len(value))
+
+	escaped := false
+	for _, r := range value {
+		if escaped {
+			b.WriteRune(r)
+			escaped = false
+			continue
+		}
+
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+
+		b.WriteRune(r)
+	}
+
+	if escaped {
+		b.WriteRune('\\')
+	}
+
+	return b.String()
 }
 
 func buildNodeLineIndex(d *model.Diagram) map[int][]string {
