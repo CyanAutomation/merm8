@@ -3359,6 +3359,23 @@ func TestAnalyzeSARIF_ReturnsSARIFForValidAnalysis(t *testing.T) {
 	if first["ruleId"] == "" {
 		t.Fatalf("expected ruleId propagation in SARIF result: %#v", first)
 	}
+	if first["ruleId"] != "sarif-probe" {
+		t.Fatalf("expected ruleId to remain unchanged, got %#v", first["ruleId"])
+	}
+	if first["level"] != "warning" {
+		t.Fatalf("expected warning severity mapping, got %#v", first["level"])
+	}
+	msg := first["message"].(map[string]any)
+	if msg["text"] != "probe" {
+		t.Fatalf("expected message to remain unchanged, got %#v", msg["text"])
+	}
+	fps, ok := first["partialFingerprints"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected partialFingerprints in SARIF result: %#v", first)
+	}
+	if fps["issueFingerprint"] == "" {
+		t.Fatalf("expected fingerprint propagation in SARIF result, got %#v", fps)
+	}
 	locs, ok := first["locations"].([]any)
 	if ok && len(locs) > 0 {
 		region := locs[0].(map[string]any)["physicalLocation"].(map[string]any)["region"].(map[string]any)

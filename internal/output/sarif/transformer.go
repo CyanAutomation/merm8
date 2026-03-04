@@ -60,10 +60,11 @@ type Base struct {
 }
 
 type Result struct {
-	RuleID    string      `json:"ruleId"`
-	Level     string      `json:"level"`
-	Message   MessageText `json:"message"`
-	Locations []Location  `json:"locations,omitempty"`
+	RuleID              string            `json:"ruleId"`
+	Level               string            `json:"level"`
+	Message             MessageText       `json:"message"`
+	Locations           []Location        `json:"locations,omitempty"`
+	PartialFingerprints map[string]string `json:"partialFingerprints,omitempty"`
 }
 
 type Location struct {
@@ -155,6 +156,9 @@ func Transform(issues []model.Issue, meta RequestMetadata) Report {
 			RuleID:  issue.RuleID,
 			Level:   MapSeverityToLevel(issue.Severity),
 			Message: MessageText{Text: issue.Message},
+		}
+		if issue.Fingerprint != "" {
+			result.PartialFingerprints = map[string]string{"issueFingerprint": issue.Fingerprint}
 		}
 		if issue.Line != nil || issue.Column != nil {
 			region := &Region{}
