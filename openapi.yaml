@@ -707,6 +707,9 @@
       "title": "merm8 Rule Configuration"
     "RuleMetadata":
       "properties":
+        "availability":
+          "example": "Planned for sequence diagram linting expansion."
+          "type": "string"
         "configurable-options":
           "items":
             "$ref": "#/components/schemas/RuleOption"
@@ -725,8 +728,15 @@
             - "warning"
             - "info"
           "type": "string"
+        "state":
+          "enum":
+            - "implemented"
+            - "planned"
+          "example": "implemented"
+          "type": "string"
       "required":
         - "id"
+        - "state"
         - "severity"
         - "description"
         - "default-config"
@@ -1880,7 +1890,7 @@
         - "Probes"
   "/v1/rules":
     "get":
-      "description": "Returns metadata for rules implemented by the currently registered runtime rule set, including defaults and configurable options."
+      "description": "Returns lifecycle metadata for built-in rule IDs, including implemented and planned rules, defaults, and configurable options."
       "operationId": "listRules"
       "responses":
         "200":
@@ -1921,6 +1931,7 @@
                         "description": "Flags root-to-leaf traversals whose depth exceeds a configurable limit."
                         "id": "max-depth"
                         "severity": "warning"
+                        "state": "implemented"
                       -
                         "configurable-options":
                           -
@@ -1951,6 +1962,7 @@
                         "description": "Flags nodes whose outgoing edge count exceeds a configurable limit."
                         "id": "max-fanout"
                         "severity": "warning"
+                        "state": "implemented"
                       -
                         "configurable-options":
                           -
@@ -1981,6 +1993,7 @@
                         "description": "Flags directed cycles in flowcharts."
                         "id": "no-cycles"
                         "severity": "error"
+                        "state": "implemented"
                       -
                         "configurable-options":
                           -
@@ -2005,6 +2018,7 @@
                         "description": "Flags nodes that are not connected by any incoming or outgoing edge."
                         "id": "no-disconnected-nodes"
                         "severity": "error"
+                        "state": "implemented"
                       -
                         "configurable-options":
                           -
@@ -2029,9 +2043,36 @@
                         "description": "Flags diagrams containing more than one node with the same ID."
                         "id": "no-duplicate-node-ids"
                         "severity": "error"
+                        "state": "implemented"
+                      -
+                        "availability": "Planned for sequence diagram linting expansion."
+                        "configurable-options":
+                          -
+                            "constraints": "Must be true or false."
+                            "description": "Enable or disable this rule."
+                            "name": "enabled"
+                            "type": "boolean"
+                          -
+                            "constraints": "Accepted values (canonical): error, warning, info."
+                            "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
+                            "name": "severity"
+                            "type": "string"
+                          -
+                            "constraints": "Each entry must be a string selector."
+                            "description": "Selectors that suppress matching issues."
+                            "name": "suppression-selectors"
+                            "type": "array[string]"
+                        "default-config":
+                          "enabled": false
+                          "severity": "info"
+                          "suppression-selectors":
+                        "description": "Will flag sequence diagrams that exceed a configurable participant count."
+                        "id": "sequence-max-participants"
+                        "severity": "info"
+                        "state": "planned"
               "schema":
                 "$ref": "#/components/schemas/RulesResponse"
-          "description": "Implemented rule metadata"
+          "description": "Rule metadata (implemented and planned)"
       "summary": "List built-in lint rules"
       "tags":
         - "Linting"
