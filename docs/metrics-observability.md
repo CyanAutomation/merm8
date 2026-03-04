@@ -117,6 +117,56 @@ scrape_configs:
 
 For very low-traffic environments (dev/staging), `30s` scrape interval is usually enough.
 
+## Recommended Alerts & Runbooks
+
+The `docs/prometheus-alerts.yaml` file contains production-ready Prometheus alert rules for merm8. These rules monitor:
+
+1. **Parser timeout rate** — Alerts when >1% of requests timeout over 10 minutes
+   - **Action:** Reduce diagram complexity, increase `PARSER_TIMEOUT_SECONDS`, or scale parser concurrency
+   - **Details:** See `ParserTimeoutRateHigh` in `prometheus-alerts.yaml`
+
+2. **Parser memory limit** — Alerts when parser subprocess hits memory ceiling
+   - **Action:** Increase `PARSER_MAX_OLD_SPACE_MB` or reduce diagram size
+   - **Details:** See `ParserMemoryLimitExceeded` in `prometheus-alerts.yaml`
+
+3. **Parser subprocess errors** — Alerts on parser crashes or fatal errors
+   - **Action:** Check logs, verify system resources, contact support
+   - **Details:** See `ParserSubprocessErrors` in `prometheus-alerts.yaml`
+
+4. **HTTP error rate** — Alerts when >10% of HTTP requests return 5xx status
+   - **Action:** Check application and system logs for root cause
+   - **Details:** See `HTTPErrorRateHigh` in `prometheus-alerts.yaml`
+
+5. **Parser service degradation** — Alerts when combined parser failures >5%
+   - **Action:** Initiate incident response, scale resources, consider circuit-breaking
+   - **Details:** See `ParserServiceDegradation` in `prometheus-alerts.yaml`
+
+6. **Request latency P95** — Alerts when 95th percentile latency exceeds 5s
+   - **Action:** Optimize rule execution, increase resources, implement request queuing
+   - **Details:** See `RequestLatencyHigh` in `prometheus-alerts.yaml`
+
+### Using These Alerts
+
+Import `prometheus-alerts.yaml` into your Prometheus config:
+
+```yaml
+rule_files:
+  - 'prometheus-alerts.yaml'  # Path relative to your prometheus.yml
+```
+
+Then configure Alertmanager to route alerts appropriately (e.g., to Slack, PagerDuty, etc.).
+
+### Tuning Alert Thresholds
+
+Default thresholds are conservative for production stability:
+
+- **Parser timeout:** 1% — adjust to 0.5% for stricter SLA, 5% for lenient
+- **Error rate:** 10% — adjust to 5% if you require tighter SLOs
+- **P95 latency:** 5s — adjust down to 1-2s for frontend-critical workloads
+- **Service degradation:** 5% — adjust to match your error budget
+
+For isolated dev/staging deployments, disable alerting or increase all thresholds by 5–10x.
+
 ## Doc maintenance guard (drift detection)
 
 A test enforces that this document still references all currently exported metric names and `/internal/metrics` keys.

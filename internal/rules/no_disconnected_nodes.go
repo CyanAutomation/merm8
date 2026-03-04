@@ -9,7 +9,13 @@ type NoDisconnectedNodes struct{}
 func (r NoDisconnectedNodes) ID() string { return "no-disconnected-nodes" }
 
 func (r NoDisconnectedNodes) Families() []model.DiagramFamily {
-	return []model.DiagramFamily{model.DiagramFamilyFlowchart}
+	return []model.DiagramFamily{
+		model.DiagramFamilyFlowchart,
+		model.DiagramFamilySequence,
+		model.DiagramFamilyClass,
+		model.DiagramFamilyER,
+		model.DiagramFamilyState,
+	}
 }
 
 func (r NoDisconnectedNodes) Run(d *model.Diagram, cfg Config) []model.Issue {

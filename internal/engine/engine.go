@@ -86,7 +86,9 @@ func (e *Engine) RunWithInstrumentation(d *model.Diagram, cfg rules.Config, sink
 	}
 
 	family := d.Type.Family()
-	if family != model.DiagramFamilyFlowchart {
+
+	// If the diagram type is explicitly unknown, return a fallback issue
+	if family == model.DiagramFamilyUnknown {
 		return []model.Issue{unsupportedDiagramTypeIssue(d)}
 	}
 

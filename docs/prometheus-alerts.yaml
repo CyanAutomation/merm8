@@ -1,0 +1,123 @@
+groups:
+  - name: merm8-alerts
+    interval: 30s
+    rules:
+      # Parser timeout rate exceeds acceptable threshold
+      - alert: ParserTimeoutRateHigh
+        expr: |
+          (rate(analyze_requests_total{outcome="parser_timeout"}[5m]) / rate(analyze_requests_total[5m])) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+          component: parser
+        annotations:
+          summary: "merm8 parser timeout rate above 1%"
+          description: |
+            Parser timeouts have exceeded 1% of requests over the last 5 minutes.
+            Current timeout rate: {{ $value | humanizePercentage }}
+            
+            Actions:
+            1. Check parser logs for timeout patterns
+            2. Reduce diagram complexity or batch large requests
+            3. If needed, increase PARSER_TIMEOUT_SECONDS (default: 5s, max: 60s)
+            4. Monitor PARSER_CONCURRENCY_LIMIT if timeouts spike
+          runbook_url: "https://github.com/CyanAutomation/merm8/blob/main/docs/metrics-observability.md#parser-timeout-troubleshooting"
+
+      # Parser memory limit errors occurring
+      - alert: ParserMemoryLimitExceeded
+        expr: increase(analyze_requests_total{outcome="parser_memory_limit"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: parser
+        annotations:
+          summary: "merm8 parser hitting memory limits"
+          description: |
+            Parser subprocess memory limit exceeded in the last 5 minutes.
+            
+            Actions:
+            1. Check parser logs for OOM messages
+            2. Reduce diagram size or split into smaller diagrams
+            3. Increase PARSER_MAX_OLD_SPACE_MB if needed (default: 512, max: 4096)
+            4. Review memory allocation on host
+          runbook_url: "https://github.com/CyanAutomation/merm8/blob/main/docs/metrics-observability.md#parser-memory-troubleshooting"
+
+      # Parser subprocess errors
+      - alert: ParserSubprocessErrors
+        expr: increase(analyze_requests_total{outcome="parser_subprocess_error"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: error
+          component: parser
+        annotations:
+          summary: "merm8 parser subprocess failures detected"
+          description: |
+            Parser subprocess crashed or failed in the last 5 minutes.
+            This indicates a parser implementation bug or resource exhaustion.
+            
+            Actions:
+            1. Check parser and system logs
+            2. Verify system resource availability (disk, memory, CPU)
+            3. Contact support with failure logs
+          runbook_url: "https://github.com/CyanAutomation/merm8/blob/main/docs/metrics-observability.md#parser-subprocess-troubleshooting"
+
+      # High HTTP error rate
+      - alert: HTTPErrorRateHigh
+        expr: |
+          (sum(rate(request_total{status=~"5.."}[5m])) by (route, method) / sum(rate(request_total[5m])) by (route, method)) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: http
+        annotations:
+          summary: "merm8 HTTP error rate above 10% on {{ $labels.route }} ({{ $labels.method }})"
+          description: |
+            Server error rate exceeded 10% for route {{ $labels.route }}.
+            Current error rate: {{ $value | humanizePercentage }}
+            
+            Actions:
+            1. Check server logs for error messages
+            2. Verify service dependencies (parser, database)
+            3. Monitor resource utilization (CPU, memory)
+          runbook_url: "https://github.com/CyanAutomation/merm8/blob/main/docs/metrics-observability.md#http-error-troubleshooting"
+
+      # Parser service degradation (combined timeout + error metrics)
+      - alert: ParserServiceDegradation
+        expr: |
+          (increase(analyze_requests_total{outcome=~"parser_timeout|parser_subprocess_error|parser_memory_limit|parser_decode_error"}[5m]) / increase(analyze_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: parser
+        annotations:
+          summary: "merm8 parser service degradation detected"
+          description: |
+            Parser failures (combined: timeout, memory, subprocess errors, decode errors) exceeded 5% in the last 5 minutes.
+            Failure rate: {{ $value | humanizePercentage }}
+            
+            Actions:
+            1. Trigger incident response
+            2. Check parser subprocess logs and system metrics
+            3. Consider scaling up resources or circuit-breaking requests
+            4. Communicate status to users
+          runbook_url: "https://github.com/CyanAutomation/merm8/blob/main/docs/metrics-observability.md#service-degradation"
+
+      # Request latency P95 too high
+      - alert: RequestLatencyHigh
+        expr: histogram_quantile(0.95, rate(request_duration_seconds_bucket[5m])) > 5
+        for: 10m
+        labels:
+          severity: warning
+          component: http
+        annotations:
+          summary: "merm8 request latency P95 above 5s"
+          description: |
+            95th percentile request latency exceeded 5 seconds.
+            P95 latency: {{ $value }}s
+            
+            Actions:
+            1. Check for slow diagrams (parser bottleneck)
+            2. Review application logs for slow rule execution
+            3. Check system resource utilization
+            4. Consider rate limiting or request queue depth
+          runbook_url: "https://github.com/CyanAutomation/merm8/blob/main/docs/metrics-observability.md#latency-troubleshooting"
