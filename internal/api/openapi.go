@@ -859,12 +859,15 @@ var openapi = map[string]interface{}{
 						},
 					},
 					"503": map[string]interface{}{
-						"description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
+						"description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array. `server_busy` responses include a `Retry-After` hint (for example `Retry-After: 1` or `Retry-After: Wed, 21 Oct 2015 07:28:00 GMT`).",
 						"headers": map[string]interface{}{
 							"Retry-After": map[string]interface{}{
 								"description": "Suggested delay before retrying a `server_busy` response. Value is either delta-seconds or an HTTP-date.",
 								"schema":      map[string]interface{}{"type": "string"},
-								"example":     "5",
+								"examples": map[string]interface{}{
+									"deltaSeconds": map[string]interface{}{"value": "1"},
+									"httpDate":     map[string]interface{}{"value": "Wed, 21 Oct 2015 07:28:00 GMT"},
+								},
 							},
 							"X-RateLimit-Limit": map[string]interface{}{
 								"description": "Maximum number of requests allowed in the current time window",
