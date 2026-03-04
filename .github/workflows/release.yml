@@ -1,0 +1,138 @@
+name: Semantic Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    name: Create GitHub Release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Validate semantic version
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          if ! [[ $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?(\+[a-zA-Z0-9]+)?$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            echo "Version must match semantic versioning pattern: v<major>.<minor>.<patch>[-prerelease][+metadata]"
+            exit 1
+          fi
+          echo "✅ Valid semantic version: $VERSION"
+
+      - name: Get tag message as release body
+        id: tag-message
+        run: |
+          TAG_MESSAGE=$(git tag -l --format='%(contents)' ${{ steps.version.outputs.tag }})
+          if [ -z "$TAG_MESSAGE" ]; then
+            TAG_MESSAGE="Release ${{ steps.version.outputs.version }}"
+          fi
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          release_name: ${{ steps.version.outputs.tag }}
+          body: ${{ steps.tag-message.outputs.message }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+
+  docker-build-and-push:
+    runs-on: ubuntu-latest
+    name: Build and Push Docker Image
+    needs: create-release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+
+      - name: Login to Google Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: europe-west1-docker.pkg.dev
+          username: _json_key
+          password: ${{ secrets.GCP_SA_KEY }}
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/merm8:${{ steps.version.outputs.version }}
+            ${{ secrets.DOCKER_USERNAME }}/merm8:latest
+            europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/merm8/merm8:${{ steps.version.outputs.version }}
+            europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/merm8/merm8:latest
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            VCS_REF=${{ github.sha }}
+
+  update-version-refs:
+    runs-on: ubuntu-latest
+    name: Update Version References
+    needs: create-release
+    if: ${{ !contains(steps.version.outputs.version, '-') }}  # Skip for pre-releases
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "merm8-release-bot"
+          git config --global user.email "releases@merm8.local"
+
+      - name: Update version in Dockerfile
+        run: |
+          sed -i "s/ARG VERSION=.*/ARG VERSION=${{ steps.version.outputs.version }}/g" Dockerfile
+          git add Dockerfile
+          git commit -m "chore: bump version to ${{ steps.version.outputs.version }}" || echo "No version bump needed"
+
+      - name: Push version updates
+        run: |
+          git push origin main --follow-tags || echo "No changes to push"
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
