@@ -225,7 +225,7 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Prometheus metrics",
-				"description": "Returns service metrics in Prometheus text exposition format. Includes request_total, request_duration_seconds, analyze_requests_total, and parser_duration_seconds metric families.",
+				"description": "Returns service metrics in Prometheus text exposition format. Exported families are request_total{route,method,status}, request_duration_seconds{route,method} histogram, analyze_requests_total{outcome}, and parser_duration_seconds{outcome} histogram. Restrict exposure to trusted scrape networks/identities in production.",
 				"operationId": "getMetrics",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
@@ -256,7 +256,7 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Internal analyze outcome counters",
-				"description": "Returns internal JSON counters for analyze outcomes: valid_success, syntax_error, and parser failure categories timeout/subprocess/decode/contract/internal.",
+				"description": "Returns cumulative internal JSON analyze outcome counters. analyze.valid_success maps to lint_success; analyze.syntax_error maps to syntax_error; parser.{timeout,subprocess,decode,contract,internal} map to parser_timeout, parser_subprocess_error, parser_decode_error, parser_contract_violation, and internal_error. Intended for restricted internal diagnostics.",
 				"operationId": "getInternalMetrics",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
