@@ -17,6 +17,8 @@ type OptionMetadata struct {
 // RuleMetadata describes supported config options, defaults, and validations for a rule.
 type RuleMetadata struct {
 	ID                  string                 `json:"id"`
+	State               string                 `json:"state"`
+	Availability        string                 `json:"availability,omitempty"`
 	Severity            string                 `json:"severity"`
 	Description         string                 `json:"description"`
 	DefaultConfig       map[string]interface{} `json:"default-config"`
@@ -120,6 +122,7 @@ const suppressionSelectorConstraints = "Each entry must match !?(node|subgraph|r
 var builtInRuleMetadata = []RuleMetadata{
 	{
 		ID:          "max-fanout",
+		State:       "implemented",
 		Severity:    "warning",
 		Description: "Flags nodes whose outgoing edge count exceeds a configurable limit.",
 		DefaultConfig: map[string]interface{}{
@@ -137,6 +140,7 @@ var builtInRuleMetadata = []RuleMetadata{
 	},
 	{
 		ID:          "no-duplicate-node-ids",
+		State:       "implemented",
 		Severity:    "error",
 		Description: "Flags diagrams containing more than one node with the same ID.",
 		DefaultConfig: map[string]interface{}{
@@ -152,6 +156,7 @@ var builtInRuleMetadata = []RuleMetadata{
 	},
 	{
 		ID:          "no-disconnected-nodes",
+		State:       "implemented",
 		Severity:    "error",
 		Description: "Flags nodes that are not connected by any incoming or outgoing edge.",
 		DefaultConfig: map[string]interface{}{
@@ -167,6 +172,7 @@ var builtInRuleMetadata = []RuleMetadata{
 	},
 	{
 		ID:          "max-depth",
+		State:       "implemented",
 		Severity:    "warning",
 		Description: "Flags root-to-leaf traversals whose depth exceeds a configurable limit.",
 		DefaultConfig: map[string]interface{}{
@@ -184,6 +190,7 @@ var builtInRuleMetadata = []RuleMetadata{
 	},
 	{
 		ID:          "no-cycles",
+		State:       "implemented",
 		Severity:    "error",
 		Description: "Flags directed cycles in flowcharts.",
 		DefaultConfig: map[string]interface{}{
@@ -197,6 +204,74 @@ var builtInRuleMetadata = []RuleMetadata{
 			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
 			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: suppressionSelectorConstraints},
 			{Name: "allow-self-loop", Type: "boolean", Description: "Allow single-node self-loop cycles without emitting issues.", Constraints: "Must be true or false."},
+		},
+	},
+	{
+		ID:           "class-no-orphan-classes",
+		State:        "planned",
+		Availability: "Planned for class diagram linting expansion.",
+		Severity:     "info",
+		Description:  "Will flag classes that are not connected to any relationship.",
+		DefaultConfig: map[string]interface{}{
+			"enabled":               false,
+			"severity":              "info",
+			"suppression-selectors": []string{},
+		},
+		ConfigurableOptions: []OptionMetadata{
+			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
+			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+		},
+	},
+	{
+		ID:           "er-no-isolated-entities",
+		State:        "planned",
+		Availability: "Planned for ER diagram linting expansion.",
+		Severity:     "info",
+		Description:  "Will flag entities with no incoming or outgoing relationships.",
+		DefaultConfig: map[string]interface{}{
+			"enabled":               false,
+			"severity":              "info",
+			"suppression-selectors": []string{},
+		},
+		ConfigurableOptions: []OptionMetadata{
+			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
+			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+		},
+	},
+	{
+		ID:           "sequence-max-participants",
+		State:        "planned",
+		Availability: "Planned for sequence diagram linting expansion.",
+		Severity:     "info",
+		Description:  "Will flag sequence diagrams that exceed a configurable participant count.",
+		DefaultConfig: map[string]interface{}{
+			"enabled":               false,
+			"severity":              "info",
+			"suppression-selectors": []string{},
+		},
+		ConfigurableOptions: []OptionMetadata{
+			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
+			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+		},
+	},
+	{
+		ID:           "state-no-unreachable-states",
+		State:        "planned",
+		Availability: "Planned for state diagram linting expansion.",
+		Severity:     "info",
+		Description:  "Will flag states that cannot be reached from any initial state.",
+		DefaultConfig: map[string]interface{}{
+			"enabled":               false,
+			"severity":              "info",
+			"suppression-selectors": []string{},
+		},
+		ConfigurableOptions: []OptionMetadata{
+			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
+			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
 		},
 	},
 }
@@ -234,6 +309,21 @@ func ListRuleMetadataForRuleIDs(ruleIDs map[string]struct{}) []RuleMetadata {
 	return metadata
 }
 
+// ListImplementedRuleMetadata returns metadata for implemented built-in rules.
+func ListImplementedRuleMetadata() []RuleMetadata {
+	metadata := make([]RuleMetadata, 0, len(builtInRuleMetadata))
+	for _, rule := range builtInRuleMetadata {
+		if rule.State != "implemented" {
+			continue
+		}
+		metadata = append(metadata, cloneRuleMetadata(rule))
+	}
+	sort.Slice(metadata, func(i, j int) bool {
+		return metadata[i].ID < metadata[j].ID
+	})
+	return metadata
+}
+
 // ConfigRegistry returns rule metadata keyed by rule ID.
 func ConfigRegistry() map[string]RuleMetadata {
 	return ConfigRegistryForRuleIDs(nil)
@@ -242,7 +332,7 @@ func ConfigRegistry() map[string]RuleMetadata {
 // ConfigRegistryForRuleIDs returns rule metadata keyed by rule ID for the
 // provided implemented rule IDs. A nil/empty ruleIDs set returns all metadata.
 func ConfigRegistryForRuleIDs(ruleIDs map[string]struct{}) map[string]RuleMetadata {
-	filtered := ListRuleMetadata()
+	filtered := ListImplementedRuleMetadata()
 	if len(ruleIDs) > 0 {
 		filtered = ListRuleMetadataForRuleIDs(ruleIDs)
 	}

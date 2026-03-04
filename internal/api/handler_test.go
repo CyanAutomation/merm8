@@ -3513,6 +3513,7 @@ func TestListRules_ResponseShape(t *testing.T) {
 	var resp struct {
 		Rules []struct {
 			ID                  string                 `json:"id"`
+			State               string                 `json:"state"`
 			Severity            string                 `json:"severity"`
 			Description         string                 `json:"description"`
 			DefaultConfig       map[string]interface{} `json:"default-config"`
@@ -3531,8 +3532,11 @@ func TestListRules_ResponseShape(t *testing.T) {
 		t.Fatal("expected non-empty rules list")
 	}
 	for _, rule := range resp.Rules {
-		if rule.ID == "" || rule.Severity == "" || rule.Description == "" {
-			t.Fatalf("expected id/severity/description for each rule, got %#v", rule)
+		if rule.ID == "" || rule.State == "" || rule.Severity == "" || rule.Description == "" {
+			t.Fatalf("expected id/state/severity/description for each rule, got %#v", rule)
+		}
+		if rule.State != "implemented" && rule.State != "planned" {
+			t.Fatalf("expected rule state to be implemented|planned, got %q for %s", rule.State, rule.ID)
 		}
 		if rule.DefaultConfig == nil {
 			t.Fatalf("expected default-config object for %s", rule.ID)
@@ -3584,6 +3588,7 @@ func TestListRules_MetadataConsistencyWithRegistry(t *testing.T) {
 	var resp struct {
 		Rules []struct {
 			ID                  string                 `json:"id"`
+			State               string                 `json:"state"`
 			Severity            string                 `json:"severity"`
 			DefaultConfig       map[string]interface{} `json:"default-config"`
 			ConfigurableOptions []struct {
@@ -3595,7 +3600,11 @@ func TestListRules_MetadataConsistencyWithRegistry(t *testing.T) {
 		t.Fatalf("failed to decode /rules response: %v", err)
 	}
 
-	registry := rules.ConfigRegistry()
+	metadata := rules.ListRuleMetadata()
+	registry := map[string]rules.RuleMetadata{}
+	for _, meta := range metadata {
+		registry[meta.ID] = meta
+	}
 	if len(resp.Rules) != len(registry) {
 		t.Fatalf("expected %d rules from /rules endpoint, got %d", len(registry), len(resp.Rules))
 	}
@@ -3603,6 +3612,9 @@ func TestListRules_MetadataConsistencyWithRegistry(t *testing.T) {
 		meta, ok := registry[rule.ID]
 		if !ok {
 			t.Fatalf("unexpected rule id %q in /rules response", rule.ID)
+		}
+		if rule.State != meta.State {
+			t.Fatalf("expected state %q for %s, got %q", meta.State, rule.ID, rule.State)
 		}
 		if rule.Severity != meta.Severity {
 			t.Fatalf("expected severity %q for %s, got %q", meta.Severity, rule.ID, rule.Severity)
@@ -3949,7 +3961,7 @@ func TestAnalyze_MetricsIssueCountsReflectUnsuppressedIssuesOnly(t *testing.T) {
 	}
 }
 
-func TestAnalyze_ConfigSuppressionSelectors_MalformedIgnored(t *testing.T) {
+func TestAnalyze_ConfigSuppressionSelectors_MalformedRejected(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{
 			Type:  model.DiagramTypeFlowchart,
@@ -3976,19 +3988,10 @@ func TestAnalyze_ConfigSuppressionSelectors_MalformedIgnored(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
 	}
-
-	var resp struct {
-		Issues []model.Issue `json:"issues"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if len(resp.Issues) == 0 {
-		t.Fatalf("expected malformed selectors to be ignored and issue retained")
-	}
+	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for suppression-selectors", "config.rules.max-fanout.suppression-selectors", nil)
 }
 
 func TestAnalyze_RequestIDHeaderPropagation(t *testing.T) {
@@ -4145,9 +4148,9 @@ func TestRuleAdvertisement_OnlyImplementedRulesExposedAndConfigurable(t *testing
 			t.Fatalf("expected implemented rule %q in /rules response", id)
 		}
 	}
-	for _, id := range []string{"no-cycles", "max-depth", "no-disconnected-nodes"} {
-		if _, ok := got[id]; ok {
-			t.Fatalf("did not expect unimplemented rule %q in /rules response", id)
+	for _, id := range []string{"no-cycles", "max-depth", "no-disconnected-nodes", "class-no-orphan-classes", "er-no-isolated-entities", "sequence-max-participants", "state-no-unreachable-states"} {
+		if _, ok := got[id]; !ok {
+			t.Fatalf("expected metadata rule %q in /rules response", id)
 		}
 	}
 

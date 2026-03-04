@@ -344,6 +344,8 @@ type ruleOptionResponse struct {
 // ruleResponse describes built-in rule metadata exposed by GET /rules.
 type ruleResponse struct {
 	ID                  string                 `json:"id"`
+	State               string                 `json:"state"`
+	Availability        string                 `json:"availability,omitempty"`
 	Severity            string                 `json:"severity"`
 	Description         string                 `json:"description"`
 	DefaultConfig       map[string]interface{} `json:"default-config"`
@@ -644,7 +646,7 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 
 // ListRules handles GET /rules.
 func (h *Handler) ListRules(w http.ResponseWriter, _ *http.Request) {
-	metadata := rules.ListRuleMetadataForRuleIDs(h.engine.KnownRuleIDs())
+	metadata := rules.ListRuleMetadata()
 	resp := make([]ruleResponse, 0, len(metadata))
 	for _, rule := range metadata {
 		options := make([]ruleOptionResponse, 0, len(rule.ConfigurableOptions))
@@ -658,6 +660,8 @@ func (h *Handler) ListRules(w http.ResponseWriter, _ *http.Request) {
 		}
 		resp = append(resp, ruleResponse{
 			ID:                  rule.ID,
+			State:               rule.State,
+			Availability:        rule.Availability,
 			Severity:            rule.Severity,
 			Description:         rule.Description,
 			DefaultConfig:       rule.DefaultConfig,
@@ -749,6 +753,9 @@ func supportedRuleIDs() []string {
 	metadata := rules.ListRuleMetadata()
 	ruleIDs := make([]string, 0, len(metadata))
 	for _, rule := range metadata {
+		if rule.State != "implemented" {
+			continue
+		}
 		ruleIDs = append(ruleIDs, rule.ID)
 	}
 	return ruleIDs
