@@ -2391,6 +2391,58 @@ func TestInfo_ReturnsServiceAndParserMetadata(t *testing.T) {
 	}
 }
 
+func TestInfo_LegacySnakeCaseClientsCanStillDeserialize(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{versionInfo: &parser.VersionInfo{ParserVersion: "1.0.0", MermaidVersion: "11.12.3"}}, engine.New())
+	h.SetServiceVersion("2.3.4")
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/info", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	type legacyInfoResponse struct {
+		ServiceVersion       string   `json:"service_version"`
+		ParserVersion        string   `json:"parser_version"`
+		MermaidVersion       string   `json:"mermaid_version"`
+		ParserTimeoutSeconds int      `json:"parser_timeout_seconds"`
+		ParserRecognized     []string `json:"parser_recognized"`
+		LintSupported        []string `json:"lint_supported"`
+		SupportedRules       []string `json:"supported_rules"`
+	}
+
+	var legacyResp legacyInfoResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &legacyResp); err != nil {
+		t.Fatalf("failed to decode /info response as legacy shape: %v", err)
+	}
+
+	if legacyResp.ServiceVersion != "2.3.4" {
+		t.Fatalf("expected service_version=2.3.4, got %q", legacyResp.ServiceVersion)
+	}
+	if legacyResp.ParserVersion != "1.0.0" {
+		t.Fatalf("expected parser_version=1.0.0, got %q", legacyResp.ParserVersion)
+	}
+	if legacyResp.MermaidVersion != "11.12.3" {
+		t.Fatalf("expected mermaid_version=11.12.3, got %q", legacyResp.MermaidVersion)
+	}
+	if legacyResp.ParserTimeoutSeconds != 0 {
+		t.Fatalf("expected parser_timeout_seconds to be omitted/zero by default, got %d", legacyResp.ParserTimeoutSeconds)
+	}
+	if len(legacyResp.ParserRecognized) == 0 {
+		t.Fatalf("expected parser_recognized to be populated for legacy clients")
+	}
+	if len(legacyResp.LintSupported) == 0 {
+		t.Fatalf("expected lint_supported to be populated for legacy clients")
+	}
+	if len(legacyResp.SupportedRules) == 0 {
+		t.Fatalf("expected supported_rules to be populated for legacy clients")
+	}
+}
+
 func TestReady_OptionallyIncludesVersionMetadata(t *testing.T) {
 	mux := http.NewServeMux()
 	h := api.NewHandler(&mockParser{versionInfo: &parser.VersionInfo{ParserVersion: "1.0.0", MermaidVersion: "11.12.3"}}, engine.New())

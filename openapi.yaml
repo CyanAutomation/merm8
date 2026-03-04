@@ -190,6 +190,7 @@
         - "message"
       "type": "object"
     "InfoResponse":
+      "description": "Canonical /info response keys use kebab-case. Deprecated snake_case aliases are included temporarily for migration compatibility and will be removed in the next major version."
       "properties":
         "lint-supported":
           "items":
