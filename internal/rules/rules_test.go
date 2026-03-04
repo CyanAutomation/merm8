@@ -363,6 +363,60 @@ func TestConfigRegistry_ContainsBuiltins(t *testing.T) {
 	}
 }
 
+func TestValidateRegisteredRuleID(t *testing.T) {
+	tests := []struct {
+		name        string
+		ruleID      string
+		wantWarning bool
+		wantErr     bool
+	}{
+		{name: "built-in legacy", ruleID: "max-fanout"},
+		{name: "built-in namespaced", ruleID: "core/max-fanout"},
+		{name: "custom namespaced", ruleID: "custom/acme/max-fanout-guard"},
+		{name: "legacy custom", ruleID: "third-party-rule", wantWarning: true},
+		{name: "invalid core id", ruleID: "core/unknown", wantErr: true},
+		{name: "invalid custom shape", ruleID: "custom/acme", wantErr: true},
+		{name: "unsupported namespace", ruleID: "vendor/rule", wantErr: true},
+		{name: "empty", ruleID: "", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			warning, err := rules.ValidateRegisteredRuleID(tt.ruleID)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tt.ruleID)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected no error for %q, got %v", tt.ruleID, err)
+			}
+			if (warning != "") != tt.wantWarning {
+				t.Fatalf("unexpected warning state for %q: warning=%q", tt.ruleID, warning)
+			}
+		})
+	}
+}
+
+func TestCanonicalRuleRegistrationID(t *testing.T) {
+	tests := []struct {
+		ruleID string
+		want   string
+	}{
+		{ruleID: "max-fanout", want: "core/max-fanout"},
+		{ruleID: "core/max-fanout", want: "core/max-fanout"},
+		{ruleID: "custom/acme/graph-depth", want: "custom/acme/graph-depth"},
+		{ruleID: "legacy-custom", want: "custom/legacy/legacy-custom"},
+	}
+
+	for _, tt := range tests {
+		if got := rules.CanonicalRuleRegistrationID(tt.ruleID); got != tt.want {
+			t.Fatalf("canonical id mismatch for %q: got %q want %q", tt.ruleID, got, tt.want)
+		}
+	}
+}
+
 func TestValidateOption_MaxFanoutLimit(t *testing.T) {
 	if err := rules.ValidateOption("max-fanout", "limit", 2); err != nil {
 		t.Fatalf("expected valid limit, got %v", err)
