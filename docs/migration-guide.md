@@ -133,3 +133,19 @@ When legacy input is used, the API emits:
 - `meta.warnings[]` structured metadata (`code`, `message`, `replacement`)
 - server log warning with migration hint
 
+
+## Rule ID namespacing migration (built-ins and plugins)
+
+As part of rule ID extensibility hardening:
+
+- Built-in rule IDs are moving toward explicit `core/<id>` naming in docs and discovery output.
+- Existing unnamespaced built-ins (for example `max-fanout`) remain accepted in config during migration.
+- Config normalization now accepts `core/<id>` for built-ins and maps it to the canonical built-in key used by the active registry.
+- If both `max-fanout` and `core/max-fanout` are supplied in config, entries are merged deterministically into one rule config object.
+- Plugin rule IDs remain `custom/<provider>/<id>` and must match a registered runtime rule exactly.
+
+Recommended client posture:
+
+1. Treat `/v1/rules` as source-of-truth for active IDs.
+2. Store IDs as opaque strings.
+3. Prefer emitting `core/<id>` for built-ins in newly generated config payloads.

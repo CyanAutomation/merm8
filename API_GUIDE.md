@@ -188,6 +188,46 @@ Interpretation guidance:
 
 This is the recommended source for integrations and generated docs.
 
+### Extensibility: Rule IDs, `/v1/rules` compatibility, and plugin loading determinism
+
+To keep rule discovery and configuration stable as plugin support expands, use the following contract.
+
+#### Rule ID namespace policy
+
+- **Built-in rules** are canonicalized under the `core/` namespace (for example `core/no-cycles`, `core/max-fanout`).
+- Existing built-in IDs without namespace (for example `no-cycles`) are still accepted as compatibility aliases in config inputs.
+- **Plugin rules** must use a vendor/provider namespace under `custom/<provider>/<id>` (for example `custom/acme/no-cross-team-calls`).
+- Rule ID segments must match `[a-z0-9][a-z0-9-]*`.
+- Unknown namespace prefixes (for example `org.rule-id` or `vendor/...`) are rejected by registration/validation.
+
+#### `/v1/rules` compatibility expectations
+
+- `/v1/rules` is the compatibility surface clients should use to discover active rules and metadata.
+- The `id` field is treated as a long-lived identifier:
+  - Existing IDs are not repurposed to mean different semantics.
+  - Renames are additive/migratory (old IDs remain as aliases during a documented transition window).
+  - Planned rules may appear ahead of enforcement, but implemented IDs remain stable once released.
+- Consumers should persist and compare IDs as opaque strings and avoid deriving behavior from naming patterns alone.
+
+#### Deterministic plugin/rule loading strategy
+
+Runtime registration is deterministic by design:
+
+- Built-in groups are appended in a static order (`Flowchart`, then `Sequence`, `Class`, `ER`, `State`).
+- There is **no runtime network fetch** for rules/plugins during engine startup.
+- Duplicate registrations are rejected using canonical IDs, ensuring stable rule identity.
+- Rule execution is deterministic with respect to the registered static order and deterministic issue sorting.
+
+#### Namespacing migration notes (current behavior)
+
+- Config validation normalizes built-in aliases:
+  - `core/max-fanout` in config is normalized to the built-in key `max-fanout`.
+  - `max-fanout` remains accepted during migration, with warnings guiding `core/...` adoption.
+- Mixed alias usage for the same built-in rule is merged onto one canonical config entry before validation.
+- For plugin IDs, exact registered IDs are required; no network-driven discovery or implicit remapping occurs.
+
+See also: `docs/rule-id-namespaces.md` and `docs/migration-guide.md`.
+
 ### Testing the `/analyze` Endpoint
 
 #### Step 1: Click "Try it out"
