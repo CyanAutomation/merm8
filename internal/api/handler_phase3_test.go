@@ -64,7 +64,7 @@ func TestInfo_ParserTimeout(t *testing.T) {
 		t.Fatalf("decode failed: %v", err)
 	}
 
-	timeout, ok := info["parser-timeout-seconds"]  // canonical kebab-case field name
+	timeout, ok := info["parser-timeout-seconds"] // canonical kebab-case field name
 	if !ok {
 		t.Errorf("parser-timeout-seconds field not found in info response")
 		return

@@ -251,7 +251,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 	if err := json.Unmarshal(cfgRaw, &cfg); err != nil {
 		return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 	}
-	
+
 	// Validate suppression selectors reference known rules
 	for _, ruleConfig := range cfg {
 		if suppSelectors, hasSuppression := ruleConfig["suppression-selectors"]; hasSuppression {
@@ -268,7 +268,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 			}
 		}
 	}
-	
+
 	return cfg, deprecations, nil
 }
 
