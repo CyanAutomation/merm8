@@ -442,20 +442,23 @@ type infoResponse struct {
 	ParserRecognized     []model.DiagramType   `json:"parser-recognized"`
 	LintSupported        []model.DiagramFamily `json:"lint-supported"`
 	SupportedRules       []string              `json:"supported-rules"`
+	SupportedRuleIDs     []string              `json:"supported-rule-ids"`
 }
 
 // MarshalJSON emits kebab-case as the canonical /info contract while preserving
 // temporary snake_case compatibility aliases.
 func (r infoResponse) MarshalJSON() ([]byte, error) {
 	payload := map[string]any{
-		"parser-recognized": r.ParserRecognized,
-		"lint-supported":    r.LintSupported,
-		"supported-rules":   r.SupportedRules,
+		"parser-recognized":  r.ParserRecognized,
+		"lint-supported":     r.LintSupported,
+		"supported-rules":    r.SupportedRules,
+		"supported-rule-ids": r.SupportedRuleIDs,
 
 		// Deprecated compatibility aliases (remove in next major version).
-		"parser_recognized": r.ParserRecognized,
-		"lint_supported":    r.LintSupported,
-		"supported_rules":   r.SupportedRules,
+		"parser_recognized":  r.ParserRecognized,
+		"lint_supported":     r.LintSupported,
+		"supported_rules":    r.SupportedRules,
+		"supported_rule_ids": r.SupportedRuleIDs,
 	}
 
 	if r.ServiceVersion != "" {
@@ -578,7 +581,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/spec", h.ServeSpec)
 	mux.HandleFunc("GET /v1/docs", h.ServeSwagger)
 
-	// Legacy unversioned compatibility aliases.
+	// Legacy unversioned compatibility aliases (including probe-friendly root path).
 	mux.HandleFunc("GET /", h.Healthz)
 	mux.HandleFunc("GET /health", h.Healthz)
 	mux.HandleFunc("GET /healthz", h.Healthz)
@@ -739,6 +742,7 @@ func (h *Handler) Info(w http.ResponseWriter, _ *http.Request) {
 		ParserRecognized: model.RecognizedDiagramTypes(),
 		LintSupported:    h.lintSupportedFamilies(),
 		SupportedRules:   supportedRuleIDs(),
+		SupportedRuleIDs: h.supportedRuleIDs(),
 	}
 	if provider, ok := h.parser.(VersionInfoProvider); ok {
 		if info, err := provider.VersionInfo(); err == nil {
@@ -763,6 +767,20 @@ func supportedRuleIDs() []string {
 		}
 		ruleIDs = append(ruleIDs, rule.ID)
 	}
+	return ruleIDs
+}
+
+func (h *Handler) supportedRuleIDs() []string {
+	if h.engine == nil {
+		return []string{}
+	}
+
+	known := h.engine.KnownRuleIDs()
+	ruleIDs := make([]string, 0, len(known))
+	for ruleID := range known {
+		ruleIDs = append(ruleIDs, ruleID)
+	}
+	sort.Strings(ruleIDs)
 	return ruleIDs
 }
 
