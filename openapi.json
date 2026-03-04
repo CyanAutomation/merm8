@@ -2087,11 +2087,18 @@
                 }
               }
             },
-            "description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array.",
+            "description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array. `server_busy` responses include a `Retry-After` hint (for example `Retry-After: 1` or `Retry-After: Wed, 21 Oct 2015 07:28:00 GMT`).",
             "headers": {
               "Retry-After": {
                 "description": "Suggested delay before retrying a `server_busy` response. Value is either delta-seconds or an HTTP-date.",
-                "example": "5",
+                "examples": {
+                  "deltaSeconds": {
+                    "value": "1"
+                  },
+                  "httpDate": {
+                    "value": "Wed, 21 Oct 2015 07:28:00 GMT"
+                  }
+                },
                 "schema": {
                   "type": "string"
                 }
