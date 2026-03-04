@@ -1,4 +1,4 @@
-.PHONY: lint format vet tidy help
+.PHONY: lint format vet tidy help test-contract
 
 help:
 	@echo "Linting and Formatting Targets:"
@@ -34,3 +34,9 @@ tidy:
 
 ci-lint: format vet tidy
 	@echo "✓ All CI linting checks passed"
+
+
+test-contract:
+	@echo "Running contract integration tests..."
+	go test ./cmd/server -run '^TestServerContractIntegration_' -count=1 -timeout=90s
+	@echo "✓ contract integration tests passed"
