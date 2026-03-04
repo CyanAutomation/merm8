@@ -779,56 +779,56 @@ func (h *Handler) AnalyzeHelp(w http.ResponseWriter, _ *http.Request) {
 		"diagram-types": map[string]map[string]string{
 			"flowchart": {
 				"description": "Directed acyclic graph for processes, workflows, and decision trees",
-				"example": "flowchart TD\n    Start([Start]) --> Process[Do Something]\n    Process --> End([End])",
+				"example":     "flowchart TD\n    Start([Start]) --> Process[Do Something]\n    Process --> End([End])",
 			},
 			"sequence": {
 				"description": "Interactions between participants over time",
-				"example": "sequenceDiagram\n    Alice->>Bob: Hello!\n    Bob-->>Alice: Hi there!",
+				"example":     "sequenceDiagram\n    Alice->>Bob: Hello!\n    Bob-->>Alice: Hi there!",
 			},
 			"class": {
 				"description": "Object-oriented class hierarchy and relationships",
-				"example": "classDiagram\n    class Animal {\n        +String name\n        +eat()\n    }",
+				"example":     "classDiagram\n    class Animal {\n        +String name\n        +eat()\n    }",
 			},
 			"er": {
 				"description": "Entity-relationship diagrams for data models",
-				"example": "erDiagram\n    CUSTOMER ||--o{ ORDER : places\n    ORDER ||--|{ ITEM : contains",
+				"example":     "erDiagram\n    CUSTOMER ||--o{ ORDER : places\n    ORDER ||--|{ ITEM : contains",
 			},
 			"state": {
 				"description": "State machines and workflows with state transitions",
-				"example": "stateDiagram-v2\n    [*] --> Active\n    Active --> Inactive\n    Inactive --> [*]",
+				"example":     "stateDiagram-v2\n    [*] --> Active\n    Active --> Inactive\n    Inactive --> [*]",
 			},
 		},
 		"common-errors": []map[string]string{
 			{
 				"pattern": "No diagram type detected",
-				"fix": "Start your diagram with a type keyword: flowchart, sequenceDiagram, classDiagram, erDiagram, or stateDiagram-v2",
+				"fix":     "Start your diagram with a type keyword: flowchart, sequenceDiagram, classDiagram, erDiagram, or stateDiagram-v2",
 				"example": "flowchart TD\n  A[Start] --> B[End]",
 			},
 			{
 				"pattern": "Looks like Graphviz syntax",
-				"fix": "Use Mermaid syntax instead. Replace 'digraph' with 'flowchart TD' and '->' with '-->'",
+				"fix":     "Use Mermaid syntax instead. Replace 'digraph' with 'flowchart TD' and '->' with '-->'",
 				"example": "flowchart TD\n  A --> B",
 			},
 			{
 				"pattern": "Unexpected token",
-				"fix": "Check syntax: correct arrow operators, bracket matching, and indentation (use spaces, not tabs)",
+				"fix":     "Check syntax: correct arrow operators, bracket matching, and indentation (use spaces, not tabs)",
 				"example": "flowchart TD\n  A[Valid Label] --> B[Another]",
 			},
 			{
 				"pattern": "Tab indentation detected",
-				"fix": "Replace tabs with spaces (2-4 spaces per indentation level)",
+				"fix":     "Replace tabs with spaces (2-4 spaces per indentation level)",
 				"example": "flowchart TD\n    A --> B",
 			},
 		},
 		"arrow-syntax": map[string]string{
 			"flowchart": "-->, -..-, -.->, or ===",
-			"sequence": "->, -->, ->>, ->>",
-			"class": "<|--, *--, o--",
-			"er": "||, |o, o|, ||",
+			"sequence":  "->, -->, ->>, ->>",
+			"class":     "<|--, *--, o--",
+			"er":        "||, |o, o|, ||",
 		},
 		"resources": map[string]string{
 			"documentation": "https://mermaid.js.org/intro/",
-			"syntax-guide": "https://mermaid.js.org/syntax/flowchart.html",
+			"syntax-guide":  "https://mermaid.js.org/syntax/flowchart.html",
 		},
 	}
 
