@@ -308,6 +308,96 @@ var openapi = map[string]interface{}{
 								"schema": map[string]interface{}{
 									"$ref": "#/components/schemas/RulesResponse",
 								},
+								"examples": map[string]interface{}{
+									"builtInRules": map[string]interface{}{
+										"summary": "Currently built-in runtime rule metadata",
+										"value": map[string]interface{}{
+											"rules": []interface{}{
+												map[string]interface{}{
+													"id":          "max-depth",
+													"severity":    "warning",
+													"description": "Flags root-to-leaf traversals whose depth exceeds a configurable limit.",
+													"default-config": map[string]interface{}{
+														"enabled":               true,
+														"severity":              "warning",
+														"suppression-selectors": []interface{}{},
+														"limit":                 8,
+													},
+													"configurable-options": []interface{}{
+														map[string]interface{}{"name": "enabled", "type": "boolean", "description": "Enable or disable this rule.", "constraints": "Must be true or false."},
+														map[string]interface{}{"name": "severity", "type": "string", "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", "constraints": "Accepted values (canonical): error, warning, info."},
+														map[string]interface{}{"name": "suppression-selectors", "type": "array[string]", "description": "Selectors that suppress matching issues.", "constraints": "Each entry must be a string selector."},
+														map[string]interface{}{"name": "limit", "type": "integer", "description": "Maximum allowed depth for root-to-leaf traversals.", "constraints": "Must be an integer >= 1. Default is 8."},
+													},
+												},
+												map[string]interface{}{
+													"id":          "max-fanout",
+													"severity":    "warning",
+													"description": "Flags nodes whose outgoing edge count exceeds a configurable limit.",
+													"default-config": map[string]interface{}{
+														"enabled":               true,
+														"severity":              "warning",
+														"suppression-selectors": []interface{}{},
+														"limit":                 5,
+													},
+													"configurable-options": []interface{}{
+														map[string]interface{}{"name": "enabled", "type": "boolean", "description": "Enable or disable this rule.", "constraints": "Must be true or false."},
+														map[string]interface{}{"name": "severity", "type": "string", "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", "constraints": "Accepted values (canonical): error, warning, info."},
+														map[string]interface{}{"name": "suppression-selectors", "type": "array[string]", "description": "Selectors that suppress matching issues.", "constraints": "Each entry must be a string selector."},
+														map[string]interface{}{"name": "limit", "type": "integer", "description": "Maximum allowed outgoing edges per node.", "constraints": "Must be an integer >= 1. Default is 5."},
+													},
+												},
+												map[string]interface{}{
+													"id":          "no-cycles",
+													"severity":    "error",
+													"description": "Flags directed cycles in flowcharts.",
+													"default-config": map[string]interface{}{
+														"enabled":               true,
+														"severity":              "error",
+														"suppression-selectors": []interface{}{},
+														"allow-self-loop":       false,
+													},
+													"configurable-options": []interface{}{
+														map[string]interface{}{"name": "enabled", "type": "boolean", "description": "Enable or disable this rule.", "constraints": "Must be true or false."},
+														map[string]interface{}{"name": "severity", "type": "string", "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", "constraints": "Accepted values (canonical): error, warning, info."},
+														map[string]interface{}{"name": "suppression-selectors", "type": "array[string]", "description": "Selectors that suppress matching issues.", "constraints": "Each entry must be a string selector."},
+														map[string]interface{}{"name": "allow-self-loop", "type": "boolean", "description": "Allow single-node self-loop cycles without emitting issues.", "constraints": "Must be true or false."},
+													},
+												},
+												map[string]interface{}{
+													"id":          "no-disconnected-nodes",
+													"severity":    "error",
+													"description": "Flags nodes that are not connected by any incoming or outgoing edge.",
+													"default-config": map[string]interface{}{
+														"enabled":               true,
+														"severity":              "error",
+														"suppression-selectors": []interface{}{},
+													},
+													"configurable-options": []interface{}{
+														map[string]interface{}{"name": "enabled", "type": "boolean", "description": "Enable or disable this rule.", "constraints": "Must be true or false."},
+														map[string]interface{}{"name": "severity", "type": "string", "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", "constraints": "Accepted values (canonical): error, warning, info."},
+														map[string]interface{}{"name": "suppression-selectors", "type": "array[string]", "description": "Selectors that suppress matching issues.", "constraints": "Each entry must be a string selector."},
+													},
+												},
+												map[string]interface{}{
+													"id":          "no-duplicate-node-ids",
+													"severity":    "error",
+													"description": "Flags diagrams containing more than one node with the same ID.",
+													"default-config": map[string]interface{}{
+														"enabled":               true,
+														"severity":              "error",
+														"suppression-selectors": []interface{}{},
+													},
+													"configurable-options": []interface{}{
+														map[string]interface{}{"name": "enabled", "type": "boolean", "description": "Enable or disable this rule.", "constraints": "Must be true or false."},
+														map[string]interface{}{"name": "severity", "type": "string", "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", "constraints": "Accepted values (canonical): error, warning, info."},
+														map[string]interface{}{"name": "suppression-selectors", "type": "array[string]", "description": "Selectors that suppress matching issues.", "constraints": "Each entry must be a string selector."},
+													},
+												},
+											},
+										},
+									},
+								},
 							},
 						},
 					},

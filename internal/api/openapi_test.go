@@ -15,6 +15,7 @@ import (
 	"github.com/CyanAutomation/merm8/internal/engine"
 	"github.com/CyanAutomation/merm8/internal/model"
 	"github.com/CyanAutomation/merm8/internal/parser"
+	"github.com/CyanAutomation/merm8/internal/rules"
 )
 
 func loadServedSpec(t *testing.T) map[string]interface{} {
@@ -578,6 +579,41 @@ func TestServeSpec_ExposesRulesEndpointAndSchemas(t *testing.T) {
 	_ = lookup(t, spec, "components", "schemas", "RulesResponse")
 	_ = lookup(t, spec, "components", "schemas", "RuleMetadata")
 	_ = lookup(t, spec, "components", "schemas", "RuleOption")
+}
+
+func TestServeSpec_RulesEndpointExampleIncludesAllBuiltInRules(t *testing.T) {
+	spec := loadServedSpec(t)
+
+	exampleRules, ok := lookup(t, spec, "paths", "/v1/rules", "get", "responses", "200", "content", "application/json", "examples", "builtInRules", "value", "rules").([]interface{})
+	if !ok {
+		t.Fatalf("expected /v1/rules builtInRules example to contain rules array, got %#v", lookup(t, spec, "paths", "/v1/rules", "get", "responses", "200", "content", "application/json", "examples", "builtInRules", "value", "rules"))
+	}
+
+	exampleByID := map[string]map[string]interface{}{}
+	for _, item := range exampleRules {
+		metadata, ok := item.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected example rule metadata object, got %#v", item)
+		}
+		id, ok := metadata["id"].(string)
+		if !ok || id == "" {
+			t.Fatalf("expected rule metadata id string, got %#v", metadata["id"])
+		}
+		exampleByID[id] = metadata
+	}
+
+	for _, expected := range rules.ListRuleMetadata() {
+		metadata, ok := exampleByID[expected.ID]
+		if !ok {
+			t.Fatalf("expected /v1/rules example to include rule %q", expected.ID)
+		}
+		if got := metadata["severity"]; got != expected.Severity {
+			t.Fatalf("expected %s severity=%q, got %#v", expected.ID, expected.Severity, got)
+		}
+		if got := metadata["description"]; got != expected.Description {
+			t.Fatalf("expected %s description=%q, got %#v", expected.ID, expected.Description, got)
+		}
+	}
 }
 
 func TestServeSpec_ExposesRuleConfigSchemaAndEndpoint(t *testing.T) {
