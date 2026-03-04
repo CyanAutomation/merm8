@@ -177,7 +177,7 @@ func TestServerContractIntegration_SuppressionSelectorNegationPrecedence(t *test
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			body, _ := json.Marshal(map[string]any{
+			body, err := json.Marshal(map[string]any{
 				"code": diagram,
 				"config": map[string]any{
 					"schema-version": "v1",
@@ -189,6 +189,9 @@ func TestServerContractIntegration_SuppressionSelectorNegationPrecedence(t *test
 					},
 				},
 			})
+			if err != nil {
+				t.Fatalf("failed to marshal request body: %v", err)
+			}
 			res, err := http.Post(server.URL+"/v1/analyze", "application/json", bytes.NewReader(body))
 			if err != nil {
 				t.Fatalf("request failed: %v", err)
