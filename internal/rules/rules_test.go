@@ -236,6 +236,23 @@ func TestValidateConfig_RejectsWarnAlias(t *testing.T) {
 	}
 }
 
+func TestValidateConfig_RejectsMalformedSuppressionSelector(t *testing.T) {
+	err := rules.ValidateConfig(rules.Config{"max-fanout": {"suppression-selectors": []string{"node", "! node:A"}}})
+	if err == nil {
+		t.Fatal("expected malformed suppression selectors to be rejected")
+	}
+	if !strings.Contains(err.Error(), "invalid suppression selector") {
+		t.Fatalf("expected invalid suppression selector error, got %v", err)
+	}
+}
+
+func TestValidateConfig_AcceptsCanonicalSuppressionSelectors(t *testing.T) {
+	err := rules.ValidateConfig(rules.Config{"max-fanout": {"suppression-selectors": []string{"node:A", "!rule:max-fanout", "subgraph:cluster-1"}}})
+	if err != nil {
+		t.Fatalf("expected canonical suppression selectors to be accepted, got %v", err)
+	}
+}
+
 func TestNoDuplicateNodeIDs_UsesDuplicateNodeLocation(t *testing.T) {
 	line := 4
 	col := 7

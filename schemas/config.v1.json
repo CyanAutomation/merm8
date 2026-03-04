@@ -29,6 +29,7 @@
             "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
+                "pattern": "^!?(node|subgraph|rule):.+$",
                 "type": "string"
               },
               "type": "array"
@@ -60,6 +61,7 @@
             "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
+                "pattern": "^!?(node|subgraph|rule):.+$",
                 "type": "string"
               },
               "type": "array"
@@ -90,6 +92,7 @@
             "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
+                "pattern": "^!?(node|subgraph|rule):.+$",
                 "type": "string"
               },
               "type": "array"
@@ -116,6 +119,7 @@
             "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
+                "pattern": "^!?(node|subgraph|rule):.+$",
                 "type": "string"
               },
               "type": "array"
@@ -142,6 +146,7 @@
             "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
+                "pattern": "^!?(node|subgraph|rule):.+$",
                 "type": "string"
               },
               "type": "array"

@@ -47,19 +47,30 @@ var sharedOptionConstraints = map[string]optionConstraint{
 	},
 	"suppression-selectors": {
 		validate: func(value any) bool {
-			switch selectors := value.(type) {
+			selectors := make([]string, 0)
+			switch typedSelectors := value.(type) {
 			case []interface{}:
-				for _, selector := range selectors {
-					if _, ok := selector.(string); !ok {
+				selectors = make([]string, 0, len(typedSelectors))
+				for _, selector := range typedSelectors {
+					selectorValue, ok := selector.(string)
+					if !ok {
 						return false
 					}
+					selectors = append(selectors, selectorValue)
 				}
-				return true
 			case []string:
-				return true
+				selectors = typedSelectors
 			default:
 				return false
 			}
+
+			for _, selector := range selectors {
+				if _, ok := ParseSuppressionSelector(selector); !ok {
+					return false
+				}
+			}
+
+			return true
 		},
 	},
 }
