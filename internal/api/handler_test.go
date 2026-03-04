@@ -4175,7 +4175,7 @@ func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
 
 func TestLegacyAnalyzeAliases_WithLegacyConfigEmitsDeprecationHeaders(t *testing.T) {
 	setStrictConfigSchemaForTest(t, false)
-	
+
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
@@ -4190,7 +4190,7 @@ func TestLegacyAnalyzeAliases_WithLegacyConfigEmitsDeprecationHeaders(t *testing
 		{name: "analyze with legacy config", method: http.MethodPost, path: "/analyze", body: `{"code":"graph TD;A-->B","config":{"schema_version":"v1","rules":{}}}`},
 		{name: "analyze sarif with legacy config", method: http.MethodPost, path: "/analyze/sarif", body: `{"code":"graph TD;A-->B","config":{"schema_version":"v1","rules":{}}}`},
 	}
-	
+
 	for _, tc := range legacyConfigTests {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
@@ -4218,7 +4218,7 @@ func TestLegacyAnalyzeAliases_WithLegacyConfigEmitsDeprecationHeaders(t *testing
 		{name: "analyze with canonical config", method: http.MethodPost, path: "/analyze", body: `{"code":"graph TD;A-->B","config":{"schema-version":"v1","rules":{}}}`},
 		{name: "analyze sarif with canonical config", method: http.MethodPost, path: "/analyze/sarif", body: `{"code":"graph TD;A-->B","config":{"schema-version":"v1","rules":{}}}`},
 	}
-	
+
 	for _, tc := range canonicalConfigTests {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
@@ -4240,11 +4240,11 @@ func TestLegacyAnalyzeAliases_WithLegacyConfigEmitsDeprecationHeaders(t *testing
 		path   string
 		body   string
 	}{
-		{name: "analyze raw", method: http.MethodPost, path: "/analyze/raw",body: `graph TD
+		{name: "analyze raw", method: http.MethodPost, path: "/analyze/raw", body: `graph TD
 A-->B`},
 		{name: "analyze help", method: http.MethodGet, path: "/analyze/help"},
 	}
-	
+
 	for _, tc := range noConfigTests {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
