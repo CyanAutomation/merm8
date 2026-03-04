@@ -888,6 +888,68 @@ func TestAnalyzeHelp_Returns200(t *testing.T) {
 	}
 }
 
+// TestAnalyzeRaw_SyntaxError_IncludesSuggestions tests that /v1/analyze/raw endpoint includes suggestions for syntax errors.
+func TestAnalyzeRaw_SyntaxError_IncludesSuggestions(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{
+		Message: "No diagram type detected",
+		Line:    1,
+		Column:  0,
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+
+	// Test /v1/analyze/raw endpoint with Graphviz syntax (common mistake)
+	codeWithGraphviz := "digraph G { A -> B }"
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", strings.NewReader(codeWithGraphviz))
+	req.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	// Verify suggestions are present and actionable
+	suggestions, ok := resp["suggestions"].([]interface{})
+	if !ok {
+		t.Fatalf("expected suggestions array, got %#v", resp["suggestions"])
+	}
+	if len(suggestions) == 0 {
+		t.Errorf("expected suggestions for /raw/ endpoint with Graphviz syntax")
+	}
+
+	// Verify at least one suggestion mentions diagram type or Graphviz
+	found := false
+	for _, s := range suggestions {
+		if str, ok := s.(string); ok {
+			if strings.Contains(str, "diagram") || strings.Contains(str, "Graphviz") {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected suggestion about diagram type or Graphviz in /raw/ response, got %v", suggestions)
+	}
+
+	// Verify valid=false
+	if valid, ok := resp["valid"].(bool); !ok || valid {
+		t.Errorf("expected valid=false for /raw/ with syntax error, got %v", resp["valid"])
+	}
+
+	// Verify syntax-error details are present
+	if syntaxErrMap, ok := resp["syntax-error"].(map[string]interface{}); !ok || syntaxErrMap == nil {
+		t.Errorf("expected syntax-error object in /raw/ response")
+	}
+}
+
 func TestAnalyze_UnsupportedDiagramType_ReturnsStructuredError(t *testing.T) {
 	diagram := &model.Diagram{Type: model.DiagramTypeSequence}
 
