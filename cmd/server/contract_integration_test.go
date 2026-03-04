@@ -37,7 +37,10 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 		t.Fatalf("failed to load slow diagram fixture: %v", err)
 	}
 
-	firstBody, _ := json.Marshal(map[string]string{"code": string(slowPayload)})
+	firstBody, err := json.Marshal(map[string]string{"code": string(slowPayload)})
+	if err != nil {
+		t.Fatalf("failed to marshal request body: %v", err)
+	}
 	firstReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/analyze", bytes.NewReader(firstBody))
 	if err != nil {
 		t.Fatalf("failed to create first request: %v", err)
