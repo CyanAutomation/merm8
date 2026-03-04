@@ -86,6 +86,8 @@ For production stability:
 
 Canonical endpoints are versioned under `/v1`. Legacy unversioned routes are still served as migration aliases and are deprecated, with planned removal in **v1.2.0 (Q2 2026)**.
 
+Use `/v1/analyze`, `/v1/analyze/raw`, and `/v1/analyze/sarif` for all new integrations. Legacy unversioned analyze routes (`/analyze`, `/analyze/raw`, `/analyze/sarif`) are deprecated compatibility aliases only.
+
 ## Interactive API Testing with Swagger UI
 
 ### The Swagger Dashboard
@@ -357,7 +359,7 @@ The endpoint auto-detects the input format:
 
 ### Using the Swagger UI
 
-1. Navigate to **`POST /v1/analyze/raw`** (or `/analyze/raw` for legacy unversioned)
+1. Navigate to **`POST /v1/analyze/raw`**
 2. Click **"Try it out"**
 3. In the request body, enter raw Mermaid code:
    ```
@@ -427,12 +429,12 @@ The response has the same structure as `/v1/analyze`:
 
 ### Using `curl`
 
-If you prefer working with `curl` or other HTTP clients instead of the GUI:
+If you prefer working with `curl` or other HTTP clients instead of the GUI, use canonical `/v1` endpoints by default:
 
 #### Basic Valid Diagram
 
 ```bash
-curl -X POST http://localhost:8080/analyze \
+curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "code": "graph TD\n  A[Start] --> B[End]"
@@ -442,7 +444,7 @@ curl -X POST http://localhost:8080/analyze \
 #### With Configuration
 
 ```bash
-curl -X POST http://localhost:8080/analyze \
+curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "code": "graph TD\n  A --> B\n  A --> C\n  A --> D",
@@ -459,17 +461,27 @@ curl -X POST http://localhost:8080/analyze \
 #### Pretty-Print the Response
 
 ```bash
-curl -X POST http://localhost:8080/analyze \
+curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d '{"code": "graph TD\n  A --> B"}' | jq .
 ```
+
+
+#### Legacy analyze aliases (deprecated)
+
+Legacy unversioned analyze routes remain available for migration only and are deprecated:
+- `POST /analyze`
+- `POST /analyze/raw`
+- `POST /analyze/sarif`
+
+These aliases emit deprecation headers and are scheduled for removal in **v1.2.0 (Q2 2026)**.
 
 ### Using Other HTTP Clients
 
 #### Postman
 
 1. Create a new request (POST)
-2. URL: `http://localhost:8080/analyze`
+2. URL: `http://localhost:8080/v1/analyze`
 3. Headers tab: Add `Content-Type: application/json`
 4. Body tab: Select "raw" → "JSON"
 5. Paste your request:
@@ -491,7 +503,7 @@ from email.utils import parsedate_to_datetime
 
 import requests
 
-url = "http://localhost:8080/analyze"
+url = "http://localhost:8080/v1/analyze"
 payload = {
     "code": "graph TD\n  A[Start] --> B[Process]\n  B --> C[End]",
     "config": {
@@ -566,7 +578,7 @@ const retryAfterToMs = (value) => {
 
 let response;
 for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-  response = await fetch('http://localhost:8080/analyze', {
+  response = await fetch('http://localhost:8080/v1/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
@@ -942,9 +954,11 @@ Key changes:
 - Wrap rules under `"rules"` key
 - Use kebab-case key names: `max_fanout` → `max-fanout`, `no_disconnected_nodes` → `no-disconnected-nodes`
 
-### SARIF Output (`POST /analyze/sarif`)
+### SARIF Output (`POST /v1/analyze/sarif`)
 
-Use `POST /analyze/sarif` with the same request body as `/analyze` to receive SARIF 2.1.0 (`Content-Type: application/sarif+json`) for valid analyses.
+Use `POST /v1/analyze/sarif` with the same request body as `/v1/analyze` to receive SARIF 2.1.0 (`Content-Type: application/sarif+json`) for valid analyses.
+
+Legacy aliases `POST /analyze` and `POST /analyze/sarif` are deprecated and scheduled for removal in v1.2.0 (Q2 2026).
 
 Canonical severity mapping is defined in code at `internal/output/sarif` and used by API docs:
 - `error -> error`
@@ -955,7 +969,7 @@ Unsupported versions are rejected with `400 unsupported_schema_version` and incl
 
 ### Pre-validate Config with `GET /rules/schema`
 
-Fetch the generated JSON Schema and validate `config` in your client before calling `/analyze`.
+Fetch the generated JSON Schema and validate `config` in your client before calling `/v1/analyze`.
 
 For pinned tooling/CI usage, use the versioned artifact in this repo: `schemas/config.v1.json`.
 
@@ -997,7 +1011,7 @@ if (!validate(config)) {
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8080/analyze \
+curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "code": "graph LR\n  A[User] --> B[System]\n  B --> C[Database]"
@@ -1024,7 +1038,7 @@ curl -X POST http://localhost:8080/analyze \
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8080/analyze \
+curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "code": "graph TD\n  A --> B\n  A --> C\n  A --> D\n  A --> E\n  A --> F\n  A --> G",
@@ -1058,7 +1072,7 @@ curl -X POST http://localhost:8080/analyze \
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8080/analyze \
+curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "code": "graph TD\n  A --> B\n  B --> C\n  D[Isolated Node]"
@@ -1089,7 +1103,7 @@ curl -X POST http://localhost:8080/analyze \
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8080/analyze \
+curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "code": "not valid mermaid syntax"
@@ -1145,12 +1159,12 @@ PARSER_SCRIPT=./parser-node/parse.mjs go run ./cmd/server
 **Escaping newlines in bash:**
 ```bash
 # Using $'...' syntax (ANSI-C quoting)
-curl -X POST http://localhost:8080/analyze \
+curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d $'{"code": "graph TD\n  A --> B"}'
 
 # Or using echo with -e
-curl -X POST http://localhost:8080/analyze \
+curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d "$(echo -e '{"code": "graph TD\\n  A --> B"}')"
 ```
@@ -1167,7 +1181,7 @@ Use the API to validate Mermaid diagrams before committing:
 #!/bin/bash
 # validate-diagrams.sh
 
-API_URL="http://localhost:8080/analyze"
+API_URL="http://localhost:8080/v1/analyze"
 
 for diagram_file in diagrams/*.mmd; do
   content=$(cat "$diagram_file")
@@ -1194,7 +1208,7 @@ Convert multiple diagrams and collect all issues:
 ```bash
 for code in "graph TD\n  A-->B" "graph LR\n  X-->Y-->Z"; do
   echo "Analyzing: $code"
-  curl -s -X POST http://localhost:8080/analyze \
+  curl -s -X POST http://localhost:8080/v1/analyze \
     -H "Content-Type: application/json" \
     -d "{\"code\": $(echo -e "$code" | jq -Rs .)}" | jq .
 done

@@ -31,6 +31,11 @@ const maxAnalyzeBodyBytes int64 = 1 << 20 // 1 MiB
 const serverBusyRetryAfterSeconds = 1
 
 const (
+	legacyAnalyzeSunsetHeader     = "Tue, 30 Jun 2026 23:59:59 GMT"
+	legacyAnalyzeSuccessorDocLink = `</v1/docs#/Linting/post_v1_analyze>; rel="successor-version"`
+)
+
+const (
 	legacySchemaVersionWarningMessage = `legacy key config.schema_version is deprecated; use config.schema-version. Example: {"config":{"schema-version":"v1","rules":{"max-fanout":{"limit":3}}}}`
 	legacyUnversionedRulesWarning     = `legacy unversioned config shape is deprecated; add config.schema-version and keep rules under config.rules. Example: {"config":{"schema-version":"v1","rules":{"max-fanout":{"limit":3}}}}`
 	legacyFlatConfigWarning           = `legacy flat config shape is deprecated; move rule settings under config.rules and add config.schema-version. Example: {"config":{"schema-version":"v1","rules":{"max-fanout":{"limit":3}}}}`
@@ -794,7 +799,9 @@ func (h *Handler) Version(w http.ResponseWriter, _ *http.Request) {
 }
 
 // AnalyzeHelp handles GET /analyze/help and returns diagram templates and common error guidance.
-func (h *Handler) AnalyzeHelp(w http.ResponseWriter, _ *http.Request) {
+func (h *Handler) AnalyzeHelp(w http.ResponseWriter, r *http.Request) {
+	setLegacyAnalyzeDeprecationHeaders(w, r)
+
 	helpResponse := map[string]any{
 		"diagram-types": map[string]map[string]string{
 			"flowchart": {
@@ -857,6 +864,8 @@ func (h *Handler) AnalyzeHelp(w http.ResponseWriter, _ *http.Request) {
 
 // Analyze handles POST /analyze.
 func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
+	setLegacyAnalyzeDeprecationHeaders(w, r)
+
 	h.analyzeWithCallback(w, r, func(resp analyzeResponse) {
 		writeJSON(w, http.StatusOK, resp)
 	})
@@ -1066,6 +1075,8 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 // Auto-detects format: tries JSON with "code" field first, falls back to treating body as raw mermaid.
 // Does NOT support lint configuration; use /analyze for that.
 func (h *Handler) AnalyzeRaw(w http.ResponseWriter, r *http.Request) {
+	setLegacyAnalyzeDeprecationHeaders(w, r)
+
 	h.analyzeRawWithCallback(w, r, func(resp analyzeResponse) {
 		writeJSON(w, http.StatusOK, resp)
 	})
@@ -1260,6 +1271,8 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 // Differs from Analyze in that all responses (including errors) are returned
 // in SARIF 2.1.0 format with appropriate HTTP status codes.
 func (h *Handler) AnalyzeSARIF(w http.ResponseWriter, r *http.Request) {
+	setLegacyAnalyzeDeprecationHeaders(w, r)
+
 	analyzeForSARIF(w, r, h)
 }
 
@@ -1481,6 +1494,22 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		ArtifactURI: "",
 	})
 	writeSARIF(w, http.StatusOK, report)
+}
+
+func setLegacyAnalyzeDeprecationHeaders(w http.ResponseWriter, r *http.Request) {
+	if r == nil || r.URL == nil {
+		return
+	}
+	if !isLegacyAnalyzeAliasPath(r.URL.Path) {
+		return
+	}
+	w.Header().Set("Deprecation", "true")
+	w.Header().Set("Sunset", legacyAnalyzeSunsetHeader)
+	w.Header().Set("Link", legacyAnalyzeSuccessorDocLink)
+}
+
+func isLegacyAnalyzeAliasPath(path string) bool {
+	return path == "/analyze" || strings.HasPrefix(path, "/analyze/")
 }
 
 func emitLegacyConfigWarnings(ctx context.Context, logger Logger, w http.ResponseWriter, warnings []string) {
