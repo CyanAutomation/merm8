@@ -536,7 +536,7 @@ func TestEngine_ConfigSuppressionSelectors_RuleAndSubgraph(t *testing.T) {
 	}
 }
 
-func TestEngine_ConfigSuppressionSelectors_MalformedIgnored(t *testing.T) {
+func TestEngine_ConfigSuppressionSelectors_MalformedRejectsConfig(t *testing.T) {
 	e := engine.NewWithRules(rules.MaxFanout{})
 	d := &model.Diagram{
 		Type:  model.DiagramTypeFlowchart,
@@ -545,8 +545,8 @@ func TestEngine_ConfigSuppressionSelectors_MalformedIgnored(t *testing.T) {
 	}
 
 	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"node", "node:", "unknown:A"}}})
-	if len(issues) != 1 {
-		t.Fatalf("expected malformed selectors to be ignored, got %#v", issues)
+	if len(issues) != 0 {
+		t.Fatalf("expected malformed selectors to fail config validation and produce no issues, got %#v", issues)
 	}
 }
 
@@ -595,7 +595,7 @@ func TestEngine_ConfigSuppressionSelectors_NegatedRuleSelectorBehavior(t *testin
 	}
 }
 
-func TestEngine_ConfigSuppressionSelectors_MalformedNegationIgnored(t *testing.T) {
+func TestEngine_ConfigSuppressionSelectors_MalformedNegationRejectsConfig(t *testing.T) {
 	e := engine.NewWithRules(rules.MaxFanout{})
 	d := &model.Diagram{
 		Type:  model.DiagramTypeFlowchart,
@@ -605,7 +605,7 @@ func TestEngine_ConfigSuppressionSelectors_MalformedNegationIgnored(t *testing.T
 
 	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:max-fanout", "! node:A", "!", "!\tnode:A"}}})
 	if len(issues) != 0 {
-		t.Fatalf("expected malformed negated selectors to be ignored safely, got %#v", issues)
+		t.Fatalf("expected malformed negated selectors to fail config validation and produce no issues, got %#v", issues)
 	}
 }
 
@@ -623,7 +623,7 @@ func TestEngine_ConfigSuppressionSelectors_UnknownRuleSelectorDoesNotMatch(t *te
 	}
 }
 
-func TestEngine_ConfigSuppressionSelectors_EscapedColonInNodeID(t *testing.T) {
+func TestEngine_ConfigSuppressionSelectors_NodeIDContainingColon(t *testing.T) {
 	line := 2
 	e := engine.NewWithRules(rules.MaxFanout{})
 	d := &model.Diagram{
@@ -632,8 +632,8 @@ func TestEngine_ConfigSuppressionSelectors_EscapedColonInNodeID(t *testing.T) {
 		Edges: []model.Edge{{From: "team:alpha", To: "B"}, {From: "team:alpha", To: "C"}, {From: "team:alpha", To: "D"}},
 	}
 
-	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{`node:team\:alpha`}}})
+	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{`node:team:alpha`}}})
 	if len(issues) != 0 {
-		t.Fatalf("expected escaped colon selector to suppress node issue, got %#v", issues)
+		t.Fatalf("expected selector containing colon in value to suppress node issue, got %#v", issues)
 	}
 }

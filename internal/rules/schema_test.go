@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 )
 
@@ -56,6 +57,12 @@ func TestConfigJSONSchema_EncodesAllowedOptionsAndConstraints(t *testing.T) {
 		t.Fatalf("unexpected max-fanout limit schema: %#v", limit)
 	}
 
+	suppressionSelectors := maxFanoutProps["suppression-selectors"].(map[string]any)
+	items := suppressionSelectors["items"].(map[string]any)
+	if items["pattern"] != SuppressionSelectorPattern {
+		t.Fatalf("unexpected suppression selector pattern: %#v", items["pattern"])
+	}
+
 	nonMaxFanout := rulesProps["no-disconnected-nodes"].(map[string]any)
 	nonMaxFanoutProps := nonMaxFanout["properties"].(map[string]any)
 	if _, ok := nonMaxFanoutProps["limit"]; ok {
@@ -101,6 +108,9 @@ func TestConfigJSONSchema_ValidationRejectsInvalidConfigs(t *testing.T) {
 		`{"max-fanout":{"limit":"3"}}`,
 		`{"schema-version":"v1","rules":{"max-fanout":{"limit":"3"}}}`,
 		`{"max-fanout":{"limit":0}}`,
+		`{"max-fanout":{"suppression-selectors":["node"]}}`,
+		`{"max-fanout":{"suppression-selectors":["! node:A"]}}`,
+		`{"max-fanout":{"suppression-selectors":["node:"]}}`,
 	}
 
 	for _, cfg := range invalidConfigs {
@@ -203,6 +213,17 @@ func validateSchemaNode(schema map[string]any, instance any) error {
 		str, ok := instance.(string)
 		if !ok {
 			return fmt.Errorf("expected string")
+		}
+		if patternRaw, ok := schema["pattern"]; ok {
+			pattern, ok := patternRaw.(string)
+			if !ok {
+				return fmt.Errorf("pattern must be string")
+			}
+			if matched, err := regexp.MatchString(pattern, str); err != nil {
+				return fmt.Errorf("invalid pattern %q: %w", pattern, err)
+			} else if !matched {
+				return fmt.Errorf("string %q does not match pattern %q", str, pattern)
+			}
 		}
 		if enumRaw, ok := schema["enum"]; ok {
 			enumVals, err := stringSlice(enumRaw)
