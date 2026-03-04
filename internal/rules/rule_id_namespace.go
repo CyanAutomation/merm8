@@ -82,6 +82,41 @@ func CanonicalRuleRegistrationID(rawRuleID string) string {
 	return "custom/legacy/" + ruleID
 }
 
+// NormalizeConfigRuleID resolves config rule ID aliases against known rule IDs.
+//
+// Supported aliases:
+//   - built-ins: max-fanout, core/max-fanout
+//   - plugin IDs: exact ID match (for example custom/acme/check)
+func NormalizeConfigRuleID(rawRuleID string, knownRuleIDs map[string]struct{}) (canonicalRuleID, warning string, err error) {
+	ruleID := strings.TrimSpace(rawRuleID)
+	if ruleID == "" {
+		return "", "", fmt.Errorf("invalid config: rule id cannot be empty")
+	}
+
+	if strings.HasPrefix(ruleID, "core/") {
+		innerRuleID := strings.TrimPrefix(ruleID, "core/")
+		if !isValidRuleIDSegment(innerRuleID) {
+			return "", "", fmt.Errorf("unknown rule id %q in config", ruleID)
+		}
+		if _, ok := builtInRuleIDSet[innerRuleID]; !ok {
+			return "", "", fmt.Errorf("unknown rule id %q in config", ruleID)
+		}
+		if _, ok := knownRuleIDs[innerRuleID]; !ok {
+			return "", "", fmt.Errorf("unknown rule id %q in config", ruleID)
+		}
+		return innerRuleID, "", nil
+	}
+
+	if _, ok := knownRuleIDs[ruleID]; ok {
+		if _, builtIn := builtInRuleIDSet[ruleID]; builtIn {
+			warning = fmt.Sprintf("legacy built-in rule id %q in config is accepted; prefer core/%s", ruleID, ruleID)
+		}
+		return ruleID, warning, nil
+	}
+
+	return "", "", fmt.Errorf("unknown rule id %q in config", ruleID)
+}
+
 func isValidRuleIDSegment(value string) bool {
 	return ruleIDSegmentPattern.MatchString(value)
 }

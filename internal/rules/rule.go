@@ -3,6 +3,7 @@ package rules
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -101,13 +102,12 @@ func NormalizeConfig(cfg Config, knownRuleIDs map[string]struct{}) (Config, erro
 
 	normalized := make(Config, len(cfg))
 	for ruleID, rawRuleCfg := range cfg {
-		canonicalRuleID := strings.TrimSpace(ruleID)
-		if canonicalRuleID == "" {
-			return nil, fmt.Errorf("invalid config: rule id cannot be empty")
+		canonicalRuleID, warning, err := NormalizeConfigRuleID(ruleID, knownRuleIDs)
+		if err != nil {
+			return nil, err
 		}
-
-		if _, ok := knownRuleIDs[canonicalRuleID]; !ok {
-			return nil, fmt.Errorf("unknown rule id %q in config", canonicalRuleID)
+		if warning != "" {
+			log.Printf("warn: %s", warning)
 		}
 
 		normalizedRuleCfg := make(map[string]interface{}, len(rawRuleCfg))
@@ -115,7 +115,16 @@ func NormalizeConfig(cfg Config, knownRuleIDs map[string]struct{}) (Config, erro
 			normalizedRuleCfg[normalizeMetaKey(key)] = value
 		}
 
-		normalized[canonicalRuleID] = normalizedRuleCfg
+		existingRuleCfg, exists := normalized[canonicalRuleID]
+		if !exists {
+			normalized[canonicalRuleID] = normalizedRuleCfg
+			continue
+		}
+	for key, value := range normalizedRuleCfg {
+		if _, exists := existingRuleCfg[key]; !exists {
+			existingRuleCfg[key] = value
+		}
+	}
 	}
 
 	if err := ValidateConfig(normalized); err != nil {
