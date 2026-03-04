@@ -258,6 +258,32 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	assertErrorShape(t, example504, "parser_timeout")
 }
 
+func TestServeSpec_InfoResponseUsesKebabCaseWithDeprecatedSnakeCaseAliases(t *testing.T) {
+	spec := loadServedSpec(t)
+
+	infoSchema := lookup(t, spec, "components", "schemas", "InfoResponse").(map[string]interface{})
+	required := infoSchema["required"].([]interface{})
+	if !slices.Contains(required, interface{}("parser-recognized")) {
+		t.Fatalf("expected InfoResponse.required to include parser-recognized, got %#v", required)
+	}
+	if !slices.Contains(required, interface{}("lint-supported")) {
+		t.Fatalf("expected InfoResponse.required to include lint-supported, got %#v", required)
+	}
+
+	properties := infoSchema["properties"].(map[string]interface{})
+	if _, ok := properties["lint-supported"]; !ok {
+		t.Fatalf("expected canonical lint-supported in InfoResponse properties, got %#v", properties)
+	}
+
+	legacyLint, ok := properties["lint_supported"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected legacy lint_supported alias property, got %#v", properties["lint_supported"])
+	}
+	if legacyLint["deprecated"] != true {
+		t.Fatalf("expected lint_supported to be marked deprecated=true, got %#v", legacyLint["deprecated"])
+	}
+}
+
 func assertErrorShape(t *testing.T, payload map[string]interface{}, expectedCode string) {
 	t.Helper()
 	if payload["valid"] != false {
@@ -365,6 +391,9 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 		{"components", "schemas", "Issue", "properties", "severity", "enum"},
 		{"paths", "/v1/analyze", "post", "requestBody", "content", "application/json", "examples", "withConfigVersioned", "value", "config", "rules", "max-fanout", "severity"},
 		{"paths", "/v1/analyze/sarif", "post", "responses", "200", "content", "application/sarif+json", "schema", "$ref"},
+		{"components", "schemas", "InfoResponse", "required"},
+		{"components", "schemas", "InfoResponse", "properties", "lint-supported", "items", "enum"},
+		{"components", "schemas", "InfoResponse", "properties", "lint_supported", "deprecated"},
 	}
 
 	for _, p := range selectedPaths {
@@ -390,6 +419,10 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 		"\"severity\": \"error\"",
 		"\"/v1/analyze/sarif\"",
 		"\"application/sarif+json\"",
+		"\"parser-recognized\"",
+		"\"lint-supported\"",
+		"\"lint_supported\"",
+		"\"deprecated\": true",
 	} {
 		if !strings.Contains(yamlSpec, snippet) {
 			t.Fatalf("openapi.yaml missing drift-check snippet: %q", snippet)
