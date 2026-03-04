@@ -9,7 +9,6 @@ import (
 	"log"
 	"regexp"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -329,75 +328,14 @@ type suppressionSelector struct {
 }
 
 func parseSelector(raw string) (suppressionSelector, bool) {
-	selector := strings.TrimSpace(raw)
-	if selector == "" {
-		return suppressionSelector{}, false
-	}
-
-	negated := false
-	if strings.HasPrefix(selector, "!") {
-		negated = true
-		selector = strings.TrimPrefix(selector, "!")
-		if selector == "" || selector[0] == ' ' || selector[0] == '\t' || selector[0] == '\n' || selector[0] == '\r' {
-			return suppressionSelector{}, false
-		}
-	}
-
-	prefixRaw, valueRaw, ok := splitSelector(selector)
+	parsed, ok := rules.ParseSuppressionSelector(raw)
 	if !ok {
 		return suppressionSelector{}, false
 	}
-
-	prefix := strings.ToLower(strings.TrimSpace(prefixRaw))
-	if _, valid := suppressionSelectorPrefixes[prefix]; !valid {
+	if _, valid := suppressionSelectorPrefixes[parsed.Prefix]; !valid {
 		return suppressionSelector{}, false
 	}
-
-	value := strings.TrimSpace(unescapeSelectorValue(valueRaw))
-	if value == "" {
-		return suppressionSelector{}, false
-	}
-
-	return suppressionSelector{Negated: negated, Prefix: prefix, Value: value}, true
-}
-
-func splitSelector(selector string) (prefix string, value string, ok bool) {
-	var prev rune
-	for i, r := range selector {
-		if r == ':' && prev != '\\' {
-			return selector[:i], selector[i+1:], true
-		}
-		prev = r
-	}
-
-	return "", "", false
-}
-
-func unescapeSelectorValue(value string) string {
-	var b strings.Builder
-	b.Grow(len(value))
-
-	escaped := false
-	for _, r := range value {
-		if escaped {
-			b.WriteRune(r)
-			escaped = false
-			continue
-		}
-
-		if r == '\\' {
-			escaped = true
-			continue
-		}
-
-		b.WriteRune(r)
-	}
-
-	if escaped {
-		b.WriteRune('\\')
-	}
-
-	return b.String()
+	return suppressionSelector{Negated: parsed.Negated, Prefix: parsed.Prefix, Value: parsed.Value}, true
 }
 
 func buildNodeLineIndex(d *model.Diagram) map[int][]string {
