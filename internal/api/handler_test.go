@@ -2890,8 +2890,8 @@ func TestAnalyze_ParserConcurrencyLimitReached_Returns503(t *testing.T) {
 	if secondW.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 when parser concurrency is exhausted, got %d", secondW.Code)
 	}
-	if got := secondW.Header().Get("Retry-After"); got != "5" {
-		t.Fatalf("expected Retry-After header value 5, got %q", got)
+	if got := secondW.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("expected Retry-After header value 1, got %q", got)
 	}
 	assertExactErrorResponse(t, secondW.Body.Bytes(), "server_busy", "parser concurrency limit reached; try again")
 
@@ -2936,8 +2936,8 @@ func TestAnalyzeSARIF_ParserConcurrencyLimitReached_Returns503WithRetryAfter(t *
 	if secondW.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 when parser concurrency is exhausted, got %d", secondW.Code)
 	}
-	if got := secondW.Header().Get("Retry-After"); got != "5" {
-		t.Fatalf("expected Retry-After header value 5, got %q", got)
+	if got := secondW.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("expected Retry-After header value 1, got %q", got)
 	}
 
 	var report sarif.Report

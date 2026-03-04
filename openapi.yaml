@@ -780,6 +780,18 @@
               "schema":
                 "$ref": "#/components/schemas/AnalyzeResponse"
           "description": "Parser/service internal failure"
+        "503":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalyzeResponse"
+          "description": "Service unavailable (parser concurrency saturated, `server_busy`)."
+          "headers":
+            "Retry-After":
+              "description": "Minimum delay before retrying a `server_busy` response. Current stable contract is delta-seconds `1`; clients should apply jittered exponential backoff and may also accept HTTP-date values for forward compatibility."
+              "example": "1"
+              "schema":
+                "type": "string"
         "504":
           "content":
             "application/json":
@@ -977,7 +989,7 @@
         - "Documentation"
   "/v1/analyze":
     "post":
-      "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nLegacy config acceptance: Phase 1 accepts legacy flat/nested/snake_case config and emits deprecation signals. Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned), where legacy config is rejected with HTTP 400 `deprecated_config_format`.\n\nOperational note: tune `PARSER_CONCURRENCY_LIMIT` and `PARSER_MAX_OLD_SPACE_MB` (documented in API_GUIDE.md under Operational environment variables). When parser concurrency is exhausted, `/analyze` returns HTTP 503 with `error.code=server_busy`; parser subprocess heap is capped with Node `--max-old-space-size`.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)\n- `parser_memory_limit` (HTTP 500)"
+      "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nLegacy config acceptance: Phase 1 accepts legacy flat/nested/snake_case config and emits deprecation signals. Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned), where legacy config is rejected with HTTP 400 `deprecated_config_format`.\n\nOperational note: tune `PARSER_CONCURRENCY_LIMIT` and `PARSER_MAX_OLD_SPACE_MB` (documented in API_GUIDE.md under Operational environment variables). When parser concurrency is exhausted, `/analyze` returns HTTP 503 with `error.code=server_busy` and `Retry-After: 1`; clients should apply jittered exponential backoff using this as the minimum delay floor. Parser subprocess heap is capped with Node `--max-old-space-size`.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)\n- `parser_memory_limit` (HTTP 500)"
       "operationId": "analyzeCode"
       "requestBody":
         "content":
@@ -1520,7 +1532,7 @@
           "description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array. `server_busy` responses include a `Retry-After` hint (for example `Retry-After: 1` or `Retry-After: Wed, 21 Oct 2015 07:28:00 GMT`)."
           "headers":
             "Retry-After":
-              "description": "Suggested delay before retrying a `server_busy` response. Value is either delta-seconds or an HTTP-date."
+              "description": "Minimum delay before retrying a `server_busy` response. Current stable contract is delta-seconds `1`; clients should apply jittered exponential backoff and may also accept HTTP-date values for forward compatibility."
               "examples":
                 "deltaSeconds":
                   "value": "1"
@@ -1629,7 +1641,7 @@
         - "Linting"
   "/v1/analyze/sarif":
     "post":
-      "description": "Runs the same analysis pipeline as POST /v1/analyze, returning SARIF 2.1.0 when analysis is valid. Legacy config acceptance follows the same deprecation lifecycle: Phase 1 accepts legacy flat/nested/snake_case config with deprecation signals, and Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned) with HTTP 400 `deprecated_config_format` for legacy config."
+      "description": "Runs the same analysis pipeline as POST /v1/analyze, returning SARIF 2.1.0 when analysis is valid. Legacy config acceptance follows the same deprecation lifecycle: Phase 1 accepts legacy flat/nested/snake_case config with deprecation signals, and Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned) with HTTP 400 `deprecated_config_format` for legacy config. When parser concurrency is exhausted, this endpoint returns HTTP 503 with `error.code=server_busy` and `Retry-After: 1`; clients should apply jittered exponential backoff using that value as the minimum delay floor."
       "operationId": "analyzeCodeSARIF"
       "requestBody":
         "content":
@@ -1704,6 +1716,18 @@
               "schema":
                 "$ref": "#/components/schemas/AnalyzeResponse"
           "description": "Parser/service internal failure"
+        "503":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalyzeResponse"
+          "description": "Service unavailable (parser concurrency saturated, `server_busy`)."
+          "headers":
+            "Retry-After":
+              "description": "Minimum delay before retrying a `server_busy` response. Current stable contract is delta-seconds `1`; clients should apply jittered exponential backoff and may also accept HTTP-date values for forward compatibility."
+              "example": "1"
+              "schema":
+                "type": "string"
         "504":
           "content":
             "application/json":

@@ -30,7 +30,7 @@ For deployment sizing and overload behavior, the parser runtime exposes three ke
 | Variable | Default | Behavior |
 |---|---|---|
 | `PARSER_TIMEOUT_SECONDS` | `5` | Timeout for each parse operation in seconds. Valid range: 1–60. Increase for complex diagrams, decrease to prioritize responsiveness. Exposed via `GET /info` canonical response field `parser-timeout-seconds` (legacy alias `parser_timeout_seconds` is temporarily retained for compatibility and is deprecated). |
-| `PARSER_CONCURRENCY_LIMIT` | `8` | Caps in-flight parser subprocesses. When the limit is reached, the server does **not queue indefinitely**; additional `POST /v1/analyze` requests are rejected with `503` and `error.code=server_busy` (`parser concurrency limit reached; try again`). |
+| `PARSER_CONCURRENCY_LIMIT` | `8` | Caps in-flight parser subprocesses. When the limit is reached, the server does **not queue indefinitely**; additional `POST /v1/analyze` requests are rejected with `503` and `error.code=server_busy` (`parser concurrency limit reached; try again`) and include `Retry-After: 1` to signal the minimum retry delay in seconds. |
 | `PARSER_MAX_OLD_SPACE_MB` | `512` | Sets the Node.js parser subprocess V8 old-space heap cap (`--max-old-space-size=<MB>`), limiting parser memory growth per parse process. |
 
 Use these together with your platform CPU/memory limits to tune throughput versus memory headroom in production.
@@ -295,13 +295,15 @@ When the API returns `503` with `error.code=server_busy`, check the `Retry-After
 
 - If `Retry-After` is an integer, treat it as delay seconds.
 - If `Retry-After` is an HTTP-date, wait until that timestamp.
-- If the header is missing or invalid, use a conservative fallback delay (for example, 5 seconds).
+- If the header is missing or invalid, use a conservative fallback delay (for example, 1 second) before applying exponential backoff.
 
 Recommended retry policy for clients:
 
 1. Retry only on transient statuses (`503`, optionally `429`/`504` depending on workload).
 2. Use exponential backoff with jitter.
 3. Cap retries to a finite budget (for example, max 5 attempts total).
+
+Stable contract for `server_busy`: the service returns `Retry-After: 1` (delta-seconds) on `503` from `/v1/analyze` and `/v1/analyze/sarif` as a minimum retry floor.
 
 Example backoff schedule (before jitter): `1s`, `2s`, `4s`, `8s`, `16s`.
 Add jitter (for example ±20% randomization) per attempt to avoid synchronized retry bursts.
