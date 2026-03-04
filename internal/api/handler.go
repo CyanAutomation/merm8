@@ -35,6 +35,8 @@ const (
 
 var strictConfigSchema = false
 
+var errInvalidRequest = errors.New("invalid request")
+
 //go:embed swagger.html
 var swaggerHTML []byte
 
@@ -60,10 +62,21 @@ type ReadinessChecker interface {
 	Ready() error
 }
 
+// ParserWithConfig can parse Mermaid with per-request execution settings.
+type ParserWithConfig interface {
+	ParseWithConfig(string, parser.Config) (*model.Diagram, *parser.SyntaxError, error)
+}
+
 // analyzeRequest is the JSON body accepted by POST /analyze.
 type analyzeRequest struct {
-	Code   string          `json:"code"`
-	Config json.RawMessage `json:"config"`
+	Code   string                 `json:"code"`
+	Config json.RawMessage        `json:"config"`
+	Parser *analyzeParserSettings `json:"parser,omitempty"`
+}
+
+type analyzeParserSettings struct {
+	TimeoutSeconds *int `json:"timeout_seconds,omitempty"`
+	MaxOldSpaceMB  *int `json:"max_old_space_mb,omitempty"`
 }
 
 type validationError struct {
@@ -734,9 +747,14 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 	}
 
 	parseStart := time.Now()
-	diagram, syntaxErr, err := h.parser.Parse(req.Code)
+	diagram, syntaxErr, err := h.parseWithRequestSettings(req)
 	parseDuration := time.Since(parseStart)
 	if err != nil {
+		if errors.Is(err, errInvalidRequest) {
+			observeAnalyzeOutcome("invalid_option")
+			writeError(w, http.StatusBadRequest, "invalid_option", strings.TrimPrefix(err.Error(), errInvalidRequest.Error()+": "))
+			return
+		}
 		outcome := parserFailureOutcome(err)
 		h.mu.RLock()
 		metrics := h.telemetryMetrics
@@ -972,9 +990,14 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 	}
 
 	parseStart := time.Now()
-	diagram, syntaxErr, err := h.parser.Parse(req.Code)
+	diagram, syntaxErr, err := h.parseWithRequestSettings(req)
 	parseDuration := time.Since(parseStart)
 	if err != nil {
+		if errors.Is(err, errInvalidRequest) {
+			observeAnalyzeOutcome("invalid_option")
+			writeError(w, http.StatusBadRequest, "invalid_option", strings.TrimPrefix(err.Error(), errInvalidRequest.Error()+": "))
+			return
+		}
 		outcome := parserFailureOutcome(err)
 		h.mu.RLock()
 		metrics := h.telemetryMetrics
@@ -1296,6 +1319,10 @@ func setServerBusyRetryAfterHeader(w http.ResponseWriter) {
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
+	writeErrorWithDetails(w, status, code, message, nil)
+}
+
+func writeErrorWithDetails(w http.ResponseWriter, status int, code, message string, details map[string]any) {
 	writeJSON(w, status, analyzeResponse{
 		Valid:         false,
 		LintSupported: false,
@@ -1305,37 +1332,62 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 		Error: &apiErrorDetails{
 			Code:    code,
 			Message: message,
+			Details: details,
 		},
 	})
+}
+
+func (h *Handler) parseWithRequestSettings(req analyzeRequest) (*model.Diagram, *parser.SyntaxError, error) {
+	cfg := parser.ConfigFromEnv().EffectiveConfig()
+	if req.Parser == nil {
+		return h.parser.Parse(req.Code)
+	}
+	minTimeout, maxTimeout, minMem, maxMem := parser.LimitBounds()
+	if req.Parser.TimeoutSeconds != nil {
+		timeout := time.Duration(*req.Parser.TimeoutSeconds) * time.Second
+		if timeout < minTimeout || timeout > maxTimeout {
+			return nil, nil, fmt.Errorf("%w: parser.timeout_seconds must be between %d and %d", errInvalidRequest, int(minTimeout.Seconds()), int(maxTimeout.Seconds()))
+		}
+		cfg.Timeout = timeout
+	}
+	if req.Parser.MaxOldSpaceMB != nil {
+		if *req.Parser.MaxOldSpaceMB < minMem || *req.Parser.MaxOldSpaceMB > maxMem {
+			return nil, nil, fmt.Errorf("%w: parser.max_old_space_mb must be between %d and %d", errInvalidRequest, minMem, maxMem)
+		}
+		cfg.NodeMaxOldSpaceMB = *req.Parser.MaxOldSpaceMB
+	}
+	if parserWithConfig, ok := h.parser.(ParserWithConfig); ok {
+		return parserWithConfig.ParseWithConfig(req.Code, cfg)
+	}
+	return h.parser.Parse(req.Code)
 }
 
 func writeParserFailure(w http.ResponseWriter, ctx context.Context, logger Logger, err error) {
 	requestID := RequestIDFromContext(ctx)
 	logger = normalizeLogger(logger)
-	switch {
-	case errors.Is(err, parser.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
+	details := parserErrorDetails(err)
+	switch details.code {
+	case "parser_timeout":
 		logger.Error("write parser failure response", "request_id", requestID, "parser_outcome", telemetry.OutcomeParserTimeout, "error", err.Error())
-		writeError(w, http.StatusGatewayTimeout, "parser_timeout", "parser timed out while validating Mermaid code")
-	case errors.Is(err, parser.ErrSubprocess):
+	case "parser_memory_limit":
 		logger.Error("write parser failure response", "request_id", requestID, "parser_outcome", telemetry.OutcomeParserSubprocessErr, "error", err.Error())
-		writeError(w, http.StatusInternalServerError, "parser_subprocess_error", "parser subprocess failed")
-	case errors.Is(err, parser.ErrDecode):
+	case "parser_subprocess_error":
+		logger.Error("write parser failure response", "request_id", requestID, "parser_outcome", telemetry.OutcomeParserSubprocessErr, "error", err.Error())
+	case "parser_decode_error":
 		logger.Error("write parser failure response", "request_id", requestID, "parser_outcome", telemetry.OutcomeParserDecodeErr, "error", err.Error())
-		writeError(w, http.StatusInternalServerError, "parser_decode_error", "parser returned malformed output")
-	case errors.Is(err, parser.ErrContract):
+	case "parser_contract_violation":
 		logger.Error("write parser failure response", "request_id", requestID, "parser_outcome", telemetry.OutcomeParserContractErr, "error", err.Error())
-		writeError(w, http.StatusInternalServerError, "parser_contract_violation", "parser response violated service contract")
 	default:
 		logger.Error("write parser failure response", "request_id", requestID, "parser_outcome", telemetry.OutcomeInternalError, "error", err.Error())
-		writeError(w, http.StatusInternalServerError, "internal_error", "internal server error")
 	}
+	writeErrorWithDetails(w, details.statusCode, details.code, details.message, details.details)
 }
 
 func parserFailureOutcome(err error) string {
 	switch {
 	case errors.Is(err, parser.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
 		return telemetry.OutcomeParserTimeout
-	case errors.Is(err, parser.ErrSubprocess):
+	case errors.Is(err, parser.ErrSubprocess), errors.Is(err, parser.ErrMemoryLimit):
 		return telemetry.OutcomeParserSubprocessErr
 	case errors.Is(err, parser.ErrDecode):
 		return telemetry.OutcomeParserDecodeErr
@@ -1346,19 +1398,48 @@ func parserFailureOutcome(err error) string {
 	}
 }
 
+type parserFailureDetail struct {
+	statusCode int
+	code       string
+	message    string
+	details    map[string]any
+}
+
 // parserFailureDetails returns HTTP status code, error code, and error message
 // for a given parser error.
 func parserFailureDetails(err error) (statusCode int, errorCode, errorMsg string) {
+	details := parserErrorDetails(err)
+	return details.statusCode, details.code, details.message
+}
+
+func parserErrorDetails(err error) parserFailureDetail {
+	failure := parserFailureDetail{statusCode: http.StatusInternalServerError, code: "internal_error", message: "internal server error"}
 	switch {
 	case errors.Is(err, parser.ErrTimeout), errors.Is(err, context.DeadlineExceeded):
-		return http.StatusGatewayTimeout, "parser_timeout", "parser timed out while validating Mermaid code"
+		failure = parserFailureDetail{statusCode: http.StatusGatewayTimeout, code: "parser_timeout", message: "parser timed out while validating Mermaid code"}
+	case errors.Is(err, parser.ErrMemoryLimit):
+		failure = parserFailureDetail{statusCode: http.StatusInternalServerError, code: "parser_memory_limit", message: "parser exceeded memory limit while validating Mermaid code"}
 	case errors.Is(err, parser.ErrSubprocess):
-		return http.StatusInternalServerError, "parser_subprocess_error", "parser subprocess failed"
+		failure = parserFailureDetail{statusCode: http.StatusInternalServerError, code: "parser_subprocess_error", message: "parser subprocess failed"}
 	case errors.Is(err, parser.ErrDecode):
-		return http.StatusInternalServerError, "parser_decode_error", "parser returned malformed output"
+		failure = parserFailureDetail{statusCode: http.StatusInternalServerError, code: "parser_decode_error", message: "parser returned malformed output"}
 	case errors.Is(err, parser.ErrContract):
-		return http.StatusInternalServerError, "parser_contract_violation", "parser response violated service contract"
-	default:
-		return http.StatusInternalServerError, "internal_error", "internal server error"
+		failure = parserFailureDetail{statusCode: http.StatusInternalServerError, code: "parser_contract_violation", message: "parser response violated service contract"}
 	}
+	if meta, ok := parser.MetadataFromError(err); ok {
+		info := map[string]any{}
+		if meta.Suggestion != "" {
+			info["suggestion"] = meta.Suggestion
+		}
+		if meta.Limit != "" {
+			info["limit"] = meta.Limit
+		}
+		if meta.ObservedSizeByte > 0 {
+			info["observed_size"] = meta.ObservedSizeByte
+		}
+		if len(info) > 0 {
+			failure.details = info
+		}
+	}
+	return failure
 }
