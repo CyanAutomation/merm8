@@ -161,7 +161,7 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Service and parser runtime metadata",
-				"description": "Returns service/app version metadata (when configured), parser and Mermaid versions, plus parser-recognized and lint-supported diagram families.",
+				"description": "Returns service/app version metadata (when configured), parser and Mermaid versions, plus parser-recognized/lint-supported diagram families and supported lint rule IDs.",
 				"operationId": "getInfo",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
@@ -1428,7 +1428,7 @@ var openapi = map[string]interface{}{
 
 			"InfoResponse": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"parser-recognized", "lint-supported"},
+				"required": []string{"parser-recognized", "lint-supported", "supported-rules"},
 				"properties": map[string]interface{}{
 					"service-version":        map[string]interface{}{"type": "string"},
 					"parser-version":         map[string]interface{}{"type": "string"},
@@ -1446,6 +1446,13 @@ var openapi = map[string]interface{}{
 						"items": map[string]interface{}{
 							"type": "string",
 							"enum": []string{"flowchart", "sequence", "class", "er", "state"},
+						},
+					},
+
+					"supported-rules": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "string",
 						},
 					},
 
@@ -1470,6 +1477,14 @@ var openapi = map[string]interface{}{
 						"items": map[string]interface{}{
 							"type": "string",
 							"enum": []string{"flowchart", "sequence", "class", "er", "state"},
+						},
+					},
+					"supported_rules": map[string]interface{}{
+						"type":        "array",
+						"deprecated":  true,
+						"description": "Deprecated alias for supported-rules; remove usage before next major version.",
+						"items": map[string]interface{}{
+							"type": "string",
 						},
 					},
 				},
