@@ -215,6 +215,31 @@ Informational-only endpoint for app/build metadata (for example deploy version, 
 {"version":"1.2.3","build_commit":"abc1234","build_time":"2026-03-04T00:00:00Z","parser_version":"1.0.0","mermaid_version":"11.12.3"}
 ```
 
+### `GET /v1/info` (canonical) and legacy alias `GET /info`
+
+Service capability metadata endpoint. Uses kebab-case field names as canonical JSON contract, with temporary snake_case compatibility aliases retained during deprecation.
+
+**Response (example)**
+
+```json
+{
+  "service-version": "1.2.3",
+  "parser-version": "1.0.0",
+  "mermaid-version": "11.12.3",
+  "parser-timeout-seconds": 5,
+  "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
+  "lint-supported": ["flowchart"],
+  "supported-rules": ["max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"],
+  "service_version": "1.2.3",
+  "parser_version": "1.0.0",
+  "mermaid_version": "11.12.3",
+  "parser_timeout_seconds": 5,
+  "parser_recognized": ["flowchart", "sequence", "class", "er", "state"],
+  "lint_supported": ["flowchart"],
+  "supported_rules": ["max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"]
+}
+```
+
 ### `GET /metrics`
 
 Prometheus-compatible metrics endpoint in text exposition format.

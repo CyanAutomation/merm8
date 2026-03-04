@@ -625,6 +625,32 @@ curl -i http://localhost:8080/ready
 curl http://localhost:8080/version
 ```
 
+### GET `/info`
+
+**Description:** Service capability metadata endpoint. Canonical response fields use **kebab-case** (`parser-recognized`, `lint-supported`, `supported-rules`), and deprecated snake_case aliases are temporarily included for backward compatibility.  
+**Response:** JSON object with parser/runtime metadata, recognized/supported diagram families, and supported lint rule IDs.
+
+**Example response:**
+
+```json
+{
+  "service-version": "1.2.3",
+  "parser-version": "1.0.0",
+  "mermaid-version": "11.12.3",
+  "parser-timeout-seconds": 5,
+  "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
+  "lint-supported": ["flowchart"],
+  "supported-rules": ["max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"],
+  "service_version": "1.2.3",
+  "parser_version": "1.0.0",
+  "mermaid_version": "11.12.3",
+  "parser_timeout_seconds": 5,
+  "parser_recognized": ["flowchart", "sequence", "class", "er", "state"],
+  "lint_supported": ["flowchart"],
+  "supported_rules": ["max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"]
+}
+```
+
 ### GET `/docs`
 
 **Description:** Interactive Swagger UI dashboard for API exploration  

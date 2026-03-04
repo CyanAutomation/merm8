@@ -434,6 +434,7 @@ type infoResponse struct {
 	ParserTimeoutSeconds int                   `json:"parser_timeout_seconds,omitempty"`
 	ParserRecognized     []model.DiagramType   `json:"parser_recognized"`
 	LintSupported        []model.DiagramFamily `json:"lint_supported"`
+	SupportedRules       []string              `json:"supported_rules"`
 }
 
 // MarshalJSON emits kebab-case as the canonical /info contract while preserving
@@ -442,10 +443,12 @@ func (r infoResponse) MarshalJSON() ([]byte, error) {
 	payload := map[string]any{
 		"parser-recognized": r.ParserRecognized,
 		"lint-supported":    r.LintSupported,
+		"supported-rules":   r.SupportedRules,
 
 		// Deprecated compatibility aliases (remove in next major version).
 		"parser_recognized": r.ParserRecognized,
 		"lint_supported":    r.LintSupported,
+		"supported_rules":   r.SupportedRules,
 	}
 
 	if r.ServiceVersion != "" {
@@ -726,6 +729,7 @@ func (h *Handler) Info(w http.ResponseWriter, _ *http.Request) {
 		ServiceVersion:   serviceVersion,
 		ParserRecognized: model.RecognizedDiagramTypes(),
 		LintSupported:    h.lintSupportedFamilies(),
+		SupportedRules:   supportedRuleIDs(),
 	}
 	if provider, ok := h.parser.(VersionInfoProvider); ok {
 		if info, err := provider.VersionInfo(); err == nil {
@@ -739,6 +743,15 @@ func (h *Handler) Info(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func supportedRuleIDs() []string {
+	metadata := rules.ListRuleMetadata()
+	ruleIDs := make([]string, 0, len(metadata))
+	for _, rule := range metadata {
+		ruleIDs = append(ruleIDs, rule.ID)
+	}
+	return ruleIDs
 }
 
 // Version handles GET /version and returns app/build version metadata.

@@ -2366,6 +2366,9 @@ func TestInfo_ReturnsServiceAndParserMetadata(t *testing.T) {
 	if !ok || len(lintSupported) == 0 {
 		t.Fatalf("expected lint-supported array, got %#v", resp["lint-supported"])
 	}
+	if supportedRules, ok := resp["supported-rules"].([]any); !ok || len(supportedRules) == 0 {
+		t.Fatalf("expected supported-rules array, got %#v", resp["supported-rules"])
+	}
 
 	// Deprecated snake_case aliases are still provided for compatibility.
 	if resp["service_version"] != "2.3.4" {
@@ -2382,6 +2385,9 @@ func TestInfo_ReturnsServiceAndParserMetadata(t *testing.T) {
 	}
 	if lintSupportedAlias, ok := resp["lint_supported"].([]any); !ok || len(lintSupportedAlias) == 0 {
 		t.Fatalf("expected lint_supported alias array, got %#v", resp["lint_supported"])
+	}
+	if supportedRulesAlias, ok := resp["supported_rules"].([]any); !ok || len(supportedRulesAlias) == 0 {
+		t.Fatalf("expected supported_rules alias array, got %#v", resp["supported_rules"])
 	}
 }
 
