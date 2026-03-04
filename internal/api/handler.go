@@ -413,6 +413,38 @@ type infoResponse struct {
 	LintSupported        []model.DiagramFamily `json:"lint_supported"`
 }
 
+// MarshalJSON emits kebab-case as the canonical /info contract while preserving
+// temporary snake_case compatibility aliases.
+func (r infoResponse) MarshalJSON() ([]byte, error) {
+	payload := map[string]any{
+		"parser-recognized": r.ParserRecognized,
+		"lint-supported":    r.LintSupported,
+
+		// Deprecated compatibility aliases (remove in next major version).
+		"parser_recognized": r.ParserRecognized,
+		"lint_supported":    r.LintSupported,
+	}
+
+	if r.ServiceVersion != "" {
+		payload["service-version"] = r.ServiceVersion
+		payload["service_version"] = r.ServiceVersion
+	}
+	if r.ParserVersion != "" {
+		payload["parser-version"] = r.ParserVersion
+		payload["parser_version"] = r.ParserVersion
+	}
+	if r.MermaidVersion != "" {
+		payload["mermaid-version"] = r.MermaidVersion
+		payload["mermaid_version"] = r.MermaidVersion
+	}
+	if r.ParserTimeoutSeconds > 0 {
+		payload["parser-timeout-seconds"] = r.ParserTimeoutSeconds
+		payload["parser_timeout_seconds"] = r.ParserTimeoutSeconds
+	}
+
+	return json.Marshal(payload)
+}
+
 // NewHandler creates a Handler with the given parser and engine.
 // This constructor allows dependency injection for testing.
 func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
