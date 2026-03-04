@@ -980,6 +980,35 @@
   },
   "openapi": "3.0.0",
   "paths": {
+    "/": {
+      "get": {
+        "deprecated": true,
+        "description": "Legacy root alias for canonical /v1/healthz. Intended for platform probes that require '/'. Returns process liveness only.",
+        "operationId": "getRootHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Process is healthy"
+          }
+        },
+        "summary": "Root liveness probe alias",
+        "tags": [
+          "Probes"
+        ]
+      }
+    },
     "/analyze": {
       "post": {
         "deprecated": true,
@@ -1048,6 +1077,95 @@
           }
         },
         "summary": "Analyze and lint a Mermaid diagram (legacy alias)",
+        "tags": [
+          "Linting"
+        ]
+      }
+    },
+    "/analyze/raw": {
+      "post": {
+        "deprecated": true,
+        "description": "Deprecated compatibility alias for POST /v1/analyze/raw. Accepts raw mermaid code directly. Scheduled for removal in v1.2.0 (Q2 2026).",
+        "operationId": "analyzeCodeRawLegacy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "Auto-detected JSON with code field",
+                "properties": {
+                  "code": {
+                    "description": "Mermaid diagram code",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "type": "object"
+              }
+            },
+            "text/plain": {
+              "schema": {
+                "description": "Raw mermaid diagram code",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Analysis complete"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request too large"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Parser/service internal failure"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Parser timeout"
+          }
+        },
+        "summary": "Analyze and lint a Mermaid diagram (raw text, legacy alias)",
         "tags": [
           "Linting"
         ]
@@ -2027,6 +2145,95 @@
         ]
       }
     },
+    "/v1/analyze/raw": {
+      "post": {
+        "description": "Accepts raw mermaid code (plain text) directly in the request body. Auto-detects format: attempts to parse as JSON first (looks for {\"code\": \"...\"} structure), then falls back to treating the entire body as raw mermaid syntax.\n\nDoes NOT support lint configuration; use POST /v1/analyze if you need to configure rules. Maximum request body size is 1 MiB.\n\nReturns the same structured analysis as /v1/analyze, including syntax errors and lint results.",
+        "operationId": "analyzeCodeRaw",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "Auto-detected JSON with code field",
+                "properties": {
+                  "code": {
+                    "description": "Mermaid diagram code",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "type": "object"
+              }
+            },
+            "text/plain": {
+              "schema": {
+                "description": "Raw mermaid diagram code",
+                "example": "sequenceDiagram\n  Alice -\u003e\u003e Bob: Hello Bob, how are you?\n  Bob--\u003e\u003eAlice: I am good thanks!",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Analysis complete (valid or syntax error)"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request (missing code, invalid body, etc.)"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request too large (exceeds 1 MiB)"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Parser/service internal failure"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyzeResponse"
+                }
+              }
+            },
+            "description": "Parser timeout"
+          }
+        },
+        "summary": "Analyze and lint a Mermaid diagram (raw text)",
+        "tags": [
+          "Linting"
+        ]
+      }
+    },
     "/v1/analyze/sarif": {
       "post": {
         "description": "Runs the same analysis pipeline as POST /v1/analyze, returning SARIF 2.1.0 when analysis is valid.",
@@ -2330,6 +2537,57 @@
         "summary": "Get OpenAPI specification",
         "tags": [
           "Documentation"
+        ]
+      }
+    },
+    "/v1/version": {
+      "get": {
+        "description": "Informational endpoint that returns service version/build metadata (when configured) and parser runtime versions. Suitable for diagnostics; not a readiness signal.",
+        "operationId": "getVersionV1",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Version metadata"
+          }
+        },
+        "summary": "Version and build metadata",
+        "tags": [
+          "Probes"
+        ]
+      }
+    },
+    "/version": {
+      "get": {
+        "deprecated": true,
+        "description": "Legacy alias for /v1/version. Returns informational service/build metadata.",
+        "operationId": "getVersion",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Version metadata"
+          }
+        },
+        "summary": "Version and build metadata alias",
+        "tags": [
+          "Probes"
         ]
       }
     }
