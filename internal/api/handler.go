@@ -25,7 +25,10 @@ import (
 )
 
 const maxAnalyzeBodyBytes int64 = 1 << 20 // 1 MiB
-const serverBusyRetryAfterSeconds = 5
+// serverBusyRetryAfterSeconds defines the stable API contract for 503 server_busy
+// responses on analyze endpoints. Clients should combine this floor with
+// jittered exponential backoff to avoid synchronized retries.
+const serverBusyRetryAfterSeconds = 1
 
 const (
 	legacySchemaVersionWarningMessage = `legacy key config.schema_version is deprecated; use config.schema-version. Example: {"config":{"schema-version":"v1","rules":{"max-fanout":{"limit":3}}}}`
