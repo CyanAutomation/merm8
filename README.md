@@ -209,13 +209,20 @@ Dependency/readiness-only endpoint (including parser runtime/script availability
 
 Prometheus-compatible metrics endpoint in text exposition format.
 
+See [docs/metrics-observability.md](docs/metrics-observability.md) for:
+
+- endpoint audience/access guidance for `/metrics` and `/internal/metrics`,
+- full metric glossary (labels, units, cardinality notes),
+- SLO-oriented alerting starters,
+- Prometheus scrape/relabel recommendations, and
+- a docs drift check tied to metric names.
+
 The server exports Prometheus metric families:
+
 - `request_total{route,method,status}`
 - `request_duration_seconds{route,method}` (histogram)
 - `analyze_requests_total{outcome}`
 - `parser_duration_seconds{outcome}` (histogram)
-
-Routes are labeled consistently (for example `/analyze`, `/healthz`, `/ready`, `/metrics`) and include middleware-produced status codes such as auth/rate-limit errors.
 
 Example scrape:
 
@@ -232,6 +239,12 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:8080"]
 ```
+
+### `GET /internal/metrics`
+
+Internal JSON counters for analyze/parser outcomes (fixed key set, no labels). Intended for internal troubleshooting and compatibility workflows.
+
+In production, this endpoint should be restricted at network/ingress layers.
 
 
 ### `GET /v1/rules` (canonical) and legacy alias `GET /rules`
