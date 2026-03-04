@@ -900,6 +900,7 @@ Accepted canonical format (versioned contract):
 | Unversioned nested config (`config.rules` without `config.schema-version`) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
 | Flat config shape (`config.{rule-id}` at root) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
 | Snake_case option keys under a rule (for example `suppression_selectors`) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
+| `/info` snake_case response aliases (`service_version`, `parser_version`, `mermaid_version`, `parser_timeout_seconds`, `parser_recognized`, `lint_supported`, `supported_rules`) | v1.0.0 | v1.0.0 | Next major version (TBD) |
 
 **Deprecation signals (runtime):**
 - HTTP `Warning` header(s): one or more `299 - "..."` values with exact migration examples.
@@ -907,6 +908,8 @@ Accepted canonical format (versioned contract):
 - JSON response `warnings` array (string messages).
 - JSON response `meta.warnings[]` structured objects with `code`, `message`, and `replacement` example.
 - Server log warning event: `legacy config format received` including migration hint text.
+
+**`GET /info` migration note:** Prefer kebab-case response keys immediately. Snake_case aliases are deprecated compatibility fields and will be removed in the next major version.
 
 See [docs/migration-guide.md](docs/migration-guide.md) for a full rollout timeline and before/after payload examples.
 
