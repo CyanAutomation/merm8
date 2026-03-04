@@ -627,6 +627,7 @@
                   "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
+                      "pattern": "^!?(node|subgraph|rule):.+$",
                       "type": "string"
                     },
                     "type": "array"
@@ -658,6 +659,7 @@
                   "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
+                      "pattern": "^!?(node|subgraph|rule):.+$",
                       "type": "string"
                     },
                     "type": "array"
@@ -688,6 +690,7 @@
                   "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
+                      "pattern": "^!?(node|subgraph|rule):.+$",
                       "type": "string"
                     },
                     "type": "array"
@@ -714,6 +717,7 @@
                   "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
+                      "pattern": "^!?(node|subgraph|rule):.+$",
                       "type": "string"
                     },
                     "type": "array"
@@ -740,6 +744,7 @@
                   "suppression-selectors": {
                     "description": "Selectors that suppress matching issues.",
                     "items": {
+                      "pattern": "^!?(node|subgraph|rule):.+$",
                       "type": "string"
                     },
                     "type": "array"
@@ -781,6 +786,7 @@
                       "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
+                          "pattern": "^!?(node|subgraph|rule):.+$",
                           "type": "string"
                         },
                         "type": "array"
@@ -812,6 +818,7 @@
                       "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
+                          "pattern": "^!?(node|subgraph|rule):.+$",
                           "type": "string"
                         },
                         "type": "array"
@@ -842,6 +849,7 @@
                       "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
+                          "pattern": "^!?(node|subgraph|rule):.+$",
                           "type": "string"
                         },
                         "type": "array"
@@ -868,6 +876,7 @@
                       "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
+                          "pattern": "^!?(node|subgraph|rule):.+$",
                           "type": "string"
                         },
                         "type": "array"
@@ -894,6 +903,7 @@
                       "suppression-selectors": {
                         "description": "Selectors that suppress matching issues.",
                         "items": {
+                          "pattern": "^!?(node|subgraph|rule):.+$",
                           "type": "string"
                         },
                         "type": "array"
@@ -2615,6 +2625,186 @@
           "200": {
             "content": {
               "application/json": {
+                "examples": {
+                  "builtInRules": {
+                    "summary": "Currently built-in runtime rule metadata",
+                    "value": {
+                      "rules": [
+                        {
+                          "configurable-options": [
+                            {
+                              "constraints": "Must be true or false.",
+                              "description": "Enable or disable this rule.",
+                              "name": "enabled",
+                              "type": "boolean"
+                            },
+                            {
+                              "constraints": "Accepted values (canonical): error, warning, info.",
+                              "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
+                              "name": "severity",
+                              "type": "string"
+                            },
+                            {
+                              "constraints": "Each entry must be a string selector.",
+                              "description": "Selectors that suppress matching issues.",
+                              "name": "suppression-selectors",
+                              "type": "array[string]"
+                            },
+                            {
+                              "constraints": "Must be an integer \u003e= 1. Default is 8.",
+                              "description": "Maximum allowed depth for root-to-leaf traversals.",
+                              "name": "limit",
+                              "type": "integer"
+                            }
+                          ],
+                          "default-config": {
+                            "enabled": true,
+                            "limit": 8,
+                            "severity": "warning",
+                            "suppression-selectors": []
+                          },
+                          "description": "Flags root-to-leaf traversals whose depth exceeds a configurable limit.",
+                          "id": "max-depth",
+                          "severity": "warning"
+                        },
+                        {
+                          "configurable-options": [
+                            {
+                              "constraints": "Must be true or false.",
+                              "description": "Enable or disable this rule.",
+                              "name": "enabled",
+                              "type": "boolean"
+                            },
+                            {
+                              "constraints": "Accepted values (canonical): error, warning, info.",
+                              "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
+                              "name": "severity",
+                              "type": "string"
+                            },
+                            {
+                              "constraints": "Each entry must be a string selector.",
+                              "description": "Selectors that suppress matching issues.",
+                              "name": "suppression-selectors",
+                              "type": "array[string]"
+                            },
+                            {
+                              "constraints": "Must be an integer \u003e= 1. Default is 5.",
+                              "description": "Maximum allowed outgoing edges per node.",
+                              "name": "limit",
+                              "type": "integer"
+                            }
+                          ],
+                          "default-config": {
+                            "enabled": true,
+                            "limit": 5,
+                            "severity": "warning",
+                            "suppression-selectors": []
+                          },
+                          "description": "Flags nodes whose outgoing edge count exceeds a configurable limit.",
+                          "id": "max-fanout",
+                          "severity": "warning"
+                        },
+                        {
+                          "configurable-options": [
+                            {
+                              "constraints": "Must be true or false.",
+                              "description": "Enable or disable this rule.",
+                              "name": "enabled",
+                              "type": "boolean"
+                            },
+                            {
+                              "constraints": "Accepted values (canonical): error, warning, info.",
+                              "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
+                              "name": "severity",
+                              "type": "string"
+                            },
+                            {
+                              "constraints": "Each entry must be a string selector.",
+                              "description": "Selectors that suppress matching issues.",
+                              "name": "suppression-selectors",
+                              "type": "array[string]"
+                            },
+                            {
+                              "constraints": "Must be true or false.",
+                              "description": "Allow single-node self-loop cycles without emitting issues.",
+                              "name": "allow-self-loop",
+                              "type": "boolean"
+                            }
+                          ],
+                          "default-config": {
+                            "allow-self-loop": false,
+                            "enabled": true,
+                            "severity": "error",
+                            "suppression-selectors": []
+                          },
+                          "description": "Flags directed cycles in flowcharts.",
+                          "id": "no-cycles",
+                          "severity": "error"
+                        },
+                        {
+                          "configurable-options": [
+                            {
+                              "constraints": "Must be true or false.",
+                              "description": "Enable or disable this rule.",
+                              "name": "enabled",
+                              "type": "boolean"
+                            },
+                            {
+                              "constraints": "Accepted values (canonical): error, warning, info.",
+                              "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
+                              "name": "severity",
+                              "type": "string"
+                            },
+                            {
+                              "constraints": "Each entry must be a string selector.",
+                              "description": "Selectors that suppress matching issues.",
+                              "name": "suppression-selectors",
+                              "type": "array[string]"
+                            }
+                          ],
+                          "default-config": {
+                            "enabled": true,
+                            "severity": "error",
+                            "suppression-selectors": []
+                          },
+                          "description": "Flags nodes that are not connected by any incoming or outgoing edge.",
+                          "id": "no-disconnected-nodes",
+                          "severity": "error"
+                        },
+                        {
+                          "configurable-options": [
+                            {
+                              "constraints": "Must be true or false.",
+                              "description": "Enable or disable this rule.",
+                              "name": "enabled",
+                              "type": "boolean"
+                            },
+                            {
+                              "constraints": "Accepted values (canonical): error, warning, info.",
+                              "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
+                              "name": "severity",
+                              "type": "string"
+                            },
+                            {
+                              "constraints": "Each entry must be a string selector.",
+                              "description": "Selectors that suppress matching issues.",
+                              "name": "suppression-selectors",
+                              "type": "array[string]"
+                            }
+                          ],
+                          "default-config": {
+                            "enabled": true,
+                            "severity": "error",
+                            "suppression-selectors": []
+                          },
+                          "description": "Flags diagrams containing more than one node with the same ID.",
+                          "id": "no-duplicate-node-ids",
+                          "severity": "error"
+                        }
+                      ]
+                    }
+                  }
+                },
                 "schema": {
                   "$ref": "#/components/schemas/RulesResponse"
                 }
