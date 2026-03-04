@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -2209,6 +2210,7 @@ func TestHealthz_ReturnsOK(t *testing.T) {
 	}{
 		{name: "healthz", path: "/healthz"},
 		{name: "health", path: "/health"},
+		{name: "root", path: "/"},
 	}
 
 	for _, tt := range tests {
@@ -2369,6 +2371,9 @@ func TestInfo_ReturnsServiceAndParserMetadata(t *testing.T) {
 	if supportedRules, ok := resp["supported-rules"].([]any); !ok || len(supportedRules) == 0 {
 		t.Fatalf("expected supported-rules array, got %#v", resp["supported-rules"])
 	}
+	if supportedRuleIDs, ok := resp["supported-rule-ids"].([]any); !ok || len(supportedRuleIDs) == 0 {
+		t.Fatalf("expected supported-rule-ids array, got %#v", resp["supported-rule-ids"])
+	}
 
 	// Deprecated snake_case aliases are still provided for compatibility.
 	if resp["service_version"] != "2.3.4" {
@@ -2388,6 +2393,41 @@ func TestInfo_ReturnsServiceAndParserMetadata(t *testing.T) {
 	}
 	if supportedRulesAlias, ok := resp["supported_rules"].([]any); !ok || len(supportedRulesAlias) == 0 {
 		t.Fatalf("expected supported_rules alias array, got %#v", resp["supported_rules"])
+	}
+	if supportedRuleIDsAlias, ok := resp["supported_rule_ids"].([]any); !ok || len(supportedRuleIDsAlias) == 0 {
+		t.Fatalf("expected supported_rule_ids alias array, got %#v", resp["supported_rule_ids"])
+	}
+}
+
+func TestInfo_IncludesEngineRegisteredSupportedRuleIDs(t *testing.T) {
+	mux := http.NewServeMux()
+	eng := engine.New()
+	h := api.NewHandler(&mockParser{}, eng)
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/info", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		SupportedRuleIDs []string `json:"supported-rule-ids"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode /v1/info response: %v", err)
+	}
+
+	want := make([]string, 0, len(eng.KnownRuleIDs()))
+	for ruleID := range eng.KnownRuleIDs() {
+		want = append(want, ruleID)
+	}
+	sort.Strings(want)
+
+	if !reflect.DeepEqual(resp.SupportedRuleIDs, want) {
+		t.Fatalf("expected supported-rule-ids=%v, got %v", want, resp.SupportedRuleIDs)
 	}
 }
 
@@ -2413,6 +2453,7 @@ func TestInfo_LegacySnakeCaseClientsCanStillDeserialize(t *testing.T) {
 		ParserRecognized     []string `json:"parser_recognized"`
 		LintSupported        []string `json:"lint_supported"`
 		SupportedRules       []string `json:"supported_rules"`
+		SupportedRuleIDs     []string `json:"supported_rule_ids"`
 	}
 
 	var legacyResp legacyInfoResponse
@@ -2440,6 +2481,9 @@ func TestInfo_LegacySnakeCaseClientsCanStillDeserialize(t *testing.T) {
 	}
 	if len(legacyResp.SupportedRules) == 0 {
 		t.Fatalf("expected supported_rules to be populated for legacy clients")
+	}
+	if len(legacyResp.SupportedRuleIDs) == 0 {
+		t.Fatalf("expected supported_rule_ids to be populated for legacy clients")
 	}
 }
 

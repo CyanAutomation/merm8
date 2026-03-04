@@ -255,6 +255,29 @@
         "type": "object"
       },
       "InfoResponse": {
+        "example": {
+          "lint-supported": [
+            "flowchart"
+          ],
+          "mermaid-version": "11.12.3",
+          "parser-recognized": [
+            "flowchart",
+            "sequence",
+            "class",
+            "er",
+            "state"
+          ],
+          "parser-version": "1.0.0",
+          "service-version": "2.3.4",
+          "supported-rule-ids": [
+            "flowchart/no-cycles",
+            "flowchart/no-disconnected-nodes"
+          ],
+          "supported-rules": [
+            "no-cycles",
+            "no-disconnected-nodes"
+          ]
+        },
         "properties": {
           "lint-supported": {
             "items": {
@@ -344,7 +367,22 @@
             "description": "Deprecated alias for service-version; remove usage before next major version.",
             "type": "string"
           },
+          "supported-rule-ids": {
+            "description": "Rule IDs currently registered in the engine and accepted in config.rules.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "supported-rules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "supported_rule_ids": {
+            "deprecated": true,
+            "description": "Deprecated alias for supported-rule-ids; remove usage before next major version.",
             "items": {
               "type": "string"
             },
@@ -362,7 +400,8 @@
         "required": [
           "parser-recognized",
           "lint-supported",
-          "supported-rules"
+          "supported-rules",
+          "supported-rule-ids"
         ],
         "type": "object"
       },
@@ -1102,9 +1141,8 @@
   "paths": {
     "/": {
       "get": {
-        "deprecated": true,
-        "description": "Legacy root alias for canonical /v1/healthz. Intended for platform probes that require '/'. Returns process liveness only.",
-        "operationId": "getRootHealth",
+        "description": "Probe-friendly root alias for canonical /v1/healthz liveness checks. Returns process liveness status only.",
+        "operationId": "getHealthRoot",
         "responses": {
           "200": {
             "content": {
@@ -1123,7 +1161,7 @@
             "description": "Process is healthy"
           }
         },
-        "summary": "Root liveness probe alias",
+        "summary": "Liveness probe root alias",
         "tags": [
           "Probes"
         ]
@@ -1360,7 +1398,7 @@
     },
     "/info": {
       "get": {
-        "description": "Returns service/app version metadata (when configured), parser and Mermaid versions, plus parser-recognized/lint-supported diagram families and supported lint rule IDs.",
+        "description": "Returns service/app version metadata (when configured), parser and Mermaid versions, parser-recognized/lint-supported diagram families, supported lint rule IDs, and engine-registered supported-rule-ids.",
         "operationId": "getInfo",
         "responses": {
           "200": {
