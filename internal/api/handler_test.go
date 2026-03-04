@@ -742,6 +742,18 @@ func TestAnalyze_UnsupportedDiagramType_ReturnsStructuredError(t *testing.T) {
 	if diagramType, ok := metrics["diagram-type"].(string); !ok || diagramType != "sequence" {
 		t.Fatalf("expected metrics.diagram-type=sequence, got %v", metrics["diagram-type"])
 	}
+	for _, key := range []string{
+		"node-count",
+		"edge-count",
+		"disconnected-node-count",
+		"duplicate-node-count",
+		"max-fanin",
+		"max-fanout",
+	} {
+		if got, ok := metrics[key].(float64); !ok || got != 0 {
+			t.Fatalf("expected metrics.%s=0, got %#v", key, metrics[key])
+		}
+	}
 }
 
 // TestAnalyze_ConfigApplied_MaxFanout tests that custom rule config is applied.
@@ -2195,9 +2207,9 @@ func TestAnalyze_Integration_UnsupportedDiagramTypes(t *testing.T) {
 			expectedType: "class",
 		},
 		{
-			name:         "state diagram",
-			code:         "stateDiagram-v2\n[*] --> Still\nStill --> [*]",
-			expectedType: "state",
+			name:         "sequence diagram",
+			code:         "sequenceDiagram\nAlice->>Bob: Hi",
+			expectedType: "sequence",
 		},
 	}
 
@@ -2250,6 +2262,26 @@ func TestAnalyze_Integration_UnsupportedDiagramTypes(t *testing.T) {
 			}
 			if !foundUnsupportedIssue {
 				t.Fatalf("expected issues to contain rule-id=unsupported-diagram-type, got %#v", issues)
+			}
+
+			metrics, ok := resp["metrics"].(map[string]interface{})
+			if !ok {
+				t.Fatalf("expected metrics object, got %#v", resp["metrics"])
+			}
+			if diagramType, ok := metrics["diagram-type"].(string); !ok || diagramType != tt.expectedType {
+				t.Fatalf("expected metrics.diagram-type=%s, got %#v", tt.expectedType, metrics["diagram-type"])
+			}
+			for _, key := range []string{
+				"node-count",
+				"edge-count",
+				"disconnected-node-count",
+				"duplicate-node-count",
+				"max-fanin",
+				"max-fanout",
+			} {
+				if got, ok := metrics[key].(float64); !ok || got != 0 {
+					t.Fatalf("expected metrics.%s=0, got %#v", key, metrics[key])
+				}
 			}
 		})
 	}
