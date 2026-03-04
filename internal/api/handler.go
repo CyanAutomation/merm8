@@ -430,13 +430,13 @@ func (s *requestRuleMetricsSink) Snapshot() []engine.RuleMetrics {
 }
 
 type infoResponse struct {
-	ServiceVersion       string                `json:"service_version,omitempty"`
-	ParserVersion        string                `json:"parser_version,omitempty"`
-	MermaidVersion       string                `json:"mermaid_version,omitempty"`
-	ParserTimeoutSeconds int                   `json:"parser_timeout_seconds,omitempty"`
-	ParserRecognized     []model.DiagramType   `json:"parser_recognized"`
-	LintSupported        []model.DiagramFamily `json:"lint_supported"`
-	SupportedRules       []string              `json:"supported_rules"`
+	ServiceVersion       string                `json:"service-version,omitempty"`
+	ParserVersion        string                `json:"parser-version,omitempty"`
+	MermaidVersion       string                `json:"mermaid-version,omitempty"`
+	ParserTimeoutSeconds int                   `json:"parser-timeout-seconds,omitempty"`
+	ParserRecognized     []model.DiagramType   `json:"parser-recognized"`
+	LintSupported        []model.DiagramFamily `json:"lint-supported"`
+	SupportedRules       []string              `json:"supported-rules"`
 }
 
 // MarshalJSON emits kebab-case as the canonical /info contract while preserving
