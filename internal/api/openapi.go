@@ -1212,20 +1212,45 @@ var openapi = map[string]interface{}{
 
 			"InfoResponse": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"parser_recognized", "lint_supported"},
+				"required": []string{"parser-recognized", "lint-supported"},
 				"properties": map[string]interface{}{
-					"service_version": map[string]interface{}{"type": "string"},
-					"parser_version":  map[string]interface{}{"type": "string"},
-					"mermaid_version": map[string]interface{}{"type": "string"},
-					"parser_recognized": map[string]interface{}{
+					"service-version":        map[string]interface{}{"type": "string"},
+					"parser-version":         map[string]interface{}{"type": "string"},
+					"mermaid-version":        map[string]interface{}{"type": "string"},
+					"parser-timeout-seconds": map[string]interface{}{"type": "integer"},
+					"parser-recognized": map[string]interface{}{
 						"type": "array",
 						"items": map[string]interface{}{
 							"type": "string",
 							"enum": []string{"flowchart", "sequence", "class", "er", "state"},
 						},
 					},
-					"lint_supported": map[string]interface{}{
+					"lint-supported": map[string]interface{}{
 						"type": "array",
+						"items": map[string]interface{}{
+							"type": "string",
+							"enum": []string{"flowchart", "sequence", "class", "er", "state"},
+						},
+					},
+
+					// Deprecated snake_case compatibility aliases.
+					"service_version":        map[string]interface{}{"type": "string", "deprecated": true, "description": "Deprecated alias for service-version; remove usage before next major version."},
+					"parser_version":         map[string]interface{}{"type": "string", "deprecated": true, "description": "Deprecated alias for parser-version; remove usage before next major version."},
+					"mermaid_version":        map[string]interface{}{"type": "string", "deprecated": true, "description": "Deprecated alias for mermaid-version; remove usage before next major version."},
+					"parser_timeout_seconds": map[string]interface{}{"type": "integer", "deprecated": true, "description": "Deprecated alias for parser-timeout-seconds; remove usage before next major version."},
+					"parser_recognized": map[string]interface{}{
+						"type":        "array",
+						"deprecated":  true,
+						"description": "Deprecated alias for parser-recognized; remove usage before next major version.",
+						"items": map[string]interface{}{
+							"type": "string",
+							"enum": []string{"flowchart", "sequence", "class", "er", "state"},
+						},
+					},
+					"lint_supported": map[string]interface{}{
+						"type":        "array",
+						"deprecated":  true,
+						"description": "Deprecated alias for lint-supported; remove usage before next major version.",
 						"items": map[string]interface{}{
 							"type": "string",
 							"enum": []string{"flowchart", "sequence", "class", "er", "state"},

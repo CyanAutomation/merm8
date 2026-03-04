@@ -23,6 +23,18 @@
                 "enabled": false
                 "severity": "info"
             "schema-version": "v1"
+        "parser":
+          "description": "Optional per-request parser execution limits. Values are bounded and validated before parsing."
+          "properties":
+            "max_old_space_mb":
+              "maximum": 4096
+              "minimum": 128
+              "type": "integer"
+            "timeout_seconds":
+              "maximum": 60
+              "minimum": 1
+              "type": "integer"
+          "type": "object"
       "required":
         - "code"
       "type": "object"
@@ -120,7 +132,7 @@
       "type": "object"
     "InfoResponse":
       "properties":
-        "lint_supported":
+        "lint-supported":
           "items":
             "enum":
               - "flowchart"
@@ -130,9 +142,41 @@
               - "state"
             "type": "string"
           "type": "array"
+        "lint_supported":
+          "deprecated": true
+          "description": "Deprecated alias for lint-supported; remove usage before next major version."
+          "items":
+            "enum":
+              - "flowchart"
+              - "sequence"
+              - "class"
+              - "er"
+              - "state"
+            "type": "string"
+          "type": "array"
+        "mermaid-version":
+          "type": "string"
         "mermaid_version":
+          "deprecated": true
+          "description": "Deprecated alias for mermaid-version; remove usage before next major version."
+          "type": "string"
+        "parser-recognized":
+          "items":
+            "enum":
+              - "flowchart"
+              - "sequence"
+              - "class"
+              - "er"
+              - "state"
+            "type": "string"
+          "type": "array"
+        "parser-timeout-seconds":
+          "type": "integer"
+        "parser-version":
           "type": "string"
         "parser_recognized":
+          "deprecated": true
+          "description": "Deprecated alias for parser-recognized; remove usage before next major version."
           "items":
             "enum":
               - "flowchart"
@@ -142,13 +186,23 @@
               - "state"
             "type": "string"
           "type": "array"
+        "parser_timeout_seconds":
+          "deprecated": true
+          "description": "Deprecated alias for parser-timeout-seconds; remove usage before next major version."
+          "type": "integer"
         "parser_version":
+          "deprecated": true
+          "description": "Deprecated alias for parser-version; remove usage before next major version."
+          "type": "string"
+        "service-version":
           "type": "string"
         "service_version":
+          "deprecated": true
+          "description": "Deprecated alias for service-version; remove usage before next major version."
           "type": "string"
       "required":
-        - "parser_recognized"
-        - "lint_supported"
+        - "parser-recognized"
+        - "lint-supported"
       "type": "object"
     "InternalMetricsResponse":
       "properties":
@@ -848,7 +902,7 @@
         - "Documentation"
   "/v1/analyze":
     "post":
-      "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nOperational note: tune `PARSER_CONCURRENCY_LIMIT` and `PARSER_MAX_OLD_SPACE_MB` (documented in API_GUIDE.md under Operational environment variables). When parser concurrency is exhausted, `/analyze` returns HTTP 503 with `error.code=server_busy`; parser subprocess heap is capped with Node `--max-old-space-size`.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)"
+      "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nOperational note: tune `PARSER_CONCURRENCY_LIMIT` and `PARSER_MAX_OLD_SPACE_MB` (documented in API_GUIDE.md under Operational environment variables). When parser concurrency is exhausted, `/analyze` returns HTTP 503 with `error.code=server_busy`; parser subprocess heap is capped with Node `--max-old-space-size`.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)\n- `parser_memory_limit` (HTTP 500)"
       "operationId": "analyzeCode"
       "requestBody":
         "content":

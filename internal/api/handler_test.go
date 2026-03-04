@@ -1913,27 +1913,43 @@ func TestInfo_ReturnsServiceAndParserMetadata(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp struct {
-		ServiceVersion   string   `json:"service_version"`
-		ParserVersion    string   `json:"parser_version"`
-		MermaidVersion   string   `json:"mermaid_version"`
-		ParserRecognized []string `json:"parser_recognized"`
-		LintSupported    []string `json:"lint_supported"`
-	}
+	var resp map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to decode /info response: %v", err)
 	}
-	if resp.ServiceVersion != "2.3.4" {
-		t.Fatalf("expected service_version=2.3.4, got %q", resp.ServiceVersion)
+	if resp["service-version"] != "2.3.4" {
+		t.Fatalf("expected service-version=2.3.4, got %#v", resp["service-version"])
 	}
-	if resp.ParserVersion != "1.0.0" {
-		t.Fatalf("expected parser_version=1.0.0, got %q", resp.ParserVersion)
+	if resp["parser-version"] != "1.0.0" {
+		t.Fatalf("expected parser-version=1.0.0, got %#v", resp["parser-version"])
 	}
-	if resp.MermaidVersion != "11.12.3" {
-		t.Fatalf("expected mermaid_version=11.12.3, got %q", resp.MermaidVersion)
+	if resp["mermaid-version"] != "11.12.3" {
+		t.Fatalf("expected mermaid-version=11.12.3, got %#v", resp["mermaid-version"])
 	}
-	if len(resp.ParserRecognized) == 0 || len(resp.LintSupported) == 0 {
-		t.Fatalf("expected parser and lint capability arrays, got %#v", resp)
+	parserRecognized, ok := resp["parser-recognized"].([]any)
+	if !ok || len(parserRecognized) == 0 {
+		t.Fatalf("expected parser-recognized array, got %#v", resp["parser-recognized"])
+	}
+	lintSupported, ok := resp["lint-supported"].([]any)
+	if !ok || len(lintSupported) == 0 {
+		t.Fatalf("expected lint-supported array, got %#v", resp["lint-supported"])
+	}
+
+	// Deprecated snake_case aliases are still provided for compatibility.
+	if resp["service_version"] != "2.3.4" {
+		t.Fatalf("expected service_version alias=2.3.4, got %#v", resp["service_version"])
+	}
+	if resp["parser_version"] != "1.0.0" {
+		t.Fatalf("expected parser_version alias=1.0.0, got %#v", resp["parser_version"])
+	}
+	if resp["mermaid_version"] != "11.12.3" {
+		t.Fatalf("expected mermaid_version alias=11.12.3, got %#v", resp["mermaid_version"])
+	}
+	if parserRecognizedAlias, ok := resp["parser_recognized"].([]any); !ok || len(parserRecognizedAlias) == 0 {
+		t.Fatalf("expected parser_recognized alias array, got %#v", resp["parser_recognized"])
+	}
+	if lintSupportedAlias, ok := resp["lint_supported"].([]any); !ok || len(lintSupportedAlias) == 0 {
+		t.Fatalf("expected lint_supported alias array, got %#v", resp["lint_supported"])
 	}
 }
 

@@ -29,7 +29,7 @@ For deployment sizing and overload behavior, the parser runtime exposes three ke
 
 | Variable | Default | Behavior |
 |---|---|---|
-| `PARSER_TIMEOUT_SECONDS` | `5` | Timeout for each parse operation in seconds. Valid range: 1–60. Increase for complex diagrams, decrease to prioritize responsiveness. Exposed via `GET /info` response field `parser_timeout_seconds`. |
+| `PARSER_TIMEOUT_SECONDS` | `5` | Timeout for each parse operation in seconds. Valid range: 1–60. Increase for complex diagrams, decrease to prioritize responsiveness. Exposed via `GET /info` canonical response field `parser-timeout-seconds` (legacy alias `parser_timeout_seconds` is temporarily retained for compatibility and is deprecated). |
 | `PARSER_CONCURRENCY_LIMIT` | `8` | Caps in-flight parser subprocesses. When the limit is reached, the server does **not queue indefinitely**; additional `POST /v1/analyze` requests are rejected with `503` and `error.code=server_busy` (`parser concurrency limit reached; try again`). |
 | `PARSER_MAX_OLD_SPACE_MB` | `512` | Sets the Node.js parser subprocess V8 old-space heap cap (`--max-old-space-size=<MB>`), limiting parser memory growth per parse process. |
 
