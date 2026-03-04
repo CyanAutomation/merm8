@@ -19,6 +19,8 @@ const (
 )
 
 var appVersion = ""
+var buildCommit = ""
+var buildTime = ""
 
 func main() {
 	scriptPath := os.Getenv("PARSER_SCRIPT")
@@ -52,6 +54,7 @@ func main() {
 	handler.SetMetricsHandler(metrics.Handler())
 	handler.SetTelemetryMetrics(metrics)
 	handler.SetServiceVersion(strings.TrimSpace(appVersion))
+	handler.SetBuildMetadata(strings.TrimSpace(buildCommit), strings.TrimSpace(buildTime))
 
 	handler.RegisterRoutes(mux)
 
@@ -73,9 +76,11 @@ func main() {
 	}
 
 	routePatterns := map[string]string{
+		"GET /":             "/",
 		"GET /health":       "/health",
 		"GET /healthz":      "/healthz",
 		"GET /ready":        "/ready",
+		"GET /version":      "/version",
 		"GET /info":         "/info",
 		"GET /metrics":      "/metrics",
 		"POST /analyze":     "/analyze",

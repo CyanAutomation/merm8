@@ -364,6 +364,8 @@ type Handler struct {
 	engine              *engine.Engine
 	logger              Logger
 	serviceVersion      string
+	buildCommit         string
+	buildTime           string
 	metricsHandler      http.Handler
 	telemetryMetrics    *telemetry.Metrics
 	analyzeCounters     analyzeOutcomeCounters
@@ -509,6 +511,14 @@ func (h *Handler) SetServiceVersion(version string) {
 	h.serviceVersion = strings.TrimSpace(version)
 }
 
+// SetBuildMetadata configures build metadata for informational endpoints.
+func (h *Handler) SetBuildMetadata(commit string, buildTime string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.buildCommit = strings.TrimSpace(commit)
+	h.buildTime = strings.TrimSpace(buildTime)
+}
+
 // SetLogger configures structured logging for API handlers.
 func (h *Handler) SetLogger(logger Logger) {
 	h.mu.Lock()
@@ -554,9 +564,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/docs", h.ServeSwagger)
 
 	// Legacy unversioned compatibility aliases.
+	mux.HandleFunc("GET /", h.Healthz)
 	mux.HandleFunc("GET /health", h.Healthz)
 	mux.HandleFunc("GET /healthz", h.Healthz)
 	mux.HandleFunc("GET /ready", h.Ready)
+	mux.HandleFunc("GET /v1/version", h.Version)
+	mux.HandleFunc("GET /version", h.Version)
 	mux.HandleFunc("GET /info", h.Info)
 	mux.HandleFunc("GET /metrics", h.Metrics)
 	mux.HandleFunc("GET /internal/metrics", h.InternalMetrics)
@@ -717,6 +730,38 @@ func (h *Handler) Info(w http.ResponseWriter, _ *http.Request) {
 	// Retrieve parser timeout if available
 	if timeoutProvider, ok := h.parser.(TimeoutProvider); ok {
 		resp.ParserTimeoutSeconds = int(timeoutProvider.Timeout().Seconds())
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// Version handles GET /version and returns app/build version metadata.
+func (h *Handler) Version(w http.ResponseWriter, _ *http.Request) {
+	h.mu.RLock()
+	serviceVersion := h.serviceVersion
+	buildCommit := h.buildCommit
+	buildTime := h.buildTime
+	h.mu.RUnlock()
+
+	resp := map[string]string{}
+	if serviceVersion != "" {
+		resp["version"] = serviceVersion
+	}
+	if buildCommit != "" {
+		resp["build_commit"] = buildCommit
+	}
+	if buildTime != "" {
+		resp["build_time"] = buildTime
+	}
+	if provider, ok := h.parser.(VersionInfoProvider); ok {
+		if info, err := provider.VersionInfo(); err == nil {
+			if info.ParserVersion != "" {
+				resp["parser_version"] = info.ParserVersion
+			}
+			if info.MermaidVersion != "" {
+				resp["mermaid_version"] = info.MermaidVersion
+			}
+		}
 	}
 
 	writeJSON(w, http.StatusOK, resp)
