@@ -51,10 +51,9 @@ var openapi = map[string]interface{}{
 		"/": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
-				"summary":     "Root liveness probe alias",
-				"description": "Legacy root alias for canonical /v1/healthz. Intended for platform probes that require '/'. Returns process liveness only.",
-				"operationId": "getRootHealth",
-				"deprecated":  true,
+				"summary":     "Liveness probe root alias",
+				"description": "Probe-friendly root alias for canonical /v1/healthz liveness checks. Returns process liveness status only.",
+				"operationId": "getHealthRoot",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
 						"description": "Process is healthy",
@@ -161,7 +160,7 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Service and parser runtime metadata",
-				"description": "Returns service/app version metadata (when configured), parser and Mermaid versions, plus parser-recognized/lint-supported diagram families and supported lint rule IDs.",
+				"description": "Returns service/app version metadata (when configured), parser and Mermaid versions, parser-recognized/lint-supported diagram families, supported lint rule IDs, and engine-registered supported-rule-ids.",
 				"operationId": "getInfo",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
@@ -1540,7 +1539,16 @@ var openapi = map[string]interface{}{
 
 			"InfoResponse": map[string]interface{}{
 				"type":     "object",
-				"required": []string{"parser-recognized", "lint-supported", "supported-rules"},
+				"required": []string{"parser-recognized", "lint-supported", "supported-rules", "supported-rule-ids"},
+				"example": map[string]interface{}{
+					"service-version":    "2.3.4",
+					"parser-version":     "1.0.0",
+					"mermaid-version":    "11.12.3",
+					"parser-recognized":  []string{"flowchart", "sequence", "class", "er", "state"},
+					"lint-supported":     []string{"flowchart"},
+					"supported-rules":    []string{"no-cycles", "no-disconnected-nodes"},
+					"supported-rule-ids": []string{"flowchart/no-cycles", "flowchart/no-disconnected-nodes"},
+				},
 				"properties": map[string]interface{}{
 					"service-version":        map[string]interface{}{"type": "string"},
 					"parser-version":         map[string]interface{}{"type": "string"},
@@ -1563,6 +1571,13 @@ var openapi = map[string]interface{}{
 
 					"supported-rules": map[string]interface{}{
 						"type": "array",
+						"items": map[string]interface{}{
+							"type": "string",
+						},
+					},
+					"supported-rule-ids": map[string]interface{}{
+						"type":        "array",
+						"description": "Rule IDs currently registered in the engine and accepted in config.rules.",
 						"items": map[string]interface{}{
 							"type": "string",
 						},
@@ -1595,6 +1610,14 @@ var openapi = map[string]interface{}{
 						"type":        "array",
 						"deprecated":  true,
 						"description": "Deprecated alias for supported-rules; remove usage before next major version.",
+						"items": map[string]interface{}{
+							"type": "string",
+						},
+					},
+					"supported_rule_ids": map[string]interface{}{
+						"type":        "array",
+						"deprecated":  true,
+						"description": "Deprecated alias for supported-rule-ids; remove usage before next major version.",
 						"items": map[string]interface{}{
 							"type": "string",
 						},
