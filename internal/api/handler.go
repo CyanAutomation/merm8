@@ -701,6 +701,15 @@ func (h *Handler) lintSupportedFamilies() []model.DiagramFamily {
 	return h.engine.DiagramFamilies()
 }
 
+func (h *Handler) isLintSupported(family model.DiagramFamily) bool {
+	for _, f := range h.lintSupportedFamilies() {
+		if f == family {
+			return true
+		}
+	}
+	return false
+}
+
 // Healthz handles GET /healthz and reports process liveness.
 func (h *Handler) Healthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -818,8 +827,6 @@ func (h *Handler) Version(w http.ResponseWriter, _ *http.Request) {
 
 // AnalyzeHelp handles GET /analyze/help and returns diagram templates and common error guidance.
 func (h *Handler) AnalyzeHelp(w http.ResponseWriter, r *http.Request) {
-	setLegacyAnalyzeDeprecationHeaders(w, r)
-
 	helpResponse := map[string]any{
 		"diagram-types": map[string]map[string]string{
 			"flowchart": {
@@ -882,8 +889,6 @@ func (h *Handler) AnalyzeHelp(w http.ResponseWriter, r *http.Request) {
 
 // Analyze handles POST /analyze.
 func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
-	setLegacyAnalyzeDeprecationHeaders(w, r)
-
 	h.analyzeWithCallback(w, r, func(resp analyzeResponse) {
 		writeJSON(w, http.StatusOK, resp)
 	})
@@ -994,7 +999,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		resp := analyzeResponse{
 			Valid:         false,
 			DiagramType:   diagramType,
-			LintSupported: diagramType.Family() == model.DiagramFamilyFlowchart,
+			LintSupported: h.isLintSupported(diagramType.Family()),
 			Suggestions:   suggestions,
 			Warnings:      deprecationWarnings,
 			Meta:          responseMetaForWarnings(deprecationWarnings),
@@ -1078,7 +1083,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 	resp := analyzeResponse{
 		Valid:         true,
 		DiagramType:   diagram.Type,
-		LintSupported: diagram.Type.Family() == model.DiagramFamilyFlowchart,
+		LintSupported: h.isLintSupported(diagram.Type.Family()),
 		SyntaxError:   nil,
 		Issues:        issues,
 		Warnings:      deprecationWarnings,
@@ -1093,8 +1098,6 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 // Auto-detects format: tries JSON with "code" field first, falls back to treating body as raw mermaid.
 // Does NOT support lint configuration; use /analyze for that.
 func (h *Handler) AnalyzeRaw(w http.ResponseWriter, r *http.Request) {
-	setLegacyAnalyzeDeprecationHeaders(w, r)
-
 	h.analyzeRawWithCallback(w, r, func(resp analyzeResponse) {
 		writeJSON(w, http.StatusOK, resp)
 	})
@@ -1193,7 +1196,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		resp := analyzeResponse{
 			Valid:         false,
 			DiagramType:   diagramType,
-			LintSupported: diagramType.Family() == model.DiagramFamilyFlowchart,
+			LintSupported: h.isLintSupported(diagramType.Family()),
 			Suggestions:   suggestions,
 			Warnings:      nil,
 			Meta:          nil,
@@ -1275,7 +1278,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 	resp := analyzeResponse{
 		Valid:         true,
 		DiagramType:   diagram.Type,
-		LintSupported: diagram.Type.Family() == model.DiagramFamilyFlowchart,
+		LintSupported: h.isLintSupported(diagram.Type.Family()),
 		SyntaxError:   nil,
 		Issues:        issues,
 		Warnings:      nil,
@@ -1289,8 +1292,6 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 // Differs from Analyze in that all responses (including errors) are returned
 // in SARIF 2.1.0 format with appropriate HTTP status codes.
 func (h *Handler) AnalyzeSARIF(w http.ResponseWriter, r *http.Request) {
-	setLegacyAnalyzeDeprecationHeaders(w, r)
-
 	analyzeForSARIF(w, r, h)
 }
 

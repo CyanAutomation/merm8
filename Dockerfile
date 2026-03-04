@@ -4,7 +4,7 @@
 FROM golang:1.24-alpine AS go-builder
 
 # Build arguments for version injection
-ARG VERSION=dev
+ARG VERSION=v1.0.0
 ARG BUILD_DATE
 ARG VCS_REF
 
@@ -34,7 +34,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 FROM node:20-alpine
 
 # Build arguments for labels
-ARG VERSION=dev
+ARG VERSION=v1.0.0
 ARG BUILD_DATE
 ARG VCS_REF
 

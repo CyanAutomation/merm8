@@ -104,7 +104,13 @@ func TestEngine_NewWithRules_AllowsLegacyCustomRuleDuringTransition(t *testing.T
 func TestEngine_DiagramFamilies_FromRegisteredRules(t *testing.T) {
 	e := engine.New()
 	got := e.DiagramFamilies()
-	want := []model.DiagramFamily{model.DiagramFamilyFlowchart}
+	want := []model.DiagramFamily{
+		model.DiagramFamilyFlowchart,
+		model.DiagramFamilySequence,
+		model.DiagramFamilyClass,
+		model.DiagramFamilyER,
+		model.DiagramFamilyState,
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("expected diagram families %v, got %v", want, got)
 	}
@@ -221,7 +227,7 @@ func TestEngine_DisabledRuleIsSkipped(t *testing.T) {
 
 // The engine still emits a fallback issue for unsupported diagram families when used directly.
 func TestEngine_UnsupportedDiagramTypeReturnsFallbackIssueForDirectEngineUse(t *testing.T) {
-	d := &model.Diagram{Type: model.DiagramTypeSequence}
+	d := &model.Diagram{Type: model.DiagramTypeUnknown}
 	e := engine.New()
 
 	issues := e.Run(d, rules.Config{})

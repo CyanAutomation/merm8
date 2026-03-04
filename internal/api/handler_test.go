@@ -2193,7 +2193,7 @@ func TestDiagramTypes_ReturnsParserAndLintSupport(t *testing.T) {
 		t.Fatalf("expected parser-recognized=%v, got %v", wantParser, resp.ParserRecognized)
 	}
 
-	wantLint := []string{"flowchart"}
+	wantLint := []string{"flowchart", "sequence", "class", "er", "state"}
 	if !reflect.DeepEqual(resp.LintSupported, wantLint) {
 		t.Fatalf("expected lint-supported=%v, got %v", wantLint, resp.LintSupported)
 	}
@@ -4173,39 +4173,90 @@ func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
 
 }
 
-func TestLegacyAnalyzeAliases_EmitDeprecationHeaders(t *testing.T) {
+func TestLegacyAnalyzeAliases_WithLegacyConfigEmitsDeprecationHeaders(t *testing.T) {
+	setStrictConfigSchemaForTest(t, false)
+	
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
 
-	for _, tc := range []struct {
+	// Test with legacy snake_case config format (should emit Deprecation headers)
+	legacyConfigTests := []struct {
 		name   string
 		method string
 		path   string
 		body   string
 	}{
-		{name: "analyze", method: http.MethodPost, path: "/analyze", body: `{"code":"graph TD;A-->B"}`},
-		{name: "analyze raw", method: http.MethodPost, path: "/analyze/raw", body: `graph TD
-A-->B`},
-		{name: "analyze sarif", method: http.MethodPost, path: "/analyze/sarif", body: `{"code":"graph TD;A-->B"}`},
-		{name: "analyze help", method: http.MethodGet, path: "/analyze/help"},
-	} {
+		{name: "analyze with legacy config", method: http.MethodPost, path: "/analyze", body: `{"code":"graph TD;A-->B","config":{"schema_version":"v1","rules":{}}}`},
+		{name: "analyze sarif with legacy config", method: http.MethodPost, path: "/analyze/sarif", body: `{"code":"graph TD;A-->B","config":{"schema_version":"v1","rules":{}}}`},
+	}
+	
+	for _, tc := range legacyConfigTests {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
-			if tc.method == http.MethodPost && tc.path != "/analyze/raw" {
-				req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			// Legacy config format should emit Deprecation header
+			if got := w.Header().Get("Deprecation"); got != "true" {
+				t.Fatalf("expected Deprecation header true for legacy config on %s, got %q", tc.path, got)
+			}
+			if got := w.Header().Get("Warning"); got == "" {
+				t.Fatalf("expected Warning header to be present for legacy config on %s", tc.path)
+			}
+		})
+	}
+
+	// Test with canonical config format (should NOT emit Deprecation headers)
+	canonicalConfigTests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{name: "analyze with canonical config", method: http.MethodPost, path: "/analyze", body: `{"code":"graph TD;A-->B","config":{"schema-version":"v1","rules":{}}}`},
+		{name: "analyze sarif with canonical config", method: http.MethodPost, path: "/analyze/sarif", body: `{"code":"graph TD;A-->B","config":{"schema-version":"v1","rules":{}}}`},
+	}
+	
+	for _, tc := range canonicalConfigTests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			// Canonical config format should NOT emit Deprecation header
+			if got := w.Header().Get("Deprecation"); got != "" {
+				t.Fatalf("expected no Deprecation header for canonical config on %s, got %q", tc.path, got)
+			}
+		})
+	}
+
+	// Test /analyze/raw and /analyze/help with no config (should NOT emit Deprecation headers)
+	noConfigTests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{name: "analyze raw", method: http.MethodPost, path: "/analyze/raw",body: `graph TD
+A-->B`},
+		{name: "analyze help", method: http.MethodGet, path: "/analyze/help"},
+	}
+	
+	for _, tc := range noConfigTests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			if tc.method == http.MethodPost {
+				req.Header.Set("Content-Type", "text/plain")
 			}
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
 
-			if got := w.Header().Get("Deprecation"); got != "true" {
-				t.Fatalf("expected Deprecation header true, got %q", got)
-			}
-			if got := w.Header().Get("Sunset"); got == "" {
-				t.Fatal("expected Sunset header to be present")
-			}
-			if got := w.Header().Get("Link"); !strings.Contains(got, "/v1/docs#/Linting/post_v1_analyze") {
-				t.Fatalf("expected Link header to point to v1 analyze docs, got %q", got)
+			// No config = no deprecation warnings
+			if got := w.Header().Get("Deprecation"); got != "" {
+				t.Fatalf("expected no Deprecation header for %s, got %q", tc.path, got)
 			}
 		})
 	}
