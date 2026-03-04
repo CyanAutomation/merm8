@@ -1983,6 +1983,63 @@ func TestMetrics_ExporterExposesPrometheusText(t *testing.T) {
 	}
 }
 
+func TestRootAlias_ReturnsHealthPayload(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{}, engine.New())
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if got := w.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Fatalf("expected application/json content-type, got %q", got)
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(payload) != 1 || payload["status"] != "ok" {
+		t.Fatalf("expected minimal liveness payload, got %#v", payload)
+	}
+}
+
+func TestVersion_ReturnsBuildAndParserMetadata(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{versionInfo: &parser.VersionInfo{ParserVersion: "1.0.0", MermaidVersion: "11.12.3"}}, engine.New())
+	h.SetServiceVersion("2.3.4")
+	h.SetBuildMetadata("abc1234", "2026-03-04T00:00:00Z")
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/version", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if got := w.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Fatalf("expected application/json content-type, got %q", got)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	required := []string{"version", "build_commit", "build_time", "parser_version", "mermaid_version"}
+	for _, key := range required {
+		value, ok := payload[key].(string)
+		if !ok || value == "" {
+			t.Fatalf("expected non-empty string field %q, got %#v", key, payload[key])
+		}
+	}
+}
+
 func TestInfo_ReturnsServiceAndParserMetadata(t *testing.T) {
 	mux := http.NewServeMux()
 	h := api.NewHandler(&mockParser{versionInfo: &parser.VersionInfo{ParserVersion: "1.0.0", MermaidVersion: "11.12.3"}}, engine.New())
@@ -3673,8 +3730,11 @@ func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
 		{method: http.MethodGet, path: "/docs", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/healthz", want: http.StatusOK},
 		{method: http.MethodGet, path: "/healthz", want: http.StatusOK},
+		{method: http.MethodGet, path: "/", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/ready", want: http.StatusOK},
 		{method: http.MethodGet, path: "/ready", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/version", want: http.StatusOK},
+		{method: http.MethodGet, path: "/version", want: http.StatusOK},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			var reqBody *strings.Reader
