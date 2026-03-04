@@ -23,6 +23,7 @@ const defaultTimeout = 5 * time.Second
 const minTimeout = 1 * time.Second
 const maxTimeout = 60 * time.Second
 const defaultNodeMaxOldSpaceSizeMB = 512
+const minNodeMaxOldSpaceSizeMB = 128
 const maxNodeMaxOldSpaceSizeMB = 4096
 
 var (
@@ -34,7 +35,72 @@ var (
 	ErrDecode = errors.New("parser decode error")
 	// ErrContract indicates parser output violated the expected parse contract.
 	ErrContract = errors.New("parser contract violation")
+	// ErrMemoryLimit indicates the parser subprocess exceeded its memory limit.
+	ErrMemoryLimit = errors.New("parser memory limit exceeded")
 )
+
+// Config captures parser execution limits for subprocess invocations.
+type Config struct {
+	Timeout           time.Duration
+	NodeMaxOldSpaceMB int
+}
+
+// EffectiveConfig returns validated parser execution limits.
+func (c Config) EffectiveConfig() Config {
+	effective := Config{
+		Timeout:           defaultTimeout,
+		NodeMaxOldSpaceMB: defaultNodeMaxOldSpaceSizeMB,
+	}
+	if c.Timeout >= minTimeout && c.Timeout <= maxTimeout {
+		effective.Timeout = c.Timeout
+	}
+	if c.NodeMaxOldSpaceMB >= minNodeMaxOldSpaceSizeMB && c.NodeMaxOldSpaceMB <= maxNodeMaxOldSpaceSizeMB {
+		effective.NodeMaxOldSpaceMB = c.NodeMaxOldSpaceMB
+	}
+	return effective
+}
+
+// DefaultConfig returns the service defaults for parser execution limits.
+func DefaultConfig() Config {
+	return Config{Timeout: defaultTimeout, NodeMaxOldSpaceMB: defaultNodeMaxOldSpaceSizeMB}
+}
+
+// LimitBounds returns hard bounds for timeout and memory parser options.
+func LimitBounds() (time.Duration, time.Duration, int, int) {
+	return minTimeout, maxTimeout, minNodeMaxOldSpaceSizeMB, maxNodeMaxOldSpaceSizeMB
+}
+
+// ConfigFromEnv returns parser config derived from service environment variables.
+func ConfigFromEnv() Config {
+	return Config{
+		Timeout:           readTimeoutSeconds(),
+		NodeMaxOldSpaceMB: readMaxOldSpaceMB(),
+	}
+}
+
+// ErrorMetadata provides optional machine-readable parser failure context.
+type ErrorMetadata struct {
+	Suggestion       string
+	Limit            string
+	ObservedSizeByte int
+}
+
+type parserExecutionError struct {
+	err      error
+	metadata ErrorMetadata
+}
+
+func (e *parserExecutionError) Error() string { return e.err.Error() }
+func (e *parserExecutionError) Unwrap() error { return e.err }
+
+// MetadataFromError extracts optional parser execution metadata.
+func MetadataFromError(err error) (ErrorMetadata, bool) {
+	var parseErr *parserExecutionError
+	if !errors.As(err, &parseErr) {
+		return ErrorMetadata{}, false
+	}
+	return parseErr.metadata, true
+}
 
 // SyntaxError describes a parse failure reported by the Node.js parser.
 type SyntaxError struct {
@@ -106,16 +172,22 @@ type Parser struct {
 
 // New returns a Parser that will invoke the given Node.js script path.
 func New(scriptPath string) (*Parser, error) {
+	return NewWithConfig(scriptPath, ConfigFromEnv())
+}
+
+// NewWithConfig returns a Parser configured with explicit execution limits.
+func NewWithConfig(scriptPath string, cfg Config) (*Parser, error) {
 	root, err := findRepoRoot()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize parser: %w", err)
 	}
+	effective := cfg.EffectiveConfig()
 
 	return &Parser{
 		scriptPath:        scriptPath,
-		timeout:           readTimeoutSeconds(),
+		timeout:           effective.Timeout,
 		repoRoot:          root,
-		nodeMaxOldSpaceMB: readMaxOldSpaceMB(),
+		nodeMaxOldSpaceMB: effective.NodeMaxOldSpaceMB,
 	}, nil
 }
 
@@ -265,6 +337,15 @@ func findRepoRoot() (string, error) {
 // Parse sends mermaidCode to the Node parser and returns either a Diagram or a
 // SyntaxError. A non-nil error means an unexpected failure (e.g. timeout).
 func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error) {
+	return p.parseWithConfig(mermaidCode, Config{Timeout: p.timeout, NodeMaxOldSpaceMB: p.nodeMaxOldSpaceMB}.EffectiveConfig())
+}
+
+// ParseWithConfig parses Mermaid code using explicit execution limits.
+func (p *Parser) ParseWithConfig(mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
+	return p.parseWithConfig(mermaidCode, cfg.EffectiveConfig())
+}
+
+func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
 	root, err := p.getRepoRoot()
 	if err != nil {
 		return nil, nil, err
@@ -275,11 +356,11 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 		return nil, nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()
 
 	// Use both a Node heap cap and a process timeout to reduce memory/CPU abuse.
-	cmd := exec.CommandContext(ctx, "node", append(p.nodeArgs(), scriptPath)...) //nolint:gosec
+	cmd := exec.CommandContext(ctx, "node", []string{fmt.Sprintf("--max-old-space-size=%d", cfg.NodeMaxOldSpaceMB), scriptPath}...) //nolint:gosec
 	cmd.Stdin = bytes.NewBufferString(mermaidCode)
 
 	var stdout, stderr bytes.Buffer
@@ -289,7 +370,7 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 	runErr := cmd.Run()
 	if runErr != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, nil, fmt.Errorf("%w: after %s", ErrTimeout, p.timeout)
+			return nil, nil, &parserExecutionError{err: fmt.Errorf("%w: after %s", ErrTimeout, cfg.Timeout), metadata: ErrorMetadata{Suggestion: "reduce diagram size or increase PARSER_TIMEOUT_SECONDS", Limit: cfg.Timeout.String()}}
 		}
 	}
 
@@ -303,6 +384,9 @@ func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error)
 
 	if runErr != nil {
 		if result.Error == nil || strings.HasPrefix(strings.ToLower(strings.TrimSpace(result.Error.Message)), "internal parser error:") {
+			if isLikelyNodeMemoryLimit(stderr.String()) {
+				return nil, nil, &parserExecutionError{err: fmt.Errorf("%w: %w (stderr: %s)", ErrMemoryLimit, runErr, stderr.String()), metadata: ErrorMetadata{Suggestion: "reduce diagram size, batch requests, or increase PARSER_MAX_OLD_SPACE_MB", Limit: fmt.Sprintf("%d MiB", cfg.NodeMaxOldSpaceMB), ObservedSizeByte: len(mermaidCode)}}
+			}
 			return nil, nil, fmt.Errorf("%w: %w (stderr: %s)", ErrSubprocess, runErr, stderr.String())
 		}
 	}
@@ -353,11 +437,16 @@ func readMaxOldSpaceMB() int {
 		return defaultNodeMaxOldSpaceSizeMB
 	}
 
-	if value > maxNodeMaxOldSpaceSizeMB {
+	if value < minNodeMaxOldSpaceSizeMB || value > maxNodeMaxOldSpaceSizeMB {
 		return defaultNodeMaxOldSpaceSizeMB
 	}
 
 	return value
+}
+
+func isLikelyNodeMemoryLimit(stderr string) bool {
+	msg := strings.ToLower(stderr)
+	return strings.Contains(msg, "heap out of memory") || strings.Contains(msg, "allocation failed") || strings.Contains(msg, "javascript heap out of memory")
 }
 
 func normalizeDiagramType(rawType string) model.DiagramType {

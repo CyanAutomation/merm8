@@ -299,7 +299,7 @@ func TestAnalyzeSARIF_ErrorCodeMapping(t *testing.T) {
 // Helper function that mirrors mapErrorCodeToLevel for testing
 func mapErrorCodeToLevel(code string) string {
 	switch code {
-	case "parser_timeout", "parser_subprocess_error", "parser_decode_error", "parser_contract_violation", "internal_error", "server_busy":
+	case "parser_timeout", "parser_memory_limit", "parser_subprocess_error", "parser_decode_error", "parser_contract_violation", "internal_error", "server_busy":
 		return sarif.SARIFLevelError
 	case "invalid_json", "invalid_config", "missing_code", "request_too_large", "deprecated_config_format", "invalid_option", "unknown_option", "unknown_rule", "unsupported_diagram_type", "syntax_error":
 		return sarif.SARIFLevelWarning
