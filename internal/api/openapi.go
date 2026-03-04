@@ -1085,6 +1085,28 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
+
+		"/v1/analyze/help": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Documentation"},
+				"summary":     "Get diagram templates and error guidance",
+				"description": "Returns diagram type templates, common error patterns with fixes, arrow syntax reference, and links to documentation.",
+				"operationId": "getAnalyzeHelp",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Help guide with templates and error resolution",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/AnalyzeHelpResponse",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+
 		"/v1/analyze/raw": map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
@@ -1643,6 +1665,11 @@ var openapi = map[string]interface{}{
 						"description": "Aggregate statistics about the diagram. Present for successful analyze responses, including syntax errors (zeroed counters with fallback diagram-type) and parsed but lint-unsupported families.",
 						"nullable":    true,
 					},
+					"suggestions": map[string]interface{}{
+						"type":        "array",
+						"description": "Actionable hints for fixing syntax errors in the Mermaid diagram. Provided when valid=false.",
+						"items":       map[string]interface{}{"type": "string"},
+					},
 				},
 			},
 			"SyntaxError": map[string]interface{}{
@@ -1786,6 +1813,75 @@ var openapi = map[string]interface{}{
 					"by-rule": map[string]interface{}{
 						"type":                 "object",
 						"additionalProperties": map[string]interface{}{"type": "integer"},
+					},
+				},
+			},
+			"AnalyzeHelpResponse": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"diagram-types": map[string]interface{}{
+						"type":        "object",
+						"description": "Map of supported diagram types with descriptions and examples",
+						"additionalProperties": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"description": map[string]interface{}{
+									"type":        "string",
+									"description": "What this diagram type is used for",
+								},
+								"example": map[string]interface{}{
+									"type":        "string",
+									"description": "Example Mermaid code for this diagram type",
+								},
+							},
+						},
+					},
+					"common-errors": map[string]interface{}{
+						"type":        "array",
+						"description": "List of common syntax errors and how to fix them",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"pattern": map[string]interface{}{
+									"type":        "string",
+									"description": "Name or pattern of the common mistake",
+								},
+								"fix": map[string]interface{}{
+									"type":        "string",
+									"description": "How to fix this error",
+								},
+								"example": map[string]interface{}{
+									"type":        "string",
+									"description": "Example of the error and correct code",
+								},
+							},
+						},
+					},
+					"arrow-syntax": map[string]interface{}{
+						"type":        "object",
+						"description": "Arrow syntax for different diagram types",
+						"additionalProperties": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"description": map[string]interface{}{
+									"type":        "string",
+									"description": "Description of arrow syntax for this diagram type",
+								},
+								"valid": map[string]interface{}{
+									"type":        "array",
+									"description": "Valid arrow styles",
+									"items":       map[string]interface{}{"type": "string"},
+								},
+							},
+						},
+					},
+					"resources": map[string]interface{}{
+						"type":        "object",
+						"description": "Helpful links and documentation",
+						"additionalProperties": map[string]interface{}{
+							"type":        "string",
+							"description": "URL to resource",
+						},
 					},
 				},
 			},

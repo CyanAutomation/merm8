@@ -326,6 +326,7 @@ type analyzeResponse struct {
 	LintSupported bool                 `json:"lint-supported"`
 	SyntaxError   *syntaxErrorResponse `json:"syntax-error"`
 	Issues        []model.Issue        `json:"issues"`
+	Suggestions   []string             `json:"suggestions,omitempty"`
 	Warnings      []string             `json:"warnings,omitempty"`
 	Meta          *responseMeta        `json:"meta,omitempty"`
 	Error         *apiErrorDetails     `json:"error,omitempty"`
@@ -560,6 +561,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/rules", h.ListRules)
 	mux.HandleFunc("GET /v1/rules/schema", h.RuleConfigSchema)
 	mux.HandleFunc("GET /v1/diagram-types", h.DiagramTypes)
+	mux.HandleFunc("GET /v1/analyze/help", h.AnalyzeHelp)
 	mux.HandleFunc("POST /v1/analyze", h.Analyze)
 	mux.HandleFunc("POST /v1/analyze/raw", h.AnalyzeRaw)
 	mux.HandleFunc("POST /v1/analyze/sarif", h.AnalyzeSARIF)
@@ -579,6 +581,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /rules", h.ListRules)
 	mux.HandleFunc("GET /rules/schema", h.RuleConfigSchema)
 	mux.HandleFunc("GET /diagram-types", h.DiagramTypes)
+	mux.HandleFunc("GET /analyze/help", h.AnalyzeHelp)
 	mux.HandleFunc("POST /analyze", h.Analyze)
 	mux.HandleFunc("POST /analyze/raw", h.AnalyzeRaw)
 	mux.HandleFunc("POST /analyze/sarif", h.AnalyzeSARIF)
@@ -770,6 +773,68 @@ func (h *Handler) Version(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// AnalyzeHelp handles GET /analyze/help and returns diagram templates and common error guidance.
+func (h *Handler) AnalyzeHelp(w http.ResponseWriter, _ *http.Request) {
+	helpResponse := map[string]any{
+		"diagram-types": map[string]map[string]string{
+			"flowchart": {
+				"description": "Directed acyclic graph for processes, workflows, and decision trees",
+				"example": "flowchart TD\n    Start([Start]) --> Process[Do Something]\n    Process --> End([End])",
+			},
+			"sequence": {
+				"description": "Interactions between participants over time",
+				"example": "sequenceDiagram\n    Alice->>Bob: Hello!\n    Bob-->>Alice: Hi there!",
+			},
+			"class": {
+				"description": "Object-oriented class hierarchy and relationships",
+				"example": "classDiagram\n    class Animal {\n        +String name\n        +eat()\n    }",
+			},
+			"er": {
+				"description": "Entity-relationship diagrams for data models",
+				"example": "erDiagram\n    CUSTOMER ||--o{ ORDER : places\n    ORDER ||--|{ ITEM : contains",
+			},
+			"state": {
+				"description": "State machines and workflows with state transitions",
+				"example": "stateDiagram-v2\n    [*] --> Active\n    Active --> Inactive\n    Inactive --> [*]",
+			},
+		},
+		"common-errors": []map[string]string{
+			{
+				"pattern": "No diagram type detected",
+				"fix": "Start your diagram with a type keyword: flowchart, sequenceDiagram, classDiagram, erDiagram, or stateDiagram-v2",
+				"example": "flowchart TD\n  A[Start] --> B[End]",
+			},
+			{
+				"pattern": "Looks like Graphviz syntax",
+				"fix": "Use Mermaid syntax instead. Replace 'digraph' with 'flowchart TD' and '->' with '-->'",
+				"example": "flowchart TD\n  A --> B",
+			},
+			{
+				"pattern": "Unexpected token",
+				"fix": "Check syntax: correct arrow operators, bracket matching, and indentation (use spaces, not tabs)",
+				"example": "flowchart TD\n  A[Valid Label] --> B[Another]",
+			},
+			{
+				"pattern": "Tab indentation detected",
+				"fix": "Replace tabs with spaces (2-4 spaces per indentation level)",
+				"example": "flowchart TD\n    A --> B",
+			},
+		},
+		"arrow-syntax": map[string]string{
+			"flowchart": "-->, -..-, -.->, or ===",
+			"sequence": "->, -->, ->>, ->>",
+			"class": "<|--, *--, o--",
+			"er": "||, |o, o|, ||",
+		},
+		"resources": map[string]string{
+			"documentation": "https://mermaid.js.org/intro/",
+			"syntax-guide": "https://mermaid.js.org/syntax/flowchart.html",
+		},
+	}
+
+	writeJSON(w, http.StatusOK, helpResponse)
+}
+
 // Analyze handles POST /analyze.
 func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	h.analyzeWithCallback(w, r, func(resp analyzeResponse) {
@@ -878,10 +943,12 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
+		suggestions := suggestionsForSyntaxError(syntaxErr, req.Code)
 		resp := analyzeResponse{
 			Valid:         false,
 			DiagramType:   diagramType,
 			LintSupported: diagramType.Family() == model.DiagramFamilyFlowchart,
+			Suggestions:   suggestions,
 			Warnings:      deprecationWarnings,
 			Meta:          responseMetaForWarnings(deprecationWarnings),
 			SyntaxError: &syntaxErrorResponse{
@@ -1073,10 +1140,12 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
+		suggestions := suggestionsForSyntaxError(syntaxErr, req.Code)
 		resp := analyzeResponse{
 			Valid:         false,
 			DiagramType:   diagramType,
 			LintSupported: diagramType.Family() == model.DiagramFamilyFlowchart,
+			Suggestions:   suggestions,
 			Warnings:      nil,
 			Meta:          nil,
 			SyntaxError: &syntaxErrorResponse{
@@ -1486,6 +1555,46 @@ func defaultMetrics(diagramType model.DiagramType) *metricsResponse {
 			ByRule:     map[string]int{},
 		},
 	}
+}
+
+// suggestionsForSyntaxError analyzes a syntax error and code to provide smart, actionable hints
+func suggestionsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []string {
+	suggestions := []string{}
+
+	// Detect Graphviz syntax
+	if strings.Contains(code, "digraph") || strings.Contains(code, "rankdir") {
+		suggestions = append(suggestions, "This looks like Graphviz syntax. Use Mermaid syntax instead: 'flowchart TD' for directed graphs.")
+	}
+
+	// Detect YAML frontmatter
+	if strings.HasPrefix(strings.TrimSpace(code), "---") {
+		suggestions = append(suggestions, "Remove YAML frontmatter (---); Mermaid code should start directly with the diagram type.")
+	}
+
+	// Detect tabs instead of spaces
+	if strings.Contains(code, "\t") {
+		suggestions = append(suggestions, "Replace tabs with spaces (Mermaid uses space indentation).")
+	}
+
+	// Detect arrow syntax issues based on error message and code content
+	if strings.Contains(code, "->") && !strings.Contains(code, "-->") {
+		firstLine := strings.TrimSpace(strings.SplitN(code, "\n", 2)[0])
+		if strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph") {
+			suggestions = append(suggestions, "Use '-->' for flowchart connections, not '->'.")
+		}
+	}
+
+	// Detect missing diagram type keyword
+	if strings.Contains(syntaxErr.Message, "No diagram type") || strings.Contains(syntaxErr.Message, "Unexpected") {
+		firstLine := strings.TrimSpace(strings.SplitN(code, "\n", 2)[0])
+		if !strings.Contains(firstLine, "flowchart") && !strings.Contains(firstLine, "sequenceDiagram") &&
+			!strings.Contains(firstLine, "classDiagram") && !strings.Contains(firstLine, "erDiagram") &&
+			!strings.Contains(firstLine, "stateDiagram") && !strings.Contains(firstLine, "graph") {
+			suggestions = append(suggestions, "Start your diagram with a type keyword: 'flowchart TD', 'sequenceDiagram', 'classDiagram', 'erDiagram', or 'stateDiagram-v2'.")
+		}
+	}
+
+	return suggestions
 }
 
 func writeConfigValidationError(w http.ResponseWriter, configValidationErr *validationError) {

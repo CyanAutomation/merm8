@@ -65,7 +65,8 @@ try {
     diagramType = detectType(input, { suppressErrors: false });
   } catch (typeErr) {
     const base = String(typeErr?.message || typeErr);
-    const hint = 'Hint: start the diagram with a Mermaid type keyword like "flowchart", "graph", "sequenceDiagram", "classDiagram", "stateDiagram", or "erDiagram".';
+    const mistakes = detectCommonMistakes(input);
+    const hint = buildErrorHint(base, mistakes);
     writeResult({
       valid: false,
       error: { message: `${base}. ${hint}`, line: 0, column: 0 },
@@ -80,7 +81,9 @@ try {
     const msg = parseErr?.message || String(parseErr);
     const line = parseErr?.hash?.loc?.first_line ?? 0;
     const col = parseErr?.hash?.loc?.first_column ?? 0;
-    writeResult({ valid: false, error: { message: msg, line, column: col } });
+    const mistakes = detectCommonMistakes(input);
+    const enhancedMsg = buildParseErrorMessage(msg, mistakes);
+    writeResult({ valid: false, error: { message: enhancedMsg, line, column: col } });
     process.exit(0);
   }
 
@@ -103,6 +106,87 @@ try {
     error: { message: 'internal parser error: ' + String(err?.message || err), line: 0, column: 0 },
   });
   process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
+// Error detection and hint generation
+// ---------------------------------------------------------------------------
+
+function detectCommonMistakes(input) {
+  const firstLine = input.split('\n')[0].trim();
+  const mistakes = [];
+
+  // Detect Graphviz syntax
+  if (firstLine.startsWith('digraph') || firstLine.startsWith('rankdir') || firstLine === '{') {
+    mistakes.push('graphviz');
+  }
+
+  // Detect YAML frontmatter
+  if (firstLine.startsWith('---')) {
+    mistakes.push('yaml-frontmatter');
+  }
+
+  // Detect tabs instead of spaces
+  if (input.includes('\t')) {
+    mistakes.push('tabs');
+  }
+
+  // Detect wrong arrow styles
+  const graphvizArrow = input.includes(' -> ') && !input.includes('-->');
+  const singleArrow = input.includes('->') && !input.includes('-->') && !input.includes(' -> ');
+  if (graphvizArrow) {
+    mistakes.push('wrong-arrow-graphviz');
+  } else if (singleArrow && input.toLowerCase().includes('flowchart')) {
+    mistakes.push('wrong-arrow-single');
+  }
+
+  return mistakes;
+}
+
+function buildErrorHint(baseMessage, mistakes) {
+  const hints = [];
+
+  if (mistakes.includes('graphviz')) {
+    hints.push('This looks like Graphviz syntax. Mermaid uses "flowchart TD" or "graph TD", not "digraph".');
+  }
+  if (mistakes.includes('yaml-frontmatter')) {
+    hints.push('Remove the "---" YAML frontmatter line; Mermaid code should start directly with the diagram type.');
+  }
+  if (mistakes.includes('tabs')) {
+    hints.push('Replace tabs with spaces (2-4 spaces per indentation level).');
+  }
+  if (mistakes.includes('wrong-arrow-graphviz')) {
+    hints.push('Use "-->" for connections in Mermaid flowcharts, not "->".');
+  }
+  if (mistakes.includes('wrong-arrow-single')) {
+    hints.push('Use "-->" for flowchart connections, not "->".');
+  }
+
+  if (hints.length > 0) {
+    return hints.join(' ');
+  }
+
+  return 'Hint: start the diagram with a Mermaid type keyword like "flowchart", "graph", "sequenceDiagram", "classDiagram", "stateDiagram", or "erDiagram".';
+}
+
+function buildParseErrorMessage(originalMsg, mistakes) {
+  const hints = [];
+
+  if (mistakes.includes('tabs')) {
+    hints.push('[Hint: Replace tabs with spaces]');
+  }
+  if (mistakes.includes('wrong-arrow-graphviz') || mistakes.includes('wrong-arrow-single')) {
+    hints.push('[Hint: Use "-->" for connections, not "->"]');
+  }
+  if (mistakes.includes('graphviz')) {
+    hints.push('[Hint: This looks like Graphviz syntax; use Mermaid syntax instead]');
+  }
+
+  if (hints.length > 0) {
+    return originalMsg + ' ' + hints.join(' ');
+  }
+
+  return originalMsg;
 }
 
 // ---------------------------------------------------------------------------
