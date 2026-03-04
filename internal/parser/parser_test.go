@@ -882,3 +882,35 @@ func TestParser_VersionInfo(t *testing.T) {
 		t.Fatal("expected mermaid version to be non-empty")
 	}
 }
+
+func TestParser_MemoryLimitCategory(t *testing.T) {
+	tempDir := repoTempDir(t)
+	script := filepath.Join(tempDir, "parse-memory.mjs")
+	scriptBody := `#!/usr/bin/env node
+process.stderr.write("FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\\n");
+process.stdout.write(JSON.stringify({valid:false,error:{message:"internal parser error: oom",line:0,column:0}}));
+process.exit(1);
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write test parser script: %v", err)
+	}
+
+	p := mustNewParser(t, script)
+	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
+	if err == nil {
+		t.Fatal("expected memory-limit error, got nil")
+	}
+	if diagram != nil || syntaxErr != nil {
+		t.Fatalf("expected nil diagram/syntaxErr, got diagram=%v syntaxErr=%v", diagram, syntaxErr)
+	}
+	if !errors.Is(err, parser.ErrMemoryLimit) {
+		t.Fatalf("expected memory-limit category error, got %v", err)
+	}
+	meta, ok := parser.MetadataFromError(err)
+	if !ok {
+		t.Fatalf("expected parser metadata for memory-limit error")
+	}
+	if meta.Limit == "" || meta.ObservedSizeByte == 0 {
+		t.Fatalf("expected metadata limit and observed size, got %+v", meta)
+	}
+}

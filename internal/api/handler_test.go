@@ -3610,3 +3610,131 @@ func TestRuleAdvertisement_OnlyImplementedRulesExposedAndConfigurable(t *testing
 	}
 	assertValidationErrorResponse(t, analyzeW.Body.Bytes(), "unknown_rule", "unknown rule: no-cycles", "config.rules.no-cycles", []string{"max-fanout", "no-duplicate-node-ids"})
 }
+
+func TestAnalyze_IntegrationParserTimeoutErrorDetails(t *testing.T) {
+	tempDir, err := os.MkdirTemp(".", "handler-parser-test-")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
+	script := filepath.Join(tempDir, "parse-timeout.mjs")
+	scriptBody := `#!/usr/bin/env node
+setTimeout(() => {}, 10000);
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write parser script: %v", err)
+	}
+
+	p, err := parser.NewWithConfig(script, parser.Config{Timeout: 1 * time.Second, NodeMaxOldSpaceMB: 512})
+	if err != nil {
+		t.Fatalf("failed to initialize parser: %v", err)
+	}
+	h := api.NewHandler(p, engine.New())
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B"}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusGatewayTimeout {
+		t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusGatewayTimeout)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	errObj := body["error"].(map[string]any)
+	if errObj["code"] != "parser_timeout" {
+		t.Fatalf("error.code=%v want parser_timeout", errObj["code"])
+	}
+	details := errObj["details"].(map[string]any)
+	if _, ok := details["suggestion"]; !ok {
+		t.Fatalf("expected suggestion in error.details")
+	}
+	if details["limit"] != "1s" {
+		t.Fatalf("limit=%v want 1s", details["limit"])
+	}
+}
+
+func TestAnalyze_IntegrationParserMemoryLimitErrorDetails(t *testing.T) {
+	tempDir, err := os.MkdirTemp(".", "handler-parser-test-")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
+	script := filepath.Join(tempDir, "parse-memory.mjs")
+	scriptBody := `#!/usr/bin/env node
+process.stderr.write("FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\\n");
+process.stdout.write(JSON.stringify({valid:false,error:{message:"internal parser error: oom",line:0,column:0}}));
+process.exit(1);
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write parser script: %v", err)
+	}
+
+	p, err := parser.NewWithConfig(script, parser.Config{Timeout: 5 * time.Second, NodeMaxOldSpaceMB: 256})
+	if err != nil {
+		t.Fatalf("failed to initialize parser: %v", err)
+	}
+	h := api.NewHandler(p, engine.New())
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	code := "graph TD; A-->B"
+	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"`+code+`"}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusInternalServerError)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	errObj := body["error"].(map[string]any)
+	if errObj["code"] != "parser_memory_limit" {
+		t.Fatalf("error.code=%v want parser_memory_limit", errObj["code"])
+	}
+	details := errObj["details"].(map[string]any)
+	if details["limit"] != "256 MiB" {
+		t.Fatalf("limit=%v want 256 MiB", details["limit"])
+	}
+	if _, ok := details["observed_size"]; !ok {
+		t.Fatalf("expected observed_size in error.details")
+	}
+}
+
+func TestAnalyze_InvalidParserOverrideValidation(t *testing.T) {
+	mux := newTestMux(func(string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":0}}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusBadRequest)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	errObj := body["error"].(map[string]any)
+	if errObj["code"] != "invalid_option" {
+		t.Fatalf("error.code=%v want invalid_option", errObj["code"])
+	}
+}
