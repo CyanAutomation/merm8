@@ -118,12 +118,15 @@ func TestServerContractIntegration_ParserTimeoutFromControlledSlowFixture(t *tes
 		t.Fatalf("failed to load large timeout fixture: %v", err)
 	}
 
-	requestBody, _ := json.Marshal(map[string]any{
+	requestBody, err := json.Marshal(map[string]any{
 		"code": string(slowPayload),
 		"parser": map[string]any{
 			"timeout_seconds": 1,
 		},
 	})
+	if err != nil {
+		t.Fatalf("failed to marshal request body: %v", err)
+	}
 
 	res, err := http.Post(server.URL+"/v1/analyze", "application/json", bytes.NewReader(requestBody))
 	if err != nil {
