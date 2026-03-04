@@ -120,9 +120,11 @@ func NormalizeConfig(cfg Config, knownRuleIDs map[string]struct{}) (Config, erro
 			normalized[canonicalRuleID] = normalizedRuleCfg
 			continue
 		}
-		for key, value := range normalizedRuleCfg {
+	for key, value := range normalizedRuleCfg {
+		if _, exists := existingRuleCfg[key]; !exists {
 			existingRuleCfg[key] = value
 		}
+	}
 	}
 
 	if err := ValidateConfig(normalized); err != nil {
