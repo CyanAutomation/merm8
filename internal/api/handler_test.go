@@ -2375,27 +2375,27 @@ func TestInfo_ReturnsServiceAndParserMetadata(t *testing.T) {
 		t.Fatalf("expected supported-rule-ids array, got %#v", resp["supported-rule-ids"])
 	}
 
-	// Deprecated snake_case aliases are still provided for compatibility.
-	if resp["service_version"] != "2.3.4" {
-		t.Fatalf("expected service_version alias=2.3.4, got %#v", resp["service_version"])
+	// Verify snake_case aliases are NOT present (v1.1.0 removed them)
+	if resp["service_version"] != nil {
+		t.Fatalf("unexpected snake_case service_version alias in response (v1.1.0 removed snake_case fields)")
 	}
-	if resp["parser_version"] != "1.0.0" {
-		t.Fatalf("expected parser_version alias=1.0.0, got %#v", resp["parser_version"])
+	if resp["parser_version"] != nil {
+		t.Fatalf("unexpected snake_case parser_version alias in response (v1.1.0 removed snake_case fields)")
 	}
-	if resp["mermaid_version"] != "11.12.3" {
-		t.Fatalf("expected mermaid_version alias=11.12.3, got %#v", resp["mermaid_version"])
+	if resp["mermaid_version"] != nil {
+		t.Fatalf("unexpected snake_case mermaid_version alias in response (v1.1.0 removed snake_case fields)")
 	}
-	if parserRecognizedAlias, ok := resp["parser_recognized"].([]any); !ok || len(parserRecognizedAlias) == 0 {
-		t.Fatalf("expected parser_recognized alias array, got %#v", resp["parser_recognized"])
+	if resp["parser_recognized"] != nil {
+		t.Fatalf("unexpected snake_case parser_recognized alias in response (v1.1.0 removed snake_case fields)")
 	}
-	if lintSupportedAlias, ok := resp["lint_supported"].([]any); !ok || len(lintSupportedAlias) == 0 {
-		t.Fatalf("expected lint_supported alias array, got %#v", resp["lint_supported"])
+	if resp["lint_supported"] != nil {
+		t.Fatalf("unexpected snake_case lint_supported alias in response (v1.1.0 removed snake_case fields)")
 	}
-	if supportedRulesAlias, ok := resp["supported_rules"].([]any); !ok || len(supportedRulesAlias) == 0 {
-		t.Fatalf("expected supported_rules alias array, got %#v", resp["supported_rules"])
+	if resp["supported_rules"] != nil {
+		t.Fatalf("unexpected snake_case supported_rules alias in response (v1.1.0 removed snake_case fields)")
 	}
-	if supportedRuleIDsAlias, ok := resp["supported_rule_ids"].([]any); !ok || len(supportedRuleIDsAlias) == 0 {
-		t.Fatalf("expected supported_rule_ids alias array, got %#v", resp["supported_rule_ids"])
+	if resp["supported_rule_ids"] != nil {
+		t.Fatalf("unexpected snake_case supported_rule_ids alias in response (v1.1.0 removed snake_case fields)")
 	}
 }
 
@@ -2428,62 +2428,6 @@ func TestInfo_IncludesEngineRegisteredSupportedRuleIDs(t *testing.T) {
 
 	if !reflect.DeepEqual(resp.SupportedRuleIDs, want) {
 		t.Fatalf("expected supported-rule-ids=%v, got %v", want, resp.SupportedRuleIDs)
-	}
-}
-
-func TestInfo_LegacySnakeCaseClientsCanStillDeserialize(t *testing.T) {
-	mux := http.NewServeMux()
-	h := api.NewHandler(&mockParser{versionInfo: &parser.VersionInfo{ParserVersion: "1.0.0", MermaidVersion: "11.12.3"}}, engine.New())
-	h.SetServiceVersion("2.3.4")
-	h.RegisterRoutes(mux)
-
-	req := httptest.NewRequest(http.MethodGet, "/info", nil)
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-
-	type legacyInfoResponse struct {
-		ServiceVersion       string   `json:"service_version"`
-		ParserVersion        string   `json:"parser_version"`
-		MermaidVersion       string   `json:"mermaid_version"`
-		ParserTimeoutSeconds int      `json:"parser_timeout_seconds"`
-		ParserRecognized     []string `json:"parser_recognized"`
-		LintSupported        []string `json:"lint_supported"`
-		SupportedRules       []string `json:"supported_rules"`
-		SupportedRuleIDs     []string `json:"supported_rule_ids"`
-	}
-
-	var legacyResp legacyInfoResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &legacyResp); err != nil {
-		t.Fatalf("failed to decode /info response as legacy shape: %v", err)
-	}
-
-	if legacyResp.ServiceVersion != "2.3.4" {
-		t.Fatalf("expected service_version=2.3.4, got %q", legacyResp.ServiceVersion)
-	}
-	if legacyResp.ParserVersion != "1.0.0" {
-		t.Fatalf("expected parser_version=1.0.0, got %q", legacyResp.ParserVersion)
-	}
-	if legacyResp.MermaidVersion != "11.12.3" {
-		t.Fatalf("expected mermaid_version=11.12.3, got %q", legacyResp.MermaidVersion)
-	}
-	if legacyResp.ParserTimeoutSeconds != 0 {
-		t.Fatalf("expected parser_timeout_seconds to be omitted/zero by default, got %d", legacyResp.ParserTimeoutSeconds)
-	}
-	if len(legacyResp.ParserRecognized) == 0 {
-		t.Fatalf("expected parser_recognized to be populated for legacy clients")
-	}
-	if len(legacyResp.LintSupported) == 0 {
-		t.Fatalf("expected lint_supported to be populated for legacy clients")
-	}
-	if len(legacyResp.SupportedRules) == 0 {
-		t.Fatalf("expected supported_rules to be populated for legacy clients")
-	}
-	if len(legacyResp.SupportedRuleIDs) == 0 {
-		t.Fatalf("expected supported_rule_ids to be populated for legacy clients")
 	}
 }
 

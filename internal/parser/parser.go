@@ -404,6 +404,10 @@ func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 	}
 
 	if !result.Valid {
+		// Check if this is a memory limit error indicated by the parser-node script
+		if result.Error != nil && strings.HasPrefix(result.Error.Message, "parser_memory_limit:") {
+			return nil, nil, &parserExecutionError{err: fmt.Errorf("%w: reported by parser-node", ErrMemoryLimit), metadata: ErrorMetadata{Suggestion: "reduce diagram size, batch requests, or increase PARSER_MAX_OLD_SPACE_MB", Limit: fmt.Sprintf("%d MiB", cfg.NodeMaxOldSpaceMB), ObservedSizeByte: len(mermaidCode)}}
+		}
 		return nil, result.Error, nil
 	}
 
