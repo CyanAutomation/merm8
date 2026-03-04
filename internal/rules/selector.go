@@ -50,17 +50,17 @@ func ValidateSuppressionSelectors(selectors []string, knownRuleIDs map[string]st
 		if !ok {
 			continue // Invalid format already handled by pattern validation elsewhere
 		}
-		
+
 		// Only validate rule: prefix selectors
 		if parsed.Prefix != "rule" {
 			continue
 		}
-		
+
 		// Allow wildcard suppressions
 		if parsed.Value == "*" {
 			continue
 		}
-		
+
 		// Check if rule exists
 		if _, exists := knownRuleIDs[parsed.Value]; !exists {
 			warnings = append(warnings, "suppression selector references unknown rule: "+parsed.Value)

@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/CyanAutomation/merm8/internal/engine"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/CyanAutomation/merm8/internal/engine"
 )
 
 const (
@@ -23,12 +23,12 @@ const (
 type Metrics struct {
 	registry *prometheus.Registry
 
-	requestTotal       *prometheus.CounterVec
-	requestDuration    *prometheus.HistogramVec
-	analyzeRequests    *prometheus.CounterVec
-	parserDuration     *prometheus.HistogramVec
-	ruleExecutionTime  *prometheus.HistogramVec
-	ruleIssuesEmitted  *prometheus.CounterVec
+	requestTotal      *prometheus.CounterVec
+	requestDuration   *prometheus.HistogramVec
+	analyzeRequests   *prometheus.CounterVec
+	parserDuration    *prometheus.HistogramVec
+	ruleExecutionTime *prometheus.HistogramVec
+	ruleIssuesEmitted *prometheus.CounterVec
 }
 
 func NewMetrics() *Metrics {
