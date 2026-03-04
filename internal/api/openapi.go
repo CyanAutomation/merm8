@@ -1661,6 +1661,13 @@ var openapi = map[string]interface{}{
 							"$ref": "#/components/schemas/RuleOption",
 						},
 					},
+					"diagram-examples": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "string",
+						},
+						"description": "Example Mermaid diagrams that trigger violations for this rule.",
+					},
 				},
 			},
 			"RuleOption": map[string]interface{}{

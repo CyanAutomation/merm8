@@ -373,6 +373,7 @@ type ruleResponse struct {
 	Description         string                 `json:"description"`
 	DefaultConfig       map[string]interface{} `json:"default-config"`
 	ConfigurableOptions []ruleOptionResponse   `json:"configurable-options"`
+	DiagramExamples     []string               `json:"diagram-examples,omitempty"`
 }
 
 type diagramTypesResponse struct {
@@ -556,6 +557,7 @@ func SetStrictConfigSchemaForTesting(strict bool) {
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Canonical versioned API routes.
 	mux.HandleFunc("GET /v1/healthz", h.Healthz)
+	mux.HandleFunc("GET /v1/health", h.Healthz)
 	mux.HandleFunc("GET /v1/ready", h.Ready)
 	mux.HandleFunc("GET /v1/info", h.Info)
 	mux.HandleFunc("GET /v1/metrics", h.Metrics)
@@ -641,6 +643,32 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 	metricsHandler.ServeHTTP(w, r)
 }
 
+func getRuleExamples(ruleID string) []string {
+	// Return example diagrams that trigger violations for each rule.
+	examples := map[string][]string{
+		"core/no-duplicate-node-ids": {
+			"graph TD\n  A[Node A]\n  B[Another Node]\n  A[Duplicate ID]\n  A --> B",
+		},
+		"core/no-disconnected-nodes": {
+			"graph TD\n  A[Connected] --> B[Also Connected]\n  C[Lonely Node]\n  D[Orphaned]",
+		},
+		"core/max-fanout": {
+			"graph TD\n  Root[Hub]\n  Root --> A[Branch 1]\n  Root --> B[Branch 2]\n  Root --> C[Branch 3]\n  Root --> D[Branch 4]\n  Root --> E[Branch 5]",
+		},
+		"core/max-depth": {
+			"graph TD\n  A[Level 1] --> B[Level 2]\n  B --> C[Level 3]\n  C --> D[Level 4]\n  D --> E[Level 5]\n  E --> F[Level 6]",
+		},
+		"core/no-cycles": {
+			"graph TD\n  A[Start] --> B[Middle]\n  B --> C[End]\n  C --> A",
+		},
+	}
+
+	if diagrams, exists := examples[ruleID]; exists {
+		return diagrams
+	}
+	return []string{}
+}
+
 // ListRules handles GET /rules.
 func (h *Handler) ListRules(w http.ResponseWriter, _ *http.Request) {
 	metadata := rules.ListRuleMetadata()
@@ -663,6 +691,7 @@ func (h *Handler) ListRules(w http.ResponseWriter, _ *http.Request) {
 			Description:         rule.Description,
 			DefaultConfig:       rule.DefaultConfig,
 			ConfigurableOptions: options,
+			DiagramExamples:     getRuleExamples(rule.ID),
 		})
 	}
 
