@@ -1004,6 +1004,67 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
+		"/v1/analyze/raw": map[string]interface{}{
+			"post": map[string]interface{}{
+				"tags":        []string{"Linting"},
+				"summary":     "Analyze and lint a Mermaid diagram (raw text)",
+				"description": "Accepts raw mermaid code (plain text) directly in the request body. Auto-detects format: attempts to parse as JSON first (looks for {\"code\": \"...\"} structure), then falls back to treating the entire body as raw mermaid syntax.\n\nDoes NOT support lint configuration; use POST /v1/analyze if you need to configure rules. Maximum request body size is 1 MiB.\n\nReturns the same structured analysis as /v1/analyze, including syntax errors and lint results.",
+				"operationId": "analyzeCodeRaw",
+				"requestBody": map[string]interface{}{
+					"required": true,
+					"content": map[string]interface{}{
+						"text/plain": map[string]interface{}{
+							"schema": map[string]interface{}{
+								"type":        "string",
+								"description": "Raw mermaid diagram code",
+								"example":     "sequenceDiagram\n  Alice ->> Bob: Hello Bob, how are you?\n  Bob-->>Alice: I am good thanks!",
+							},
+						},
+						"application/json": map[string]interface{}{
+							"schema": map[string]interface{}{
+								"type":        "object",
+								"description": "Auto-detected JSON with code field",
+								"properties": map[string]interface{}{
+									"code": map[string]interface{}{
+										"type":        "string",
+										"description": "Mermaid diagram code",
+									},
+								},
+								"required": []string{"code"},
+							},
+						},
+					},
+				},
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Analysis complete (valid or syntax error)",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/AnalyzeResponse",
+								},
+							},
+						},
+					},
+					"400": map[string]interface{}{
+						"description": "Bad request (missing code, invalid body, etc.)",
+						"content":     map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/Error"}}},
+					},
+					"413": map[string]interface{}{
+						"description": "Request too large (exceeds 1 MiB)",
+						"content":     map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/Error"}}},
+					},
+					"500": map[string]interface{}{
+						"description": "Parser/service internal failure",
+						"content":     map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}},
+					},
+					"504": map[string]interface{}{
+						"description": "Parser timeout",
+						"content":     map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}},
+					},
+				},
+			},
+		},
 		"/v1/analyze/sarif": map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
@@ -1139,6 +1200,46 @@ var openapi = map[string]interface{}{
 					"200": map[string]interface{}{"description": "Success", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
 					"400": map[string]interface{}{"description": "Bad request", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
 					"413": map[string]interface{}{"description": "Request too large", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
+					"500": map[string]interface{}{"description": "Parser/service internal failure", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
+					"504": map[string]interface{}{"description": "Parser timeout", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
+				},
+			},
+		},
+		"/analyze/raw": map[string]interface{}{
+			"post": map[string]interface{}{
+				"tags":        []string{"Linting"},
+				"summary":     "Analyze and lint a Mermaid diagram (raw text, legacy alias)",
+				"description": "Deprecated compatibility alias for POST /v1/analyze/raw. Accepts raw mermaid code directly. Scheduled for removal in v1.2.0 (Q2 2026).",
+				"operationId": "analyzeCodeRawLegacy",
+				"deprecated":  true,
+				"requestBody": map[string]interface{}{
+					"required": true,
+					"content": map[string]interface{}{
+						"text/plain": map[string]interface{}{
+							"schema": map[string]interface{}{
+								"type":        "string",
+								"description": "Raw mermaid diagram code",
+							},
+						},
+						"application/json": map[string]interface{}{
+							"schema": map[string]interface{}{
+								"type":        "object",
+								"description": "Auto-detected JSON with code field",
+								"properties": map[string]interface{}{
+									"code": map[string]interface{}{
+										"type":        "string",
+										"description": "Mermaid diagram code",
+									},
+								},
+								"required": []string{"code"},
+							},
+						},
+					},
+				},
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{"description": "Analysis complete", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
+					"400": map[string]interface{}{"description": "Bad request", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/Error"}}}},
+					"413": map[string]interface{}{"description": "Request too large", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/Error"}}}},
 					"500": map[string]interface{}{"description": "Parser/service internal failure", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
 					"504": map[string]interface{}{"description": "Parser timeout", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
 				},
