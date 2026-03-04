@@ -940,6 +940,91 @@ func TestAnalyze_ConfigLegacySnakeCaseKeysAcceptedWithWarning(t *testing.T) {
 	}
 }
 
+func TestAnalyze_LegacyConfigShapesWarnAndStillApplyConfig(t *testing.T) {
+	diagram := &model.Diagram{
+		Type: model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges: []model.Edge{
+			{From: "A", To: "B"},
+			{From: "A", To: "C"},
+		},
+	}
+
+	tests := []struct {
+		name   string
+		config map[string]any
+	}{
+		{
+			name: "flat legacy config",
+			config: map[string]any{
+				"max-fanout": map[string]any{"limit": 1},
+			},
+		},
+		{
+			name: "nested legacy config",
+			config: map[string]any{
+				"rules": map[string]any{
+					"max-fanout": map[string]any{"limit": 1},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var parseCalls atomic.Int32
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				parseCalls.Add(1)
+				return diagram, nil, nil
+			})
+
+			bodyJSON, _ := json.Marshal(map[string]any{
+				"code":   "graph TD\n  A --> B\n  A --> C",
+				"config": tt.config,
+			})
+
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(bodyJSON))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200 for %s, got %d body=%s", tt.name, w.Code, w.Body.String())
+			}
+			if got := w.Header().Get("Deprecation"); got != "true" {
+				t.Fatalf("expected Deprecation header true for %s, got %q", tt.name, got)
+			}
+			if got := w.Header().Get("Warning"); got == "" {
+				t.Fatalf("expected Warning header to be present for %s", tt.name)
+			}
+			if parseCalls.Load() == 0 {
+				t.Fatalf("expected parser to run for %s", tt.name)
+			}
+
+			var resp map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to decode response for %s: %v", tt.name, err)
+			}
+			warnings, ok := resp["warnings"].([]any)
+			if !ok || len(warnings) == 0 {
+				t.Fatalf("expected non-empty warnings array for %s, got %#v", tt.name, resp["warnings"])
+			}
+
+			issues, ok := resp["issues"].([]any)
+			if !ok {
+				t.Fatalf("expected issues array for %s, got %T", tt.name, resp["issues"])
+			}
+			if len(issues) != 1 {
+				t.Fatalf("expected exactly 1 issue with max-fanout.limit=1 for %s, got %d (%#v)", tt.name, len(issues), issues)
+			}
+			issue, ok := issues[0].(map[string]any)
+			if !ok || issue["rule-id"] != "max-fanout" {
+				t.Fatalf("expected max-fanout issue for %s, got %#v", tt.name, issues[0])
+			}
+		})
+	}
+}
+
 func TestAnalyze_ConfigCanonicalFormatNoDeprecationWarnings(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}, {ID: "B"}}, Edges: []model.Edge{{From: "A", To: "B"}}}, nil, nil
