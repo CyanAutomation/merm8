@@ -354,6 +354,58 @@ func TestNormalizeConfig_LegacySnakeCaseAlias(t *testing.T) {
 	}
 }
 
+func TestNormalizeConfig_NamespacedBuiltInRuleID(t *testing.T) {
+	cfg := rules.Config{
+		"core/max-fanout": {
+			"limit": 2,
+		},
+	}
+
+	normalized, err := rules.NormalizeConfig(cfg, map[string]struct{}{"max-fanout": {}})
+	if err != nil {
+		t.Fatalf("expected normalization to succeed, got %v", err)
+	}
+	if _, ok := normalized["max-fanout"]; !ok {
+		t.Fatal("expected core/max-fanout to normalize to max-fanout")
+	}
+	if normalized["max-fanout"]["limit"] != 2 {
+		t.Fatalf("expected merged limit value to be preserved, got %#v", normalized["max-fanout"]["limit"])
+	}
+}
+
+func TestNormalizeConfig_MergesLegacyAndNamespacedBuiltInRuleID(t *testing.T) {
+	cfg := rules.Config{
+		"max-fanout": {
+			"enabled": false,
+		},
+		"core/max-fanout": {
+			"limit": 3,
+		},
+	}
+
+	normalized, err := rules.NormalizeConfig(cfg, map[string]struct{}{"max-fanout": {}})
+	if err != nil {
+		t.Fatalf("expected normalization to succeed, got %v", err)
+	}
+	ruleCfg, ok := normalized["max-fanout"]
+	if !ok {
+		t.Fatal("expected merged max-fanout config entry")
+	}
+	if got, ok := ruleCfg["enabled"].(bool); !ok || got {
+		t.Fatalf("expected enabled=false to be preserved, got %#v", ruleCfg["enabled"])
+	}
+	if got, ok := ruleCfg["limit"].(int); !ok || got != 3 {
+		t.Fatalf("expected limit=3 from namespaced entry, got %#v", ruleCfg["limit"])
+	}
+}
+
+func TestNormalizeConfig_UnknownNamespacedRuleID(t *testing.T) {
+	_, err := rules.NormalizeConfig(rules.Config{"core/not-a-built-in": {}}, map[string]struct{}{"max-fanout": {}})
+	if err == nil {
+		t.Fatal("expected error for unknown namespaced rule id")
+	}
+}
+
 func TestNormalizeConfig_UnknownRuleID(t *testing.T) {
 	_, err := rules.NormalizeConfig(rules.Config{"unknown": {}}, map[string]struct{}{"max-fanout": {}})
 	if err == nil {
