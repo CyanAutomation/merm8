@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -24,8 +25,10 @@ import (
 const maxAnalyzeBodyBytes int64 = 1 << 20 // 1 MiB
 
 const (
-	legacyConfigDeprecationMessage = "legacy config format is deprecated; migrate to {\"schema-version\":\"v1\",\"rules\":{...}} with kebab-case keys"
-	legacyConfigDeprecationHeader  = "299 - \"legacy config format is deprecated and will be rejected in a future phase\""
+	legacySchemaVersionWarningMessage = `legacy key config.schema_version is deprecated; use config.schema-version. Example: {"config":{"schema-version":"v1","rules":{"max-fanout":{"limit":3}}}}`
+	legacyUnversionedRulesWarning     = `legacy unversioned config shape is deprecated; add config.schema-version and keep rules under config.rules. Example: {"config":{"schema-version":"v1","rules":{"max-fanout":{"limit":3}}}}`
+	legacyFlatConfigWarning           = `legacy flat config shape is deprecated; move rule settings under config.rules and add config.schema-version. Example: {"config":{"schema-version":"v1","rules":{"max-fanout":{"limit":3}}}}`
+	legacyOptionKeyWarningTemplate    = `legacy key config.%s.%s is deprecated; use config.%s.%s. Example: {"%s": ["node:A"]}`
 )
 
 var strictConfigSchema = false
@@ -97,7 +100,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		}
 		schemaVersionValue = legacySchemaVersionValue
 		hasSchemaVersion = true
-		deprecations = append(deprecations, legacyConfigDeprecationMessage)
+		deprecations = append(deprecations, legacySchemaVersionWarningMessage)
 	}
 
 	if strict && !hasSchemaVersion {
@@ -147,7 +150,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		if strict {
 			return rules.Config{}, nil, &validationError{Code: "deprecated_config_format", Path: "config", Message: "legacy unversioned config shape is deprecated; use config.schema-version and config.rules"}
 		}
-		deprecations = append(deprecations, legacyConfigDeprecationMessage)
+		deprecations = append(deprecations, legacyUnversionedRulesWarning)
 		rulesMap, ok := rulesValue.(map[string]any)
 		if !ok {
 			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
@@ -162,7 +165,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 	} else if strict {
 		return rules.Config{}, nil, &validationError{Code: "deprecated_config_format", Path: "config", Message: "legacy unversioned config shape is deprecated; use config.schema-version and config.rules"}
 	} else {
-		deprecations = append(deprecations, legacyConfigDeprecationMessage)
+		deprecations = append(deprecations, legacyFlatConfigWarning)
 	}
 
 	registryByRuleID := rules.ConfigRegistryForRuleIDs(knownRuleIDs)
@@ -193,6 +196,9 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 
 		for optionKey, optionValue := range ruleConfigMap {
 			canonicalOptionKey := rules.NormalizeOptionKey(optionKey)
+			if optionKey != canonicalOptionKey {
+				deprecations = append(deprecations, fmt.Sprintf(legacyOptionKeyWarningTemplate, ruleID, optionKey, ruleID, canonicalOptionKey, canonicalOptionKey))
+			}
 			if !contains(registry.AllowedOptionKeys, canonicalOptionKey) {
 				return rules.Config{}, nil, &validationError{
 					Code:      "unknown_option",
@@ -269,6 +275,16 @@ type issueCountsResponse struct {
 }
 
 // analyzeResponse is returned by POST /analyze.
+type responseWarning struct {
+	Code        string `json:"code"`
+	Message     string `json:"message"`
+	Replacement string `json:"replacement"`
+}
+
+type responseMeta struct {
+	Warnings []responseWarning `json:"warnings,omitempty"`
+}
+
 type analyzeResponse struct {
 	Valid         bool                 `json:"valid"`
 	DiagramType   model.DiagramType    `json:"diagram-type,omitempty"`
@@ -276,6 +292,7 @@ type analyzeResponse struct {
 	SyntaxError   *syntaxErrorResponse `json:"syntax-error"`
 	Issues        []model.Issue        `json:"issues"`
 	Warnings      []string             `json:"warnings,omitempty"`
+	Meta          *responseMeta        `json:"meta,omitempty"`
 	Error         *apiErrorDetails     `json:"error,omitempty"`
 	Metrics       *metricsResponse     `json:"metrics"`
 }
@@ -689,10 +706,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 	}
 
 	deprecationWarnings = uniqueStrings(deprecationWarnings)
-	if len(deprecationWarnings) > 0 {
-		w.Header().Set("Deprecation", "true")
-		w.Header().Set("Warning", legacyConfigDeprecationHeader)
-	}
+	emitLegacyConfigWarnings(r.Context(), logger, w, deprecationWarnings)
 
 	normalizedCfg, err := h.engine.NormalizeConfig(cfg)
 	if err != nil {
@@ -749,6 +763,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			DiagramType:   diagramType,
 			LintSupported: diagramType.Family() == model.DiagramFamilyFlowchart,
 			Warnings:      deprecationWarnings,
+			Meta:          responseMetaForWarnings(deprecationWarnings),
 			SyntaxError: &syntaxErrorResponse{
 				Message: syntaxErr.Message,
 				Line:    syntaxErr.Line,
@@ -800,6 +815,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			SyntaxError:   nil,
 			Issues:        []model.Issue{unsupportedIssue},
 			Warnings:      deprecationWarnings,
+			Meta:          responseMetaForWarnings(deprecationWarnings),
 			Error: &apiErrorDetails{
 				Code:    "unsupported_diagram_type",
 				Message: "diagram type is parsed but linting is not supported",
@@ -832,6 +848,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		SyntaxError:   nil,
 		Issues:        issues,
 		Warnings:      deprecationWarnings,
+		Meta:          responseMetaForWarnings(deprecationWarnings),
 		Metrics:       computeMetrics(diagram, issues),
 	}
 	onValid(resp)
@@ -918,10 +935,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 	}
 
 	deprecationWarnings = uniqueStrings(deprecationWarnings)
-	if len(deprecationWarnings) > 0 {
-		w.Header().Set("Deprecation", "true")
-		w.Header().Set("Warning", legacyConfigDeprecationHeader)
-	}
+	emitLegacyConfigWarnings(r.Context(), logger, w, deprecationWarnings)
 
 	normalizedCfg, err := h.engine.NormalizeConfig(cfg)
 	if err != nil {
@@ -1059,6 +1073,50 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		ArtifactURI: "",
 	})
 	writeSARIF(w, http.StatusOK, report)
+}
+
+func emitLegacyConfigWarnings(ctx context.Context, logger Logger, w http.ResponseWriter, warnings []string) {
+	if len(warnings) == 0 {
+		return
+	}
+	w.Header().Set("Deprecation", "true")
+	for _, warning := range warnings {
+		w.Header().Add("Warning", "299 - \""+warning+"\"")
+	}
+	for _, warning := range warnings {
+		logger.Warn(
+			"legacy config format received",
+			"request_id", RequestIDFromContext(ctx),
+			"warning", warning,
+		)
+	}
+}
+
+func responseMetaForWarnings(warnings []string) *responseMeta {
+	structured := buildResponseWarnings(warnings)
+	if len(structured) == 0 {
+		return nil
+	}
+	return &responseMeta{Warnings: structured}
+}
+
+func buildResponseWarnings(warnings []string) []responseWarning {
+	if len(warnings) == 0 {
+		return nil
+	}
+	respWarnings := make([]responseWarning, 0, len(warnings))
+	for _, warning := range warnings {
+		replacement := ""
+		if parts := strings.SplitN(warning, "Example: ", 2); len(parts) == 2 {
+			replacement = strings.TrimSpace(parts[1])
+		}
+		respWarnings = append(respWarnings, responseWarning{
+			Code:        "legacy_config_format",
+			Message:     warning,
+			Replacement: replacement,
+		})
+	}
+	return respWarnings
 }
 
 func uniqueStrings(values []string) []string {
