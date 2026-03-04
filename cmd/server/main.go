@@ -73,13 +73,13 @@ func main() {
 	}
 
 	routePatterns := map[string]string{
-		"GET /health":        "/health",
-		"GET /healthz":       "/healthz",
-		"GET /ready":         "/ready",
-		"GET /info":          "/info",
-		"GET /metrics":       "/metrics",
-		"POST /analyze":      "/analyze",
-		"POST /analyze/raw":  "/analyze/raw",
+		"GET /health":       "/health",
+		"GET /healthz":      "/healthz",
+		"GET /ready":        "/ready",
+		"GET /info":         "/info",
+		"GET /metrics":      "/metrics",
+		"POST /analyze":     "/analyze",
+		"POST /analyze/raw": "/analyze/raw",
 	}
 	rootHandler = api.MetricsMiddleware(rootHandler, routePatterns, metrics)
 	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, logger)
