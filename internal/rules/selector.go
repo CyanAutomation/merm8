@@ -5,7 +5,15 @@ import (
 	"strings"
 )
 
-const SuppressionSelectorPattern = `^!?(node|subgraph|rule):.+$`
+// SuppressionSelectorPattern accepts canonical selectors in the form:
+//   - node:<id>
+//   - subgraph:<id>
+//   - rule:<id>
+//
+// and the optional negated variants prefixed with '!'.
+//
+// Whitespace policy: selectors must not contain whitespace anywhere.
+const SuppressionSelectorPattern = `^!?(node|subgraph|rule):\S+$`
 
 var suppressionSelectorPatternRE = regexp.MustCompile(SuppressionSelectorPattern)
 

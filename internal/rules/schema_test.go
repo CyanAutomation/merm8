@@ -88,6 +88,7 @@ func TestConfigJSONSchema_ValidationAcceptsFlatAndVersionedConfigs(t *testing.T)
 	validConfigs := []string{
 		`{"max-fanout":{"limit":1},"no-cycles":{"enabled":true}}`,
 		`{"schema-version":"v1","rules":{"max-fanout":{"limit":3},"no-cycles":{"enabled":false}}}`,
+		`{"max-fanout":{"suppression-selectors":["node:A","subgraph:payments","rule:max-fanout","!node:critical"]}}`,
 	}
 
 	for _, cfg := range validConfigs {
@@ -111,6 +112,8 @@ func TestConfigJSONSchema_ValidationRejectsInvalidConfigs(t *testing.T) {
 		`{"max-fanout":{"suppression-selectors":["node"]}}`,
 		`{"max-fanout":{"suppression-selectors":["! node:A"]}}`,
 		`{"max-fanout":{"suppression-selectors":["node:"]}}`,
+		`{"max-fanout":{"suppression-selectors":["node: A"]}}`,
+		`{"max-fanout":{"suppression-selectors":["subgraph:payments team"]}}`,
 	}
 
 	for _, cfg := range invalidConfigs {

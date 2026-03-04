@@ -717,6 +717,39 @@ readinessProbe:
 
 ## Rule Configuration Guide
 
+### Suppression selector grammar
+
+`suppression-selectors` entries must use the canonical grammar:
+
+- `node:<id>` — suppress issues associated with node `<id>`
+- `subgraph:<id>` — suppress issues emitted in subgraph context `<id>`
+- `rule:<id>` — suppress issues from rule `<id>`
+
+Negation is supported by prefixing a selector with `!` (for example `!node:critical`).
+Matching negated selectors act as exclusions and override matching non-negated selectors.
+
+Whitespace is **not** allowed anywhere in a selector. For example, `node:A` is valid, while ` node:A`, `node: A`, and `! node:A` are invalid.
+
+Concrete examples:
+
+```json
+{
+  "config": {
+    "schema-version": "v1",
+    "rules": {
+      "max-fanout": {
+        "suppression-selectors": [
+          "node:A",
+          "subgraph:payments",
+          "rule:max-fanout",
+          "!node:must-review"
+        ]
+      }
+    }
+  }
+}
+```
+
 ### Available Rules
 
 The merm8 engine currently includes five built-in lint rules:
