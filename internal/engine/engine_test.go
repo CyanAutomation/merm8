@@ -609,6 +609,20 @@ func TestEngine_ConfigSuppressionSelectors_MalformedNegationRejectsConfig(t *tes
 	}
 }
 
+func TestEngine_ConfigSuppressionSelectors_WhitespaceInSelectorRejectsConfig(t *testing.T) {
+	e := engine.NewWithRules(rules.MaxFanout{})
+	d := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+	}
+
+	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"node: A", "subgraph:payments team"}}})
+	if len(issues) != 0 {
+		t.Fatalf("expected whitespace-containing selectors to fail config validation and produce no issues, got %#v", issues)
+	}
+}
+
 func TestEngine_ConfigSuppressionSelectors_UnknownRuleSelectorDoesNotMatch(t *testing.T) {
 	e := engine.NewWithRules(rules.MaxFanout{})
 	d := &model.Diagram{
