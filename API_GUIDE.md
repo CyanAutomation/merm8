@@ -719,12 +719,15 @@ readinessProbe:
 
 ### Available Rules
 
-The merm8 engine includes three built-in lint rules:
+The merm8 engine currently includes five built-in lint rules:
 
 #### `no-duplicate-node-ids`
 - **Severity:** error
-- **Purpose:** Ensures each node ID is unique
-- **Configuration:** No options
+- **Purpose:** Flags diagrams containing more than one node with the same ID
+- **Configuration options:**
+  - `enabled` (boolean, default: `true`)
+  - `severity` (string: `error|warning|info`, default: `error`)
+  - `suppression-selectors` (array of selector strings, default: `[]`)
 - **Example response:**
   ```json
   {
@@ -736,8 +739,11 @@ The merm8 engine includes three built-in lint rules:
 
 #### `no-disconnected-nodes`
 - **Severity:** error
-- **Purpose:** Ensures all nodes are connected to the graph
-- **Configuration:** No options
+- **Purpose:** Flags nodes that are not connected by any incoming or outgoing edge
+- **Configuration options:**
+  - `enabled` (boolean, default: `true`)
+  - `severity` (string: `error|warning|info`, default: `error`)
+  - `suppression-selectors` (array of selector strings, default: `[]`)
 - **Example response:**
   ```json
   {
@@ -749,12 +755,17 @@ The merm8 engine includes three built-in lint rules:
 
 #### `max-fanout`
 - **Severity:** warning
-- **Purpose:** Limits maximum outgoing edges from a single node
-- **Configuration:** `limit` (integer, default: 5)
+- **Purpose:** Flags nodes whose outgoing edge count exceeds a configurable limit
+- **Configuration options:**
+  - `enabled` (boolean, default: `true`)
+  - `severity` (string: `error|warning|info`, default: `warning`)
+  - `suppression-selectors` (array of selector strings, default: `[]`)
+  - `limit` (integer >= 1, default: `5`)
 - **Example:**
   ```json
   {
     "config": {
+      "schema-version": "v1",
       "rules": {
         "max-fanout": { "limit": 3 }
       }
@@ -767,6 +778,62 @@ The merm8 engine includes three built-in lint rules:
     "rule-id": "max-fanout",
     "severity": "warning",
     "message": "Node 'A' has fanout of 6, exceeds limit of 5"
+  }
+  ```
+
+#### `max-depth`
+- **Severity:** warning
+- **Purpose:** Flags root-to-leaf traversals whose depth exceeds a configurable limit
+- **Configuration options:**
+  - `enabled` (boolean, default: `true`)
+  - `severity` (string: `error|warning|info`, default: `warning`)
+  - `suppression-selectors` (array of selector strings, default: `[]`)
+  - `limit` (integer >= 1, default: `8`)
+- **Example:**
+  ```json
+  {
+    "config": {
+      "schema-version": "v1",
+      "rules": {
+        "max-depth": { "limit": 6 }
+      }
+    }
+  }
+  ```
+- **Example response:**
+  ```json
+  {
+    "rule-id": "max-depth",
+    "severity": "warning",
+    "message": "Traversal from 'A' has depth 9, exceeds limit of 8"
+  }
+  ```
+
+#### `no-cycles`
+- **Severity:** error
+- **Purpose:** Flags directed cycles in flowcharts
+- **Configuration options:**
+  - `enabled` (boolean, default: `true`)
+  - `severity` (string: `error|warning|info`, default: `error`)
+  - `suppression-selectors` (array of selector strings, default: `[]`)
+  - `allow-self-loop` (boolean, default: `false`)
+- **Example:**
+  ```json
+  {
+    "config": {
+      "schema-version": "v1",
+      "rules": {
+        "no-cycles": { "allow-self-loop": true }
+      }
+    }
+  }
+  ```
+- **Example response:**
+  ```json
+  {
+    "rule-id": "no-cycles",
+    "severity": "error",
+    "message": "Cycle detected: A -> B -> C -> A"
   }
   ```
 
