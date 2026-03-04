@@ -9,6 +9,7 @@ import (
 // Logger defines structured logging used by API components.
 type Logger interface {
 	Info(msg string, fields ...any)
+	Warn(msg string, fields ...any)
 	Error(msg string, fields ...any)
 }
 
@@ -18,6 +19,10 @@ type slogLogger struct {
 
 func (l *slogLogger) Info(msg string, fields ...any) {
 	l.inner.Info(msg, fields...)
+}
+
+func (l *slogLogger) Warn(msg string, fields ...any) {
+	l.inner.Warn(msg, fields...)
 }
 
 func (l *slogLogger) Error(msg string, fields ...any) {
@@ -40,6 +45,7 @@ func newJSONLogger(w io.Writer, component string) Logger {
 type noopLogger struct{}
 
 func (noopLogger) Info(string, ...any)  {}
+func (noopLogger) Warn(string, ...any)  {}
 func (noopLogger) Error(string, ...any) {}
 
 func normalizeLogger(logger Logger) Logger {

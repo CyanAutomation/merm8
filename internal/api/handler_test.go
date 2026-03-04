@@ -55,6 +55,25 @@ func (m *mockParser) VersionInfo() (*parser.VersionInfo, error) {
 	return m.versionInfo, nil
 }
 
+type captureLogger struct {
+	mu       sync.Mutex
+	warnings []string
+}
+
+func (l *captureLogger) Info(string, ...any)  {}
+func (l *captureLogger) Error(string, ...any) {}
+func (l *captureLogger) Warn(msg string, fields ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.warnings = append(l.warnings, msg+" "+fmt.Sprint(fields...))
+}
+
+func (l *captureLogger) warningText() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return strings.Join(l.warnings, "\n")
+}
+
 // newTestMux creates a test HTTP server backed by a handler using a mock parser.
 func newTestMux(mockParseFn func(string) (*model.Diagram, *parser.SyntaxError, error)) *http.ServeMux {
 	mux := http.NewServeMux()
@@ -918,6 +937,108 @@ func TestAnalyze_ConfigLegacySnakeCaseKeysAcceptedWithWarning(t *testing.T) {
 	warnings, ok := resp["warnings"].([]any)
 	if !ok || len(warnings) == 0 {
 		t.Fatalf("expected warnings array in response, got %#v", resp["warnings"])
+	}
+}
+
+func TestAnalyze_ConfigCanonicalFormatNoDeprecationWarnings(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}, {ID: "B"}}, Edges: []model.Edge{{From: "A", To: "B"}}}, nil, nil
+	})
+
+	bodyJSON, _ := json.Marshal(map[string]any{
+		"code": "graph TD\n  A --> B",
+		"config": map[string]any{
+			"schema-version": "v1",
+			"rules": map[string]any{
+				"max-fanout": map[string]any{
+					"suppression-selectors": []string{"node:A"},
+				},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(bodyJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for canonical config, got %d body=%s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Deprecation"); got != "" {
+		t.Fatalf("expected no Deprecation header, got %q", got)
+	}
+	if got := w.Header().Get("Warning"); got != "" {
+		t.Fatalf("expected no Warning header, got %q", got)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if _, exists := resp["warnings"]; exists {
+		t.Fatalf("expected warnings to be absent for canonical format, got %#v", resp["warnings"])
+	}
+	if _, exists := resp["meta"]; exists {
+		t.Fatalf("expected meta warnings to be absent for canonical format, got %#v", resp["meta"])
+	}
+}
+
+func TestAnalyze_LegacyConfigWarningsIncludeStructuredMetadataAndLogHint(t *testing.T) {
+	mux := http.NewServeMux()
+	log := &captureLogger{}
+	h := api.NewHandler(&mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}, {ID: "B"}}, Edges: []model.Edge{{From: "A", To: "B"}}}, nil, nil
+	}}, engine.New())
+	h.SetLogger(log)
+	h.RegisterRoutes(mux)
+
+	bodyJSON, _ := json.Marshal(map[string]any{
+		"code": "graph TD\n  A --> B",
+		"config": map[string]any{
+			"schema_version": "v1",
+			"rules": map[string]any{
+				"max-fanout": map[string]any{
+					"suppression_selectors": []string{"node:A"},
+				},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(bodyJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for legacy config, got %d body=%s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Values("Warning"); len(got) == 0 {
+		t.Fatal("expected Warning headers to be present")
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	meta, ok := resp["meta"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected meta object in response, got %#v", resp["meta"])
+	}
+	metaWarnings, ok := meta["warnings"].([]any)
+	if !ok || len(metaWarnings) == 0 {
+		t.Fatalf("expected structured meta warnings in response, got %#v", meta["warnings"])
+	}
+	firstWarning, ok := metaWarnings[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first warning object, got %#v", metaWarnings[0])
+	}
+	if firstWarning["replacement"] == "" {
+		t.Fatalf("expected replacement example in structured warning, got %#v", firstWarning)
+	}
+
+	logText := log.warningText()
+	if !strings.Contains(logText, "schema-version") || !strings.Contains(logText, "Example") {
+		t.Fatalf("expected migration hint in warning logs, got %s", logText)
 	}
 }
 
