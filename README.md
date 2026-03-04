@@ -162,10 +162,16 @@ All API JSON field names use **kebab-case** as the canonical contract for reques
 
 Canonical config format is `{"schema-version":"v1","rules":{...}}` and canonical key style is kebab-case.
 
-- **Phase 1 (current)**: legacy snake_case keys (for example `schema_version`, `suppression_selectors`) and legacy shapes (flat `{"rule-id":{...}}` / unversioned nested `{"rules":{...}}`) are accepted **with runtime deprecation signals** (`Deprecation: true`, `Warning` header, and response `warnings`).
-- **Phase 2 (v1.2.0, Q2 2026 planned)**: legacy keys/shapes will be rejected with machine-readable `400 deprecated_config_format` errors. Only canonical versioned format will be accepted.
+| Legacy input | Accepted since | Warn since | Remove in |
+|---|---|---|---|
+| `config.schema_version` | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
+| Unversioned nested config (`config.rules` without `schema-version`) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
+| Flat config (`config.{rule-id}`) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
+| Snake_case rule option keys (for example `suppression_selectors`) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
 
-For migration details, see [API_GUIDE.md — Configuration Format and Deprecation Policy](API_GUIDE.md#configuration-format-and-deprecation-policy).
+Phase-1 runtime signals include `Deprecation` + `Warning` headers, response `warnings`, and structured `meta.warnings` metadata.
+
+For migration details, see [docs/migration-guide.md](docs/migration-guide.md) and [API_GUIDE.md — Configuration Format and Deprecation Policy](API_GUIDE.md#configuration-format-and-deprecation-policy).
 
 ## API
 
