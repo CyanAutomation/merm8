@@ -1380,6 +1380,11 @@
                 "$ref": "#/components/schemas/AnalyzeResponse"
           "description": "Service unavailable. For non-200 API failures, `error` is populated, `syntax-error` is null, and `issues` is an empty array."
           "headers":
+            "Retry-After":
+              "description": "Suggested delay before retrying a `server_busy` response. Value is either delta-seconds or an HTTP-date."
+              "example": "5"
+              "schema":
+                "type": "string"
             "X-RateLimit-Limit":
               "description": "Maximum number of requests allowed in the current time window"
               "example": 120
