@@ -365,7 +365,7 @@ var openapi = map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Analyze and lint a Mermaid diagram",
-				"description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nLegacy config acceptance: Phase 1 accepts legacy flat/nested/snake_case config and emits deprecation signals. Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned), where legacy config is rejected with HTTP 400 `deprecated_config_format`.\n\nOperational note: tune `PARSER_CONCURRENCY_LIMIT` and `PARSER_MAX_OLD_SPACE_MB` (documented in API_GUIDE.md under Operational environment variables). When parser concurrency is exhausted, `/analyze` returns HTTP 503 with `error.code=server_busy`; parser subprocess heap is capped with Node `--max-old-space-size`.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)\n- `parser_memory_limit` (HTTP 500)",
+				"description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nLegacy config acceptance: Phase 1 accepts legacy flat/nested/snake_case config and emits deprecation signals. Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned), where legacy config is rejected with HTTP 400 `deprecated_config_format`.\n\nOperational note: tune `PARSER_CONCURRENCY_LIMIT` and `PARSER_MAX_OLD_SPACE_MB` (documented in API_GUIDE.md under Operational environment variables). When parser concurrency is exhausted, `/analyze` returns HTTP 503 with `error.code=server_busy`; parser subprocess heap is capped with Node `--max-old-space-size`. Per-request parser overrides remain bounded (timeout 1-60s, memory 128-4096 MiB). For oversized/complex diagrams, split work into smaller diagrams and batch requests.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)\n- `parser_memory_limit` (HTTP 500)",
 				"operationId": "analyzeCode",
 				"requestBody": map[string]interface{}{
 					"required": true,
@@ -1590,10 +1590,10 @@ var openapi = map[string]interface{}{
 					},
 					"parser": map[string]interface{}{
 						"type":        "object",
-						"description": "Optional per-request parser execution limits. Values are bounded and validated before parsing.",
+						"description": "Optional per-request parser execution limits. Server-side bounds are enforced regardless of requested values. Defaults: timeout_seconds=5, max_old_space_mb=512. For very large diagrams, split into smaller diagrams/subgraphs and batch requests where possible.",
 						"properties": map[string]interface{}{
-							"timeout_seconds":  map[string]interface{}{"type": "integer", "minimum": 1, "maximum": 60},
-							"max_old_space_mb": map[string]interface{}{"type": "integer", "minimum": 128, "maximum": 4096},
+							"timeout_seconds":  map[string]interface{}{"type": "integer", "minimum": 1, "maximum": 60, "default": 5, "description": "Parser timeout in seconds. Min 1, max 60."},
+							"max_old_space_mb": map[string]interface{}{"type": "integer", "minimum": 128, "maximum": 4096, "default": 512, "description": "Node parser max old-space heap in MiB. Min 128, max 4096."},
 						},
 					},
 				},

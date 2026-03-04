@@ -26,13 +26,14 @@ import (
 
 // mockParser is a test double for ParserInterface.
 type mockParser struct {
-	diagram     *model.Diagram
-	syntaxErr   *parser.SyntaxError
-	parseError  error
-	parseFunc   func(string) (*model.Diagram, *parser.SyntaxError, error)
-	readyError  error
-	versionInfo *parser.VersionInfo
-	versionErr  error
+	diagram         *model.Diagram
+	syntaxErr       *parser.SyntaxError
+	parseError      error
+	parseFunc       func(string) (*model.Diagram, *parser.SyntaxError, error)
+	readyError      error
+	versionInfo     *parser.VersionInfo
+	versionErr      error
+	parseWithConfig func(string, parser.Config) (*model.Diagram, *parser.SyntaxError, error)
 }
 
 func (m *mockParser) Parse(code string) (*model.Diagram, *parser.SyntaxError, error) {
@@ -40,6 +41,13 @@ func (m *mockParser) Parse(code string) (*model.Diagram, *parser.SyntaxError, er
 		return m.parseFunc(code)
 	}
 	return m.diagram, m.syntaxErr, m.parseError
+}
+
+func (m *mockParser) ParseWithConfig(code string, cfg parser.Config) (*model.Diagram, *parser.SyntaxError, error) {
+	if m.parseWithConfig != nil {
+		return m.parseWithConfig(code, cfg)
+	}
+	return m.Parse(code)
 }
 
 func (m *mockParser) Ready() error {
@@ -4281,28 +4289,105 @@ process.exit(1);
 	}
 }
 
-func TestAnalyze_InvalidParserOverrideValidation(t *testing.T) {
-	mux := newTestMux(func(string) (*model.Diagram, *parser.SyntaxError, error) {
-		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
-	})
+func TestAnalyze_ParserOverridesAcceptedAndPropagated(t *testing.T) {
+	var captured parser.Config
+	mockP := &mockParser{
+		parseWithConfig: func(_ string, cfg parser.Config) (*model.Diagram, *parser.SyntaxError, error) {
+			captured = cfg
+			return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+		},
+	}
+	mux := http.NewServeMux()
+	h := api.NewHandler(mockP, engine.New())
+	h.RegisterRoutes(mux)
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":0}}`))
+	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":8,"max_old_space_mb":768}}`))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusBadRequest)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusOK)
 	}
-	var body map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatalf("decode failed: %v", err)
+	if captured.Timeout != 8*time.Second {
+		t.Fatalf("captured timeout=%s want=8s", captured.Timeout)
 	}
-	errObj := body["error"].(map[string]any)
-	if errObj["code"] != "invalid_option" {
-		t.Fatalf("error.code=%v want invalid_option", errObj["code"])
+	if captured.NodeMaxOldSpaceMB != 768 {
+		t.Fatalf("captured memory=%d want=768", captured.NodeMaxOldSpaceMB)
+	}
+}
+
+func TestAnalyze_InvalidParserOverrideValidation(t *testing.T) {
+	cases := []string{
+		`{"code":"graph TD; A-->B","parser":{"timeout_seconds":0}}`,
+		`{"code":"graph TD; A-->B","parser":{"timeout_seconds":61}}`,
+		`{"code":"graph TD; A-->B","parser":{"max_old_space_mb":127}}`,
+		`{"code":"graph TD; A-->B","parser":{"max_old_space_mb":4097}}`,
+	}
+
+	for _, payload := range cases {
+		t.Run(payload, func(t *testing.T) {
+			mux := newTestMux(func(string) (*model.Diagram, *parser.SyntaxError, error) {
+				return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(payload))
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusBadRequest)
+			}
+			var body map[string]any
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("decode failed: %v", err)
+			}
+			errObj := body["error"].(map[string]any)
+			if errObj["code"] != "invalid_option" {
+				t.Fatalf("error.code=%v want invalid_option", errObj["code"])
+			}
+		})
+	}
+}
+
+func TestAnalyze_ParserOverrideTimeoutBehavior(t *testing.T) {
+	tempDir, err := os.MkdirTemp(".", "handler-parser-timeout-")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
+	script := filepath.Join(tempDir, "parse-timeout-override.mjs")
+	scriptBody := `#!/usr/bin/env node
+setTimeout(() => {
+	process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[],edges:[],subgraphs:[],suppressions:[]}}));
+}, 2000);
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write parser script: %v", err)
+	}
+
+	p, err := parser.NewWithConfig(script, parser.Config{Timeout: 5 * time.Second, NodeMaxOldSpaceMB: 256})
+	if err != nil {
+		t.Fatalf("failed to initialize parser: %v", err)
+	}
+	h := api.NewHandler(p, engine.New())
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":1}}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusGatewayTimeout {
+		t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusGatewayTimeout)
 	}
 }
 
