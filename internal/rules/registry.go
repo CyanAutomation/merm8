@@ -115,6 +115,8 @@ var ruleSpecificConstraints = map[string]map[string]optionConstraint{
 	},
 }
 
+const suppressionSelectorConstraints = "Each entry must match !?(node|subgraph|rule):<id> with no whitespace; ! negates a selector."
+
 var builtInRuleMetadata = []RuleMetadata{
 	{
 		ID:          "max-fanout",
@@ -129,7 +131,7 @@ var builtInRuleMetadata = []RuleMetadata{
 		ConfigurableOptions: []OptionMetadata{
 			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
 			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
-			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: suppressionSelectorConstraints},
 			{Name: "limit", Type: "integer", Description: "Maximum allowed outgoing edges per node.", Constraints: "Must be an integer >= 1. Default is 5."},
 		},
 	},
@@ -145,7 +147,7 @@ var builtInRuleMetadata = []RuleMetadata{
 		ConfigurableOptions: []OptionMetadata{
 			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
 			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
-			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: suppressionSelectorConstraints},
 		},
 	},
 	{
@@ -160,7 +162,7 @@ var builtInRuleMetadata = []RuleMetadata{
 		ConfigurableOptions: []OptionMetadata{
 			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
 			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
-			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: suppressionSelectorConstraints},
 		},
 	},
 	{
@@ -176,7 +178,7 @@ var builtInRuleMetadata = []RuleMetadata{
 		ConfigurableOptions: []OptionMetadata{
 			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
 			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
-			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: suppressionSelectorConstraints},
 			{Name: "limit", Type: "integer", Description: "Maximum allowed depth for root-to-leaf traversals.", Constraints: "Must be an integer >= 1. Default is 8."},
 		},
 	},
@@ -193,7 +195,7 @@ var builtInRuleMetadata = []RuleMetadata{
 		ConfigurableOptions: []OptionMetadata{
 			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
 			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
-			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: "Each entry must be a string selector."},
+			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: suppressionSelectorConstraints},
 			{Name: "allow-self-loop", Type: "boolean", Description: "Allow single-node self-loop cycles without emitting issues.", Constraints: "Must be true or false."},
 		},
 	},

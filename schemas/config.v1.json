@@ -29,7 +29,7 @@
             "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
-                "pattern": "^!?(node|subgraph|rule):.+$",
+                "pattern": "^!?(node|subgraph|rule):\\S+$",
                 "type": "string"
               },
               "type": "array"
@@ -61,7 +61,7 @@
             "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
-                "pattern": "^!?(node|subgraph|rule):.+$",
+                "pattern": "^!?(node|subgraph|rule):\\S+$",
                 "type": "string"
               },
               "type": "array"
@@ -92,7 +92,7 @@
             "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
-                "pattern": "^!?(node|subgraph|rule):.+$",
+                "pattern": "^!?(node|subgraph|rule):\\S+$",
                 "type": "string"
               },
               "type": "array"
@@ -119,7 +119,7 @@
             "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
-                "pattern": "^!?(node|subgraph|rule):.+$",
+                "pattern": "^!?(node|subgraph|rule):\\S+$",
                 "type": "string"
               },
               "type": "array"
@@ -146,7 +146,7 @@
             "suppression-selectors": {
               "description": "Selectors that suppress matching issues.",
               "items": {
-                "pattern": "^!?(node|subgraph|rule):.+$",
+                "pattern": "^!?(node|subgraph|rule):\\S+$",
                 "type": "string"
               },
               "type": "array"
