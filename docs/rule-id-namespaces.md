@@ -42,3 +42,17 @@ Examples:
 - `max-fanout` and `core/max-fanout` collide.
 - `legacy-check` and `custom/legacy/legacy-check` collide.
 - `custom/acme/check` and `custom/acme/check` collide.
+
+
+## `/v1/rules` compatibility contract
+
+- `/v1/rules` is the canonical discovery endpoint for rule IDs and metadata.
+- Rule IDs are stable compatibility keys once released as implemented.
+- Renames must be introduced via additive migration windows rather than in-place ID repurposing.
+
+## Deterministic plugin loading and evaluation
+
+- Built-in rule registration order is static and source-defined.
+- Runtime does not fetch plugins/rules over the network.
+- Registration collisions are detected using canonicalized IDs and fail fast.
+- Output ordering is deterministic because issue sorting/deduplication is deterministic after rule execution.
