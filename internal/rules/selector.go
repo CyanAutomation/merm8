@@ -27,10 +27,7 @@ func ParseSuppressionSelector(raw string) (SuppressionSelector, bool) {
 		selector = selector[1:]
 	}
 
-	prefix, value, ok := strings.Cut(selector, ":")
-	if !ok || value == "" {
-		return SuppressionSelector{}, false
-	}
+	prefix, value, _ := strings.Cut(selector, ":")
 
 	return SuppressionSelector{Negated: negated, Prefix: prefix, Value: value}, true
 }
