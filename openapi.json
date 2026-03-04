@@ -938,6 +938,13 @@
           "description": {
             "type": "string"
           },
+          "diagram-examples": {
+            "description": "Example Mermaid diagrams that trigger violations for this rule.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "id": {
             "example": "max-fanout",
             "type": "string"
