@@ -25,7 +25,7 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 	if err != nil {
 		t.Fatalf("failed to build handler with fixture parser: %v", err)
 	}
-	h.SetParserConcurrencyLimit(envInt("PARSER_CONCURRENCY_LIMIT", defaultParserConcurrencyLimit))
+	h.SetParserConcurrencyLimit(1)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
