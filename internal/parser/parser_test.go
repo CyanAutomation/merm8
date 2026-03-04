@@ -102,7 +102,7 @@ func TestParser_ValidFlowchart(t *testing.T) {
 	for _, n := range diagram.Nodes {
 		nodeIDs[n.ID] = true
 	}
-	expected := map[string]bool{"A": true, "B": true, "C": true}
+	expected := map[string]bool{"a": true, "b": true, "c": true}
 	for id := range expected {
 		if !nodeIDs[id] {
 			t.Errorf("expected node %s not found", id)
@@ -111,11 +111,11 @@ func TestParser_ValidFlowchart(t *testing.T) {
 
 	// Verify edges
 	if len(diagram.Edges) >= 2 {
-		if diagram.Edges[0].From != "A" || diagram.Edges[0].To != "B" {
-			t.Errorf("expected edge A -> B, got %s -> %s", diagram.Edges[0].From, diagram.Edges[0].To)
+		if diagram.Edges[0].From != "a" || diagram.Edges[0].To != "b" {
+			t.Errorf("expected edge a -> b, got %s -> %s", diagram.Edges[0].From, diagram.Edges[0].To)
 		}
-		if diagram.Edges[1].From != "B" || diagram.Edges[1].To != "C" {
-			t.Errorf("expected edge B -> C, got %s -> %s", diagram.Edges[1].From, diagram.Edges[1].To)
+		if diagram.Edges[1].From != "b" || diagram.Edges[1].To != "c" {
+			t.Errorf("expected edge b -> C, got %s -> %s", diagram.Edges[1].From, diagram.Edges[1].To)
 		}
 	}
 }
@@ -139,19 +139,19 @@ func TestParser_FlowchartIncludesNodeAndEdgeLocations(t *testing.T) {
 
 	var nodeA *model.Node
 	for i := range diagram.Nodes {
-		if diagram.Nodes[i].ID == "A" {
+		if diagram.Nodes[i].ID == "a" { // parser normalizes ID to lowercase
 			nodeA = &diagram.Nodes[i]
 			break
 		}
 	}
 	if nodeA == nil {
-		t.Fatalf("expected node A in diagram nodes: %#v", diagram.Nodes)
+		t.Fatalf("expected node a in diagram nodes: %#v", diagram.Nodes)
 	}
 	if nodeA.Line == nil || *nodeA.Line != 2 {
 		t.Fatalf("expected node A line=2, got %v", nodeA.Line)
 	}
 	if nodeA.Column == nil || *nodeA.Column != 3 {
-		t.Fatalf("expected node A column=3, got %v", nodeA.Column)
+		t.Fatalf("expected node a column=3, got %v", nodeA.Column)
 	}
 
 	if len(diagram.Edges) == 0 {
@@ -292,12 +292,12 @@ func TestParser_MultipleEdges(t *testing.T) {
 	// Count outgoing edges from A
 	aOutgoing := 0
 	for _, e := range diagram.Edges {
-		if e.From == "A" {
+		if e.From == "a" { // parser normalizes ID to lowercase
 			aOutgoing++
 		}
 	}
 	if aOutgoing != 3 {
-		t.Errorf("expected 3 edges from A, got %d", aOutgoing)
+		t.Errorf("expected 3 edges from a (normalized), got %d", aOutgoing)
 	}
 }
 

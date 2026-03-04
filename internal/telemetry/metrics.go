@@ -7,6 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/CyanAutomation/merm8/internal/engine"
 )
 
 const (
@@ -22,10 +23,12 @@ const (
 type Metrics struct {
 	registry *prometheus.Registry
 
-	requestTotal    *prometheus.CounterVec
-	requestDuration *prometheus.HistogramVec
-	analyzeRequests *prometheus.CounterVec
-	parserDuration  *prometheus.HistogramVec
+	requestTotal       *prometheus.CounterVec
+	requestDuration    *prometheus.HistogramVec
+	analyzeRequests    *prometheus.CounterVec
+	parserDuration     *prometheus.HistogramVec
+	ruleExecutionTime  *prometheus.HistogramVec
+	ruleIssuesEmitted  *prometheus.CounterVec
 }
 
 func NewMetrics() *Metrics {
@@ -51,9 +54,18 @@ func NewMetrics() *Metrics {
 			Help:    "Duration of parser invocations in seconds by outcome.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"outcome"}),
+		ruleExecutionTime: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "rule_execution_duration_seconds",
+			Help:    "Duration of individual rule executions in seconds.",
+			Buckets: prometheus.DefBuckets,
+		}, []string{"rule_id"}),
+		ruleIssuesEmitted: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "rule_issues_emitted_total",
+			Help: "Total number of issues emitted by each linting rule.",
+		}, []string{"rule_id"}),
 	}
 
-	registry.MustRegister(m.requestTotal, m.requestDuration, m.analyzeRequests, m.parserDuration)
+	registry.MustRegister(m.requestTotal, m.requestDuration, m.analyzeRequests, m.parserDuration, m.ruleExecutionTime, m.ruleIssuesEmitted)
 	return m
 }
 
@@ -85,4 +97,31 @@ func (m *Metrics) ObserveParserDuration(outcome string, duration time.Duration) 
 		return
 	}
 	m.parserDuration.WithLabelValues(outcome).Observe(duration.Seconds())
+}
+
+func (m *Metrics) ObserveRuleExecutionDuration(ruleID string, duration time.Duration) {
+	if m == nil {
+		return
+	}
+	m.ruleExecutionTime.WithLabelValues(ruleID).Observe(duration.Seconds())
+}
+
+func (m *Metrics) ObserveRuleIssuesEmitted(ruleID string, count int) {
+	if m == nil {
+		return
+	}
+	for i := 0; i < count; i++ {
+		m.ruleIssuesEmitted.WithLabelValues(ruleID).Inc()
+	}
+}
+
+// RecordRuleMetrics implements engine.InstrumentationSink.
+func (m *Metrics) RecordRuleMetrics(metrics engine.RuleMetrics) {
+	if m == nil {
+		return
+	}
+	ruleID := metrics.RuleID
+	duration := time.Duration(metrics.TotalDurationNS)
+	m.ObserveRuleExecutionDuration(ruleID, duration)
+	m.ObserveRuleIssuesEmitted(ruleID, metrics.IssuesEmitted)
 }

@@ -292,27 +292,7 @@
             },
             "type": "array"
           },
-          "lint_supported": {
-            "deprecated": true,
-            "description": "Deprecated alias for lint-supported; remove usage before next major version.",
-            "items": {
-              "enum": [
-                "flowchart",
-                "sequence",
-                "class",
-                "er",
-                "state"
-              ],
-              "type": "string"
-            },
-            "type": "array"
-          },
           "mermaid-version": {
-            "type": "string"
-          },
-          "mermaid_version": {
-            "deprecated": true,
-            "description": "Deprecated alias for mermaid-version; remove usage before next major version.",
             "type": "string"
           },
           "parser-recognized": {
@@ -334,37 +314,7 @@
           "parser-version": {
             "type": "string"
           },
-          "parser_recognized": {
-            "deprecated": true,
-            "description": "Deprecated alias for parser-recognized; remove usage before next major version.",
-            "items": {
-              "enum": [
-                "flowchart",
-                "sequence",
-                "class",
-                "er",
-                "state"
-              ],
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "parser_timeout_seconds": {
-            "deprecated": true,
-            "description": "Deprecated alias for parser-timeout-seconds; remove usage before next major version.",
-            "type": "integer"
-          },
-          "parser_version": {
-            "deprecated": true,
-            "description": "Deprecated alias for parser-version; remove usage before next major version.",
-            "type": "string"
-          },
           "service-version": {
-            "type": "string"
-          },
-          "service_version": {
-            "deprecated": true,
-            "description": "Deprecated alias for service-version; remove usage before next major version.",
             "type": "string"
           },
           "supported-rule-ids": {
@@ -375,22 +325,6 @@
             "type": "array"
           },
           "supported-rules": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "supported_rule_ids": {
-            "deprecated": true,
-            "description": "Deprecated alias for supported-rule-ids; remove usage before next major version.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "supported_rules": {
-            "deprecated": true,
-            "description": "Deprecated alias for supported-rules; remove usage before next major version.",
             "items": {
               "type": "string"
             },

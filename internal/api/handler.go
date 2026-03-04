@@ -251,6 +251,24 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 	if err := json.Unmarshal(cfgRaw, &cfg); err != nil {
 		return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 	}
+	
+	// Validate suppression selectors reference known rules
+	for _, ruleConfig := range cfg {
+		if suppSelectors, hasSuppression := ruleConfig["suppression-selectors"]; hasSuppression {
+			// Convert interface{} to []string if possible
+			if selectorArray, ok := suppSelectors.([]interface{}); ok {
+				selectors := make([]string, 0, len(selectorArray))
+				for _, sel := range selectorArray {
+					if selStr, ok := sel.(string); ok {
+						selectors = append(selectors, selStr)
+					}
+				}
+				warnings := rules.ValidateSuppressionSelectors(selectors, knownRuleIDs)
+				deprecations = append(deprecations, warnings...)
+			}
+		}
+	}
+	
 	return cfg, deprecations, nil
 }
 
@@ -445,42 +463,6 @@ type infoResponse struct {
 	SupportedRuleIDs     []string              `json:"supported-rule-ids"`
 }
 
-// MarshalJSON emits kebab-case as the canonical /info contract while preserving
-// temporary snake_case compatibility aliases.
-func (r infoResponse) MarshalJSON() ([]byte, error) {
-	payload := map[string]any{
-		"parser-recognized":  r.ParserRecognized,
-		"lint-supported":     r.LintSupported,
-		"supported-rules":    r.SupportedRules,
-		"supported-rule-ids": r.SupportedRuleIDs,
-
-		// Deprecated compatibility aliases (remove in next major version).
-		"parser_recognized":  r.ParserRecognized,
-		"lint_supported":     r.LintSupported,
-		"supported_rules":    r.SupportedRules,
-		"supported_rule_ids": r.SupportedRuleIDs,
-	}
-
-	if r.ServiceVersion != "" {
-		payload["service-version"] = r.ServiceVersion
-		payload["service_version"] = r.ServiceVersion
-	}
-	if r.ParserVersion != "" {
-		payload["parser-version"] = r.ParserVersion
-		payload["parser_version"] = r.ParserVersion
-	}
-	if r.MermaidVersion != "" {
-		payload["mermaid-version"] = r.MermaidVersion
-		payload["mermaid_version"] = r.MermaidVersion
-	}
-	if r.ParserTimeoutSeconds > 0 {
-		payload["parser-timeout-seconds"] = r.ParserTimeoutSeconds
-		payload["parser_timeout_seconds"] = r.ParserTimeoutSeconds
-	}
-
-	return json.Marshal(payload)
-}
-
 // NewHandler creates a Handler with the given parser and engine.
 // This constructor allows dependency injection for testing.
 func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
@@ -557,10 +539,17 @@ func NewHandlerWithScript(scriptPath string) (*Handler, error) {
 	), nil
 }
 
-// SetStrictConfigSchemaForTesting toggles strict config schema enforcement.
-// It is intended for tests that need to validate future rejection behavior.
-func SetStrictConfigSchemaForTesting(strict bool) {
+// SetStrictConfigSchema toggles strict config schema enforcement.
+// When strict mode is enabled, legacy config formats are rejected.
+// Default is false for v1.0 compatibility; should be true for production deployments.
+func SetStrictConfigSchema(strict bool) {
 	strictConfigSchema = strict
+}
+
+// SetStrictConfigSchemaForTesting is a deprecated alias for SetStrictConfigSchema.
+// It is kept for backward compatibility with existing tests.
+func SetStrictConfigSchemaForTesting(strict bool) {
+	SetStrictConfigSchema(strict)
 }
 
 // RegisterRoutes attaches all routes to mux.
@@ -996,10 +985,18 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
 		suggestions := suggestionsForSyntaxError(syntaxErr, req.Code)
+		// On syntax errors, only set lint-supported=true if we detected a diagram type
+		// AND that type's family supports linting. If no type detected, always false.
+		var lintSupported bool
+		if diagramType == model.DiagramTypeUnknown {
+			lintSupported = false
+		} else {
+			lintSupported = h.isLintSupported(diagramType.Family())
+		}
 		resp := analyzeResponse{
 			Valid:         false,
 			DiagramType:   diagramType,
-			LintSupported: h.isLintSupported(diagramType.Family()),
+			LintSupported: lintSupported,
 			Suggestions:   suggestions,
 			Warnings:      deprecationWarnings,
 			Meta:          responseMetaForWarnings(deprecationWarnings),
@@ -1076,6 +1073,13 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			"issues_emitted", ruleMetrics.IssuesEmitted,
 			"total_duration_ns", ruleMetrics.TotalDurationNS,
 		)
+		// Record rule metrics to application telemetry (Prometheus)
+		h.mu.RLock()
+		telemetry := h.telemetryMetrics
+		h.mu.RUnlock()
+		if telemetry != nil {
+			telemetry.RecordRuleMetrics(ruleMetrics)
+		}
 	}
 	observeAnalyzeOutcome(telemetry.OutcomeLintSuccess)
 	setAnalyzeLogFields(r.Context(), telemetry.OutcomeLintSuccess, string(diagram.Type))
@@ -1193,10 +1197,18 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
 		suggestions := suggestionsForSyntaxError(syntaxErr, req.Code)
+		// On syntax errors, only set lint-supported=true if we detected a diagram type
+		// AND that type's family supports linting. If no type detected, always false.
+		var lintSupported bool
+		if diagramType == model.DiagramTypeUnknown {
+			lintSupported = false
+		} else {
+			lintSupported = h.isLintSupported(diagramType.Family())
+		}
 		resp := analyzeResponse{
 			Valid:         false,
 			DiagramType:   diagramType,
-			LintSupported: h.isLintSupported(diagramType.Family()),
+			LintSupported: lintSupported,
 			Suggestions:   suggestions,
 			Warnings:      nil,
 			Meta:          nil,

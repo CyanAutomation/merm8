@@ -101,10 +101,29 @@ try {
   }
   writeResult({ valid: true, diagram_type: normalizeDiagramType(diagramType), ast });
 } catch (err) {
-  writeResult({
-    valid: false,
-    error: { message: 'internal parser error: ' + String(err?.message || err), line: 0, column: 0 },
-  });
+  // Detect memory exhaustion errors (JavaScript heap out of memory, etc.)
+  const errorMsg = String(err?.message || err).toLowerCase();
+  const isMemoryError = 
+    errorMsg.includes('heap') || 
+    errorMsg.includes('memory') || 
+    errorMsg.includes('out of memory') ||
+    errorMsg.includes('javascript heap out of memory');
+  
+  if (isMemoryError) {
+    writeResult({
+      valid: false,
+      error: { 
+        message: 'parser_memory_limit: Parser memory exhausted; diagram too large for configured limit', 
+        line: 0, 
+        column: 0 
+      },
+    });
+  } else {
+    writeResult({
+      valid: false,
+      error: { message: 'internal parser error: ' + String(err?.message || err), line: 0, column: 0 },
+    });
+  }
   process.exit(1);
 }
 
@@ -227,9 +246,11 @@ async function extractAST(mermaidAPI, source, diagramType) {
 
   const rawEdges = Array.isArray(db.edges) ? db.edges : [];
   for (const e of rawEdges) {
-    const from = normalizeNodeID(String(e.start ?? e.from ?? ''));
-    const to = normalizeNodeID(String(e.end ?? e.to ?? ''));
-    const edgeLoc = findEdgeLocation(sourceLines, from, to);
+    const fromOriginal = String(e.start ?? e.from ?? '');
+    const toOriginal = String(e.end ?? e.to ?? '');
+    const from = normalizeNodeID(fromOriginal);
+    const to = normalizeNodeID(toOriginal);
+    const edgeLoc = findEdgeLocation(sourceLines, fromOriginal, toOriginal);
     ast.edges.push({
       from,
       to,
@@ -251,13 +272,14 @@ async function extractAST(mermaidAPI, source, diagramType) {
     for (const e of ast.edges) {
       if (e.from && !seen.has(e.from)) {
         seen.add(e.from);
-        const nodeLoc = findNodeLocation(sourceLines, e.from);
-        ast.nodes.push({ id: e.from, label: '', ...(nodeLoc || {}) });
+        // For fallback node extraction, find location using the original non-normalized ID
+        // Since we only have normalized IDs in edges here, we can't find original location
+        // This is a limitation of the fallback path
+        ast.nodes.push({ id: e.from, label: '' });
       }
       if (e.to && !seen.has(e.to)) {
         seen.add(e.to);
-        const nodeLoc = findNodeLocation(sourceLines, e.to);
-        ast.nodes.push({ id: e.to, label: '', ...(nodeLoc || {}) });
+        ast.nodes.push({ id: e.to, label: '' });
       }
     }
   }

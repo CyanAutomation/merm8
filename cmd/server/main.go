@@ -50,6 +50,14 @@ func main() {
 	parserConcurrencyLimit := envInt("PARSER_CONCURRENCY_LIMIT", defaultParserConcurrencyLimit)
 	handler.SetParserConcurrencyLimit(parserConcurrencyLimit)
 
+	// Wire up strict config schema enforcement based on environment variable.
+	// Default is false for backward compatibility with v1.0; production deployments should enable.
+	strictConfigSchema := strings.ToLower(strings.TrimSpace(os.Getenv("STRICT_CONFIG_SCHEMA")))
+	if strictConfigSchema == "true" || strictConfigSchema == "1" {
+		api.SetStrictConfigSchema(true)
+		logger.Info("Strict config schema enforcement enabled via STRICT_CONFIG_SCHEMA=true", "component", "server")
+	}
+
 	metrics := telemetry.NewMetrics()
 	handler.SetMetricsHandler(metrics.Handler())
 	handler.SetTelemetryMetrics(metrics)
