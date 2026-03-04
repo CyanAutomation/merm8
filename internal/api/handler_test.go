@@ -227,7 +227,6 @@ func assertExactErrorResponse(t *testing.T, body []byte, wantCode, wantMessage s
 	// error.details is optional and may be present for some error types
 }
 
-
 func assertValidationErrorResponse(t *testing.T, body []byte, wantCode, wantMessage, wantPath string, wantSupported []string) {
 	t.Helper()
 
