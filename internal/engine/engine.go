@@ -288,15 +288,18 @@ func issueMatchesAnySelector(issue model.Issue, selectors []string, nodeLineInde
 			continue
 		}
 
-		if parsed.Negated {
-			matchedExclude = true
-			continue
-		}
-
-		matchedInclude = true
+		matchedInclude, matchedExclude = applySelectorMatchPrecedence(parsed.Negated, matchedInclude, matchedExclude)
 	}
 
 	return matchedInclude && !matchedExclude
+}
+
+func applySelectorMatchPrecedence(negated bool, matchedInclude bool, matchedExclude bool) (bool, bool) {
+	if negated {
+		return matchedInclude, true
+	}
+
+	return true, matchedExclude
 }
 
 type suppressionSelector struct {
@@ -314,7 +317,10 @@ func parseSelector(raw string) (suppressionSelector, bool) {
 	negated := false
 	if strings.HasPrefix(selector, "!") {
 		negated = true
-		selector = strings.TrimSpace(strings.TrimPrefix(selector, "!"))
+		selector = strings.TrimPrefix(selector, "!")
+		if selector == "" || selector[0] == ' ' || selector[0] == '\t' || selector[0] == '\n' || selector[0] == '\r' {
+			return suppressionSelector{}, false
+		}
 	}
 
 	prefixRaw, valueRaw, ok := splitSelector(selector)
