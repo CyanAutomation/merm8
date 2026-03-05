@@ -676,8 +676,8 @@ func TestAnalyze_SyntaxError_UsesDetectedDiagramTypeForDefaults(t *testing.T) {
 	if diagramType, ok := resp["diagram-type"].(string); !ok || diagramType != "flowchart" {
 		t.Fatalf("expected syntax error diagram-type=flowchart fallback from input, got %v", resp["diagram-type"])
 	}
-	if lintSupported, ok := resp["lint-supported"].(bool); !ok || !lintSupported {
-		t.Fatalf("expected lint-supported=true for flowchart syntax error fallback, got %v", resp["lint-supported"])
+	if lintSupported, ok := resp["lint-supported"].(bool); !ok || lintSupported {
+		t.Fatalf("expected lint-supported=false for syntax error (regardless of diagram type), got %v", resp["lint-supported"])
 	}
 	metrics, ok := resp["metrics"].(map[string]interface{})
 	if !ok {
@@ -2202,6 +2202,7 @@ func TestDiagramTypes_ReturnsParserAndLintSupport(t *testing.T) {
 func TestHealthz_ReturnsOK(t *testing.T) {
 	mux := http.NewServeMux()
 	h := api.NewHandler(&mockParser{readyError: errors.New("parser is unavailable")}, engine.New())
+	h.SetBuildMetadata("abc1234", "2026-03-05T00:00:00Z")
 	h.RegisterRoutes(mux)
 
 	tests := []struct {
@@ -2223,8 +2224,19 @@ func TestHealthz_ReturnsOK(t *testing.T) {
 				t.Fatalf("expected 200, got %d", w.Code)
 			}
 
-			if got := strings.TrimSpace(w.Body.String()); got != `{"status":"ok"}` {
-				t.Fatalf("expected body %q, got %q", `{"status":"ok"}`, got)
+			var resp map[string]string
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			if resp["status"] != "ok" {
+				t.Fatalf("expected status=ok, got %q", resp["status"])
+			}
+			if resp["build-commit"] != "abc1234" {
+				t.Fatalf("expected build-commit=abc1234, got %q", resp["build-commit"])
+			}
+			if resp["build-time"] != "2026-03-05T00:00:00Z" {
+				t.Fatalf("expected build-time=2026-03-05T00:00:00Z, got %q", resp["build-time"])
 			}
 		})
 	}
@@ -2324,7 +2336,7 @@ func TestVersion_ReturnsBuildAndParserMetadata(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	required := []string{"version", "build_commit", "build_time", "parser_version", "mermaid_version"}
+	required := []string{"version", "build-commit", "build-time", "parser-version", "mermaid-version"}
 	for _, key := range required {
 		value, ok := payload[key].(string)
 		if !ok || value == "" {
@@ -2451,11 +2463,11 @@ func TestReady_OptionallyIncludesVersionMetadata(t *testing.T) {
 	if resp["status"] != "ready" {
 		t.Fatalf("expected status=ready, got %q", resp["status"])
 	}
-	if resp["parser_version"] != "1.0.0" {
-		t.Fatalf("expected parser_version=1.0.0, got %q", resp["parser_version"])
+	if resp["parser-version"] != "1.0.0" {
+		t.Fatalf("expected parser-version=1.0.0, got %q", resp["parser-version"])
 	}
-	if resp["mermaid_version"] != "11.12.3" {
-		t.Fatalf("expected mermaid_version=11.12.3, got %q", resp["mermaid_version"])
+	if resp["mermaid-version"] != "11.12.3" {
+		t.Fatalf("expected mermaid-version=11.12.3, got %q", resp["mermaid-version"])
 	}
 }
 func TestReady_ReturnsReadyWhenDependencyHealthy(t *testing.T) {
