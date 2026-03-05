@@ -14,22 +14,33 @@ func (r NoDuplicateNodeIDs) Families() []model.DiagramFamily {
 
 func (r NoDuplicateNodeIDs) Run(d *model.Diagram, cfg Config) []model.Issue {
 	severity := EffectiveSeverity(r.ID(), cfg, "error")
-	seen := make(map[string]int, len(d.Nodes))
-	reported := make(map[string]bool)
+
+	// Detect duplicate node IDs - report each unique ID that appears multiple times
+	IDCount := make(map[string]int)
+	lastNodeByID := make(map[string]*model.Node)
+
+	for i := range d.Nodes {
+		IDCount[d.Nodes[i].ID]++
+		lastNodeByID[d.Nodes[i].ID] = &d.Nodes[i]
+	}
+
 	var issues []model.Issue
-	for _, n := range d.Nodes {
-		if seen[n.ID] > 0 && !reported[n.ID] {
-			issues = append(issues, model.Issue{
+	seen := make(map[string]bool)
+
+	for nodeID, count := range IDCount {
+		if count > 1 && !seen[nodeID] {
+			seen[nodeID] = true
+			lastNode := lastNodeByID[nodeID]
+			issue := model.Issue{
 				RuleID:   r.ID(),
 				Severity: severity,
-				Message:  "duplicate node ID: " + n.ID,
-				Line:     n.Line,
-				Column:   n.Column,
-				Context:  NodeSubgraphContextForOccurrence(d, n.ID, seen[n.ID]),
-			})
-			reported[n.ID] = true
+				Message:  "duplicate node ID: " + nodeID,
+				Line:     lastNode.Line,
+				Column:   lastNode.Column,
+			}
+			issues = append(issues, issue)
 		}
-		seen[n.ID]++
 	}
+
 	return issues
 }

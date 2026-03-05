@@ -1090,7 +1090,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			Message:  "diagram type \"" + string(diagram.Type) + "\" is parsed but lint rules are not available yet",
 		}
 		resp := analyzeResponse{
-			Valid:         false,
+			Valid:         true,
 			DiagramType:   diagram.Type,
 			LintSupported: false,
 			SyntaxError:   nil,
@@ -1300,7 +1300,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 			Message:  "diagram type \"" + string(diagram.Type) + "\" is parsed but lint rules are not available yet",
 		}
 		resp := analyzeResponse{
-			Valid:         false,
+			Valid:         true,
 			DiagramType:   diagram.Type,
 			LintSupported: false,
 			SyntaxError:   nil,

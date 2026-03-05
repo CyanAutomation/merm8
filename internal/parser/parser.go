@@ -416,6 +416,11 @@ func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 	}
 
 	diagram := toDiagram(result)
+
+	// Enhance the diagram with source-level analysis to preserve node information
+	// that the Mermaid parser may drop during normalization
+	EnhanceASTWithSourceAnalysis(diagram, mermaidCode)
+
 	return diagram, nil, nil
 }
 
