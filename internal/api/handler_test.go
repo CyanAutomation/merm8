@@ -4819,3 +4819,691 @@ func TestAnalyzeRaw_ParserTimeout(t *testing.T) {
 		t.Errorf("expected error.code=parser_timeout, got %v", errDetail["code"])
 	}
 }
+
+// TestAnalyze_DuplicateNodeDetection tests that duplicate node IDs are detected and reported correctly.
+func TestAnalyze_DuplicateNodeDetection(t *testing.T) {
+	tests := []struct {
+		name              string
+		nodes             []model.Node
+		edges             []model.Edge
+		wantDuplicateNode string
+		wantSubgraphID    string
+		description       string
+	}{
+		{
+			name: "simple duplicate nodes",
+			nodes: []model.Node{
+				{ID: "A", Label: "First A"},
+				{ID: "B", Label: "B"},
+				{ID: "A", Label: "Second A"},
+			},
+			edges: []model.Edge{
+				{From: "A", To: "B"},
+			},
+			wantDuplicateNode: "A",
+			wantSubgraphID:    "",
+			description:       "Duplicate node IDs at root level",
+		},
+		{
+			name: "duplicate in nested subgraph",
+			nodes: []model.Node{
+				{ID: "A", Label: "Root A"},
+				{ID: "SG1_A", Label: "Subgraph A"},
+				{ID: "A", Label: "Another Root A"},
+			},
+			edges: []model.Edge{},
+			wantDuplicateNode: "A",
+			wantSubgraphID:    "",
+			description:       "Multiple duplicates at root level including one in subgraph context",
+		},
+		{
+			name: "multiple different duplicates",
+			nodes: []model.Node{
+				{ID: "A", Label: "First A"},
+				{ID: "A", Label: "Second A"},
+				{ID: "B", Label: "First B"},
+				{ID: "B", Label: "Second B"},
+			},
+			edges: []model.Edge{},
+			wantDuplicateNode: "", // Should have both A and B duplicates
+			wantSubgraphID:    "",
+			description:       "Multiple different node IDs are duplicated",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diagram := &model.Diagram{
+				Type:      model.DiagramTypeFlowchart,
+				Direction: "TD",
+				Nodes:     tt.nodes,
+				Edges:     tt.edges,
+			}
+
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				return diagram, nil, nil
+			})
+
+			body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			issues, ok := resp["issues"].([]interface{})
+			if !ok {
+				t.Fatal("expected issues array in response")
+			}
+
+			// Find duplicate node issues
+			var duplicateIssues []map[string]interface{}
+			for _, issue := range issues {
+				if issueMap, ok := issue.(map[string]interface{}); ok {
+					if ruleID, ok := issueMap["rule-id"].(string); ok && ruleID == "no-duplicate-node-ids" {
+						duplicateIssues = append(duplicateIssues, issueMap)
+					}
+				}
+			}
+
+			if len(duplicateIssues) == 0 {
+				t.Errorf("expected at least one no-duplicate-node-ids issue, got none")
+				return
+			}
+
+			// For single duplicate tests, verify specific duplicate
+			if tt.wantDuplicateNode != "" {
+				found := false
+				for _, issue := range duplicateIssues {
+					if msg, ok := issue["message"].(string); ok && strings.Contains(msg, tt.wantDuplicateNode) {
+						found = true
+						// Verify issue has message
+						if !strings.HasPrefix(msg, "duplicate node ID:") {
+							t.Errorf("expected message format 'duplicate node ID: X', got %q", msg)
+						}
+						// Verify severity
+						if severity, ok := issue["severity"].(string); !ok || severity != "error" {
+							t.Errorf("expected severity=error, got %v", issue["severity"])
+						}
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected duplicate issue for node %q, got: %v", tt.wantDuplicateNode, duplicateIssues)
+				}
+			} else {
+				// For multiple duplicate tests, just verify we got the right number
+				if tt.name == "multiple different duplicates" && len(duplicateIssues) < 2 {
+					t.Errorf("expected at least 2 duplicate issues, got %d", len(duplicateIssues))
+				}
+			}
+		})
+	}
+}
+
+// TestAnalyze_FanoutLimitExceedance tests that nodes exceeding the max-fanout limit are detected.
+func TestAnalyze_FanoutLimitExceedance(t *testing.T) {
+	tests := []struct {
+		name            string
+		edgeCount       int
+		configLimit     *int
+		shouldHaveIssue bool
+		description     string
+	}{
+		{
+			name:            "default limit (5) with 6 edges",
+			edgeCount:       6,
+			configLimit:     nil,
+			shouldHaveIssue: true,
+			description:     "Node exceeds default fanout limit of 5",
+		},
+		{
+			name:            "default limit (5) with 4 edges",
+			edgeCount:       4,
+			configLimit:     nil,
+			shouldHaveIssue: false,
+			description:     "Node within default fanout limit",
+		},
+		{
+			name:            "default limit (5) with exactly 5 edges",
+			edgeCount:       5,
+			configLimit:     nil,
+			shouldHaveIssue: false,
+			description:     "Node at exactly the default limit",
+		},
+		{
+			name:            "custom limit (10) with 6 edges",
+			edgeCount:       6,
+			configLimit:     intPtr(10),
+			shouldHaveIssue: false,
+			description:     "Node within custom higher limit",
+		},
+		{
+			name:            "custom limit (3) with 6 edges",
+			edgeCount:       6,
+			configLimit:     intPtr(3),
+			shouldHaveIssue: true,
+			description:     "Node exceeds custom lower limit",
+		},
+		{
+			name:            "custom limit (3) with 3 edges",
+			edgeCount:       3,
+			configLimit:     intPtr(3),
+			shouldHaveIssue: false,
+			description:     "Node at custom limit boundary",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create diagram with node A having N outgoing edges
+			nodes := []model.Node{{ID: "A", Label: "A"}}
+			edges := []model.Edge{}
+			for i := 1; i <= tt.edgeCount; i++ {
+				nodeID := fmt.Sprintf("N%d", i)
+				nodes = append(nodes, model.Node{ID: nodeID, Label: nodeID})
+				edges = append(edges, model.Edge{From: "A", To: nodeID, Type: "arrow"})
+			}
+
+			diagram := &model.Diagram{
+				Type:      model.DiagramTypeFlowchart,
+				Direction: "TD",
+				Nodes:     nodes,
+				Edges:     edges,
+			}
+
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				return diagram, nil, nil
+			})
+
+			// Build request config
+			reqBody := map[string]interface{}{
+				"code": "graph TD\n  A-->B",
+			}
+			if tt.configLimit != nil {
+				reqBody["config"] = map[string]interface{}{
+					"schema-version": "v1",
+					"rules": map[string]interface{}{
+						"max-fanout": map[string]interface{}{
+							"limit": *tt.configLimit,
+						},
+					},
+				}
+			}
+
+			body, _ := json.Marshal(reqBody)
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			issues, ok := resp["issues"].([]interface{})
+			if !ok {
+				t.Fatal("expected issues array in response")
+			}
+
+			// Find max-fanout issues
+			var fanoutIssues []map[string]interface{}
+			for _, issue := range issues {
+				if issueMap, ok := issue.(map[string]interface{}); ok {
+					if ruleID, ok := issueMap["rule-id"].(string); ok && ruleID == "max-fanout" {
+						fanoutIssues = append(fanoutIssues, issueMap)
+					}
+				}
+			}
+
+			if tt.shouldHaveIssue {
+				if len(fanoutIssues) == 0 {
+					t.Errorf("expected max-fanout issue with config limit %v and %d edges", tt.configLimit, tt.edgeCount)
+				} else {
+					// Verify severity is "warning"
+					if severity, ok := fanoutIssues[0]["severity"].(string); !ok || severity != "warning" {
+						t.Errorf("expected severity=warning for max-fanout, got %v", fanoutIssues[0]["severity"])
+					}
+				}
+			} else {
+				if len(fanoutIssues) > 0 {
+					t.Errorf("expected no max-fanout issue with config limit %v and %d edges, but got: %v", tt.configLimit, tt.edgeCount, fanoutIssues)
+				}
+			}
+		})
+	}
+}
+
+func intPtr(i int) *int {
+	return &i
+}
+
+// TestAnalyze_UnknownRuleAndOptionValidation tests that config validation detects unknown rules and options.
+func TestAnalyze_UnknownRuleAndOptionValidation(t *testing.T) {
+	tests := []struct {
+		name            string
+		config          map[string]interface{}
+		expectedCode    string
+		expectedPath    string
+		expectedMessage string
+		description     string
+	}{
+		{
+			name: "unknown rule in versioned config",
+			config: map[string]interface{}{
+				"schema-version": "v1",
+				"rules": map[string]interface{}{
+					"fake-rule": map[string]interface{}{},
+				},
+			},
+			expectedCode:    "unknown_rule",
+			expectedPath:    "config.rules.fake-rule",
+			expectedMessage: "unknown rule: fake-rule",
+			description:     "Config with unknown rule should return error code unknown_rule",
+		},
+		{
+			name: "unknown option in versioned config",
+			config: map[string]interface{}{
+				"schema-version": "v1",
+				"rules": map[string]interface{}{
+					"max-fanout": map[string]interface{}{
+						"threshold": 5,
+					},
+				},
+			},
+			expectedCode:    "unknown_option",
+			expectedPath:    "config.rules.max-fanout.threshold",
+			expectedMessage: "unknown option: threshold",
+			description:     "Config with unknown option should return error code unknown_option",
+		},
+		{
+			name: "unknown rule in legacy config",
+			config: map[string]interface{}{
+				"unknown-rule": map[string]interface{}{},
+			},
+			expectedCode:    "unknown_rule",
+			expectedPath:    "config.unknown-rule",
+			expectedMessage: "unknown rule: unknown-rule",
+			description:     "Legacy config with unknown rule should also be caught",
+		},
+		{
+			name: "unknown option in legacy config",
+			config: map[string]interface{}{
+				"max-fanout": map[string]interface{}{
+					"max_value": 10,
+				},
+			},
+			expectedCode:    "unknown_option",
+			expectedPath:    "config.max-fanout.max_value",
+			expectedMessage: "unknown option: max_value",
+			description:     "Legacy config with unknown option should also be caught",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				return &model.Diagram{
+					Type:  model.DiagramTypeFlowchart,
+					Nodes: []model.Node{{ID: "A"}},
+					Edges: []model.Edge{},
+				}, nil, nil
+			})
+
+			body, _ := json.Marshal(map[string]interface{}{
+				"code":   "graph TD\n  A-->B",
+				"config": tt.config,
+			})
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for invalid config, got %d: %s", w.Code, w.Body.String())
+			}
+
+			var resp struct {
+				Valid bool                   `json:"valid"`
+				Error struct {
+					Code    string `json:"code"`
+					Message string `json:"message"`
+					Details struct {
+						Path      string   `json:"path"`
+						Supported []string `json:"supported"`
+					} `json:"details"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			// Verify valid=false
+			if resp.Valid {
+				t.Fatalf("expected valid=false, got %v", resp.Valid)
+			}
+
+			// Verify error code
+			if resp.Error.Code != tt.expectedCode {
+				t.Errorf("expected error.code=%q, got %q", tt.expectedCode, resp.Error.Code)
+			}
+
+			// Verify message
+			if resp.Error.Message != tt.expectedMessage {
+				t.Errorf("expected error.message=%q, got %q", tt.expectedMessage, resp.Error.Message)
+			}
+
+			// Verify details path
+			if resp.Error.Details.Path != tt.expectedPath {
+				t.Errorf("expected error.details.path=%q, got %q", tt.expectedPath, resp.Error.Details.Path)
+			}
+
+			// Verify supported list exists (should contain list of known rules/options)
+			if len(resp.Error.Details.Supported) == 0 {
+				t.Errorf("expected Supported list to be populated, got empty")
+			} else {
+				t.Logf("Supported options/rules: %v", resp.Error.Details.Supported)
+			}
+		})
+	}
+}
+
+// TestAnalyze_SuppressionValidation tests suppression selectors targeting rules.
+func TestAnalyze_SuppressionValidation(t *testing.T) {
+	tests := []struct {
+		name                 string
+		nodes                []model.Node
+		edges                []model.Edge
+		suppressionSelectors []string
+		shouldHaveIssue      bool
+		description          string
+	}{
+		{
+			name: "suppression for existing rule and matching node",
+			nodes: []model.Node{
+				{ID: "A", Label: "A"},
+				{ID: "B", Label: "B"},
+				{ID: "C", Label: "C"},
+				{ID: "D", Label: "D"},
+				{ID: "E", Label: "E"},
+				{ID: "F", Label: "F"},
+				{ID: "G", Label: "G"},
+			},
+			edges: []model.Edge{
+				{From: "A", To: "B"},
+				{From: "A", To: "C"},
+				{From: "A", To: "D"},
+				{From: "A", To: "E"},
+				{From: "A", To: "F"},
+				{From: "A", To: "G"},
+			},
+			suppressionSelectors: []string{"node:A", "rule:max-fanout"},
+			shouldHaveIssue:      false,
+			description:          "Suppression targeting max-fanout on node A should suppress the issue",
+		},
+		{
+			name: "suppression for non-existent rule (silently ignored)",
+			nodes: []model.Node{
+				{ID: "A", Label: "A"},
+				{ID: "B", Label: "B"},
+				{ID: "C", Label: "C"},
+				{ID: "D", Label: "D"},
+				{ID: "E", Label: "E"},
+				{ID: "F", Label: "F"},
+				{ID: "G", Label: "G"},
+			},
+			edges: []model.Edge{
+				{From: "A", To: "B"},
+				{From: "A", To: "C"},
+				{From: "A", To: "D"},
+				{From: "A", To: "E"},
+				{From: "A", To: "F"},
+				{From: "A", To: "G"},
+			},
+			suppressionSelectors: []string{"rule:fake-rule-that-does-not-exist"},
+			shouldHaveIssue:      true,
+			description:          "Suppression for unknown rule should be silently ignored, issue should still appear",
+		},
+		{
+			name: "multiple suppressions mix valid and invalid",
+			nodes: []model.Node{
+				{ID: "A", Label: "A"},
+				{ID: "B", Label: "B"},
+				{ID: "C", Label: "C"},
+				{ID: "D", Label: "D"},
+				{ID: "E", Label: "E"},
+				{ID: "F", Label: "F"},
+				{ID: "G", Label: "G"},
+			},
+			edges: []model.Edge{
+				{From: "A", To: "B"},
+				{From: "A", To: "C"},
+				{From: "A", To: "D"},
+				{From: "A", To: "E"},
+				{From: "A", To: "F"},
+				{From: "A", To: "G"},
+			},
+			suppressionSelectors: []string{"rule:fake-rule", "rule:max-fanout"},
+			shouldHaveIssue:      false,
+			description:          "Valid suppression should work even with invalid ones present",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diagram := &model.Diagram{
+				Type:      model.DiagramTypeFlowchart,
+				Direction: "TD",
+				Nodes:     tt.nodes,
+				Edges:     tt.edges,
+			}
+
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				return diagram, nil, nil
+			})
+
+			config := map[string]interface{}{
+				"schema-version": "v1",
+				"rules": map[string]interface{}{
+					"max-fanout": map[string]interface{}{
+						"limit":                 5,
+						"suppression-selectors": tt.suppressionSelectors,
+					},
+				},
+			}
+
+			body, _ := json.Marshal(map[string]interface{}{
+				"code":   "graph TD\n  A-->B",
+				"config": config,
+			})
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			issues, ok := resp["issues"].([]interface{})
+			if !ok {
+				t.Fatal("expected issues array in response")
+			}
+
+			// Find max-fanout issues
+			var fanoutIssues []map[string]interface{}
+			for _, issue := range issues {
+				if issueMap, ok := issue.(map[string]interface{}); ok {
+					if ruleID, ok := issueMap["rule-id"].(string); ok && ruleID == "max-fanout" {
+						fanoutIssues = append(fanoutIssues, issueMap)
+					}
+				}
+			}
+
+			if tt.shouldHaveIssue {
+				if len(fanoutIssues) == 0 {
+					t.Errorf("expected max-fanout issue(s), got none")
+				}
+			} else {
+				if len(fanoutIssues) > 0 {
+					t.Errorf("expected no max-fanout issue (should be suppressed), but got: %v", fanoutIssues)
+				}
+			}
+		})
+	}
+}
+
+// TestAnalyze_MaxDepthViolation tests that nodes violating the max-depth limit are detected.
+func TestAnalyze_MaxDepthViolation(t *testing.T) {
+	tests := []struct {
+		name            string
+		chainLength     int
+		configLimit     *int
+		shouldHaveIssue bool
+		description     string
+	}{
+		{
+			name:            "default limit (8) with chain of 10",
+			chainLength:     10,
+			configLimit:     nil,
+			shouldHaveIssue: true,
+			description:     "Chain exceeds default max depth of 8 (10 nodes = 9 edges = depth 9)",
+		},
+		{
+			name:            "default limit (8) with chain of 9",
+			chainLength:     9,
+			configLimit:     nil,
+			shouldHaveIssue: false,
+			description:     "Chain at exactly the default limit (9 nodes = 8 edges = depth 8)",
+		},
+		{
+			name:            "default limit (8) with chain of 8",
+			chainLength:     8,
+			configLimit:     nil,
+			shouldHaveIssue: false,
+			description:     "Chain within default limit (8 nodes = 7 edges = depth 7)",
+		},
+		{
+			name:            "custom limit (20) with chain of 10",
+			chainLength:     10,
+			configLimit:     intPtr(20),
+			shouldHaveIssue: false,
+			description:     "Chain within custom higher limit",
+		},
+		{
+			name:            "custom limit (5) with chain of 10",
+			chainLength:     10,
+			configLimit:     intPtr(5),
+			shouldHaveIssue: true,
+			description:     "Chain exceeds custom lower limit (10 nodes = 9 edges = depth 9 > limit 5)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a chain of nodes: N0 -> N1 -> N2 -> ... -> N(chainLength-1)
+			nodes := make([]model.Node, tt.chainLength)
+			edges := make([]model.Edge, tt.chainLength-1)
+			for i := 0; i < tt.chainLength; i++ {
+				nodeID := fmt.Sprintf("N%d", i)
+				nodes[i] = model.Node{ID: nodeID, Label: nodeID}
+				if i > 0 {
+					edges[i-1] = model.Edge{From: fmt.Sprintf("N%d", i-1), To: nodeID, Type: "arrow"}
+				}
+			}
+
+			diagram := &model.Diagram{
+				Type:      model.DiagramTypeFlowchart,
+				Direction: "TD",
+				Nodes:     nodes,
+				Edges:     edges,
+			}
+
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				return diagram, nil, nil
+			})
+
+			// Build request config
+			reqBody := map[string]interface{}{
+				"code": "graph TD\n  N0-->N1",
+			}
+			if tt.configLimit != nil {
+				reqBody["config"] = map[string]interface{}{
+					"schema-version": "v1",
+					"rules": map[string]interface{}{
+						"max-depth": map[string]interface{}{
+							"limit": *tt.configLimit,
+						},
+					},
+				}
+			}
+
+			body, _ := json.Marshal(reqBody)
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			issues, ok := resp["issues"].([]interface{})
+			if !ok {
+				t.Fatal("expected issues array in response")
+			}
+
+			// Find max-depth issues
+			var depthIssues []map[string]interface{}
+			for _, issue := range issues {
+				if issueMap, ok := issue.(map[string]interface{}); ok {
+					if ruleID, ok := issueMap["rule-id"].(string); ok && ruleID == "max-depth" {
+						depthIssues = append(depthIssues, issueMap)
+					}
+				}
+			}
+
+			if tt.shouldHaveIssue {
+				if len(depthIssues) == 0 {
+					t.Errorf("expected max-depth issue with config limit %v and chain length %d", tt.configLimit, tt.chainLength)
+				} else {
+					// Verify severity is "warning"
+					if severity, ok := depthIssues[0]["severity"].(string); !ok || severity != "warning" {
+						t.Errorf("expected severity=warning for max-depth, got %v", depthIssues[0]["severity"])
+					}
+					// Verify message contains depth info
+					if msg, ok := depthIssues[0]["message"].(string); !ok || !strings.Contains(msg, "path depth") {
+						t.Errorf("expected message to contain 'path depth', got %v", depthIssues[0]["message"])
+					}
+				}
+			} else {
+				if len(depthIssues) > 0 {
+					t.Errorf("expected no max-depth issue with config limit %v and chain length %d, but got: %v", tt.configLimit, tt.chainLength, depthIssues)
+				}
+			}
+		})
+	}
+}
