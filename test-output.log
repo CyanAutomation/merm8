@@ -1,0 +1,12 @@
+=== RUN   TestParseArgsDefaultsToStdin
+--- PASS: TestParseArgsDefaultsToStdin (0.00s)
+=== RUN   TestParseArgsFormatValidation
+--- PASS: TestParseArgsFormatValidation (0.00s)
+=== RUN   TestChooseExitCodePriority
+--- PASS: TestChooseExitCodePriority (0.00s)
+=== RUN   TestParseConfigFileVersionedShape
+--- PASS: TestParseConfigFileVersionedShape (0.00s)
+=== RUN   TestParseConfigFileRejectsUnsupportedSchemaVersion
+--- PASS: TestParseConfigFileRejectsUnsupportedSchemaVersion (0.00s)
+PASS
+ok  	github.com/CyanAutomation/merm8/cmd/merm8-cli	(cached)

@@ -159,6 +159,7 @@
     Decision -->|Yes| End([End])
     Decision -->|No| Process</textarea>
                     <button onclick="testDiagram('template-flowchart')">Test Flowchart</button>
+                    <div id="template-flowchart-output" class="output"></div>
                 </div>
                 <div>
                     <label style="font-weight: bold; font-size: 13px;">Sequence Diagram</label>
@@ -167,6 +168,7 @@
     Bob-->>Alice: Hi Alice!
     Alice->>Bob: How are you?</textarea>
                     <button onclick="testDiagram('template-sequence')">Test Sequence</button>
+                    <div id="template-sequence-output" class="output"></div>
                 </div>
                 <div>
                     <label style="font-weight: bold; font-size: 13px;">Class Diagram</label>
@@ -179,6 +181,7 @@
         +bark()
     }</textarea>
                     <button onclick="testDiagram('template-class')">Test Class</button>
+                    <div id="template-class-output" class="output"></div>
                 </div>
                 <div>
                     <label style="font-weight: bold; font-size: 13px;">State Diagram</label>
@@ -187,6 +190,7 @@
     Active --> Inactive
     Inactive --> [*]</textarea>
                     <button onclick="testDiagram('template-state')">Test State</button>
+                    <div id="template-state-output" class="output"></div>
                 </div>
             </div>
         </div>
@@ -236,10 +240,20 @@
                 });
                 const result = await response.json();
 
-                // Find output element (handle both custom and template cases)
-                let outputEl = document.getElementById('custom-output');
-                if (!outputEl || outputEl.parentElement.parentElement.classList.contains('active') === false) {
-                    // Not in custom tab, don't show output
+                // Determine output element based on which input was used
+                let outputEl;
+                if (textareaId === 'custom-input') {
+                    outputEl = document.getElementById('custom-output');
+                } else if (textareaId.startsWith('template-')) {
+                    // For template buttons, extract template name and use specific output
+                    const templateName = textareaId.replace('template-', '');
+                    outputEl = document.getElementById(`template-${templateName}-output`);
+                } else {
+                    return; // Unknown input source
+                }
+
+                if (!outputEl) {
+                    console.error(`Output element not found for ${textareaId}`);
                     return;
                 }
 
@@ -269,8 +283,18 @@
                     outputEl.innerHTML = `<div class="invalid">❌ Error: ${result.error.message}</div>`;
                 }
             } catch (err) {
-                document.getElementById('custom-output').innerHTML = `<div class="invalid">❌ Failed to analyze: ${err.message}</div>`;
-                document.getElementById('custom-output').classList.add('show');
+                // Determine which output element to use for error messaging
+                let outputEl_error;
+                if (textareaId === 'custom-input') {
+                    outputEl_error = document.getElementById('custom-output');
+                } else if (textareaId.startsWith('template-')) {
+                    const templateName = textareaId.replace('template-', '');
+                    outputEl_error = document.getElementById(`template-${templateName}-output`);
+                }
+                if (outputEl_error) {
+                    outputEl_error.innerHTML = `<div class="invalid">❌ Failed to analyze: ${err.message}</div>`;
+                    outputEl_error.classList.add('show');
+                }
             }
         }
 
