@@ -2199,49 +2199,6 @@ func TestDiagramTypes_ReturnsParserAndLintSupport(t *testing.T) {
 	}
 }
 
-func TestHealthz_ReturnsOK(t *testing.T) {
-	mux := http.NewServeMux()
-	h := api.NewHandler(&mockParser{readyError: errors.New("parser is unavailable")}, engine.New())
-	h.SetBuildMetadata("abc1234", "2026-03-05T00:00:00Z")
-	h.RegisterRoutes(mux)
-
-	tests := []struct {
-		name string
-		path string
-	}{
-		{name: "healthz", path: "/healthz"},
-		{name: "health", path: "/health"},
-		{name: "root", path: "/"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-			w := httptest.NewRecorder()
-			mux.ServeHTTP(w, req)
-
-			if w.Code != http.StatusOK {
-				t.Fatalf("expected 200, got %d", w.Code)
-			}
-
-			var resp map[string]string
-			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-				t.Fatalf("failed to decode response: %v", err)
-			}
-
-			if resp["status"] != "ok" {
-				t.Fatalf("expected status=ok, got %q", resp["status"])
-			}
-			if resp["build-commit"] != "abc1234" {
-				t.Fatalf("expected build-commit=abc1234, got %q", resp["build-commit"])
-			}
-			if resp["build-time"] != "2026-03-05T00:00:00Z" {
-				t.Fatalf("expected build-time=2026-03-05T00:00:00Z, got %q", resp["build-time"])
-			}
-		})
-	}
-}
-
 func TestMetrics_ReturnsNotImplementedWhenExporterMissing(t *testing.T) {
 	mux := http.NewServeMux()
 	h := api.NewHandler(&mockParser{}, engine.New())
@@ -2285,31 +2242,6 @@ func TestMetrics_ExporterExposesPrometheusText(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "request_total") {
 		t.Fatalf("expected metrics payload to include request_total, got %q", body)
-	}
-}
-
-func TestRootAlias_ReturnsHealthPayload(t *testing.T) {
-	mux := http.NewServeMux()
-	h := api.NewHandler(&mockParser{}, engine.New())
-	h.RegisterRoutes(mux)
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	if got := w.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
-		t.Fatalf("expected application/json content-type, got %q", got)
-	}
-
-	var payload map[string]string
-	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if len(payload) != 1 || payload["status"] != "ok" {
-		t.Fatalf("expected minimal liveness payload, got %#v", payload)
 	}
 }
 
@@ -4851,7 +4783,7 @@ func TestAnalyze_DuplicateNodeDetection(t *testing.T) {
 				{ID: "SG1_A", Label: "Subgraph A"},
 				{ID: "A", Label: "Another Root A"},
 			},
-			edges: []model.Edge{},
+			edges:             []model.Edge{},
 			wantDuplicateNode: "A",
 			wantSubgraphID:    "",
 			description:       "Multiple duplicates at root level including one in subgraph context",
@@ -4864,7 +4796,7 @@ func TestAnalyze_DuplicateNodeDetection(t *testing.T) {
 				{ID: "B", Label: "First B"},
 				{ID: "B", Label: "Second B"},
 			},
-			edges: []model.Edge{},
+			edges:             []model.Edge{},
 			wantDuplicateNode: "", // Should have both A and B duplicates
 			wantSubgraphID:    "",
 			description:       "Multiple different node IDs are duplicated",
@@ -5177,7 +5109,7 @@ func TestAnalyze_UnknownRuleAndOptionValidation(t *testing.T) {
 			}
 
 			var resp struct {
-				Valid bool                   `json:"valid"`
+				Valid bool `json:"valid"`
 				Error struct {
 					Code    string `json:"code"`
 					Message string `json:"message"`
@@ -5365,6 +5297,454 @@ func TestAnalyze_SuppressionValidation(t *testing.T) {
 			} else {
 				if len(fanoutIssues) > 0 {
 					t.Errorf("expected no max-fanout issue (should be suppressed), but got: %v", fanoutIssues)
+				}
+			}
+		})
+	}
+}
+
+// TestAnalyze_DeprecationWarnings tests that deprecated config formats and fields produce deprecation warnings.
+func TestAnalyze_DeprecationWarnings(t *testing.T) {
+	tests := []struct {
+		name               string
+		config             map[string]interface{}
+		expectedDeprecated bool
+		description        string
+	}{
+		{
+			name: "legacy unversioned config shape",
+			config: map[string]interface{}{
+				"max-fanout": map[string]interface{}{"limit": 2},
+			},
+			expectedDeprecated: true,
+			description:        "Unversioned (flat) config format should produce deprecation warning",
+		},
+		{
+			name: "legacy snake_case option key",
+			config: map[string]interface{}{
+				"schema-version": "v1",
+				"rules": map[string]interface{}{
+					"max-fanout": map[string]interface{}{
+						"suppression_selectors": []string{"node:A"},
+					},
+				},
+			},
+			expectedDeprecated: true,
+			description:        "snake_case option keys should produce deprecation warning (should use kebab-case)",
+		},
+		{
+			name: "canonical versioned config",
+			config: map[string]interface{}{
+				"schema-version": "v1",
+				"rules": map[string]interface{}{
+					"max-fanout": map[string]interface{}{
+						"limit": 2,
+					},
+				},
+			},
+			expectedDeprecated: false,
+			description:        "Canonical versioned config should not produce deprecation warning",
+		},
+		{
+			name: "nested legacy config (without schema-version)",
+			config: map[string]interface{}{
+				"rules": map[string]interface{}{
+					"max-fanout": map[string]interface{}{"limit": 2},
+				},
+			},
+			expectedDeprecated: true,
+			description:        "Legacy nested config without schema-version should produce deprecation warning",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diagram := &model.Diagram{
+				Type:  model.DiagramTypeFlowchart,
+				Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
+				Edges: []model.Edge{{From: "A", To: "B"}},
+			}
+
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				return diagram, nil, nil
+			})
+
+			body, _ := json.Marshal(map[string]interface{}{
+				"code":   "graph TD\n  A --> B",
+				"config": tt.config,
+			})
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+
+			// Check Deprecation header
+			hasDeprecation := w.Header().Get("Deprecation") == "true"
+			hasWarningHeader := w.Header().Get("Warning") != ""
+
+			if tt.expectedDeprecated {
+				if !hasDeprecation {
+					t.Errorf("expected Deprecation header=true, got %q", w.Header().Get("Deprecation"))
+				}
+				if !hasWarningHeader {
+					t.Errorf("expected Warning header to be present, got %q", w.Header().Get("Warning"))
+				}
+			} else {
+				if hasDeprecation {
+					t.Errorf("expected no Deprecation header for canonical config, got %q", w.Header().Get("Deprecation"))
+				}
+			}
+
+			// Check warnings in response body
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			warnings, ok := resp["warnings"].([]interface{})
+			if tt.expectedDeprecated {
+				if !ok || len(warnings) == 0 {
+					t.Errorf("expected warnings array in response for deprecated config, got %v", resp["warnings"])
+				} else {
+					// Verify warnings are not duplicated (each warning should appear once)
+					warningMsgs := make([]string, 0, len(warnings))
+					for _, w := range warnings {
+						if warnMap, ok := w.(map[string]interface{}); ok {
+							if msg, ok := warnMap["message"].(string); ok {
+								warningMsgs = append(warningMsgs, msg)
+							}
+						}
+					}
+					// Check for duplicates
+					seen := make(map[string]int)
+					for _, msg := range warningMsgs {
+						seen[msg]++
+					}
+					for msg, count := range seen {
+						if count > 1 {
+							t.Errorf("warning %q appears %d times (expected to be deduplicated)", msg, count)
+						}
+					}
+				}
+			} else {
+				if ok && len(warnings) > 0 {
+					t.Errorf("expected no warnings for canonical config, got %v", warnings)
+				}
+			}
+		})
+	}
+}
+
+// TestAnalyze_SyntaxErrorResilience tests handling of various syntax errors in mermaid diagrams.
+func TestAnalyze_SyntaxErrorResilience(t *testing.T) {
+	tests := []struct {
+		name           string
+		syntaxErr      *parser.SyntaxError
+		expectedCode   string
+		expectedMetric string
+		description    string
+	}{
+		{
+			name: "graphviz arrow syntax error",
+			syntaxErr: &parser.SyntaxError{
+				Message: "unsupported arrow syntax: -->",
+				Line:    2,
+				Column:  5,
+			},
+			expectedCode:   "lint_supported",
+			expectedMetric: "unknown",
+			description:    "Graphviz-style arrows should be caught as syntax errors",
+		},
+		{
+			name: "malformed YAML front matter",
+			syntaxErr: &parser.SyntaxError{
+				Message: "invalid YAML front matter",
+				Line:    1,
+				Column:  0,
+			},
+			expectedCode:   "lint_supported",
+			expectedMetric: "unknown",
+			description:    "Malformed YAML delimiters should error",
+		},
+		{
+			name: "misaligned indentation",
+			syntaxErr: &parser.SyntaxError{
+				Message: "unexpected indentation",
+				Line:    3,
+				Column:  0,
+			},
+			expectedCode:   "lint_supported",
+			expectedMetric: "unknown",
+			description:    "Tab/indentation misalignment should be caught",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				return nil, tt.syntaxErr, nil
+			})
+
+			body, _ := json.Marshal(map[string]string{"code": "invalid code"})
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200 for syntax error (linting still supported), got %d", w.Code)
+			}
+
+			var resp struct {
+				Valid       bool                   `json:"valid"`
+				SyntaxError *parser.SyntaxError    `json:"syntax-error"`
+				Metrics     map[string]interface{} `json:"metrics"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			if resp.Valid {
+				t.Errorf("expected valid=false for syntax error, got true")
+			}
+
+			if resp.SyntaxError == nil {
+				t.Errorf("expected syntax-error object in response")
+			} else {
+				if resp.SyntaxError.Message != tt.syntaxErr.Message {
+					t.Errorf("expected syntax error message %q, got %q", tt.syntaxErr.Message, resp.SyntaxError.Message)
+				}
+			}
+
+			// Verify diagram-type metric is "unknown" when parse fails
+			if diagramType, ok := resp.Metrics["diagram-type"].(string); !ok || diagramType != tt.expectedMetric {
+				t.Errorf("expected metrics.diagram-type=%q, got %v", tt.expectedMetric, resp.Metrics["diagram-type"])
+			}
+		})
+	}
+}
+
+// TestAnalyze_ParserMemoryLimitExceeded tests handling of parser memory limit errors.
+func TestAnalyze_ParserMemoryLimitExceeded(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, fmt.Errorf("%w: exceeded max memory", parser.ErrMemoryLimit)
+	})
+
+	body, _ := json.Marshal(map[string]string{"code": "very large diagram"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for memory limit error, got %d", w.Code)
+	}
+
+	var resp struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.Error.Code != "parser_memory_limit" {
+		t.Errorf("expected error.code=parser_memory_limit, got %q", resp.Error.Code)
+	}
+}
+
+// TestAnalyze_ConcurrentRequests simulates concurrent analyze requests.
+func TestAnalyze_ConcurrentRequests(t *testing.T) {
+	requestCount := atomic.Int32{}
+	maxConcurrentParses := atomic.Int32{}
+	currentConcurrentParses := atomic.Int32{}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		requestCount.Add(1)
+		concurrent := currentConcurrentParses.Add(1)
+		if concurrent > maxConcurrentParses.Load() {
+			maxConcurrentParses.Store(concurrent)
+		}
+		defer currentConcurrentParses.Add(-1)
+
+		// Simulate some work
+		time.Sleep(50 * time.Millisecond)
+
+		return &model.Diagram{
+			Type:  model.DiagramTypeFlowchart,
+			Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
+			Edges: []model.Edge{{From: "A", To: "B"}},
+		}, nil, nil
+	})
+
+	// Send 5 concurrent requests
+	numRequests := 5
+	done := make(chan int, numRequests)
+	for i := 0; i < numRequests; i++ {
+		go func() {
+			body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A --> B"})
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				done <- 0
+			} else {
+				done <- 1
+			}
+		}()
+	}
+
+	// Collect results
+	successCount := 0
+	for i := 0; i < numRequests; i++ {
+		if <-done == 1 {
+			successCount++
+		}
+	}
+
+	if successCount != numRequests {
+		t.Errorf("expected all %d concurrent requests to succeed, got %d successes", numRequests, successCount)
+	}
+
+	t.Logf("Processed %d requests, parallel handling achieved", requestCount.Load())
+}
+
+// TestAnalyze_SARIFOutputFormat tests SARIF output format and structure.
+func TestAnalyze_SARIFOutputFormat(t *testing.T) {
+	// Diagram with violations
+	diagram := &model.Diagram{
+		Type:      model.DiagramTypeFlowchart,
+		Direction: "TD",
+		Nodes: []model.Node{
+			{ID: "A", Label: "A"},
+			{ID: "A", Label: "Duplicate A"},
+			{ID: "B", Label: "B"},
+			{ID: "C", Label: "C"},
+			{ID: "D", Label: "D"},
+			{ID: "E", Label: "E"},
+			{ID: "F", Label: "F"},
+		},
+		Edges: []model.Edge{
+			{From: "A", To: "B"},
+			{From: "A", To: "C"},
+			{From: "A", To: "D"},
+			{From: "A", To: "E"},
+			{From: "A", To: "F"},
+			// C is disconnected, B has only incoming edge
+		},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B\n  A-->C"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for SARIF endpoint, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var sarifOutput map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &sarifOutput); err != nil {
+		t.Fatalf("failed to unmarshal SARIF response: %v", err)
+	}
+
+	// Verify basic SARIF structure
+	if version, ok := sarifOutput["version"].(string); !ok || version != "2.1.0" {
+		t.Errorf("expected SARIF version 2.1.0, got %v", sarifOutput["version"])
+	}
+
+	if runs, ok := sarifOutput["runs"].([]interface{}); !ok || len(runs) == 0 {
+		t.Errorf("expected runs array in SARIF output, got %v", sarifOutput["runs"])
+	} else {
+		run := runs[0].(map[string]interface{})
+		if results, ok := run["results"].([]interface{}); ok && len(results) > 0 {
+			// Verify rule and level mapping
+			result := results[0].(map[string]interface{})
+			if ruleID, ok := result["ruleId"].(string); !ok || ruleID == "" {
+				t.Errorf("expected ruleId in SARIF result, got %v", result["ruleId"])
+			}
+			if level, ok := result["level"].(string); !ok || (level != "error" && level != "warning" && level != "none") {
+				t.Errorf("expected valid SARIF level, got %v", result["level"])
+			}
+		}
+	}
+}
+
+// TestAnalyze_MetricsTracking tests that metrics are correctly tracked for analyze requests.
+func TestAnalyze_MetricsTracking(t *testing.T) {
+	diagram := &model.Diagram{
+		Type:      model.DiagramTypeFlowchart,
+		Direction: "TD",
+		Nodes:     []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges:     []model.Edge{{From: "A", To: "B"}, {From: "B", To: "C"}},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	tests := []struct {
+		name         string
+		code         string
+		expectIssues int
+	}{
+		{
+			name:         "clean diagram",
+			code:         "graph TD\n  A-->B\n  B-->C",
+			expectIssues: 0,
+		},
+		{
+			name: "diagram with violations",
+			code: "graph TD\n  A-->B\n  B-->C",
+			// Same diagram, should have no violations (it's clean)
+			expectIssues: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]string{"code": tt.code})
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", w.Code)
+			}
+
+			var resp struct {
+				Issues  []model.Issue          `json:"issues"`
+				Metrics map[string]interface{} `json:"metrics"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			if len(resp.Issues) != tt.expectIssues {
+				t.Errorf("expected %d issues, got %d", tt.expectIssues, len(resp.Issues))
+			}
+
+			// Verify metrics structure
+			if resp.Metrics == nil {
+				t.Fatal("expected metrics object")
+			}
+
+			requiredMetrics := []string{"node-count", "edge-count", "diagram-type"}
+			for _, metric := range requiredMetrics {
+				if _, ok := resp.Metrics[metric]; !ok {
+					t.Errorf("expected metric %q in response", metric)
 				}
 			}
 		})

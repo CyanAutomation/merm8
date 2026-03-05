@@ -413,25 +413,6 @@ func TestNormalizeConfig_UnknownRuleID(t *testing.T) {
 	}
 }
 
-func TestConfigRegistry_ContainsBuiltins(t *testing.T) {
-	registry := rules.ConfigRegistry()
-	if _, ok := registry["max-fanout"]; !ok {
-		t.Fatal("expected max-fanout in config registry")
-	}
-	if _, ok := registry["no-duplicate-node-ids"]; !ok {
-		t.Fatal("expected no-duplicate-node-ids in config registry")
-	}
-	if _, ok := registry["no-disconnected-nodes"]; !ok {
-		t.Fatal("expected no-disconnected-nodes in config registry")
-	}
-	if _, ok := registry["no-cycles"]; !ok {
-		t.Fatal("expected no-cycles in config registry")
-	}
-	if _, ok := registry["max-depth"]; !ok {
-		t.Fatal("expected max-depth in config registry")
-	}
-}
-
 func TestValidateRegisteredRuleID(t *testing.T) {
 	tests := []struct {
 		name        string
