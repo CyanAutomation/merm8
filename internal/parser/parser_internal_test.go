@@ -19,16 +19,16 @@ func TestParserConfig_AppliesDefaultsAndBounds(t *testing.T) {
 			envVars: map[string]string{"PARSER_MAX_OLD_SPACE_MB": ""},
 		},
 		{
-			name: "clamps timeout to max",
+			name:   "clamps timeout to max",
 			config: Config{Timeout: 999 * time.Second},
 		},
 		{
-			name: "clamps memory to max",
+			name:   "clamps memory to max",
 			config: Config{NodeMaxOldSpaceMB: 999999},
 		},
 		{
-			name: "clamps timeout and memory to min",
-			config: Config{Timeout: 100 * time.Millisecond, NodeMaxOldSpaceMB: 1},
+			name:       "clamps timeout and memory to min",
+			config:     Config{Timeout: 100 * time.Millisecond, NodeMaxOldSpaceMB: 1},
 			wantMinMax: true,
 		},
 		{
@@ -70,7 +70,7 @@ func TestParserConfig_AppliesDefaultsAndBounds(t *testing.T) {
 			if effective.NodeMaxOldSpaceMB < minNodeMaxOldSpaceSizeMB || effective.NodeMaxOldSpaceMB > maxNodeMaxOldSpaceSizeMB {
 				t.Fatalf("memory out of bounds: %d not in [%d, %d]", effective.NodeMaxOldSpaceMB, minNodeMaxOldSpaceSizeMB, maxNodeMaxOldSpaceSizeMB)
 			}
-		
+
 			// For min/max case, verify clamping
 			if tt.wantMinMax {
 				if effective.Timeout != minTimeout {
