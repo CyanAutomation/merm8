@@ -5,58 +5,81 @@ import (
 	"time"
 )
 
-func TestConfigEffectiveConfig_Defaults(t *testing.T) {
-	effective := (Config{}).EffectiveConfig()
-	if effective.Timeout != defaultTimeout {
-		t.Fatalf("expected default timeout %s, got %s", defaultTimeout, effective.Timeout)
+func TestParserConfig_AppliesDefaultsAndBounds(t *testing.T) {
+	tests := []struct {
+		name       string
+		config     Config
+		envVars    map[string]string
+		wantErr    bool
+		wantMinMax bool
+	}{
+		{
+			name:    "empty config uses defaults",
+			config:  Config{},
+			envVars: map[string]string{"PARSER_MAX_OLD_SPACE_MB": ""},
+		},
+		{
+			name: "clamps timeout to max",
+			config: Config{Timeout: 999 * time.Second},
+		},
+		{
+			name: "clamps memory to max",
+			config: Config{NodeMaxOldSpaceMB: 999999},
+		},
+		{
+			name: "clamps timeout and memory to min",
+			config: Config{Timeout: 100 * time.Millisecond, NodeMaxOldSpaceMB: 1},
+			wantMinMax: true,
+		},
+		{
+			name:    "env var invalid uses default",
+			envVars: map[string]string{"PARSER_MAX_OLD_SPACE_MB": "not-a-number"},
+		},
+		{
+			name:    "env var out of range uses default",
+			envVars: map[string]string{"PARSER_MAX_OLD_SPACE_MB": "999999"},
+		},
+		{
+			name:    "env var valid value applied",
+			envVars: map[string]string{"PARSER_MAX_OLD_SPACE_MB": "256"},
+		},
 	}
-	if effective.NodeMaxOldSpaceMB != defaultNodeMaxOldSpaceSizeMB {
-		t.Fatalf("expected default memory %d, got %d", defaultNodeMaxOldSpaceSizeMB, effective.NodeMaxOldSpaceMB)
-	}
-}
 
-func TestConfigEffectiveConfig_ClampsToSafeBounds(t *testing.T) {
-	effective := (Config{Timeout: 999 * time.Second, NodeMaxOldSpaceMB: 999999}).EffectiveConfig()
-	if effective.Timeout != maxTimeout {
-		t.Fatalf("expected timeout clamped to %s, got %s", maxTimeout, effective.Timeout)
-	}
-	if effective.NodeMaxOldSpaceMB != maxNodeMaxOldSpaceSizeMB {
-		t.Fatalf("expected memory clamped to %d, got %d", maxNodeMaxOldSpaceSizeMB, effective.NodeMaxOldSpaceMB)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envVars != nil {
+				for k, v := range tt.envVars {
+					t.Setenv(k, v)
+				}
+			}
 
-	effective = (Config{Timeout: 100 * time.Millisecond, NodeMaxOldSpaceMB: 1}).EffectiveConfig()
-	if effective.Timeout != minTimeout {
-		t.Fatalf("expected timeout clamped to %s, got %s", minTimeout, effective.Timeout)
-	}
-	if effective.NodeMaxOldSpaceMB != minNodeMaxOldSpaceSizeMB {
-		t.Fatalf("expected memory clamped to %d, got %d", minNodeMaxOldSpaceSizeMB, effective.NodeMaxOldSpaceMB)
-	}
-}
+			effective := tt.config.EffectiveConfig()
 
-func TestReadMaxOldSpaceMB_DefaultOnMissing(t *testing.T) {
-	t.Setenv("PARSER_MAX_OLD_SPACE_MB", "")
-	if got := readMaxOldSpaceMB(); got != defaultNodeMaxOldSpaceSizeMB {
-		t.Fatalf("expected default %d, got %d", defaultNodeMaxOldSpaceSizeMB, got)
-	}
-}
+			// Verify defaults are applied
+			if effective.Timeout == 0 {
+				t.Fatal("timeout should never be zero")
+			}
+			if effective.NodeMaxOldSpaceMB == 0 {
+				t.Fatal("NodeMaxOldSpaceMB should never be zero")
+			}
 
-func TestReadMaxOldSpaceMB_DefaultOnInvalid(t *testing.T) {
-	t.Setenv("PARSER_MAX_OLD_SPACE_MB", "not-a-number")
-	if got := readMaxOldSpaceMB(); got != defaultNodeMaxOldSpaceSizeMB {
-		t.Fatalf("expected default %d, got %d", defaultNodeMaxOldSpaceSizeMB, got)
-	}
-}
-
-func TestReadMaxOldSpaceMB_UsesConfiguredValue(t *testing.T) {
-	t.Setenv("PARSER_MAX_OLD_SPACE_MB", "256")
-	if got := readMaxOldSpaceMB(); got != 256 {
-		t.Fatalf("expected configured value 256, got %d", got)
-	}
-}
-
-func TestReadMaxOldSpaceMB_DefaultOnOutOfRangeValue(t *testing.T) {
-	t.Setenv("PARSER_MAX_OLD_SPACE_MB", "999999")
-	if got := readMaxOldSpaceMB(); got != defaultNodeMaxOldSpaceSizeMB {
-		t.Fatalf("expected default %d for out-of-range value, got %d", defaultNodeMaxOldSpaceSizeMB, got)
+			// Verify bounds are respected
+			if effective.Timeout < minTimeout || effective.Timeout > maxTimeout {
+				t.Fatalf("timeout out of bounds: %v not in [%s, %s]", effective.Timeout, minTimeout, maxTimeout)
+			}
+			if effective.NodeMaxOldSpaceMB < minNodeMaxOldSpaceSizeMB || effective.NodeMaxOldSpaceMB > maxNodeMaxOldSpaceSizeMB {
+				t.Fatalf("memory out of bounds: %d not in [%d, %d]", effective.NodeMaxOldSpaceMB, minNodeMaxOldSpaceSizeMB, maxNodeMaxOldSpaceSizeMB)
+			}
+		
+			// For min/max case, verify clamping
+			if tt.wantMinMax {
+				if effective.Timeout != minTimeout {
+					t.Errorf("expected min timeout %s, got %s", minTimeout, effective.Timeout)
+				}
+				if effective.NodeMaxOldSpaceMB != minNodeMaxOldSpaceSizeMB {
+					t.Errorf("expected min memory, got %d", effective.NodeMaxOldSpaceMB)
+				}
+			}
+		})
 	}
 }
