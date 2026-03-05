@@ -730,7 +730,19 @@ func (h *Handler) isLintSupported(family model.DiagramFamily) bool {
 
 // Healthz handles GET /healthz and reports process liveness.
 func (h *Handler) Healthz(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	h.mu.RLock()
+	buildCommit := h.buildCommit
+	buildTime := h.buildTime
+	h.mu.RUnlock()
+
+	resp := map[string]string{"status": "ok"}
+	if buildCommit != "" {
+		resp["build-commit"] = buildCommit
+	}
+	if buildTime != "" {
+		resp["build-time"] = buildTime
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // Ready handles GET /ready and reports dependency readiness.
@@ -748,11 +760,22 @@ func (h *Handler) Ready(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 
+	h.mu.RLock()
+	buildCommit := h.buildCommit
+	buildTime := h.buildTime
+	h.mu.RUnlock()
+
 	resp := map[string]string{"status": "ready"}
+	if buildCommit != "" {
+		resp["build-commit"] = buildCommit
+	}
+	if buildTime != "" {
+		resp["build-time"] = buildTime
+	}
 	if provider, ok := h.parser.(VersionInfoProvider); ok {
 		if info, err := provider.VersionInfo(); err == nil {
-			resp["parser_version"] = info.ParserVersion
-			resp["mermaid_version"] = info.MermaidVersion
+			resp["parser-version"] = info.ParserVersion
+			resp["mermaid-version"] = info.MermaidVersion
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -824,18 +847,18 @@ func (h *Handler) Version(w http.ResponseWriter, _ *http.Request) {
 		resp["version"] = serviceVersion
 	}
 	if buildCommit != "" {
-		resp["build_commit"] = buildCommit
+		resp["build-commit"] = buildCommit
 	}
 	if buildTime != "" {
-		resp["build_time"] = buildTime
+		resp["build-time"] = buildTime
 	}
 	if provider, ok := h.parser.(VersionInfoProvider); ok {
 		if info, err := provider.VersionInfo(); err == nil {
 			if info.ParserVersion != "" {
-				resp["parser_version"] = info.ParserVersion
+				resp["parser-version"] = info.ParserVersion
 			}
 			if info.MermaidVersion != "" {
-				resp["mermaid_version"] = info.MermaidVersion
+				resp["mermaid-version"] = info.MermaidVersion
 			}
 		}
 	}
