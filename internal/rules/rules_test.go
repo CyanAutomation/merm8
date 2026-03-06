@@ -476,33 +476,6 @@ func TestValidateOption_MaxFanoutLimit(t *testing.T) {
 	}
 }
 
-func TestNoDuplicateNodeIDs_SubgraphContextUsesDuplicateOccurrence(t *testing.T) {
-	t.Skip("Duplicate detection now uses source-level analysis, not diagram model")
-}
-
-func TestNoDuplicateNodeIDs_SubgraphContextAbsentWhenDuplicateOutsideSubgraph(t *testing.T) {
-	t.Skip("Duplicate detection now uses source-level analysis, not diagram model")
-}
-
-func TestNoDuplicateNodeIDs_DetectsWhitespaceNormalizedDuplicates(t *testing.T) {
-	t.Skip("Duplicate detection now uses source-level analysis, not diagram model")
-}
-
-func TestNoDuplicateNodeIDs_DetectsCaseInsensitiveDuplicates(t *testing.T) {
-	// Simulates what happens after the parser normalizes case:
-	// Input: "NodeA" and "nodea" -> Parser normalizes both to "nodea"
-	// The rule should detect this as a duplicate.
-	t.Skip("Duplicate detection now uses source-level analysis, not diagram model")
-}
-
-func TestNoDisconnectedNodes_SubgraphContextPresentForMemberNode(t *testing.T) {
-	t.Skip("Disconnected node detection now uses source-level analysis, not diagram model")
-}
-
-func TestNoDisconnectedNodes_SubgraphContextAbsentForNonMemberNode(t *testing.T) {
-	t.Skip("Disconnected node detection now uses source-level analysis, not diagram model")
-}
-
 func TestNoCycles_DetectsDirectedCycle(t *testing.T) {
 	d := &model.Diagram{
 		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
