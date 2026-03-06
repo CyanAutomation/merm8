@@ -5,6 +5,15 @@ import https from 'node:https';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const waitForFile = async (filePath) => {
+  while (true) {
+    if (fs.existsSync(filePath)) {
+      return;
+    }
+    await sleep(10);
+  }
+};
+
 const signalStarted = async () => {
   const signalURL = process.env.MERM8_PARSE_SIGNAL_URL;
   if (!signalURL) {
@@ -41,8 +50,12 @@ process.stdin.on('end', async () => {
   }
 
   const isSlow = input.includes('SLOW_PARSE_MARKER');
-  if (isSlow) {
-    await sleep(1800);
+  const blockReleaseFile = process.env.MERM8_PARSE_BLOCK_RELEASE_FILE;
+  if (isSlow && blockReleaseFile) {
+    if (marker) {
+      fs.appendFileSync(marker, 'blocked\n', 'utf8');
+    }
+    await waitForFile(blockReleaseFile);
   }
 
   const result = {
