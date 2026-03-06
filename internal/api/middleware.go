@@ -17,12 +17,21 @@ import (
 const trustedProxyCIDRsEnv = "ANALYZE_TRUSTED_PROXY_CIDRS"
 
 const requestIDHeader = "X-Request-Id"
+const apiVersionHeader = "Accept-Version"
+const contentVersionHeader = "Content-Version"
+
+// CurrentAPIVersion is the current version of the API
+const CurrentAPIVersion = "1.0"
+
+// SupportedAPIVersions lists all versions this server supports
+var SupportedAPIVersions = []string{"1.0"}
 
 type contextKey string
 
 const (
 	requestIDContextKey        contextKey = "request-id"
 	analyzeLogFieldsContextKey contextKey = "analyze-log-fields"
+	apiVersionContextKey       contextKey = "api-version"
 )
 
 type analyzeLogFields struct {
@@ -42,6 +51,46 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), requestIDContextKey, requestID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// VersionNegotiationMiddleware handles API version negotiation.
+// Supports Accept-Version header for client-requested versions.
+// Responds with Content-Version header indicating the API version being used.
+func VersionNegotiationMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedVersion := strings.TrimSpace(r.Header.Get(apiVersionHeader))
+
+		// Default to current version if not specified
+		version := CurrentAPIVersion
+		if requestedVersion != "" {
+			// Use requested version if it's supported, otherwise use current
+			for _, v := range SupportedAPIVersions {
+				if v == requestedVersion {
+					version = requestedVersion
+					break
+				}
+			}
+		}
+
+		// Set response header indicating which version is being used
+		w.Header().Set(contentVersionHeader, version)
+
+		// Add version to context for use in handlers
+		ctx := context.WithValue(r.Context(), apiVersionContextKey, version)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// APIVersionFromContext returns the negotiated API version from the request context.
+func APIVersionFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return CurrentAPIVersion
+	}
+	version, _ := ctx.Value(apiVersionContextKey).(string)
+	if version == "" {
+		return CurrentAPIVersion
+	}
+	return version
 }
 
 // AnalyzeLoggingMiddleware emits per-request structured logs for analyze endpoints.
