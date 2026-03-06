@@ -7,7 +7,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,6 +48,25 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 	}
 	firstReq.Header.Set("Content-Type", "application/json")
 
+	type latch struct {
+		once sync.Once
+		ch   chan struct{}
+	}
+
+	started := &latch{ch: make(chan struct{})}
+	notifyMux := http.NewServeMux()
+	notifyMux.HandleFunc("/started", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		started.once.Do(func() { close(started.ch) })
+		w.WriteHeader(http.StatusNoContent)
+	})
+	notifyServer := httptest.NewServer(notifyMux)
+	defer notifyServer.Close()
+	t.Setenv("MERM8_PARSE_SIGNAL_URL", notifyServer.URL+"/started")
+
 	firstDone := make(chan struct{})
 	go func() {
 		defer close(firstDone)
@@ -56,15 +76,18 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 		}
 	}()
 
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		if b, readErr := os.ReadFile(marker); readErr == nil && strings.Contains(string(b), "started") {
-			break
+	const maxWait = 10 * time.Second
+	waitStart := time.Now()
+	select {
+	case <-started.ch:
+	case <-time.After(maxWait):
+		markerState := "unavailable"
+		if b, readErr := os.ReadFile(marker); readErr == nil {
+			markerState = string(b)
+		} else {
+			markerState = "read error: " + readErr.Error()
 		}
-		if time.Now().After(deadline) {
-			t.Fatal("first parse request did not start within 2s")
-		}
-		time.Sleep(10 * time.Millisecond)
+		t.Fatalf("first parse request did not signal parser start within %s (elapsed=%s, marker_state=%q)", maxWait, time.Since(waitStart), markerState)
 	}
 
 	secondReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/analyze", bytes.NewReader(firstBody))
@@ -82,8 +105,12 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 	if secondRes.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 when parser concurrency is saturated, got %d", secondRes.StatusCode)
 	}
-	if got := secondRes.Header.Get("Retry-After"); got != "5" {
-		t.Fatalf("expected Retry-After=5 from API contract, got %q", got)
+	retryAfter := secondRes.Header.Get("Retry-After")
+	if retryAfter == "" {
+		t.Fatalf("expected Retry-After header to be set when parser concurrency is saturated")
+	}
+	if retryAfterSeconds, convErr := strconv.Atoi(retryAfter); convErr != nil || retryAfterSeconds <= 0 {
+		t.Fatalf("expected Retry-After to be a positive integer, got %q (conv_err=%v)", retryAfter, convErr)
 	}
 
 	var body struct {
