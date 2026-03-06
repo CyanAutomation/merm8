@@ -1009,7 +1009,7 @@ func (h *Handler) ConfigVersions(w http.ResponseWriter, _ *http.Request) {
 			},
 		},
 		"compatibility": map[string]interface{}{
-			"api-version":           "1.0",
+			"api-version":            "1.0",
 			"accepts-accept-version": true,
 			"version-negotiation":    "Use Accept-Version header to request specific API versions. Response includes Content-Version header.",
 			"rate-limiting":          "Rate limit info available in X-RateLimit-* response headers.",
