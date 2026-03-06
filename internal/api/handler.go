@@ -252,7 +252,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 	}
 
-	// Validate suppression selectors reference known rules (errors, not warnings)
+	// Validate suppression selectors reference known rules (warnings, not errors)
 	for ruleID, ruleConfig := range cfg {
 		if suppSelectors, hasSuppression := ruleConfig["suppression-selectors"]; hasSuppression {
 			// Convert interface{} to []string if possible
@@ -274,15 +274,10 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 						}
 					}
 
-					// Validate rule selectors reference known rules
+					// Validate rule selectors reference known rules (warnings)
 					if parsed.Prefix == "rule" && parsed.Value != "*" {
 						if _, exists := knownRuleIDs[parsed.Value]; !exists {
-							return rules.Config{}, nil, &validationError{
-								Code:      "unknown_rule_in_suppression",
-								Path:      rulePathPrefix + "." + ruleID + ".suppression-selectors",
-								Message:   "suppression selector references unknown rule: " + parsed.Value,
-								Supported: sortedRuleIDs(knownRuleIDs),
-							}
+							deprecations = append(deprecations, "suppression selector references unknown rule: "+parsed.Value)
 						}
 					}
 				}
@@ -624,6 +619,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/analyze/sarif", h.AnalyzeSARIF)
 	mux.HandleFunc("GET /v1/spec", h.ServeSpec)
 	mux.HandleFunc("GET /v1/docs", h.ServeSwagger)
+	mux.HandleFunc("GET /v1/config-versions", h.ConfigVersions)
 
 	// Legacy unversioned compatibility aliases (including probe-friendly root path).
 	mux.HandleFunc("GET /", h.Healthz)
@@ -644,6 +640,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /analyze/sarif", h.AnalyzeSARIF)
 	mux.HandleFunc("GET /spec", h.ServeSpec)
 	mux.HandleFunc("GET /docs", h.ServeSwagger)
+	mux.HandleFunc("GET /config-versions", h.ConfigVersions)
 }
 
 // InternalMetrics handles GET /internal/metrics and returns analyze outcome counters.
@@ -987,6 +984,37 @@ func (h *Handler) Version(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// ConfigVersions handles GET /v1/config-versions and returns config schema version compatibility info.
+func (h *Handler) ConfigVersions(w http.ResponseWriter, _ *http.Request) {
+	resp := map[string]interface{}{
+		"current":   rules.CurrentConfigSchemaVersion,
+		"supported": []string{rules.CurrentConfigSchemaVersion},
+		"deprecations": []map[string]interface{}{
+			{
+				"version":         "unversioned",
+				"status":          "deprecated",
+				"sunset-date":     "2026-12-31T23:59:59Z",
+				"replacement":     "Use config.schema-version: v1 with config.rules structure",
+				"migration-notes": "Legacy flat config shapes and unversioned config structures must be migrated to the v1 schema.",
+			},
+			{
+				"version":         "schema_version (underscore)",
+				"status":          "deprecated",
+				"sunset-date":     "2026-09-30T23:59:59Z",
+				"replacement":     "Use config.schema-version (hyphenated) instead",
+				"migration-notes": "The underscore variant config.schema_version is deprecated; migrate to config.schema-version.",
+			},
+		},
+		"compatibility": map[string]interface{}{
+			"api-version":           "1.0",
+			"accepts-accept-version": true,
+			"version-negotiation":    "Use Accept-Version header to request specific API versions. Response includes Content-Version header.",
+			"rate-limiting":          "Rate limit info available in X-RateLimit-* response headers.",
+		},
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
