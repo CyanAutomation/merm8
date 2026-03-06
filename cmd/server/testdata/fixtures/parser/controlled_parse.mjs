@@ -34,7 +34,11 @@ process.stdin.on('end', async () => {
     fs.appendFileSync(marker, 'started\n', 'utf8');
   }
 
-  await signalStarted();
+  try {
+    await signalStarted();
+  } catch (err) {
+    // Continue parsing even if signal fails
+  }
 
   const isSlow = input.includes('SLOW_PARSE_MARKER');
   if (isSlow) {
