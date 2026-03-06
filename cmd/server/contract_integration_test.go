@@ -13,6 +13,9 @@ import (
 	"time"
 
 	"github.com/CyanAutomation/merm8/internal/api"
+	"github.com/CyanAutomation/merm8/internal/engine"
+	"github.com/CyanAutomation/merm8/internal/model"
+	parserpkg "github.com/CyanAutomation/merm8/internal/parser"
 )
 
 func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.T) {
@@ -193,12 +196,21 @@ func TestServerContractIntegration_ParserTimeoutFromControlledSlowFixture(t *tes
 	}
 }
 
+// suppressionFixtureParser is a controlled parser fixture used to validate
+// suppression selector precedence without spawning the real parser runtime.
+// Keeping this test fixture-based ensures default `go test ./cmd/...` remains fast.
+type suppressionFixtureParser struct{}
+
+func (suppressionFixtureParser) Parse(code string) (*model.Diagram, *parserpkg.SyntaxError, error) {
+	return &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}, {ID: "D"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}},
+	}, nil, nil
+}
+
 func TestServerContractIntegration_SuppressionSelectorNegationPrecedence(t *testing.T) {
-	parserScript := filepath.Join("..", "..", "parser-node", "parse.mjs")
-	h, err := api.NewHandlerWithScript(parserScript)
-	if err != nil {
-		t.Fatalf("failed to initialize real parser: %v", err)
-	}
+	h := api.NewHandler(suppressionFixtureParser{}, engine.New())
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
