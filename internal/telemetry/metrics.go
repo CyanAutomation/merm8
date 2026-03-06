@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -23,12 +24,17 @@ const (
 type Metrics struct {
 	registry *prometheus.Registry
 
-	requestTotal      *prometheus.CounterVec
-	requestDuration   *prometheus.HistogramVec
-	analyzeRequests   *prometheus.CounterVec
-	parserDuration    *prometheus.HistogramVec
-	ruleExecutionTime *prometheus.HistogramVec
-	ruleIssuesEmitted *prometheus.CounterVec
+	requestTotal           *prometheus.CounterVec
+	requestDuration        *prometheus.HistogramVec
+	analyzeRequests        *prometheus.CounterVec
+	parserDuration         *prometheus.HistogramVec
+	ruleExecutionTime      *prometheus.HistogramVec
+	ruleIssuesEmitted      *prometheus.CounterVec
+	ruleViolationsBySev    *prometheus.CounterVec // per-rule violations by severity
+	ruleSuppressions       *prometheus.CounterVec // per-rule suppression counts
+	analysisLatency        *prometheus.HistogramVec // analysis end-to-end latency
+	diagramTypeAnalyzed    *prometheus.CounterVec // analyses by diagram type
+	lintSupportCheckCount  *prometheus.CounterVec // count of lint-support checks by result
 }
 
 func NewMetrics() *Metrics {
@@ -63,9 +69,42 @@ func NewMetrics() *Metrics {
 			Name: "rule_issues_emitted_total",
 			Help: "Total number of issues emitted by each linting rule.",
 		}, []string{"rule_id"}),
+		ruleViolationsBySev: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "rule_violations_by_severity_total",
+			Help: "Total violations by rule ID and severity (error, warning, info).",
+		}, []string{"rule_id", "severity"}),
+		ruleSuppressions: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "rule_suppressions_total",
+			Help: "Total suppressions applied by rule ID.",
+		}, []string{"rule_id"}),
+		analysisLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "analysis_latency_seconds",
+			Help:    "End-to-end analysis latency in seconds (from parse to linting complete).",
+			Buckets: prometheus.DefBuckets,
+		}, []string{"diagram_type"}),
+		diagramTypeAnalyzed: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "diagram_type_analyzed_total",
+			Help: "Total diagrams analyzed by type.",
+		}, []string{"diagram_type"}),
+		lintSupportCheckCount: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "lint_support_check_total",
+			Help: "Total lint-support checks by result (supported or unsupported).",
+		}, []string{"diagram_type", "result"}),
 	}
 
-	registry.MustRegister(m.requestTotal, m.requestDuration, m.analyzeRequests, m.parserDuration, m.ruleExecutionTime, m.ruleIssuesEmitted)
+	registry.MustRegister(
+		m.requestTotal,
+		m.requestDuration,
+		m.analyzeRequests,
+		m.parserDuration,
+		m.ruleExecutionTime,
+		m.ruleIssuesEmitted,
+		m.ruleViolationsBySev,
+		m.ruleSuppressions,
+		m.analysisLatency,
+		m.diagramTypeAnalyzed,
+		m.lintSupportCheckCount,
+	)
 	return m
 }
 
@@ -89,12 +128,20 @@ func (m *Metrics) ObserveAnalyzeOutcome(outcome string) {
 	if m == nil {
 		return
 	}
+	// Validate outcome is a known value to prevent label cardinality explosion
+	if !ValidOutcome(outcome) {
+		panic(fmt.Sprintf("invalid analyze outcome: %q (should be one of: syntax_error, lint_success, parser_timeout, parser_subprocess_error, parser_decode_error, parser_contract_violation, internal_error)", outcome))
+	}
 	m.analyzeRequests.WithLabelValues(outcome).Inc()
 }
 
 func (m *Metrics) ObserveParserDuration(outcome string, duration time.Duration) {
 	if m == nil {
 		return
+	}
+	// Validate outcome is a known value
+	if !ValidOutcome(outcome) {
+		panic(fmt.Sprintf("invalid parser outcome: %q (should be one of: syntax_error, lint_success, parser_timeout, parser_subprocess_error, parser_decode_error, parser_contract_violation, internal_error)", outcome))
 	}
 	m.parserDuration.WithLabelValues(outcome).Observe(duration.Seconds())
 }
@@ -124,4 +171,52 @@ func (m *Metrics) RecordRuleMetrics(metrics engine.RuleMetrics) {
 	duration := time.Duration(metrics.TotalDurationNS)
 	m.ObserveRuleExecutionDuration(ruleID, duration)
 	m.ObserveRuleIssuesEmitted(ruleID, metrics.IssuesEmitted)
+}
+
+// ObserveRuleViolationBySeverity records a violation for a rule with given severity.
+func (m *Metrics) ObserveRuleViolationBySeverity(ruleID, severity string) {
+	if m == nil {
+		return
+	}
+	// Validate severity to prevent label cardinality explosion
+	switch severity {
+	case "error", "warning", "info":
+		m.ruleViolationsBySev.WithLabelValues(ruleID, severity).Inc()
+	}
+}
+
+// ObserveRuleSuppression records that a rule violation was suppressed.
+func (m *Metrics) ObserveRuleSuppression(ruleID string) {
+	if m == nil {
+		return
+	}
+	m.ruleSuppressions.WithLabelValues(ruleID).Inc()
+}
+
+// ObserveAnalysisLatency records the end-to-end analysis latency by diagram type.
+func (m *Metrics) ObserveAnalysisLatency(diagramType string, duration time.Duration) {
+	if m == nil {
+		return
+	}
+	m.analysisLatency.WithLabelValues(diagramType).Observe(duration.Seconds())
+}
+
+// ObserveDiagramTypeAnalyzed records that a diagram of the given type was analyzed.
+func (m *Metrics) ObserveDiagramTypeAnalyzed(diagramType string) {
+	if m == nil {
+		return
+	}
+	m.diagramTypeAnalyzed.WithLabelValues(diagramType).Inc()
+}
+
+// ObserveLintSupportCheck records the result of a lint-support check.
+func (m *Metrics) ObserveLintSupportCheck(diagramType string, supported bool) {
+	if m == nil {
+		return
+	}
+	result := "unsupported"
+	if supported {
+		result = "supported"
+	}
+	m.lintSupportCheckCount.WithLabelValues(diagramType, result).Inc()
 }
