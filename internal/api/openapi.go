@@ -156,6 +156,42 @@ var openapi = map[string]interface{}{
 			},
 		},
 
+		"/v1/health/metrics": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Extended health and metrics snapshot (v1)",
+				"description": "Returns comprehensive health status including uptime, request counters, analysis outcomes, and parser health. Suitable for dashboards and monitoring; not a probe endpoint.",
+				"operationId": "getHealthMetricsV1",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Health metrics snapshot",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/HealthMetricsResponse",
+								},
+								"example": map[string]interface{}{
+									"status":                "ok",
+									"timestamp":             1704067200000,
+									"uptime-seconds":        3600.5,
+									"build-commit":          "abc123def456",
+									"build-time":            "2024-03-06T10:00:00Z",
+									"parser-ready":          true,
+									"parser-version":        "10.6.1",
+									"lint-supported":        []string{"flowchart", "graph"},
+									"total-requests":        1500,
+									"successful-analyses":   map[string]interface{}{"total": 1450, "lint-success": 1450},
+									"failed-analyses":       map[string]interface{}{"total": 50, "syntax-errors": 25, "parser-timeout": 10, "parser-errors": 10, "internal-errors": 5},
+									"median-parser-latency-ms": 42.5,
+									"p95-parser-latency-ms":    150.0,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+
 		"/info": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
@@ -1312,35 +1348,156 @@ var openapi = map[string]interface{}{
 							"application/sarif+json": map[string]interface{}{
 								"schema": map[string]interface{}{"$ref": "#/components/schemas/SARIFReport"},
 								"examples": map[string]interface{}{
-									"validDiagram": map[string]interface{}{
+									"validDiagramWithIssues": map[string]interface{}{
+										"summary": "Valid diagram with rule violations (max-fanout exceeded)",
+										"value": map[string]interface{}{
+											"version": "2.1.0",
+											"$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+											"runs": []interface{}{
+												map[string]interface{}{
+													"tool": map[string]interface{}{
+														"driver": map[string]interface{}{
+															"name":           "merm8",
+															"informationUri": "https://github.com/CyanAutomation/merm8",
+															"rules": []interface{}{
+																map[string]interface{}{
+																	"id":   "max-fanout",
+																	"name": "max-fanout",
+																	"shortDescription": map[string]interface{}{
+																		"text": "Flags nodes whose outgoing edge count exceeds a configurable limit (default 5).",
+																	},
+																},
+															},
+														},
+													},
+													"artifacts": []interface{}{
+														map[string]interface{}{
+															"location": map[string]interface{}{
+																"uri": "mermaid://diagram",
+															},
+														},
+													},
+													"invocations": []interface{}{
+														map[string]interface{}{
+															"executionSuccessful": true,
+															"properties": map[string]interface{}{
+																"request-uri": "/v1/analyze/sarif",
+															},
+														},
+													},
+													"results": []interface{}{
+														map[string]interface{}{
+															"ruleId": "max-fanout",
+															"level":  "warning",
+															"message": map[string]interface{}{
+																"text": "Node exceeds max-fanout limit: 6 outgoing edges (limit: 5)",
+															},
+															"locations": []interface{}{
+																map[string]interface{}{
+																	"physicalLocation": map[string]interface{}{
+																		"artifactLocation": map[string]interface{}{
+																			"uri": "mermaid://diagram",
+																		},
+																		"region": map[string]interface{}{
+																			"startLine": 1,
+																		},
+																	},
+																},
+															},
+															"partialFingerprints": map[string]interface{}{
+																"ruleId": "max-fanout",
+																"nodeId": "A",
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+									"syntaxError": map[string]interface{}{
+										"summary": "Parser syntax error (invalid arrow operator)",
+										"value": map[string]interface{}{
+											"version": "2.1.0",
+											"$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+											"runs": []interface{}{
+												map[string]interface{}{
+													"tool": map[string]interface{}{
+														"driver": map[string]interface{}{
+															"name":           "merm8",
+															"informationUri": "https://github.com/CyanAutomation/merm8",
+														},
+													},
+													"artifacts": []interface{}{
+														map[string]interface{}{
+															"location": map[string]interface{}{
+																"uri": "mermaid://diagram",
+															},
+														},
+													},
+													"invocations": []interface{}{
+														map[string]interface{}{
+															"executionSuccessful": false,
+															"properties": map[string]interface{}{
+																"error-code":    "syntax_error",
+																"error-message": "Unexpected token at line 4, column 5",
+															},
+														},
+													},
+													"results": []interface{}{
+														map[string]interface{}{
+															"level": "error",
+															"message": map[string]interface{}{
+																"text": "Unexpected token at line 4, column 5. Check arrow syntax: --> (left to right) or any valid Mermaid arrow.",
+															},
+															"locations": []interface{}{
+																map[string]interface{}{
+																	"physicalLocation": map[string]interface{}{
+																		"artifactLocation": map[string]interface{}{
+																			"uri": "mermaid://diagram",
+																		},
+																		"region": map[string]interface{}{
+																			"startLine": 4,
+																		},
+																	},
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+									"validDiagramNoIssues": map[string]interface{}{
 										"summary": "Valid diagram with no issues",
 										"value": map[string]interface{}{
 											"version": "2.1.0",
-											"runs": []interface{}{map[string]interface{}{
-												"tool":    map[string]interface{}{"driver": map[string]interface{}{"name": "merm8"}},
-												"results": []interface{}{},
-											}},
-										},
-									},
-									"diagramWithIssues": map[string]interface{}{
-										"summary": "Diagram with lint violations",
-										"value": map[string]interface{}{
-											"version": "2.1.0",
-											"runs": []interface{}{map[string]interface{}{
-												"tool": map[string]interface{}{"driver": map[string]interface{}{"name": "merm8"}},
-												"results": []interface{}{
-													map[string]interface{}{
-														"ruleId":  "no-cycles",
-														"level":   "error",
-														"message": map[string]interface{}{"text": "Cycle detected"},
+											"$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+											"runs": []interface{}{
+												map[string]interface{}{
+													"tool": map[string]interface{}{
+														"driver": map[string]interface{}{
+															"name":           "merm8",
+															"informationUri": "https://github.com/CyanAutomation/merm8",
+														},
 													},
-													map[string]interface{}{
-														"ruleId":  "max-fanout",
-														"level":   "warning",
-														"message": map[string]interface{}{"text": "Node 'A' has fanout 6, exceeding limit of 5"},
+													"artifacts": []interface{}{
+														map[string]interface{}{
+															"location": map[string]interface{}{
+																"uri": "mermaid://diagram",
+															},
+														},
 													},
+													"invocations": []interface{}{
+														map[string]interface{}{
+															"executionSuccessful": true,
+															"properties": map[string]interface{}{
+																"request-uri": "/v1/analyze/sarif",
+															},
+														},
+													},
+													"results": []interface{}{},
 												},
-											}},
+											},
 										},
 									},
 								},
@@ -1534,6 +1691,105 @@ var openapi = map[string]interface{}{
 				"properties": map[string]interface{}{
 					"status": map[string]interface{}{"type": "string", "example": "not_ready"},
 					"error":  map[string]interface{}{"$ref": "#/components/schemas/Error"},
+				},
+			},
+
+			"HealthMetricsResponse": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"status", "timestamp", "uptime-seconds", "parser-ready", "lint-supported", "total-requests"},
+				"properties": map[string]interface{}{
+					"status": map[string]interface{}{
+						"type":    "string",
+						"example": "ok",
+						"enum":    []string{"ok", "degraded"},
+					},
+					"timestamp": map[string]interface{}{
+						"type":        "integer",
+						"format":      "int64",
+						"description": "Unix timestamp in milliseconds",
+						"example":     1704067200000,
+					},
+					"uptime-seconds": map[string]interface{}{
+						"type":    "number",
+						"example": 3600.5,
+					},
+					"build-commit": map[string]interface{}{
+						"type": "string",
+					},
+					"build-time": map[string]interface{}{
+						"type": "string",
+					},
+					"parser-ready": map[string]interface{}{
+						"type":    "boolean",
+						"example": true,
+					},
+					"parser-version": map[string]interface{}{
+						"type": "string",
+					},
+					"lint-supported": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type":    "string",
+							"enum":    []string{"flowchart", "sequence", "class", "er", "state"},
+						},
+						"example": []string{"flowchart"},
+					},
+					"total-requests": map[string]interface{}{
+						"type":    "integer",
+						"format":  "int64",
+						"example": 1500,
+					},
+					"successful-analyses": map[string]interface{}{
+						"$ref": "#/components/schemas/AnalyzeOutcomeMetrics",
+					},
+					"failed-analyses": map[string]interface{}{
+						"$ref": "#/components/schemas/AnalyzeOutcomeMetrics",
+					},
+					"median-parser-latency-ms": map[string]interface{}{
+						"type":    "number",
+						"example": 42.5,
+					},
+					"p95-parser-latency-ms": map[string]interface{}{
+						"type":    "number",
+						"example": 150.0,
+					},
+				},
+			},
+
+			"AnalyzeOutcomeMetrics": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"total"},
+				"properties": map[string]interface{}{
+					"total": map[string]interface{}{
+						"type":    "integer",
+						"format":  "int64",
+						"example": 1450,
+					},
+					"syntax-errors": map[string]interface{}{
+						"type":    "integer",
+						"format":  "int64",
+						"example": 25,
+					},
+					"lint-success": map[string]interface{}{
+						"type":    "integer",
+						"format":  "int64",
+						"example": 1450,
+					},
+					"parser-timeout": map[string]interface{}{
+						"type":    "integer",
+						"format":  "int64",
+						"example": 10,
+					},
+					"parser-errors": map[string]interface{}{
+						"type":    "integer",
+						"format":  "int64",
+						"example": 10,
+					},
+					"internal-errors": map[string]interface{}{
+						"type":    "integer",
+						"format":  "int64",
+						"example": 5,
+					},
 				},
 			},
 

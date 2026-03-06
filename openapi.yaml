@@ -1728,35 +1728,101 @@
           "content":
             "application/sarif+json":
               "examples":
-                "diagramWithIssues":
-                  "summary": "Diagram with lint violations"
+                "syntaxError":
+                  "summary": "Parser syntax error (invalid arrow operator)"
                   "value":
+                    "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
                     "runs":
                       -
+                        "artifacts":
+                          -
+                            "location":
+                              "uri": "mermaid://diagram"
+                        "invocations":
+                          -
+                            "executionSuccessful": false
+                            "properties":
+                              "error-code": "syntax_error"
+                              "error-message": "Unexpected token at line 4, column 5"
                         "results":
                           -
                             "level": "error"
+                            "locations":
+                              -
+                                "physicalLocation":
+                                  "artifactLocation":
+                                    "uri": "mermaid://diagram"
+                                  "region":
+                                    "startLine": 4
                             "message":
-                              "text": "Cycle detected"
-                            "ruleId": "no-cycles"
-                          -
-                            "level": "warning"
-                            "message":
-                              "text": "Node 'A' has fanout 6, exceeding limit of 5"
-                            "ruleId": "max-fanout"
+                              "text": "Unexpected token at line 4, column 5. Check arrow syntax: --> (left to right) or any valid Mermaid arrow."
                         "tool":
                           "driver":
+                            "informationUri": "https://github.com/CyanAutomation/merm8"
                             "name": "merm8"
                     "version": "2.1.0"
-                "validDiagram":
+                "validDiagramNoIssues":
                   "summary": "Valid diagram with no issues"
                   "value":
+                    "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
                     "runs":
                       -
+                        "artifacts":
+                          -
+                            "location":
+                              "uri": "mermaid://diagram"
+                        "invocations":
+                          -
+                            "executionSuccessful": true
+                            "properties":
+                              "request-uri": "/v1/analyze/sarif"
                         "results":
                         "tool":
                           "driver":
+                            "informationUri": "https://github.com/CyanAutomation/merm8"
                             "name": "merm8"
+                    "version": "2.1.0"
+                "validDiagramWithIssues":
+                  "summary": "Valid diagram with rule violations (max-fanout exceeded)"
+                  "value":
+                    "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
+                    "runs":
+                      -
+                        "artifacts":
+                          -
+                            "location":
+                              "uri": "mermaid://diagram"
+                        "invocations":
+                          -
+                            "executionSuccessful": true
+                            "properties":
+                              "request-uri": "/v1/analyze/sarif"
+                        "results":
+                          -
+                            "level": "warning"
+                            "locations":
+                              -
+                                "physicalLocation":
+                                  "artifactLocation":
+                                    "uri": "mermaid://diagram"
+                                  "region":
+                                    "startLine": 1
+                            "message":
+                              "text": "Node exceeds max-fanout limit: 6 outgoing edges (limit: 5)"
+                            "partialFingerprints":
+                              "nodeId": "A"
+                              "ruleId": "max-fanout"
+                            "ruleId": "max-fanout"
+                        "tool":
+                          "driver":
+                            "informationUri": "https://github.com/CyanAutomation/merm8"
+                            "name": "merm8"
+                            "rules":
+                              -
+                                "id": "max-fanout"
+                                "name": "max-fanout"
+                                "shortDescription":
+                                  "text": "Flags nodes whose outgoing edge count exceeds a configurable limit (default 5)."
                     "version": "2.1.0"
               "schema":
                 "$ref": "#/components/schemas/SARIFReport"

@@ -252,8 +252,8 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 	}
 
-	// Validate suppression selectors reference known rules
-	for _, ruleConfig := range cfg {
+	// Validate suppression selectors reference known rules (errors, not warnings)
+	for ruleID, ruleConfig := range cfg {
 		if suppSelectors, hasSuppression := ruleConfig["suppression-selectors"]; hasSuppression {
 			// Convert interface{} to []string if possible
 			if selectorArray, ok := suppSelectors.([]interface{}); ok {
@@ -263,8 +263,29 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 						selectors = append(selectors, selStr)
 					}
 				}
-				warnings := rules.ValidateSuppressionSelectors(selectors, knownRuleIDs)
-				deprecations = append(deprecations, warnings...)
+				// Validate each selector
+				for _, selector := range selectors {
+					parsed, ok := rules.ParseSuppressionSelector(selector)
+					if !ok {
+						return rules.Config{}, nil, &validationError{
+							Code:    "invalid_suppression_selector",
+							Path:    rulePathPrefix + "." + ruleID + ".suppression-selectors",
+							Message: "invalid suppression selector format: " + selector,
+						}
+					}
+
+					// Validate rule selectors reference known rules
+					if parsed.Prefix == "rule" && parsed.Value != "*" {
+						if _, exists := knownRuleIDs[parsed.Value]; !exists {
+							return rules.Config{}, nil, &validationError{
+								Code:      "unknown_rule_in_suppression",
+								Path:      rulePathPrefix + "." + ruleID + ".suppression-selectors",
+								Message:   "suppression selector references unknown rule: " + parsed.Value,
+								Supported: sortedRuleIDs(knownRuleIDs),
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -347,6 +368,8 @@ type analyzeResponse struct {
 	Valid         bool                 `json:"valid"`
 	DiagramType   model.DiagramType    `json:"diagram-type,omitempty"`
 	LintSupported bool                 `json:"lint-supported"`
+	RequestID     string               `json:"request-id,omitempty"`
+	Timestamp     int64                `json:"timestamp,omitempty"`
 	SyntaxError   *syntaxErrorResponse `json:"syntax-error"`
 	Issues        []model.Issue        `json:"issues"`
 	Suggestions   []string             `json:"suggestions,omitempty"`
@@ -399,6 +422,7 @@ type Handler struct {
 	metricsHandler      http.Handler
 	telemetryMetrics    *telemetry.Metrics
 	analyzeCounters     analyzeOutcomeCounters
+	startTime           time.Time
 	mu                  sync.RWMutex
 	parserConcurrencyCh chan struct{}
 }
@@ -464,13 +488,41 @@ type infoResponse struct {
 	SupportedRuleIDs     []string              `json:"supported-rule-ids"`
 }
 
+// healthMetricsResponse provides extended health and metrics information.
+type healthMetricsResponse struct {
+	Status              string               `json:"status"`
+	Timestamp           int64                `json:"timestamp"`
+	Uptime              float64              `json:"uptime-seconds"`
+	BuildCommit         string               `json:"build-commit,omitempty"`
+	BuildTime           string               `json:"build-time,omitempty"`
+	ParserReady         bool                 `json:"parser-ready"`
+	ParserVersion       string               `json:"parser-version,omitempty"`
+	LintSupported       []model.DiagramFamily `json:"lint-supported"`
+	TotalRequests       uint64               `json:"total-requests"`
+	SuccessfulAnalyses  healthMetricsOutcome `json:"successful-analyses"`
+	FailedAnalyses      healthMetricsOutcome `json:"failed-analyses"`
+	MedianParserLatency float64              `json:"median-parser-latency-ms"`
+	P95ParserLatency    float64              `json:"p95-parser-latency-ms"`
+}
+
+// healthMetricsOutcome breaks down analyses by outcome for health endpoint.
+type healthMetricsOutcome struct {
+	Total          uint64 `json:"total"`
+	SyntaxErrors   uint64 `json:"syntax-errors,omitempty"`
+	LintSuccess    uint64 `json:"lint-success,omitempty"`
+	ParserTimeout  uint64 `json:"parser-timeout,omitempty"`
+	ParserErrors   uint64 `json:"parser-errors,omitempty"`
+	InternalErrors uint64 `json:"internal-errors,omitempty"`
+}
+
 // NewHandler creates a Handler with the given parser and engine.
 // This constructor allows dependency injection for testing.
 func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
 	return &Handler{
-		parser: p,
-		engine: e,
-		logger: normalizeLogger(NewLogger("api")),
+		parser:    p,
+		engine:    e,
+		logger:    normalizeLogger(NewLogger("api")),
+		startTime: time.Now(),
 	}
 }
 
@@ -558,6 +610,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Canonical versioned API routes.
 	mux.HandleFunc("GET /v1/healthz", h.Healthz)
 	mux.HandleFunc("GET /v1/health", h.Healthz)
+	mux.HandleFunc("GET /v1/health/metrics", h.HealthMetrics)
 	mux.HandleFunc("GET /v1/ready", h.Ready)
 	mux.HandleFunc("GET /v1/info", h.Info)
 	mux.HandleFunc("GET /v1/metrics", h.Metrics)
@@ -781,6 +834,77 @@ func (h *Handler) Ready(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// HealthMetrics handles GET /v1/health/metrics and returns extended health status with metrics.
+func (h *Handler) HealthMetrics(w http.ResponseWriter, _ *http.Request) {
+	h.mu.RLock()
+	buildCommit := h.buildCommit
+	buildTime := h.buildTime
+	startTime := h.startTime
+	h.mu.RUnlock()
+
+	uptime := time.Since(startTime).Seconds()
+	
+	// Check parser readiness
+	parserReady := true
+	parserVersion := ""
+	if checker, ok := h.parser.(ReadinessChecker); ok {
+		if err := checker.Ready(); err != nil {
+			parserReady = false
+		}
+	}
+	if provider, ok := h.parser.(VersionInfoProvider); ok {
+		if info, err := provider.VersionInfo(); err == nil {
+			parserVersion = info.ParserVersion
+		}
+	}
+
+	// Get lint-supported diagram families
+	lintSupported := []model.DiagramFamily{}
+	if h.engine != nil {
+		lintSupported = h.engine.DiagramFamilies()
+	}
+
+	// Aggregate analyze outcome counters
+	totalRequests := h.analyzeCounters.validSuccess.Load() +
+		h.analyzeCounters.syntaxError.Load() +
+		h.analyzeCounters.parserTimeout.Load() +
+		h.analyzeCounters.parserSubprocess.Load() +
+		h.analyzeCounters.parserDecode.Load() +
+		h.analyzeCounters.parserContract.Load() +
+		h.analyzeCounters.parserInternalError.Load()
+
+	successfulAnalyses := healthMetricsOutcome{
+		Total:       h.analyzeCounters.validSuccess.Load(),
+		LintSuccess: h.analyzeCounters.validSuccess.Load(),
+	}
+
+	failedAnalyses := healthMetricsOutcome{
+		Total:          totalRequests - successfulAnalyses.Total,
+		SyntaxErrors:   h.analyzeCounters.syntaxError.Load(),
+		ParserTimeout:  h.analyzeCounters.parserTimeout.Load(),
+		ParserErrors:   h.analyzeCounters.parserSubprocess.Load() + h.analyzeCounters.parserDecode.Load() + h.analyzeCounters.parserContract.Load(),
+		InternalErrors: h.analyzeCounters.parserInternalError.Load(),
+	}
+
+	// TODO: Add real P50/P95 latency data when histogram metrics are collected
+	resp := healthMetricsResponse{
+		Status:              "ok",
+		Timestamp:           time.Now().UnixMilli(),
+		Uptime:              uptime,
+		BuildCommit:         buildCommit,
+		BuildTime:           buildTime,
+		ParserReady:         parserReady,
+		ParserVersion:       parserVersion,
+		LintSupported:       lintSupported,
+		TotalRequests:       totalRequests,
+		SuccessfulAnalyses:  successfulAnalyses,
+		FailedAnalyses:      failedAnalyses,
+		MedianParserLatency: 0, // TODO: populate from histogram
+		P95ParserLatency:    0, // TODO: populate from histogram
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // Info handles GET /info and returns service/parser capability metadata.
 func (h *Handler) Info(w http.ResponseWriter, _ *http.Request) {
 	h.mu.RLock()
@@ -998,7 +1122,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		default:
 			observeAnalyzeOutcome("server_busy")
 			setServerBusyRetryAfterHeader(w)
-			writeError(w, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again")
+			writeErrorWithDetailsAndContext(w, r, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again", nil)
 			return
 		}
 	}
@@ -1009,7 +1133,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 	if err != nil {
 		if errors.Is(err, errInvalidRequest) {
 			observeAnalyzeOutcome("invalid_option")
-			writeError(w, http.StatusBadRequest, "invalid_option", strings.TrimPrefix(err.Error(), errInvalidRequest.Error()+": "))
+			writeErrorWithDetailsAndContext(w, r, http.StatusBadRequest, "invalid_option", strings.TrimPrefix(err.Error(), errInvalidRequest.Error()+": "), nil)
 			return
 		}
 		outcome := parserFailureOutcome(err)
@@ -1042,6 +1166,8 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			Valid:         false,
 			DiagramType:   diagramType,
 			LintSupported: false,
+			RequestID:     RequestIDFromContext(r.Context()),
+			Timestamp:     time.Now().UnixMilli(),
 			Suggestions:   suggestions,
 			Warnings:      deprecationWarnings,
 			Meta:          responseMetaForWarnings(deprecationWarnings),
@@ -1093,6 +1219,8 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			Valid:         true,
 			DiagramType:   diagram.Type,
 			LintSupported: false,
+			RequestID:     RequestIDFromContext(r.Context()),
+			Timestamp:     time.Now().UnixMilli(),
 			SyntaxError:   nil,
 			Issues:        []model.Issue{unsupportedIssue},
 			Warnings:      deprecationWarnings,
@@ -1133,6 +1261,8 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		Valid:         true,
 		DiagramType:   diagram.Type,
 		LintSupported: h.isLintSupported(diagram.Type.Family()),
+		RequestID:     RequestIDFromContext(r.Context()),
+		Timestamp:     time.Now().UnixMilli(),
 		SyntaxError:   nil,
 		Issues:        issues,
 		Warnings:      deprecationWarnings,
@@ -1203,7 +1333,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		default:
 			observeAnalyzeOutcome("server_busy")
 			setServerBusyRetryAfterHeader(w)
-			writeError(w, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again")
+			writeErrorWithDetailsAndContext(w, r, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again", nil)
 			return
 		}
 	}
@@ -1214,7 +1344,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		if errors.Is(err, errInvalidRequest) {
 			observeAnalyzeOutcome("invalid_option")
-			writeError(w, http.StatusBadRequest, "invalid_option", strings.TrimPrefix(err.Error(), errInvalidRequest.Error()+": "))
+			writeErrorWithDetailsAndContext(w, r, http.StatusBadRequest, "invalid_option", strings.TrimPrefix(err.Error(), errInvalidRequest.Error()+": "), nil)
 			return
 		}
 		outcome := parserFailureOutcome(err)
@@ -1254,6 +1384,8 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 			Valid:         false,
 			DiagramType:   diagramType,
 			LintSupported: lintSupported,
+			RequestID:     RequestIDFromContext(r.Context()),
+			Timestamp:     time.Now().UnixMilli(),
 			Suggestions:   suggestions,
 			Warnings:      nil,
 			Meta:          nil,
@@ -1303,6 +1435,8 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 			Valid:         true,
 			DiagramType:   diagram.Type,
 			LintSupported: false,
+			RequestID:     RequestIDFromContext(r.Context()),
+			Timestamp:     time.Now().UnixMilli(),
 			SyntaxError:   nil,
 			Issues:        []model.Issue{unsupportedIssue},
 			Warnings:      nil,
@@ -1336,6 +1470,8 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		Valid:         true,
 		DiagramType:   diagram.Type,
 		LintSupported: h.isLintSupported(diagram.Type.Family()),
+		RequestID:     RequestIDFromContext(r.Context()),
+		Timestamp:     time.Now().UnixMilli(),
 		SyntaxError:   nil,
 		Issues:        issues,
 		Warnings:      nil,
@@ -1465,7 +1601,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 	if err != nil {
 		if errors.Is(err, errInvalidRequest) {
 			observeAnalyzeOutcome("invalid_option")
-			writeError(w, http.StatusBadRequest, "invalid_option", strings.TrimPrefix(err.Error(), errInvalidRequest.Error()+": "))
+			writeErrorWithDetailsAndContext(w, r, http.StatusBadRequest, "invalid_option", strings.TrimPrefix(err.Error(), errInvalidRequest.Error()+": "), nil)
 			return
 		}
 		outcome := parserFailureOutcome(err)
@@ -1848,10 +1984,35 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeErrorWithDetails(w, status, code, message, nil)
 }
 
+// writeErrorWithContext includes request ID and timestamp in error responses
+func writeErrorWithContext(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	writeErrorWithDetailsAndContext(w, r, status, code, message, nil)
+}
+
 func writeErrorWithDetails(w http.ResponseWriter, status int, code, message string, details map[string]any) {
 	writeJSON(w, status, analyzeResponse{
 		Valid:         false,
 		LintSupported: false,
+		RequestID:     "",
+		Timestamp:     0,
+		SyntaxError:   nil,
+		Issues:        []model.Issue{},
+		Metrics:       defaultMetrics(model.DiagramTypeUnknown),
+		Error: &apiErrorDetails{
+			Code:    code,
+			Message: message,
+			Details: details,
+		},
+	})
+}
+
+// writeErrorWithDetailsAndContext includes request ID and timestamp in error responses
+func writeErrorWithDetailsAndContext(w http.ResponseWriter, r *http.Request, status int, code, message string, details map[string]any) {
+	writeJSON(w, status, analyzeResponse{
+		Valid:         false,
+		LintSupported: false,
+		RequestID:     RequestIDFromContext(r.Context()),
+		Timestamp:     time.Now().UnixMilli(),
 		SyntaxError:   nil,
 		Issues:        []model.Issue{},
 		Metrics:       defaultMetrics(model.DiagramTypeUnknown),
@@ -1870,15 +2031,17 @@ func (h *Handler) parseWithRequestSettings(req analyzeRequest) (*model.Diagram, 
 	}
 	minTimeout, maxTimeout, minMem, maxMem := parser.LimitBounds()
 	if req.Parser.TimeoutSeconds != nil {
-		timeout := time.Duration(*req.Parser.TimeoutSeconds) * time.Second
-		if timeout < minTimeout || timeout > maxTimeout {
-			return nil, nil, fmt.Errorf("%w: parser.timeout_seconds must be between %d and %d", errInvalidRequest, int(minTimeout.Seconds()), int(maxTimeout.Seconds()))
+		// Validate timeout is in allowed range
+		if *req.Parser.TimeoutSeconds < int(minTimeout.Seconds()) || *req.Parser.TimeoutSeconds > int(maxTimeout.Seconds()) {
+			return nil, nil, fmt.Errorf("%w: parser.timeout_seconds must be an integer between %d and %d seconds; got %d", errInvalidRequest, int(minTimeout.Seconds()), int(maxTimeout.Seconds()), *req.Parser.TimeoutSeconds)
 		}
+		timeout := time.Duration(*req.Parser.TimeoutSeconds) * time.Second
 		cfg.Timeout = timeout
 	}
 	if req.Parser.MaxOldSpaceMB != nil {
+		// Validate memory limit is in allowed range
 		if *req.Parser.MaxOldSpaceMB < minMem || *req.Parser.MaxOldSpaceMB > maxMem {
-			return nil, nil, fmt.Errorf("%w: parser.max_old_space_mb must be between %d and %d", errInvalidRequest, minMem, maxMem)
+			return nil, nil, fmt.Errorf("%w: parser.max_old_space_mb must be an integer between %d and %d MiB; got %d", errInvalidRequest, minMem, maxMem, *req.Parser.MaxOldSpaceMB)
 		}
 		cfg.NodeMaxOldSpaceMB = *req.Parser.MaxOldSpaceMB
 	}
@@ -1906,7 +2069,20 @@ func writeParserFailure(w http.ResponseWriter, ctx context.Context, logger Logge
 	default:
 		logger.Error("write parser failure response", "request_id", requestID, "parser_outcome", telemetry.OutcomeInternalError, "error", err.Error())
 	}
-	writeErrorWithDetails(w, details.statusCode, details.code, details.message, details.details)
+	writeJSON(w, details.statusCode, analyzeResponse{
+		Valid:         false,
+		LintSupported: false,
+		RequestID:     requestID,
+		Timestamp:     time.Now().UnixMilli(),
+		SyntaxError:   nil,
+		Issues:        []model.Issue{},
+		Metrics:       defaultMetrics(model.DiagramTypeUnknown),
+		Error: &apiErrorDetails{
+			Code:    details.code,
+			Message: details.message,
+			Details: details.details,
+		},
+	})
 }
 
 func parserFailureOutcome(err error) string {
