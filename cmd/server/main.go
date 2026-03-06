@@ -68,6 +68,7 @@ func main() {
 
 	rootHandler := http.Handler(mux)
 	rootHandler = api.RequestIDMiddleware(rootHandler)
+	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
 
 	authToken := strings.TrimSpace(os.Getenv("ANALYZE_AUTH_TOKEN"))
 	rateLimitPerMinute := envInt("ANALYZE_RATE_LIMIT_PER_MINUTE", 0)

@@ -234,6 +234,48 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
+
+		"/v1/config-versions": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Documentation"},
+				"summary":     "Config schema version compatibility information",
+				"description": "Returns information about supported config schema versions, deprecation timelines, and API version negotiation details. Use this endpoint to plan config migrations and understand backward compatibility guarantees.",
+				"operationId": "getConfigVersionsV1",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Config version compatibility information",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/ConfigVersionsResponse",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+
+		"/config-versions": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Documentation"},
+				"summary":     "Config schema version compatibility information alias",
+				"description": "Legacy alias for /v1/config-versions. Returns config schema version and deprecation info.",
+				"operationId": "getConfigVersions",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Config version compatibility information",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/ConfigVersionsResponse",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"/version": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
@@ -1885,6 +1927,86 @@ var openapi = map[string]interface{}{
 						"items": map[string]interface{}{
 							"type": "string",
 							"enum": []string{"flowchart", "sequence", "class", "er", "state"},
+						},
+					},
+				},
+			},
+			"ConfigVersionsResponse": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"current", "supported", "deprecations", "compatibility"},
+				"properties": map[string]interface{}{
+					"current": map[string]interface{}{
+						"type":        "string",
+						"description": "The current/default config schema version",
+						"example":     "v1",
+					},
+					"supported": map[string]interface{}{
+						"type":        "array",
+						"description": "List of supported config schema versions",
+						"items": map[string]interface{}{
+							"type": "string",
+						},
+						"example": []string{"v1"},
+					},
+					"deprecations": map[string]interface{}{
+						"type":        "array",
+						"description": "Deprecated config shapes and their sunset dates",
+						"items": map[string]interface{}{
+							"type":     "object",
+							"required": []string{"version", "status", "sunset-date", "replacement", "migration-notes"},
+							"properties": map[string]interface{}{
+								"version": map[string]interface{}{
+									"type":        "string",
+									"description": "The deprecated config variant",
+									"example":     "unversioned",
+								},
+								"status": map[string]interface{}{
+									"type":    "string",
+									"enum":    []string{"deprecated"},
+									"example": "deprecated",
+								},
+								"sunset-date": map[string]interface{}{
+									"type":        "string",
+									"format":      "date-time",
+									"description": "ISO 8601 datetime when support will be removed",
+									"example":     "2026-12-31T23:59:59Z",
+								},
+								"replacement": map[string]interface{}{
+									"type":        "string",
+									"description": "Recommended alternative",
+									"example":     "Use config.schema-version: v1 with config.rules structure",
+								},
+								"migration-notes": map[string]interface{}{
+									"type":        "string",
+									"description": "Migration guidance",
+									"example":     "Legacy flat config shapes must be migrated to the v1 schema.",
+								},
+							},
+						},
+					},
+					"compatibility": map[string]interface{}{
+						"type":        "object",
+						"required":    []string{"api-version", "accepts-accept-version", "version-negotiation", "rate-limiting"},
+						"description": "API compatibility information",
+						"properties": map[string]interface{}{
+							"api-version": map[string]interface{}{
+								"type":    "string",
+								"example": "1.0",
+							},
+							"accepts-accept-version": map[string]interface{}{
+								"type":    "boolean",
+								"example": true,
+							},
+							"version-negotiation": map[string]interface{}{
+								"type":        "string",
+								"description": "How to use version negotiation headers",
+								"example":     "Use Accept-Version header to request specific API versions. Response includes Content-Version header.",
+							},
+							"rate-limiting": map[string]interface{}{
+								"type":        "string",
+								"description": "Rate limiting information",
+								"example":     "Rate limit info available in X-RateLimit-* response headers.",
+							},
 						},
 					},
 				},
