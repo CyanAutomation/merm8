@@ -157,6 +157,7 @@ func (e *Engine) DiagramFamilies() []model.DiagramFamily {
 		}
 	}
 
+	// Only return families that have at least one rule
 	families := make([]model.DiagramFamily, 0, len(set))
 	for _, candidate := range []model.DiagramFamily{
 		model.DiagramFamilyFlowchart,
