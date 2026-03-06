@@ -24,17 +24,17 @@ const (
 type Metrics struct {
 	registry *prometheus.Registry
 
-	requestTotal           *prometheus.CounterVec
-	requestDuration        *prometheus.HistogramVec
-	analyzeRequests        *prometheus.CounterVec
-	parserDuration         *prometheus.HistogramVec
-	ruleExecutionTime      *prometheus.HistogramVec
-	ruleIssuesEmitted      *prometheus.CounterVec
-	ruleViolationsBySev    *prometheus.CounterVec // per-rule violations by severity
-	ruleSuppressions       *prometheus.CounterVec // per-rule suppression counts
-	analysisLatency        *prometheus.HistogramVec // analysis end-to-end latency
-	diagramTypeAnalyzed    *prometheus.CounterVec // analyses by diagram type
-	lintSupportCheckCount  *prometheus.CounterVec // count of lint-support checks by result
+	requestTotal          *prometheus.CounterVec
+	requestDuration       *prometheus.HistogramVec
+	analyzeRequests       *prometheus.CounterVec
+	parserDuration        *prometheus.HistogramVec
+	ruleExecutionTime     *prometheus.HistogramVec
+	ruleIssuesEmitted     *prometheus.CounterVec
+	ruleViolationsBySev   *prometheus.CounterVec   // per-rule violations by severity
+	ruleSuppressions      *prometheus.CounterVec   // per-rule suppression counts
+	analysisLatency       *prometheus.HistogramVec // analysis end-to-end latency
+	diagramTypeAnalyzed   *prometheus.CounterVec   // analyses by diagram type
+	lintSupportCheckCount *prometheus.CounterVec   // count of lint-support checks by result
 }
 
 func NewMetrics() *Metrics {

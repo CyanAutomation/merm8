@@ -490,19 +490,19 @@ type infoResponse struct {
 
 // healthMetricsResponse provides extended health and metrics information.
 type healthMetricsResponse struct {
-	Status              string               `json:"status"`
-	Timestamp           int64                `json:"timestamp"`
-	Uptime              float64              `json:"uptime-seconds"`
-	BuildCommit         string               `json:"build-commit,omitempty"`
-	BuildTime           string               `json:"build-time,omitempty"`
-	ParserReady         bool                 `json:"parser-ready"`
-	ParserVersion       string               `json:"parser-version,omitempty"`
+	Status              string                `json:"status"`
+	Timestamp           int64                 `json:"timestamp"`
+	Uptime              float64               `json:"uptime-seconds"`
+	BuildCommit         string                `json:"build-commit,omitempty"`
+	BuildTime           string                `json:"build-time,omitempty"`
+	ParserReady         bool                  `json:"parser-ready"`
+	ParserVersion       string                `json:"parser-version,omitempty"`
 	LintSupported       []model.DiagramFamily `json:"lint-supported"`
-	TotalRequests       uint64               `json:"total-requests"`
-	SuccessfulAnalyses  healthMetricsOutcome `json:"successful-analyses"`
-	FailedAnalyses      healthMetricsOutcome `json:"failed-analyses"`
-	MedianParserLatency float64              `json:"median-parser-latency-ms"`
-	P95ParserLatency    float64              `json:"p95-parser-latency-ms"`
+	TotalRequests       uint64                `json:"total-requests"`
+	SuccessfulAnalyses  healthMetricsOutcome  `json:"successful-analyses"`
+	FailedAnalyses      healthMetricsOutcome  `json:"failed-analyses"`
+	MedianParserLatency float64               `json:"median-parser-latency-ms"`
+	P95ParserLatency    float64               `json:"p95-parser-latency-ms"`
 }
 
 // healthMetricsOutcome breaks down analyses by outcome for health endpoint.
@@ -843,7 +843,7 @@ func (h *Handler) HealthMetrics(w http.ResponseWriter, _ *http.Request) {
 	h.mu.RUnlock()
 
 	uptime := time.Since(startTime).Seconds()
-	
+
 	// Check parser readiness
 	parserReady := true
 	parserVersion := ""
