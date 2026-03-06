@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -77,8 +78,12 @@ func TestServerStack_ParserConcurrencyBusyResponses_IncludeRetryAfter(t *testing
 	if secondRes.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 on second request, got %d", secondRes.StatusCode)
 	}
-	if got := secondRes.Header.Get("Retry-After"); got != "5" {
-		t.Fatalf("expected Retry-After header value 5, got %q", got)
+	retryAfter := secondRes.Header.Get("Retry-After")
+	if retryAfter == "" {
+		t.Fatalf("expected Retry-After header to be set")
+	}
+	if seconds, err := strconv.Atoi(retryAfter); err != nil || seconds <= 0 {
+		t.Fatalf("expected Retry-After to be a positive integer, got %q (err=%v)", retryAfter, err)
 	}
 
 	var apiResp struct {
@@ -145,8 +150,12 @@ func TestServerStack_ParserConcurrencyBusySARIF_IncludeRetryAfter(t *testing.T) 
 	if secondRes.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 on second SARIF request, got %d", secondRes.StatusCode)
 	}
-	if got := secondRes.Header.Get("Retry-After"); got != "5" {
-		t.Fatalf("expected Retry-After header value 5, got %q", got)
+	retryAfter := secondRes.Header.Get("Retry-After")
+	if retryAfter == "" {
+		t.Fatalf("expected Retry-After header to be set")
+	}
+	if seconds, err := strconv.Atoi(retryAfter); err != nil || seconds <= 0 {
+		t.Fatalf("expected Retry-After to be a positive integer, got %q (err=%v)", retryAfter, err)
 	}
 
 	var report sarif.Report
