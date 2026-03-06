@@ -18,7 +18,14 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 	t.Setenv("PARSER_CONCURRENCY_LIMIT", "1")
 
 	marker := filepath.Join(t.TempDir(), "parse-started.log")
+	blockLatch := filepath.Join(t.TempDir(), "parse-block.latch")
+	releaseLatch := filepath.Join(t.TempDir(), "parse-release.latch")
+	if err := os.WriteFile(blockLatch, []byte("block\n"), 0o600); err != nil {
+		t.Fatalf("failed to create block latch: %v", err)
+	}
 	t.Setenv("MERM8_PARSE_MARKER", marker)
+	t.Setenv("MERM8_PARSE_BLOCK_LATCH", blockLatch)
+	t.Setenv("MERM8_PARSE_RELEASE_LATCH", releaseLatch)
 	parserScript := filepath.Join("testdata", "fixtures", "parser", "controlled_parse.mjs")
 
 	h, err := api.NewHandlerWithScript(parserScript)
@@ -58,11 +65,11 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 
 	deadline := time.Now().Add(2 * time.Second)
 	for {
-		if b, readErr := os.ReadFile(marker); readErr == nil && strings.Contains(string(b), "started") {
+		if b, readErr := os.ReadFile(marker); readErr == nil && strings.Contains(string(b), "blocked") {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("first parse request did not start within 2s")
+			t.Fatal("first parse request did not reach blocked state within 2s")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -82,8 +89,8 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 	if secondRes.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 when parser concurrency is saturated, got %d", secondRes.StatusCode)
 	}
-	if got := secondRes.Header.Get("Retry-After"); got != "5" {
-		t.Fatalf("expected Retry-After=5 from API contract, got %q", got)
+	if got := secondRes.Header.Get("Retry-After"); got != "1" {
+		t.Fatalf("expected Retry-After=1 from API contract, got %q", got)
 	}
 
 	var body struct {
@@ -98,10 +105,22 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 		t.Fatalf("expected error.code=server_busy, got %q", body.Error.Code)
 	}
 
+	if err := os.WriteFile(releaseLatch, []byte("release\n"), 0o600); err != nil {
+		t.Fatalf("failed to create release latch: %v", err)
+	}
+
 	<-firstDone
 }
 
 func TestServerContractIntegration_ParserTimeoutFromControlledSlowFixture(t *testing.T) {
+	blockLatch := filepath.Join(t.TempDir(), "parse-block.latch")
+	releaseLatch := filepath.Join(t.TempDir(), "parse-release.latch")
+	if err := os.WriteFile(blockLatch, []byte("block\n"), 0o600); err != nil {
+		t.Fatalf("failed to create block latch: %v", err)
+	}
+	t.Setenv("MERM8_PARSE_BLOCK_LATCH", blockLatch)
+	t.Setenv("MERM8_PARSE_RELEASE_LATCH", releaseLatch)
+
 	parserScript := filepath.Join("testdata", "fixtures", "parser", "controlled_parse.mjs")
 	h, err := api.NewHandlerWithScript(parserScript)
 	if err != nil {
