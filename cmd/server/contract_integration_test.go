@@ -18,8 +18,11 @@ import (
 func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.T) {
 	t.Setenv("PARSER_CONCURRENCY_LIMIT", "1")
 
-	marker := filepath.Join(t.TempDir(), "parse-started.log")
+	tmpDir := t.TempDir()
+	marker := filepath.Join(tmpDir, "parse-started.log")
+	blockReleaseFile := filepath.Join(tmpDir, "release-parse-block")
 	t.Setenv("MERM8_PARSE_MARKER", marker)
+	t.Setenv("MERM8_PARSE_BLOCK_RELEASE_FILE", blockReleaseFile)
 	parserScript := filepath.Join("testdata", "fixtures", "parser", "controlled_parse.mjs")
 
 	h, err := api.NewHandlerWithScript(parserScript)
@@ -125,10 +128,22 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 		t.Fatalf("expected error.code=server_busy, got %q", body.Error.Code)
 	}
 
-	<-firstDone
+	if err := os.WriteFile(blockReleaseFile, []byte("release\n"), 0o644); err != nil {
+		t.Fatalf("failed to release parser block: %v", err)
+	}
+
+	select {
+	case <-firstDone:
+	case <-time.After(maxWait):
+		t.Fatalf("first parse request did not complete within %s after release", maxWait)
+	}
 }
 
 func TestServerContractIntegration_ParserTimeoutFromControlledSlowFixture(t *testing.T) {
+	tmpDir := t.TempDir()
+	blockReleaseFile := filepath.Join(tmpDir, "never-release-parse-block")
+	t.Setenv("MERM8_PARSE_BLOCK_RELEASE_FILE", blockReleaseFile)
+
 	parserScript := filepath.Join("testdata", "fixtures", "parser", "controlled_parse.mjs")
 	h, err := api.NewHandlerWithScript(parserScript)
 	if err != nil {
