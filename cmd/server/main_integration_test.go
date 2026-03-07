@@ -189,7 +189,7 @@ func TestServerStack_CORSHeaders_AllowedOrigin(t *testing.T) {
 	allowedOrigins := "https://example.com,https://app.example.com"
 	rootHandler = api.MetricsMiddleware(rootHandler, map[string]string{"GET /health": "/health"}, nil)
 	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, api.NewLogger("test"))
-	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
+	rootHandler = api.CORSMiddleware(allowedOrigins, nil, nil)(rootHandler)
 
 	server := httptest.NewServer(rootHandler)
 	defer server.Close()
@@ -230,7 +230,7 @@ func TestServerStack_CORSHeaders_DisallowedOrigin(t *testing.T) {
 	allowedOrigins := "https://example.com"
 	rootHandler = api.MetricsMiddleware(rootHandler, map[string]string{"GET /health": "/health"}, nil)
 	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, api.NewLogger("test"))
-	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
+	rootHandler = api.CORSMiddleware(allowedOrigins, nil, nil)(rootHandler)
 
 	server := httptest.NewServer(rootHandler)
 	defer server.Close()
@@ -271,7 +271,7 @@ func TestServerStack_CORSPreflight_AllowedOrigin(t *testing.T) {
 	allowedOrigins := "https://example.com"
 	rootHandler = api.MetricsMiddleware(rootHandler, map[string]string{"POST /v1/analyze": "/v1/analyze"}, nil)
 	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, api.NewLogger("test"))
-	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
+	rootHandler = api.CORSMiddleware(allowedOrigins, nil, nil)(rootHandler)
 
 	server := httptest.NewServer(rootHandler)
 	defer server.Close()
@@ -336,7 +336,7 @@ func newMainLikeTestServer(t *testing.T, allowedOrigins string, rateLimitPerMinu
 	}
 	rootHandler = api.MetricsMiddleware(rootHandler, routePatterns, nil)
 	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, api.NewLogger("test"))
-	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
+	rootHandler = api.CORSMiddleware(allowedOrigins, nil, nil)(rootHandler)
 
 	return httptest.NewServer(rootHandler)
 }
