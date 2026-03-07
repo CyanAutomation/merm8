@@ -273,14 +273,13 @@ async function extractAST(mermaidAPI, source, diagramType) {
     for (const e of ast.edges) {
       if (e.from && !seen.has(e.from)) {
         seen.add(e.from);
-        // For fallback node extraction, find location using the original non-normalized ID
-        // Since we only have normalized IDs in edges here, we can't find original location
-        // This is a limitation of the fallback path
-        ast.nodes.push({ id: e.from, label: '' });
+        const nodeLoc = findNodeLocation(sourceLines, e.from);
+        ast.nodes.push({ id: e.from, label: '', ...(nodeLoc || {}) });
       }
       if (e.to && !seen.has(e.to)) {
         seen.add(e.to);
-        ast.nodes.push({ id: e.to, label: '' });
+        const nodeLoc = findNodeLocation(sourceLines, e.to);
+        ast.nodes.push({ id: e.to, label: '', ...(nodeLoc || {}) });
       }
     }
   }
@@ -300,9 +299,9 @@ async function extractAST(mermaidAPI, source, diagramType) {
 function findNodeLocation(lines, id) {
   const escaped = escapeRegExp(id);
   const patterns = [
-    new RegExp(`(^|\\s)${escaped}(?=\\s*[\\[({])`),
-    new RegExp(`(^|\\s)${escaped}(?=\\s*[-.=xo]+>)`),
-    new RegExp(`(^|\\s)${escaped}(?=\\s*$)`),
+    new RegExp(`(^|\\s)${escaped}(?=\\s*[\\[({])`, 'i'),
+    new RegExp(`(^|\\s)${escaped}(?=\\s*[-.=xo]+>)`, 'i'),
+    new RegExp(`(^|\\s)${escaped}(?=\\s*$)`, 'i'),
   ];
 
   for (let i = 0; i < lines.length; i++) {
@@ -322,6 +321,11 @@ function findNodeLocation(lines, id) {
 function findEdgeLocation(lines, from, to) {
   if (!from || !to) return null;
 
+  const escapedFrom = escapeRegExp(from);
+  const escapedTo = escapeRegExp(to);
+  const fromPattern = new RegExp(`(^|\\s)${escapedFrom}(?=\\s*(?:[\\[({]|[-.=xo]+>))`, 'i');
+  const toPattern = new RegExp(`(^|\\s)${escapedTo}(?=\\s*(?:[\\[({]|$))`, 'i');
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const arrowIndex = line.search(/[-.=xo]+>/);
@@ -329,13 +333,19 @@ function findEdgeLocation(lines, from, to) {
       continue;
     }
 
-    const fromIndex = line.indexOf(from);
-    if (fromIndex < 0 || fromIndex > arrowIndex) {
+    const fromMatch = line.match(fromPattern);
+    if (!fromMatch) {
       continue;
     }
 
-    const toIndex = line.indexOf(to, arrowIndex);
-    if (toIndex < 0) {
+    const fromIndex = fromMatch.index + fromMatch[1].length;
+    if (fromIndex > arrowIndex) {
+      continue;
+    }
+
+    const afterArrow = line.slice(arrowIndex);
+    const toMatch = afterArrow.match(toPattern);
+    if (!toMatch) {
       continue;
     }
 
