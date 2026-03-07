@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestParserConfigNormalization(t *testing.T) {
+func TestParserConfig_EffectiveConfig_Boundaries(t *testing.T) {
 	defaults := DefaultConfig()
 	minTimeout, maxTimeout, minMemory, maxMemory := LimitBounds()
 
@@ -22,13 +22,13 @@ func TestParserConfigNormalization(t *testing.T) {
 			expectedMemory:  defaults.NodeMaxOldSpaceMB,
 		},
 		{
-			name:            "config values below bounds are clamped to minimums",
+			name:            "minimum boundary clamps to usable floor to prevent unusable parser limits",
 			config:          Config{Timeout: 100 * time.Millisecond, NodeMaxOldSpaceMB: 1},
 			expectedTimeout: minTimeout,
 			expectedMemory:  minMemory,
 		},
 		{
-			name:            "config values above bounds are clamped to maximums",
+			name:            "maximum boundary clamps to hard cap",
 			config:          Config{Timeout: maxTimeout + time.Second, NodeMaxOldSpaceMB: maxMemory + 1},
 			expectedTimeout: maxTimeout,
 			expectedMemory:  maxMemory,
@@ -99,8 +99,6 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 
 			effective := ConfigFromEnv().EffectiveConfig()
 			if effective.Timeout != tc.expectedConfig.Timeout || effective.NodeMaxOldSpaceMB != tc.expectedConfig.NodeMaxOldSpaceMB {
-				t.Fatalf("expected config %#v, got %#v", tc.expectedConfig, effective)
-			}
 				t.Fatalf("expected config %#v, got %#v", tc.expectedConfig, effective)
 			}
 		})
