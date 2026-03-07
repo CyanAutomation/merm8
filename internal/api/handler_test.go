@@ -5615,6 +5615,66 @@ func TestAnalyze_ConcurrentRequests(t *testing.T) {
 	t.Logf("Processed %d requests, parallel handling achieved", requestCount.Load())
 }
 
+func TestAnalyze_ConcurrentRequestsWithStrictConfigToggling(t *testing.T) {
+	t.Cleanup(func() {
+		api.SetStrictConfigSchemaForTesting(false)
+	})
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	requestBody, err := json.Marshal(map[string]any{
+		"code": "graph TD\n  A --> B",
+		"config": map[string]any{
+			"schema-version": "v1",
+			"rules":          map[string]any{},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	const toggleIterations = 600
+	const requestGoroutines = 8
+	const requestsPerGoroutine = 120
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < toggleIterations; i++ {
+			api.SetStrictConfigSchemaForTesting(i%2 == 0)
+		}
+	}()
+
+	errCh := make(chan error, requestGoroutines*requestsPerGoroutine)
+	for i := 0; i < requestGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < requestsPerGoroutine; j++ {
+				req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(requestBody))
+				req.Header.Set("Content-Type", "application/json")
+				w := httptest.NewRecorder()
+				mux.ServeHTTP(w, req)
+				if w.Code != http.StatusOK {
+					errCh <- fmt.Errorf("unexpected status %d body=%s", w.Code, w.Body.String())
+					return
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // TestAnalyze_SARIFOutputFormat tests SARIF output format and structure.
 func TestAnalyze_SARIFOutputFormat(t *testing.T) {
 	// Diagram with violations
