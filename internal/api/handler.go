@@ -504,7 +504,11 @@ func (l *parserConcurrencyLimiter) TryAcquire() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if l.limit > 0 && l.inFlight >= l.limit {
+	if l.limit <= 0 {
+		return true
+	}
+
+	if l.inFlight >= l.limit {
 		return false
 	}
 
