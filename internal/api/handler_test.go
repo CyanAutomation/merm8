@@ -5921,7 +5921,7 @@ func TestAnalyze_MetricsTracking(t *testing.T) {
 		case "internal-error":
 			return nil, nil, nil
 		default:
-			return nil, nil, errors.New("unexpected test input")
+			return &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}}, Edges: []model.Edge{}}, nil, nil
 		}
 	}}, engine.NewWithRules(metricsConditionalRuleA{}, metricsConditionalRuleB{}))
 	h.RegisterRoutes(mux)
