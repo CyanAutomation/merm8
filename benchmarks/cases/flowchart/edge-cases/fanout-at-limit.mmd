@@ -1,0 +1,17 @@
+graph TD
+    Primary["Distribution Hub"]
+    
+    Primary --> Out1["Destination 1"]
+    Primary --> Out2["Destination 2"]
+    Primary --> Out3["Destination 3"]
+    Primary --> Out4["Destination 4"]
+    Primary --> Out5["Destination 5"]
+    
+    Out1 --> End["Convergence"]
+    Out2 --> End
+    Out3 --> End
+    Out4 --> End
+    Out5 --> End
+    
+    %% @rule: max-fanout
+    %% Exactly 5 outgoing edges from Primary (at default limit)—should pass

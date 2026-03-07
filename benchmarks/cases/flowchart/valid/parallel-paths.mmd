@@ -1,0 +1,24 @@
+graph TD
+    Start["Initialize"]
+    
+    Task1A["Task 1A"]
+    Task1B["Task 1B"]
+    Task1C["Task 1C"]
+    
+    Task2A["Task 2A"]
+    Task2B["Task 2B"]
+    Task2C["Task 2C"]
+    
+    Join["Synchronize"]
+    End["Complete"]
+    
+    Start --> Task1A
+    Start --> Task2A
+    
+    Task1A --> Task1B --> Task1C --> Join
+    Task2A --> Task2B --> Task2C --> Join
+    
+    Join --> End
+    
+    %% @rule: *
+    %% Parallel paths merging together—all rules should pass

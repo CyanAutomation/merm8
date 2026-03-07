@@ -1,0 +1,18 @@
+graph TD
+    A["Hub Node"]
+    
+    A --> B["Out 1"]
+    A --> C["Out 2"]
+    A --> D["Out 3"]
+    A --> E["Out 4"]
+    A --> F["Out 5"]
+    A --> G["Out 6"]
+    
+    B --> H["End"]
+    C --> H
+    D --> H
+    E --> H
+    F --> H
+    G --> H
+    
+    %% @rule: max-fanout

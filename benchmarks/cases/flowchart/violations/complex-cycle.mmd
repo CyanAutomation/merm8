@@ -1,0 +1,15 @@
+graph TD
+    A["Step 1"]
+    B["Step 2"]
+    C["Step 3"]
+    D["Step 4"]
+    E["Step 5"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> A
+    
+    %% @rule: no-cycles
+    %% Forms a cycle: A → B → C → D → E → A
