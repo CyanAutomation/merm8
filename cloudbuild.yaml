@@ -50,6 +50,11 @@ steps:
         apt-get install -y --no-install-recommends nodejs npm
         rm -rf /var/lib/apt/lists/*
 
+        set -e
+        apt-get update
+        apt-get install -y --no-install-recommends nodejs npm
+        rm -rf /var/lib/apt/lists/*
+
         if [ ! -d "parser-node" ]; then
           echo "Error: parser-node directory not found"
           exit 1
@@ -60,6 +65,12 @@ steps:
         cd ..
 
         go run ./benchmarks/main.go
+
+        if [ ! -f "benchmark.html" ]; then
+          echo "Error: benchmark.html was not generated"
+          exit 1
+        fi
+        echo "Successfully generated benchmark.html"
 
   # ---- Step 2: Build image ----
   # Plain docker build with BuildKit enabled — no Buildx or QEMU needed.
