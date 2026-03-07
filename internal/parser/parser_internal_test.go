@@ -12,11 +12,8 @@ func TestParserConfigNormalization(t *testing.T) {
 	testCases := []struct {
 		name            string
 		config          Config
-		env             map[string]string
-		useEnv          bool
 		expectedTimeout time.Duration
 		expectedMemory  int
-		expectFallback  bool
 	}{
 		{
 			name:            "zero-value config uses defaults",
@@ -32,41 +29,64 @@ func TestParserConfigNormalization(t *testing.T) {
 		},
 		{
 			name:            "config values above bounds are clamped to maximums",
-			config:          Config{Timeout: 999 * time.Second, NodeMaxOldSpaceMB: 999999},
+			config:          Config{Timeout: maxTimeout + time.Second, NodeMaxOldSpaceMB: maxMemory + 1},
 			expectedTimeout: maxTimeout,
 			expectedMemory:  maxMemory,
 		},
 		{
+			name:            "in-range values are preserved",
+			config:          Config{Timeout: minTimeout + time.Second, NodeMaxOldSpaceMB: minMemory + 1},
+			expectedTimeout: minTimeout + time.Second,
+			expectedMemory:  minMemory + 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			effective := tc.config.EffectiveConfig()
+
+			if effective.Timeout != tc.expectedTimeout {
+				t.Fatalf("expected timeout %s, got %s", tc.expectedTimeout, effective.Timeout)
+			}
+			if effective.NodeMaxOldSpaceMB != tc.expectedMemory {
+				t.Fatalf("expected NodeMaxOldSpaceMB %d, got %d", tc.expectedMemory, effective.NodeMaxOldSpaceMB)
+			}
+		})
+	}
+}
+
+func TestParserConfigFromEnvNormalization(t *testing.T) {
+	defaults := DefaultConfig()
+
+	testCases := []struct {
+		name           string
+		env            map[string]string
+		expectedConfig Config
+	}{
+		{
 			name: "environment values are parsed when valid",
 			env: map[string]string{
-				"PARSER_TIMEOUT_SECONDS": "12",
+				"PARSER_TIMEOUT_SECONDS":  "12",
 				"PARSER_MAX_OLD_SPACE_MB": "256",
 			},
-			useEnv:          true,
-			expectedTimeout: 12 * time.Second,
-			expectedMemory:  256,
+			expectedConfig: Config{Timeout: 12 * time.Second, NodeMaxOldSpaceMB: 256}.EffectiveConfig(),
 		},
 		{
 			name: "invalid non-numeric environment values fall back to defaults",
 			env: map[string]string{
-				"PARSER_TIMEOUT_SECONDS": "not-a-number",
+				"PARSER_TIMEOUT_SECONDS":  "not-a-number",
 				"PARSER_MAX_OLD_SPACE_MB": "not-a-number",
 			},
-			useEnv:          true,
-			expectedTimeout: defaults.Timeout,
-			expectedMemory:  defaults.NodeMaxOldSpaceMB,
-			expectFallback:  true,
+			expectedConfig: defaults,
 		},
 		{
 			name: "out-of-range environment values fall back to defaults",
 			env: map[string]string{
-				"PARSER_TIMEOUT_SECONDS": "999",
+				"PARSER_TIMEOUT_SECONDS":  "999",
 				"PARSER_MAX_OLD_SPACE_MB": "999999",
 			},
-			useEnv:          true,
-			expectedTimeout: defaults.Timeout,
-			expectedMemory:  defaults.NodeMaxOldSpaceMB,
-			expectFallback:  true,
+			expectedConfig: defaults,
 		},
 	}
 
@@ -77,24 +97,11 @@ func TestParserConfigNormalization(t *testing.T) {
 				t.Setenv(key, value)
 			}
 
-			var effective Config
-			if tc.useEnv {
-				effective = ConfigFromEnv().EffectiveConfig()
-			} else {
-				effective = tc.config.EffectiveConfig()
+			effective := ConfigFromEnv().EffectiveConfig()
+			if effective.Timeout != tc.expectedConfig.Timeout || effective.NodeMaxOldSpaceMB != tc.expectedConfig.NodeMaxOldSpaceMB {
+				t.Fatalf("expected config %#v, got %#v", tc.expectedConfig, effective)
 			}
-
-			if effective.Timeout != tc.expectedTimeout {
-				t.Fatalf("expected timeout %s, got %s", tc.expectedTimeout, effective.Timeout)
-			}
-			if effective.NodeMaxOldSpaceMB != tc.expectedMemory {
-				t.Fatalf("expected NodeMaxOldSpaceMB %d, got %d", tc.expectedMemory, effective.NodeMaxOldSpaceMB)
-			}
-
-			if tc.expectFallback {
-				if effective != defaults {
-					t.Fatalf("expected fallback to defaults %#v, got %#v", defaults, effective)
-				}
+				t.Fatalf("expected config %#v, got %#v", tc.expectedConfig, effective)
 			}
 		})
 	}
