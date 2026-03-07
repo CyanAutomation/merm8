@@ -120,8 +120,6 @@ func TestParseArgsFormatValidation(t *testing.T) {
 }
 
 func TestRunExitCodesFromPublicCLIBehavior(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name         string
 		args         []string
@@ -155,8 +153,6 @@ func TestRunExitCodesFromPublicCLIBehavior(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(tt.responseCode)
@@ -173,8 +169,6 @@ func TestRunExitCodesFromPublicCLIBehavior(t *testing.T) {
 	}
 
 	t.Run("transport failures exit three", func(t *testing.T) {
-		t.Parallel()
-
 		exitCode := runWithStdin(t, []string{"--url", "http://127.0.0.1:1", "--stdin", "--timeout", "100ms"}, "graph TD; A-->B")
 		if exitCode != exitTransport {
 			t.Fatalf("expected exit code %d, got %d", exitTransport, exitCode)
