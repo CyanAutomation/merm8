@@ -447,3 +447,36 @@ func TestServerStack_AnalyzeRateLimited_IncludesCORSAndRateLimitHeaders(t *testi
 		t.Fatalf("unexpected rate-limited payload: %#v", rateLimitedPayload)
 	}
 }
+
+func TestResolveAllowedOrigins_ProductionWarnsWhenEmpty(t *testing.T) {
+	resolved, shouldWarn := resolveAllowedOrigins("production", "")
+
+	if resolved != defaultAllowedOrigins {
+		t.Fatalf("expected default allowed origins %q, got %q", defaultAllowedOrigins, resolved)
+	}
+	if !shouldWarn {
+		t.Fatal("expected warning for empty ALLOWED_ORIGINS in production")
+	}
+}
+
+func TestResolveAllowedOrigins_ProductionWarnsOnDockerPlaceholder(t *testing.T) {
+	resolved, shouldWarn := resolveAllowedOrigins("production", dockerAllowedOriginsPlaceholder)
+
+	if resolved != dockerAllowedOriginsPlaceholder {
+		t.Fatalf("expected configured allowed origins %q, got %q", dockerAllowedOriginsPlaceholder, resolved)
+	}
+	if !shouldWarn {
+		t.Fatal("expected warning for Docker placeholder ALLOWED_ORIGINS in production")
+	}
+}
+
+func TestResolveAllowedOrigins_DevelopmentNoWarningWhenEmpty(t *testing.T) {
+	resolved, shouldWarn := resolveAllowedOrigins("development", "")
+
+	if resolved != defaultAllowedOrigins {
+		t.Fatalf("expected default allowed origins %q, got %q", defaultAllowedOrigins, resolved)
+	}
+	if shouldWarn {
+		t.Fatal("did not expect warning for empty ALLOWED_ORIGINS in development")
+	}
+}

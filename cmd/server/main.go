@@ -14,8 +14,10 @@ import (
 )
 
 const (
-	defaultParserConcurrencyLimit = 8
-	defaultRateLimitPerMinute     = 120
+	defaultParserConcurrencyLimit   = 8
+	defaultRateLimitPerMinute       = 120
+	defaultAllowedOrigins           = "https://merm8-splash.vercel.app"
+	dockerAllowedOriginsPlaceholder = "https://merm8.example.app"
 )
 
 var appVersion = ""
@@ -101,10 +103,10 @@ func main() {
 	// Configure CORS with allowed origins from environment variable.
 	// Apply this middleware last so it executes first on request entry,
 	// including short-circuit 401/429 responses from inner middleware.
-	allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
-	if allowedOrigins == "" {
-		// Default to Vercel frontend domain for merm8
-		allowedOrigins = "https://merm8-splash.vercel.app"
+	configuredAllowedOrigins := os.Getenv("ALLOWED_ORIGINS")
+	allowedOrigins, warnOnAllowedOrigins := resolveAllowedOrigins(deploymentMode, configuredAllowedOrigins)
+	if warnOnAllowedOrigins {
+		logger.Warn("ALLOWED_ORIGINS appears misconfigured for production", "mode", deploymentMode, "configured_allowed_origins", strings.TrimSpace(configuredAllowedOrigins), "placeholder_allowed_origins", dockerAllowedOriginsPlaceholder, "recommended_allowed_origins", defaultAllowedOrigins)
 	}
 	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
 
@@ -129,4 +131,16 @@ func envInt(key string, fallback int) int {
 	}
 
 	return value
+}
+
+func resolveAllowedOrigins(deploymentMode, rawAllowedOrigins string) (string, bool) {
+	configured := strings.TrimSpace(rawAllowedOrigins)
+	warnOnMisconfiguration := strings.EqualFold(strings.TrimSpace(deploymentMode), "production") &&
+		(configured == "" || configured == dockerAllowedOriginsPlaceholder)
+
+	if configured == "" {
+		return defaultAllowedOrigins, warnOnMisconfiguration
+	}
+
+	return configured, warnOnMisconfiguration
 }
