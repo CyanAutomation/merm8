@@ -85,6 +85,8 @@ steps:
       - build
       - --platform
       - linux/amd64
+      - --build-arg
+      - REQUIRE_BENCHMARK_HTML=true
       - --tag
       - ${_GAR_REGION}-docker.pkg.dev/$PROJECT_ID/${_GAR_REPO}/${_IMAGE_NAME}:${_IMAGE_TAG}
       - --tag
