@@ -110,8 +110,16 @@ jobs:
 
       - name: Generate benchmark HTML artifact
         run: |
-          set -e
-          go run ./benchmarks/main.go || { echo "Benchmark generation failed"; exit 1; }
+          set -euo pipefail
+          timeout 5m go run ./benchmarks/main.go || {
+            code=$?
+            if [ "$code" -eq 124 ]; then
+              echo "Benchmark generation timed out after 5 minutes"
+            else
+              echo "Benchmark generation failed"
+            fi
+            exit "$code"
+          }
           test -f benchmark.html || { echo "benchmark.html was not generated"; exit 1; }
 
       - name: Build and push Docker image
