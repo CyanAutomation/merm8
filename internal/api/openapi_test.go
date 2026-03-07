@@ -54,6 +54,13 @@ func lookup(t *testing.T, v interface{}, path ...string) interface{} {
 	return cur
 }
 
+func assertNoHelpSuggestionKey(t *testing.T, payload map[string]interface{}, name string) {
+	t.Helper()
+	if _, exists := payload["help-suggestion"]; exists {
+		t.Fatalf("expected %s to omit help-suggestion, got %#v", name, payload["help-suggestion"])
+	}
+}
+
 func TestServeSpec_HasRequiredOpenAPIFieldsAndRefs(t *testing.T) {
 	spec := loadServedSpec(t)
 
@@ -142,6 +149,7 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	if errField := validDiagram["error"]; errField != nil {
 		t.Fatalf("expected validDiagram.error to be null/omitted, got %#v", errField)
 	}
+	assertNoHelpSuggestionKey(t, validDiagram, "validDiagram")
 	metrics := lookup(t, validDiagram, "metrics").(map[string]interface{})
 	for _, metric := range []string{"node-count", "edge-count", "disconnected-node-count", "duplicate-node-count", "max-fanin", "max-fanout"} {
 		if _, ok := metrics[metric].(float64); !ok {
@@ -175,6 +183,7 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	if errField := withIssues["error"]; errField != nil {
 		t.Fatalf("expected withIssues.error to be null/omitted, got %#v", errField)
 	}
+	assertNoHelpSuggestionKey(t, withIssues, "withIssues")
 	if _, ok := withIssues["metrics"].(map[string]interface{}); !ok {
 		t.Fatalf("expected withIssues.metrics object, got %#v", withIssues["metrics"])
 	}
@@ -192,6 +201,17 @@ func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	}
 	if errField := syntaxExample["error"]; errField != nil {
 		t.Fatalf("expected syntaxError.error to be null/omitted, got %#v", errField)
+	}
+	if rawHelp, exists := syntaxExample["help-suggestion"]; exists && rawHelp != nil {
+		helpSuggestion, ok := rawHelp.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected syntaxError.help-suggestion object when present, got %#v", rawHelp)
+		}
+		for _, key := range []string{"title", "explanation", "wrong-example", "correct-example", "doc-link", "fix-action"} {
+			if value, ok := helpSuggestion[key].(string); !ok || value == "" {
+				t.Fatalf("expected syntaxError.help-suggestion.%s non-empty string, got %#v", key, helpSuggestion[key])
+			}
+		}
 	}
 	if _, ok := syntaxExample["metrics"].(map[string]interface{}); !ok {
 		t.Fatalf("expected syntaxError.metrics object, got %#v", syntaxExample["metrics"])
@@ -263,6 +283,7 @@ func assertErrorShape(t *testing.T, payload map[string]interface{}, expectedCode
 	if syntaxErr, ok := payload["syntax-error"]; !ok || syntaxErr != nil {
 		t.Fatalf("expected syntax-error=null, got %#v", payload["syntax-error"])
 	}
+	assertNoHelpSuggestionKey(t, payload, "error payload")
 	issues, ok := payload["issues"].([]interface{})
 	if !ok || len(issues) != 0 {
 		t.Fatalf("expected empty issues array, got %#v", payload["issues"])
@@ -274,12 +295,12 @@ func assertErrorShape(t *testing.T, payload map[string]interface{}, expectedCode
 	if metrics["diagram-type"] != "unknown" {
 		t.Fatalf("expected metrics.diagram-type=unknown, got %#v", metrics["diagram-type"])
 	}
-	code := lookup(t, payload, "error", "code")
-	if code != expectedCode {
-		t.Fatalf("expected error.code=%q, got %#v", expectedCode, code)
+	code, ok := lookup(t, payload, "error", "code").(string)
+	if !ok || code != expectedCode {
+		t.Fatalf("expected error.code=%q string, got %#v", expectedCode, lookup(t, payload, "error", "code"))
 	}
-	if msg := lookup(t, payload, "error", "message"); msg == "" {
-		t.Fatal("expected non-empty error.message")
+	if msg, ok := lookup(t, payload, "error", "message").(string); !ok || msg == "" {
+		t.Fatalf("expected non-empty string error.message, got %#v", lookup(t, payload, "error", "message"))
 	}
 }
 

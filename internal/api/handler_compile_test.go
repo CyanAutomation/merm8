@@ -31,10 +31,3 @@ func TestHelpForSyntaxError_CompileCheck(t *testing.T) {
 		t.Logf("Syntax error with no line/column info")
 	}
 }
-
-// TestNewResponseStructure verifies that the analyzeResponse type exists and has HelpSuggestion field
-func TestNewResponseStructure(t *testing.T) {
-	// This is a compile-time check via vet
-	// If HelpSuggestion field doesn't exist, this file won't compile
-	t.Logf("Response structure test - if this runs, the struct changes are valid")
-}
