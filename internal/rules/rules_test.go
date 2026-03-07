@@ -129,6 +129,48 @@ func TestNoDisconnectedNodes_NoEdgesMultipleNodes(t *testing.T) {
 	}
 }
 
+func TestNoDisconnectedNodes_UsesDisconnectedNodeIDsFromSourceAnalysis(t *testing.T) {
+	d := &model.Diagram{
+		Nodes:               []model.Node{{ID: "A"}, {ID: "B"}},
+		Edges:               []model.Edge{{From: "A", To: "B"}},
+		DisconnectedNodeIDs: []string{"C", "D"},
+	}
+
+	issues := rules.NoDisconnectedNodes{}.Run(d, nil)
+	if len(issues) != 2 {
+		t.Fatalf("expected 2 issues for source-derived disconnected nodes, got %d", len(issues))
+	}
+	if issues[0].Message != "node is disconnected: C" {
+		t.Fatalf("expected first issue for C, got %q", issues[0].Message)
+	}
+	if issues[1].Message != "node is disconnected: D" {
+		t.Fatalf("expected second issue for D, got %q", issues[1].Message)
+	}
+	if issues[0].Line != nil || issues[0].Column != nil || issues[1].Line != nil || issues[1].Column != nil {
+		t.Fatalf("expected location to be unset for nodes absent from AST, got %#v", issues)
+	}
+}
+
+func TestNoDisconnectedNodes_DeDuplicatesAcrossGraphAndSourceAnalysis(t *testing.T) {
+	d := &model.Diagram{
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges: []model.Edge{{From: "A", To: "B"}},
+		// C is disconnected in graph analysis; D exists only in source analysis.
+		DisconnectedNodeIDs: []string{"D", "C", "D"},
+	}
+
+	issues := rules.NoDisconnectedNodes{}.Run(d, nil)
+	if len(issues) != 2 {
+		t.Fatalf("expected 2 unique disconnected node issues, got %d", len(issues))
+	}
+	if issues[0].Message != "node is disconnected: C" {
+		t.Fatalf("expected deterministic first issue for C, got %q", issues[0].Message)
+	}
+	if issues[1].Message != "node is disconnected: D" {
+		t.Fatalf("expected deterministic second issue for D, got %q", issues[1].Message)
+	}
+}
+
 func TestMaxFanout_UnderLimit(t *testing.T) {
 	d := &model.Diagram{
 		Edges: []model.Edge{
