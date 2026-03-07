@@ -54,7 +54,7 @@ func main() {
 	// Default is false for backward compatibility with v1.0; production deployments should enable.
 	strictConfigSchema := strings.ToLower(strings.TrimSpace(os.Getenv("STRICT_CONFIG_SCHEMA")))
 	if strictConfigSchema == "true" || strictConfigSchema == "1" {
-		api.SetStrictConfigSchema(true)
+		handler.SetStrictConfigSchema(true)
 		logger.Info("Strict config schema enforcement enabled via STRICT_CONFIG_SCHEMA=true", "component", "server")
 	}
 
