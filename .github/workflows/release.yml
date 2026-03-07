@@ -103,6 +103,16 @@ jobs:
           password: ${{ secrets.GCP_SA_KEY }}
         if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Generate benchmark HTML artifact
+        run: |
+          go run ./benchmarks/main.go
+          test -f benchmark.html
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
