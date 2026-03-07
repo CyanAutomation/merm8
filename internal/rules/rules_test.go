@@ -151,6 +151,29 @@ func TestNoDisconnectedNodes_UsesDisconnectedNodeIDsFromSourceAnalysis(t *testin
 	}
 }
 
+func TestNoDisconnectedNodes_SourceDerivedIDPresentInNodesKeepsLocation(t *testing.T) {
+	line, column := 7, 12
+	d := &model.Diagram{
+		Nodes: []model.Node{{ID: "A", Line: &line, Column: &column}, {ID: "B"}},
+		Edges: []model.Edge{{From: "A", To: "B"}},
+		// A is connected by edge analysis, but source analysis can still mark it disconnected.
+		DisconnectedNodeIDs: []string{"A"},
+	}
+
+	issues := rules.NoDisconnectedNodes{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Message != "node is disconnected: A" {
+		t.Fatalf("expected issue for A, got %q", issues[0].Message)
+	}
+	if issues[0].Line == nil || issues[0].Column == nil {
+		t.Fatalf("expected location to be preserved for A, got line=%v column=%v", issues[0].Line, issues[0].Column)
+	}
+	if *issues[0].Line != line || *issues[0].Column != column {
+		t.Fatalf("expected line=%d column=%d, got line=%d column=%d", line, column, *issues[0].Line, *issues[0].Column)
+	}
+}
 func TestNoDisconnectedNodes_DeDuplicatesAcrossGraphAndSourceAnalysis(t *testing.T) {
 	d := &model.Diagram{
 		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
