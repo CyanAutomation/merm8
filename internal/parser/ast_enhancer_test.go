@@ -120,43 +120,95 @@ func TestEnhanceASTWithSourceAnalysis_AllNodesConnected(t *testing.T) {
 
 func TestExtractAllNodeIDsFromSource_BasicPatterns(t *testing.T) {
 	tests := []struct {
-		name         string
-		source       string
-		wantContains []string // Just check that these node IDs are present
+		name              string
+		source            string
+		wantIDsInOrder    []string
+		forbiddenIDs      []string
+		downstreamEdgeIDs map[string]bool
+		wantDisconnected  []string
+		wantDuplicates    []string
 	}{
 		{
-			name:         "square brackets",
-			source:       "A[Box]\nB[Another]",
-			wantContains: []string{"A", "B"},
+			name:              "square brackets",
+			source:            "A[Box]\nB[Another]",
+			wantIDsInOrder:    []string{"A", "B"},
+			forbiddenIDs:      []string{"graph", "TD", "Box"},
+			downstreamEdgeIDs: map[string]bool{"A": true},
+			wantDisconnected:  []string{"B"},
+			wantDuplicates:    []string{},
 		},
 		{
-			name:         "parentheses",
-			source:       "A(Round)\nB(Circle)",
-			wantContains: []string{"A", "B"},
+			name:              "parentheses",
+			source:            "A(Round)\nB(Circle)",
+			wantIDsInOrder:    []string{"A", "B"},
+			forbiddenIDs:      []string{"Round", "Circle"},
+			downstreamEdgeIDs: map[string]bool{"A": true, "B": true},
+			wantDisconnected:  []string{},
+			wantDuplicates:    []string{},
 		},
 		{
-			name:         "curly braces",
-			source:       "A{Diamond}\nB{Rhombus}",
-			wantContains: []string{"A", "B"},
+			name:              "curly braces",
+			source:            "A{Diamond}\nB{Rhombus}",
+			wantIDsInOrder:    []string{"A", "B"},
+			forbiddenIDs:      []string{"Diamond", "Rhombus"},
+			downstreamEdgeIDs: map[string]bool{"A": true},
+			wantDisconnected:  []string{"B"},
+			wantDuplicates:    []string{},
 		},
 		{
-			name:         "no duplicate A in output",
-			source:       "A[First]\nA[Second]",
-			wantContains: []string{"A"},
+			name:              "no duplicate A in output",
+			source:            "graph TD\nA[First]\nA[Second]\nB --> C\nclassDef foo fill:#f9f,stroke:#333\nsubgraph cluster_1\nend",
+			wantIDsInOrder:    []string{"A"},
+			forbiddenIDs:      []string{"graph", "TD", "classDef", "foo", "subgraph", "cluster_1", "end", "B", "C", "First", "Second"},
+			downstreamEdgeIDs: map[string]bool{},
+			wantDisconnected:  []string{"A"},
+			wantDuplicates:    []string{"A"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := extractAllNodeIDsFromSource(tt.source)
-			gotSet := make(map[string]bool)
+
+			if len(got) != len(tt.wantIDsInOrder) {
+				t.Fatalf("expected %d node IDs, got %d: %v", len(tt.wantIDsInOrder), len(got), got)
+			}
+			for i, want := range tt.wantIDsInOrder {
+				if got[i] != want {
+					t.Fatalf("expected node ID %q at position %d, got %q (all=%v)", want, i, got[i], got)
+				}
+			}
+
+			gotSet := make(map[string]bool, len(got))
 			for _, id := range got {
 				gotSet[id] = true
 			}
-			for _, want := range tt.wantContains {
-				if !gotSet[want] {
-					t.Fatalf("expected node ID %q to be in result, got %v", want, got)
+			for _, forbidden := range tt.forbiddenIDs {
+				if gotSet[forbidden] {
+					t.Fatalf("unexpected non-node token %q captured from source, got IDs %v", forbidden, got)
 				}
+			}
+
+			var disconnected []string
+			for _, id := range got {
+				if !tt.downstreamEdgeIDs[id] {
+					disconnected = append(disconnected, id)
+				}
+			}
+			normalize := func(ids []string) []string {
+				if ids == nil {
+					return []string{}
+				}
+				return ids
+			}
+
+			if !reflect.DeepEqual(normalize(disconnected), normalize(tt.wantDisconnected)) {
+				t.Fatalf("disconnected-node input mismatch: want=%v got=%v from source IDs=%v", tt.wantDisconnected, disconnected, got)
+			}
+
+			duplicates := findDuplicateNodeIDs(tt.source)
+			if !reflect.DeepEqual(normalize(duplicates), normalize(tt.wantDuplicates)) {
+				t.Fatalf("duplicate-node input mismatch: want=%v got=%v", tt.wantDuplicates, duplicates)
 			}
 		})
 	}
