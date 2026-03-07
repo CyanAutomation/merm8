@@ -464,6 +464,9 @@ func (r *Runner) generateReports(results *BenchmarkResults) error {
 
 	legacyHTMLPath := filepath.Join(r.reportsDir, "index.html")
 	if legacyHTMLPath != htmlPath {
+		if err := os.MkdirAll(filepath.Dir(legacyHTMLPath), 0755); err != nil {
+			return err
+		}
 		if err := os.WriteFile(legacyHTMLPath, []byte(htmlContent), 0644); err != nil {
 			return err
 		}
