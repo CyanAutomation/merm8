@@ -5558,61 +5558,76 @@ func TestAnalyze_ParserMemoryLimitExceeded(t *testing.T) {
 	}
 }
 
-// TestAnalyze_ConcurrentRequests simulates concurrent analyze requests.
+// TestAnalyze_ConcurrentRequests verifies deterministic outcomes for concurrent requests.
 func TestAnalyze_ConcurrentRequests(t *testing.T) {
-	requestCount := atomic.Int32{}
-	maxConcurrentParses := atomic.Int32{}
-	currentConcurrentParses := atomic.Int32{}
+	const parserLimit = 2
 
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		requestCount.Add(1)
-		concurrent := currentConcurrentParses.Add(1)
-		if concurrent > maxConcurrentParses.Load() {
-			maxConcurrentParses.Store(concurrent)
-		}
-		defer currentConcurrentParses.Add(-1)
+	entered := make(chan struct{}, parserLimit)
+	release := make(chan struct{})
 
-		// Simulate some work
-		time.Sleep(50 * time.Millisecond)
-
+	mockP := &mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		entered <- struct{}{}
+		<-release
 		return &model.Diagram{
 			Type:  model.DiagramTypeFlowchart,
 			Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
 			Edges: []model.Edge{{From: "A", To: "B"}},
 		}, nil, nil
-	})
+	}}
 
-	// Send 5 concurrent requests
-	numRequests := 5
-	done := make(chan int, numRequests)
-	for i := 0; i < numRequests; i++ {
+	h := api.NewHandler(mockP, engine.New())
+	h.SetParserConcurrencyLimit(parserLimit)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A --> B"})
+
+	start := make(chan struct{})
+	type result struct {
+		status int
+		retry  string
+	}
+	results := make(chan result, parserLimit+1)
+
+	for i := 0; i < parserLimit+1; i++ {
 		go func() {
-			body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A --> B"})
+			<-start
 			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
-			if w.Code != http.StatusOK {
-				done <- 0
-			} else {
-				done <- 1
-			}
+			results <- result{status: w.Code, retry: w.Header().Get("Retry-After")}
 		}()
 	}
 
-	// Collect results
-	successCount := 0
-	for i := 0; i < numRequests; i++ {
-		if <-done == 1 {
-			successCount++
+	close(start)
+
+	for i := 0; i < parserLimit; i++ {
+		select {
+		case <-entered:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for admitted parse call %d", i+1)
 		}
 	}
 
-	if successCount != numRequests {
-		t.Errorf("expected all %d concurrent requests to succeed, got %d successes", numRequests, successCount)
+	busy := <-results
+	if busy.status != http.StatusServiceUnavailable {
+		t.Fatalf("expected overflow request to return 503, got %d", busy.status)
+	}
+	if busy.retry != "1" {
+		t.Fatalf("expected Retry-After header value 1 on busy response, got %q", busy.retry)
 	}
 
-	t.Logf("Processed %d requests, parallel handling achieved", requestCount.Load())
+	close(release)
+
+	successes := 0
+	for successes < parserLimit {
+		res := <-results
+		if res.status != http.StatusOK {
+			t.Fatalf("expected admitted request to complete with 200, got %d", res.status)
+		}
+		successes++
+	}
 }
 
 // TestAnalyze_SARIFOutputFormat tests SARIF output format and structure.
