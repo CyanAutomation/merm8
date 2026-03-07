@@ -477,7 +477,50 @@ type Handler struct {
 	startTime           time.Time
 	mu                  sync.RWMutex
 	strictConfigSchema  bool
-	parserConcurrencyCh chan struct{}
+	parserConcurrency   *parserConcurrencyLimiter
+}
+
+type parserConcurrencyLimiter struct {
+	mu       sync.Mutex
+	limit    int
+	inFlight int
+}
+
+func newParserConcurrencyLimiter() *parserConcurrencyLimiter {
+	return &parserConcurrencyLimiter{}
+}
+
+func (l *parserConcurrencyLimiter) SetLimit(limit int) {
+	if limit < 0 {
+		limit = 0
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.limit = limit
+}
+
+func (l *parserConcurrencyLimiter) TryAcquire() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.limit > 0 && l.inFlight >= l.limit {
+		return false
+	}
+
+	l.inFlight++
+	return true
+}
+
+func (l *parserConcurrencyLimiter) Release() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.inFlight == 0 {
+		return
+	}
+
+	l.inFlight--
 }
 
 type analyzeOutcomeCounters struct {
@@ -577,6 +620,7 @@ func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
 		logger:             normalizeLogger(NewLogger("api")),
 		startTime:          time.Now(),
 		strictConfigSchema: defaultStrictConfigSchema.Load(),
+		parserConcurrency:  newParserConcurrencyLimiter(),
 	}
 }
 
@@ -599,13 +643,23 @@ func (h *Handler) strictConfigSchemaEnabled() bool {
 func (h *Handler) SetParserConcurrencyLimit(limit int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.parserConcurrency.SetLimit(limit)
+}
 
-	if limit <= 0 {
-		h.parserConcurrencyCh = nil
-		return
+func (h *Handler) tryAcquireParserSlot() (func(), bool) {
+	h.mu.RLock()
+	limiter := h.parserConcurrency
+	h.mu.RUnlock()
+
+	if limiter == nil {
+		return func() {}, true
 	}
 
-	h.parserConcurrencyCh = make(chan struct{}, limit)
+	if !limiter.TryAcquire() {
+		return nil, false
+	}
+
+	return limiter.Release, true
 }
 
 // SetMetricsHandler configures the exporter used by GET /metrics.
@@ -1216,21 +1270,14 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		return
 	}
 
-	h.mu.RLock()
-	parserConcurrencyCh := h.parserConcurrencyCh
-	h.mu.RUnlock()
-
-	if parserConcurrencyCh != nil {
-		select {
-		case parserConcurrencyCh <- struct{}{}:
-			defer func() { <-parserConcurrencyCh }()
-		default:
-			observeAnalyzeOutcome("server_busy")
-			setServerBusyRetryAfterHeader(w)
-			writeErrorWithDetailsAndContext(w, r, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again", nil)
-			return
-		}
+	releaseParserSlot, ok := h.tryAcquireParserSlot()
+	if !ok {
+		observeAnalyzeOutcome("server_busy")
+		setServerBusyRetryAfterHeader(w)
+		writeErrorWithDetailsAndContext(w, r, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again", nil)
+		return
 	}
+	defer releaseParserSlot()
 
 	parseStart := time.Now()
 	diagram, syntaxErr, err := h.parseWithRequestSettings(req)
@@ -1475,21 +1522,14 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	h.mu.RLock()
-	parserConcurrencyCh := h.parserConcurrencyCh
-	h.mu.RUnlock()
-
-	if parserConcurrencyCh != nil {
-		select {
-		case parserConcurrencyCh <- struct{}{}:
-			defer func() { <-parserConcurrencyCh }()
-		default:
-			observeAnalyzeOutcome("server_busy")
-			setServerBusyRetryAfterHeader(w)
-			writeErrorWithDetailsAndContext(w, r, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again", nil)
-			return
-		}
+	releaseParserSlot, ok := h.tryAcquireParserSlot()
+	if !ok {
+		observeAnalyzeOutcome("server_busy")
+		setServerBusyRetryAfterHeader(w)
+		writeErrorWithDetailsAndContext(w, r, http.StatusServiceUnavailable, "server_busy", "parser concurrency limit reached; try again", nil)
+		return
 	}
+	defer releaseParserSlot()
 
 	parseStart := time.Now()
 	diagram, syntaxErr, err := h.parseWithRequestSettings(req)
@@ -1733,25 +1773,18 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		return
 	}
 
-	h.mu.RLock()
-	parserConcurrencyCh := h.parserConcurrencyCh
-	h.mu.RUnlock()
-
-	if parserConcurrencyCh != nil {
-		select {
-		case parserConcurrencyCh <- struct{}{}:
-			defer func() { <-parserConcurrencyCh }()
-		default:
-			observeAnalyzeOutcome("server_busy")
-			setServerBusyRetryAfterHeader(w)
-			report := sarif.TransformError(sarif.ErrorInfo{
-				Code:    "server_busy",
-				Message: "parser concurrency limit reached; try again",
-			}, meta)
-			writeSARIF(w, http.StatusServiceUnavailable, report)
-			return
-		}
+	releaseParserSlot, ok := h.tryAcquireParserSlot()
+	if !ok {
+		observeAnalyzeOutcome("server_busy")
+		setServerBusyRetryAfterHeader(w)
+		report := sarif.TransformError(sarif.ErrorInfo{
+			Code:    "server_busy",
+			Message: "parser concurrency limit reached; try again",
+		}, meta)
+		writeSARIF(w, http.StatusServiceUnavailable, report)
+		return
 	}
+	defer releaseParserSlot()
 
 	parseStart := time.Now()
 	diagram, syntaxErr, err := h.parseWithRequestSettings(req)
