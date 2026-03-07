@@ -5977,6 +5977,7 @@ func TestAnalyze_SARIFOutputFormat(t *testing.T) {
 			{ID: "D", Label: "D"},
 			{ID: "E", Label: "E"},
 			{ID: "F", Label: "F"},
+			{ID: "G", Label: "G"},
 		},
 		Edges: []model.Edge{
 			{From: "A", To: "B"},
@@ -5984,6 +5985,7 @@ func TestAnalyze_SARIFOutputFormat(t *testing.T) {
 			{From: "A", To: "D"},
 			{From: "A", To: "E"},
 			{From: "A", To: "F"},
+			{From: "A", To: "G"},
 			// C is disconnected, B has only incoming edge
 		},
 	}
@@ -6047,12 +6049,20 @@ func TestAnalyze_SARIFOutputFormat(t *testing.T) {
 		got = append(got, toFinding(result))
 	}
 
-	want := []finding{{
-		ruleID:  "no-duplicate-node-ids",
-		level:   "error",
-		message: "duplicate node ID: A",
-		hasLoc:  false,
-	}}
+	want := []finding{
+		{
+			ruleID:  "max-fanout",
+			level:   "warning",
+			message: "node \"A\" has fanout 6, exceeding limit of 5",
+			hasLoc:  false,
+		},
+		{
+			ruleID:  "no-duplicate-node-ids",
+			level:   "error",
+			message: "duplicate node ID: A",
+			hasLoc:  false,
+		},
+	}
 
 	sort.Slice(got, func(i, j int) bool {
 		if got[i].ruleID != got[j].ruleID {
