@@ -6,40 +6,45 @@ import (
 	"testing"
 )
 
-func TestRequestIDMiddleware_PropagatesIncomingHeader(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := RequestIDFromContext(r.Context()); got != "incoming-id" {
-			t.Fatalf("expected request id in context, got %q", got)
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	req.Header.Set(requestIDHeader, "incoming-id")
-	rec := httptest.NewRecorder()
-
-	RequestIDMiddleware(next).ServeHTTP(rec, req)
-
-	if got := rec.Header().Get(requestIDHeader); got != "incoming-id" {
-		t.Fatalf("expected response request id %q, got %q", "incoming-id", got)
+func TestRequestIDMiddleware_PropagatesOrGeneratesRequestID(t *testing.T) {
+	tests := []struct {
+		name       string
+		incomingID string
+		wantID     string
+	}{
+		{name: "propagates incoming request id", incomingID: "incoming-id", wantID: "incoming-id"},
+		{name: "generates request id when missing"},
 	}
-}
 
-func TestRequestIDMiddleware_GeneratesHeaderWhenMissing(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := RequestIDFromContext(r.Context()); got == "" {
-			t.Fatal("expected generated request id in context")
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got := RequestIDFromContext(r.Context())
+				if tc.wantID != "" && got != tc.wantID {
+					t.Fatalf("expected request id in context %q, got %q", tc.wantID, got)
+				}
+				if tc.wantID == "" && got == "" {
+					t.Fatal("expected generated request id in context")
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
 
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/health", nil)
+			if tc.incomingID != "" {
+				req.Header.Set(requestIDHeader, tc.incomingID)
+			}
+			rec := httptest.NewRecorder()
 
-	RequestIDMiddleware(next).ServeHTTP(rec, req)
+			RequestIDMiddleware(next).ServeHTTP(rec, req)
 
-	if got := rec.Header().Get(requestIDHeader); got == "" {
-		t.Fatal("expected generated request id in response header")
+			got := rec.Header().Get(requestIDHeader)
+			if tc.wantID != "" && got != tc.wantID {
+				t.Fatalf("expected response request id %q, got %q", tc.wantID, got)
+			}
+			if tc.wantID == "" && got == "" {
+				t.Fatal("expected generated request id in response header")
+			}
+		})
 	}
 }
 
