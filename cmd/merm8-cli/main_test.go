@@ -3,15 +3,63 @@ package main
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestParseArgsDefaultsToStdin(t *testing.T) {
-	opts, err := parseArgs([]string{})
-	if err != nil {
-		t.Fatalf("parseArgs error: %v", err)
+	tests := []struct {
+		name       string
+		args       []string
+		wantStdin  bool
+		wantFormat string
+		wantConfig string
+	}{
+		{
+			name:       "no args defaults to stdin",
+			args:       []string{},
+			wantStdin:  true,
+			wantFormat: "text",
+			wantConfig: "",
+		},
+		{
+			name:       "positional file disables stdin",
+			args:       []string{"diagram.mmd"},
+			wantStdin:  false,
+			wantFormat: "text",
+			wantConfig: "",
+		},
+		{
+			name:       "explicit stdin flag with file",
+			args:       []string{"--stdin", "diagram.mmd"},
+			wantStdin:  true,
+			wantFormat: "text",
+			wantConfig: "",
+		},
 	}
-	if !opts.UseStdin {
-		t.Fatalf("expected UseStdin=true when no files are provided")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts, err := parseArgs(tt.args)
+			if err != nil {
+				t.Fatalf("parseArgs error: %v", err)
+			}
+
+			if opts.UseStdin != tt.wantStdin {
+				t.Fatalf("expected UseStdin=%t, got %t", tt.wantStdin, opts.UseStdin)
+			}
+			if opts.Format != tt.wantFormat {
+				t.Fatalf("expected Format=%q, got %q", tt.wantFormat, opts.Format)
+			}
+			if opts.ConfigPath != tt.wantConfig {
+				t.Fatalf("expected ConfigPath=%q, got %q", tt.wantConfig, opts.ConfigPath)
+			}
+			if opts.URL != "" {
+				t.Fatalf("expected URL to default to empty, got %q", opts.URL)
+			}
+			if opts.Timeout != 10*time.Second {
+				t.Fatalf("expected Timeout=%s, got %s", 10*time.Second, opts.Timeout)
+			}
+		})
 	}
 }
 
