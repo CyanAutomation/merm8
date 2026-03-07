@@ -32,8 +32,10 @@ const maxAnalyzeBodyBytes int64 = 1 << 20 // 1 MiB
 const serverBusyRetryAfterSeconds = 1
 
 const (
-	legacyAnalyzeSunsetHeader     = "Tue, 30 Jun 2026 23:59:59 GMT"
-	legacyAnalyzeSuccessorDocLink = `</v1/docs#/Linting/post_v1_analyze>; rel="successor-version"`
+	legacyAnalyzeSunsetHeader      = "Tue, 30 Jun 2026 23:59:59 GMT"
+	legacyAnalyzeSuccessorDocLink  = `</v1/docs#/Linting/post_v1_analyze>; rel="successor-version"`
+	v1AnalyseDeprecationWarning    = `299 - "POST /v1/analyse is deprecated; use POST /v1/analyze. Planned removal in v1.2.0 (Q2 2026)."`
+	v1AnalyseRawDeprecationWarning = `299 - "POST /v1/analyse/raw is deprecated; use POST /v1/analyze/raw. Planned removal in v1.2.0 (Q2 2026)."`
 )
 
 const (
@@ -678,7 +680,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/diagram-types", h.DiagramTypes)
 	mux.HandleFunc("GET /v1/analyze/help", h.AnalyzeHelp)
 	mux.HandleFunc("POST /v1/analyze", h.Analyze)
+	mux.HandleFunc("POST /v1/analyse", h.Analyze)
 	mux.HandleFunc("POST /v1/analyze/raw", h.AnalyzeRaw)
+	mux.HandleFunc("POST /v1/analyse/raw", h.AnalyzeRaw)
 	mux.HandleFunc("POST /v1/analyze/sarif", h.AnalyzeSARIF)
 	mux.HandleFunc("GET /v1/spec", h.ServeSpec)
 	mux.HandleFunc("GET /v1/docs", h.ServeSwagger)
@@ -1145,6 +1149,7 @@ func (h *Handler) AnalyzeHelp(w http.ResponseWriter, r *http.Request) {
 
 // Analyze handles POST /analyze.
 func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
+	emitAnalyseAliasWarning(w, r)
 	h.analyzeWithCallback(w, r, func(resp analyzeResponse) {
 		writeJSON(w, http.StatusOK, resp)
 	})
@@ -1372,9 +1377,25 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 // Auto-detects format: tries JSON with "code" field first, falls back to treating body as raw mermaid.
 // JSON requests can also include config and parser settings, matching /analyze behavior.
 func (h *Handler) AnalyzeRaw(w http.ResponseWriter, r *http.Request) {
+	emitAnalyseAliasWarning(w, r)
 	h.analyzeRawWithCallback(w, r, func(resp analyzeResponse) {
 		writeJSON(w, http.StatusOK, resp)
 	})
+}
+
+func emitAnalyseAliasWarning(w http.ResponseWriter, r *http.Request) {
+	if r == nil || r.URL == nil {
+		return
+	}
+
+	switch r.URL.Path {
+	case "/v1/analyse":
+		w.Header().Set("Deprecation", "true")
+		w.Header().Add("Warning", v1AnalyseDeprecationWarning)
+	case "/v1/analyse/raw":
+		w.Header().Set("Deprecation", "true")
+		w.Header().Add("Warning", v1AnalyseRawDeprecationWarning)
+	}
 }
 
 func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request, onValid func(resp analyzeResponse)) {

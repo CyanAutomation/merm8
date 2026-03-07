@@ -345,12 +345,12 @@ func isAnalyzePath(path string) bool {
 }
 
 func isAnalyzeJSONPath(path string) bool {
-	return path == "/analyze" || path == "/v1/analyze"
+	return path == "/analyze" || path == "/v1/analyze" || path == "/v1/analyse"
 }
 
 func isProtectedAnalyzePath(path string) bool {
 	return isAnalyzeJSONPath(path) ||
-		path == "/analyze/raw" || path == "/v1/analyze/raw" ||
+		path == "/analyze/raw" || path == "/v1/analyze/raw" || path == "/v1/analyse/raw" ||
 		path == "/analyze/sarif" || path == "/v1/analyze/sarif"
 }
 

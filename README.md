@@ -308,7 +308,7 @@ A versioned schema artifact is also published at `schemas/config.v1.json` for to
 curl -s http://localhost:8080/rules/schema | jq '.schema'
 ```
 
-### `POST /v1/analyze` (canonical) and legacy alias `POST /analyze`
+### `POST /v1/analyze` (canonical) with compatibility aliases `POST /v1/analyse` and legacy `POST /analyze`
 
 **Request body**
 
@@ -339,7 +339,9 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 
 > Request body size limit: **1 MiB**. Oversized payloads return `413` with the same unified `AnalyzeResponse` shape (`valid=false`, `lint-supported=false`, `syntax-error=null`, `issues=[]`, and populated `error`).
 
-**Response-mode matrix (`POST /analyze`)**
+**Response-mode matrix (`POST /v1/analyze`, `POST /v1/analyse`, and `POST /analyze`)**
+
+> Spelling note: `analyze` is canonical. The British-English aliases `/v1/analyse` and `/v1/analyse/raw` are temporary compatibility routes and emit deprecation `Warning` headers; migrate to `/v1/analyze*`.
 
 | HTTP status | `valid` | `syntax-error` | `issues` | `error` | when it occurs |
 |---|---:|---|---|---|---|
