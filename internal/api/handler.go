@@ -116,6 +116,8 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 	cfgRaw := raw
 	rulePathPrefix := "config"
 	deprecations := make([]string, 0, 2)
+	var nestedRulesCfg rules.Config
+	useNestedRulesCfg := false
 
 	schemaVersionValue, hasSchemaVersion := asMap["schema-version"]
 	if legacySchemaVersionValue, hasLegacySchemaVersion := asMap["schema_version"]; hasLegacySchemaVersion {
@@ -131,6 +133,8 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		return rules.Config{}, nil, &validationError{Code: "deprecated_config_format", Path: "config", Message: "legacy unversioned config shape is deprecated; use config.schema-version and config.rules"}
 	}
 
+	rulesValue, hasTopLevelRules := asMap["rules"]
+
 	if hasSchemaVersion {
 		schemaVersion, ok := schemaVersionValue.(string)
 		if !ok {
@@ -145,8 +149,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 			}
 		}
 
-		rulesValue, hasRules := asMap["rules"]
-		if !hasRules {
+		if !hasTopLevelRules {
 			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules is required when config.schema-version is set"}
 		}
 		rulesMap, ok := rulesValue.(map[string]any)
@@ -170,11 +173,20 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		cfgRaw = rawRules
 		asMap = rulesMap
 		rulePathPrefix = "config.rules"
-	} else if rulesValue, hasRules := asMap["rules"]; hasRules {
+	} else if hasTopLevelRules {
 		if strict {
 			return rules.Config{}, nil, &validationError{Code: "deprecated_config_format", Path: "config", Message: "legacy unversioned config shape is deprecated; use config.schema-version and config.rules"}
 		}
 		deprecations = append(deprecations, legacyUnversionedRulesWarning)
+
+		var nested struct {
+			Rules rules.Config `json:"rules"`
+		}
+		if err := json.Unmarshal(raw, &nested); err == nil {
+			nestedRulesCfg = nested.Rules
+			useNestedRulesCfg = true
+		}
+
 		rulesMap, ok := rulesValue.(map[string]any)
 		if !ok {
 			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
@@ -248,8 +260,12 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 	}
 
 	var cfg rules.Config
-	if err := json.Unmarshal(cfgRaw, &cfg); err != nil {
-		return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
+	if useNestedRulesCfg {
+		cfg = nestedRulesCfg
+	} else {
+		if err := json.Unmarshal(cfgRaw, &cfg); err != nil {
+			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
+		}
 	}
 
 	// Validate suppression selectors reference known rules (warnings, not errors)
