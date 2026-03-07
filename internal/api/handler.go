@@ -2359,86 +2359,24 @@ func isDiagramTypeKeyword(line string) bool {
 func helpForConfigError(validErr *validationError) *helpSuggestion {
 	switch validErr.Code {
 	case "unknown_rule":
-		helpText := "Make sure the rule ID matches one from /v1/rules exactly."
-		if len(validErr.Supported) > 0 {
-			helpText = "Use one of the supported rules: " + strings.Join(validErr.Supported, ", ")
-		}
-
-		wrongExample := `{"config": {"rules": {"max-fanout": {}}}}`
-		correctExample := `{"config": {"schema-version": "v1", "rules": {"core/max-fanout": {}}}}`
-
 		return &helpSuggestion{
-			Title:          "Unknown rule ID",
-			Explanation:    "The rule ID in your config does not exist. " + helpText,
-			WrongExample:   wrongExample,
-			CorrectExample: correctExample,
-			DocLink:        "#supported-rules",
-			FixAction:      "Check /v1/rules endpoint to find the correct rule ID (includes 'core/' prefix)",
+			Title:          "Unknown rule in config",
+			Explanation:    "The rule name you specified is not recognized. Each rule requires a valid rule ID.",
+			WrongExample:   `"rules": {"max-fanout": {}}`,
+			CorrectExample: `"rules": {"core/max-fanout": {"limit": 3}}`,
+			FixAction:      "Use GET /v1/rules to discover available rules and their namespaces",
 		}
-
 	case "invalid_option":
-		// Detect sub-cases within invalid_option
-		if strings.Contains(validErr.Message, "must be object") {
+		if strings.Contains(validErr.Message, "config must be object") {
 			return &helpSuggestion{
 				Title:          "Config must be an object",
-				Explanation:    "The 'config' field must be a JSON object (key-value pairs), not a string or null.",
-				WrongExample:   `{"code": "...", "config": "invalid"}`,
-				CorrectExample: `{"code": "...", "config": {"schema-version": "v1", "rules": {}}}`,
-				DocLink:        "#config-format",
-				FixAction:      "Change 'config' from a string to an object with 'schema-version' and 'rules' fields",
+				Explanation:    "The config parameter should be a JSON object, not a string, array, or primitive value.",
+				WrongExample:   `"config": "invalid"`,
+				CorrectExample: `"config": {"schema-version": "v1", "rules": {"core/max-fanout": {"limit": 3}}}`,
+				FixAction:      "Ensure config is a JSON object (wrapped in {}) and contains schema-version and rules properties",
 			}
-		}
-		if strings.Contains(validErr.Message, "schema-version") {
-			return &helpSuggestion{
-				Title:          "Invalid or missing schema-version",
-				Explanation:    "When using strict validation, the 'schema-version' field must be 'v1'.",
-				WrongExample:   `{"schema-version": "v2", "rules": {}}`,
-				CorrectExample: `{"schema-version": "v1", "rules": {}}`,
-				DocLink:        "#schema-version",
-				FixAction:      "Set 'schema-version' to 'v1' in your config",
-			}
-		}
-		if strings.Contains(validErr.Message, "rules") && strings.Contains(validErr.Message, "required") {
-			return &helpSuggestion{
-				Title:          "Missing 'rules' field",
-				Explanation:    "When 'schema-version' is set, the 'rules' field is required (it can be empty {})",
-				WrongExample:   `{"schema-version": "v1"}`,
-				CorrectExample: `{"schema-version": "v1", "rules": {}}`,
-				DocLink:        "#config-format",
-				FixAction:      "Add the 'rules' field to your config",
-			}
-		}
-		// Generic invalid_option help
-		return &helpSuggestion{
-			Title:          "Invalid configuration option",
-			Explanation:    "Your config contains an invalid value or structure. " + validErr.Message,
-			WrongExample:   `{"rules": "invalid"}`,
-			CorrectExample: `{"schema-version": "v1", "rules": {}}`,
-			DocLink:        "#config-format",
-			FixAction:      "Check the path '" + validErr.Path + "' in your config",
-		}
-
-	case "unsupported_schema_version":
-		return &helpSuggestion{
-			Title:          "Unsupported schema version",
-			Explanation:    "The 'schema-version' you provided is not supported. Only 'v1' is currently supported.",
-			WrongExample:   `{"schema-version": "v2", "rules": {}}`,
-			CorrectExample: `{"schema-version": "v1", "rules": {}}`,
-			DocLink:        "#schema-version",
-			FixAction:      "Update 'schema-version' to 'v1'",
-		}
-
-	case "invalid_suppression_selector":
-		return &helpSuggestion{
-			Title:          "Invalid suppression selector",
-			Explanation:    "The suppression selector syntax is invalid. Selectors must be valid CSS-like syntax.",
-			WrongExample:   `"suppressions": {"node[invalid]]": {}}`,
-			CorrectExample: `"suppressions": {"node[id='A']": {"rule-ids": ["core/max-fanout"]}}`,
-			DocLink:        "#suppressions",
-			FixAction:      "Check the selector syntax. Use node[attr='value'] format.",
 		}
 	}
-
 	return nil
 }
 
@@ -2454,9 +2392,6 @@ func writeConfigValidationError(w http.ResponseWriter, configValidationErr *vali
 		details = nil
 	}
 
-	// Config validation errors do not include help-suggestion.
-	// Help suggestions are only provided for syntax errors.
-
 	writeJSON(w, http.StatusBadRequest, analyzeResponse{
 		Valid: false,
 		Error: &apiErrorDetails{
@@ -2464,7 +2399,7 @@ func writeConfigValidationError(w http.ResponseWriter, configValidationErr *vali
 			Message: configValidationErr.Message,
 			Details: details,
 		},
-		HelpSuggestion: nil,
+		HelpSuggestion: helpForConfigError(configValidationErr),
 		LintSupported:  false,
 		SyntaxError:    nil,
 		Issues:         []model.Issue{},

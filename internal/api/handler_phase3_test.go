@@ -17,7 +17,7 @@ import (
 	"github.com/CyanAutomation/merm8/internal/parser"
 )
 
-// mockParserWithTimeout wraps a mock parser and implements TimeoutProvider
+// mockParserWithTimeout wraps a mock parser and implements TimeoutProvider and ParserWithConfig
 type mockParserWithTimeout struct {
 	diagram    *model.Diagram
 	syntaxErr  *parser.SyntaxError
@@ -26,6 +26,10 @@ type mockParserWithTimeout struct {
 }
 
 func (m *mockParserWithTimeout) Parse(code string) (*model.Diagram, *parser.SyntaxError, error) {
+	return m.diagram, m.syntaxErr, m.parseError
+}
+
+func (m *mockParserWithTimeout) ParseWithConfig(code string, cfg parser.Config) (*model.Diagram, *parser.SyntaxError, error) {
 	return m.diagram, m.syntaxErr, m.parseError
 }
 

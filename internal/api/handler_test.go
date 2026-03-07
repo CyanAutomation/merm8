@@ -268,9 +268,6 @@ func assertExactErrorResponse(t *testing.T, body []byte, wantCode, wantMessage s
 	if syntaxErr, exists := resp["syntax-error"]; !exists || syntaxErr != nil {
 		t.Fatalf("expected syntax-error=null, got %#v", resp["syntax-error"])
 	}
-	if _, exists := resp["help-suggestion"]; exists {
-		t.Fatalf("expected help-suggestion to be omitted for non-syntax errors, got %#v", resp["help-suggestion"])
-	}
 
 	metrics, ok := resp["metrics"].(map[string]interface{})
 	if !ok {
@@ -325,9 +322,6 @@ func assertValidationErrorResponse(t *testing.T, body []byte, wantCode, wantMess
 	}
 	if resp.SyntaxError != nil {
 		t.Fatalf("expected syntax-error=null, got %#v", resp.SyntaxError)
-	}
-	if _, exists := raw["help-suggestion"]; exists {
-		t.Fatalf("expected help-suggestion to be omitted for validation errors, got %#v", raw["help-suggestion"])
 	}
 	if len(resp.Issues) != 0 {
 		t.Fatalf("expected empty issues array, got %#v", resp.Issues)
