@@ -85,6 +85,7 @@ func parseArgs(args []string) (cliOptions, error) {
 		return cliOptions{}, err
 	}
 	opts.Files = fs.Args()
+	opts.Format = strings.ToLower(strings.TrimSpace(opts.Format))
 	if opts.Format != "text" && opts.Format != "json" {
 		return cliOptions{}, fmt.Errorf("unsupported --format %q (expected text or json)", opts.Format)
 	}
