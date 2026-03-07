@@ -24,7 +24,7 @@ go run ./benchmarks/main.go
 This will:
 1. Discover all `.mmd` test cases
 2. Execute the benchmark suite
-3. Generate `benchmarks/reports/index.html` (HTML report) and `benchmarks/reports/latest-results.json` (JSON results)
+3. Generate `benchmark.html` (HTML report) and `benchmarks/reports/latest-results.json` (JSON results)
 4. Print a text summary to stdout
 
 ### Run Specific Rule
@@ -167,9 +167,11 @@ Default threshold: 5% (configurable via `--regression-threshold`).
 
 ## Reports
 
+> Note: The canonical user-facing HTML report path is now `benchmark.html`. A legacy copy may still be emitted at `benchmarks/reports/index.html` temporarily for backward compatibility.
+
 ### HTML Report
 
-The HTML report (`benchmarks/reports/index.html`) displays:
+The HTML report (`benchmark.html`) displays:
 - Overall pass rate and summary metrics
 - Per-rule detection rates (color-coded: green >90%, yellow 70–90%, red <70%)
 - Timing statistics
@@ -214,6 +216,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions on authoring an
 ```bash
 make benchmark
 ```
+
+### Release Packaging
+
+The release pipeline prebuilds `benchmark.html` before the Docker image build step, so the Docker context always includes the benchmark artifact required by the runtime image.
 
 ### GitHub Actions (Future)
 

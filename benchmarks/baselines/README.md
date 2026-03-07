@@ -59,13 +59,15 @@ The runner will report any detection rate drop >5% (configurable):
 
 ## Creating a New Baseline
 
+> Historical note: if older automation still points to `benchmarks/reports/index.html`, migrate to `benchmark.html`. The legacy path may be retained temporarily for compatibility.
+
 After significant changes to rules or test fixtures:
 
 ```bash
 # 1. Run benchmarks (this generates latest-results.json)
 go run ./benchmarks/main.go
 
-# 2. Review results in benchmarks/reports/index.html
+# 2. Review results in benchmark.html
 # 3. If acceptable, snapshot as new baseline
 cp benchmarks/reports/latest-results.json benchmarks/baselines/v0.1.1.json
 
