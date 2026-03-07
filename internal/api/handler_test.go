@@ -3857,6 +3857,81 @@ func TestAnalyze_InvalidNoCyclesAllowSelfLoopType_Returns400(t *testing.T) {
 	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for allow-self-loop", "config.rules.no-cycles.allow-self-loop", nil)
 }
 
+func TestAnalyze_SequenceDiagramSupportedWhenRulesRegistered(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeSequence}, nil, nil
+	}}, engine.NewWithRules(sequenceProbeRule{}))
+	h.RegisterRoutes(mux)
+
+	body, _ := json.Marshal(map[string]any{"code": "sequenceDiagram\nAlice->>Bob: Hi"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (%s)", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if lintSupported, ok := resp["lint-supported"].(bool); !ok || !lintSupported {
+		t.Fatalf("expected lint-supported=true, got %#v", resp["lint-supported"])
+	}
+	if _, hasError := resp["error"]; hasError {
+		t.Fatalf("did not expect error payload, got %#v", resp["error"])
+	}
+	issues, ok := resp["issues"].([]any)
+	if !ok || len(issues) != 1 {
+		t.Fatalf("expected one issue from sequence rule, got %#v", resp["issues"])
+	}
+	issue, ok := issues[0].(map[string]any)
+	if !ok || issue["rule-id"] != "sequence-probe" {
+		t.Fatalf("expected sequence-probe issue, got %#v", issues[0])
+	}
+}
+
+func TestAnalyzeSARIF_SequenceDiagramSupportedWhenRulesRegistered(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeSequence}, nil, nil
+	}}, engine.NewWithRules(sequenceProbeRule{}))
+	h.RegisterRoutes(mux)
+
+	body, _ := json.Marshal(map[string]any{"code": "sequenceDiagram\nAlice->>Bob: Hi"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (%s)", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "application/sarif+json") {
+		t.Fatalf("expected SARIF content type, got %q", ct)
+	}
+
+	var sarifResp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &sarifResp); err != nil {
+		t.Fatalf("decode sarif: %v", err)
+	}
+	runs, ok := sarifResp["runs"].([]any)
+	if !ok || len(runs) == 0 {
+		t.Fatalf("expected runs in SARIF response, got %#v", sarifResp["runs"])
+	}
+	results, ok := runs[0].(map[string]any)["results"].([]any)
+	if !ok || len(results) != 1 {
+		t.Fatalf("expected one SARIF result from sequence rule, got %#v", runs[0].(map[string]any)["results"])
+	}
+	result := results[0].(map[string]any)
+	if result["ruleId"] != "sequence-probe" {
+		t.Fatalf("expected sequence-probe SARIF result, got %#v", result["ruleId"])
+	}
+}
+
 func TestAnalyzeSARIF_ReturnsSARIFForValidAnalysis(t *testing.T) {
 	mux := http.NewServeMux()
 	h := api.NewHandler(&mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
@@ -3972,9 +4047,25 @@ func TestAnalyzeSARIF_NilURLDoesNotPanic(t *testing.T) {
 	}
 }
 
+type sequenceProbeRule struct{}
+
+func (sequenceProbeRule) ID() string { return "sequence-probe" }
+
+func (sequenceProbeRule) Families() []model.DiagramFamily {
+	return []model.DiagramFamily{model.DiagramFamilySequence}
+}
+
+func (sequenceProbeRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
+	return []model.Issue{{RuleID: "sequence-probe", Severity: "warning", Message: "sequence probe"}}
+}
+
 type sarifProbeRule struct{}
 
 func (sarifProbeRule) ID() string { return "sarif-probe" }
+
+func (sarifProbeRule) Families() []model.DiagramFamily {
+	return []model.DiagramFamily{model.DiagramFamilyFlowchart}
+}
 func (sarifProbeRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 	line, col := 4, 9
 	return []model.Issue{{RuleID: "sarif-probe", Severity: "warning", Message: "probe", Line: &line, Column: &col}}
@@ -3983,6 +4074,10 @@ func (sarifProbeRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 type severityProbeRule struct{}
 
 func (severityProbeRule) ID() string { return "severity-probe" }
+
+func (severityProbeRule) Families() []model.DiagramFamily {
+	return []model.DiagramFamily{model.DiagramFamilyFlowchart}
+}
 func (severityProbeRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 	return []model.Issue{
 		{RuleID: "r1", Severity: "error", Message: "e"},
@@ -4158,7 +4253,6 @@ func TestAnalyze_RequestIDHeaderPropagation(t *testing.T) {
 		t.Fatalf("expected propagated request id, got %q", got)
 	}
 }
-
 
 func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
