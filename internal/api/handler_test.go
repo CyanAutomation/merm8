@@ -148,7 +148,9 @@ type nextLineProbeRule struct{}
 
 func (nextLineProbeRule) ID() string { return "next-line-probe" }
 
-func (nextLineProbeRule) Families() []model.DiagramFamily { return []model.DiagramFamily{model.DiagramFamilyFlowchart} }
+func (nextLineProbeRule) Families() []model.DiagramFamily {
+	return []model.DiagramFamily{model.DiagramFamilyFlowchart}
+}
 
 func (nextLineProbeRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 	directiveLine := 2
@@ -163,7 +165,9 @@ type otherProbeRule struct{}
 
 func (otherProbeRule) ID() string { return "other-probe" }
 
-func (otherProbeRule) Families() []model.DiagramFamily { return []model.DiagramFamily{model.DiagramFamilyFlowchart} }
+func (otherProbeRule) Families() []model.DiagramFamily {
+	return []model.DiagramFamily{model.DiagramFamilyFlowchart}
+}
 
 func (otherProbeRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 	line := 3
@@ -174,7 +178,9 @@ type metricsConditionalRuleA struct{}
 
 func (metricsConditionalRuleA) ID() string { return "custom/test/metrics-conditional-a" }
 
-func (metricsConditionalRuleA) Families() []model.DiagramFamily { return []model.DiagramFamily{model.DiagramFamilyFlowchart} }
+func (metricsConditionalRuleA) Families() []model.DiagramFamily {
+	return []model.DiagramFamily{model.DiagramFamilyFlowchart}
+}
 
 func (metricsConditionalRuleA) Run(d *model.Diagram, _ rules.Config) []model.Issue {
 	if d.Direction != "BT" {
@@ -192,7 +198,9 @@ type metricsConditionalRuleB struct{}
 
 func (metricsConditionalRuleB) ID() string { return "custom/test/metrics-conditional-b" }
 
-func (metricsConditionalRuleB) Families() []model.DiagramFamily { return []model.DiagramFamily{model.DiagramFamilyFlowchart} }
+func (metricsConditionalRuleB) Families() []model.DiagramFamily {
+	return []model.DiagramFamily{model.DiagramFamilyFlowchart}
+}
 
 func (metricsConditionalRuleB) Run(d *model.Diagram, _ rules.Config) []model.Issue {
 	if d.Direction != "BT" {
