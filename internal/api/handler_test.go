@@ -3490,6 +3490,73 @@ func TestAnalyze_ParserConcurrencyLimit_HighConcurrencyContention(t *testing.T) 
 	}
 }
 
+func TestAnalyze_ParserConcurrencyLimit_RuntimeUpdates_DoNotCreateParallelLimiters(t *testing.T) {
+	const (
+		limit      = 2
+		totalCalls = 80
+	)
+
+	var inFlight int32
+	var peakInFlight int32
+
+	mockP := &mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		current := atomic.AddInt32(&inFlight, 1)
+		for {
+			peak := atomic.LoadInt32(&peakInFlight)
+			if current <= peak || atomic.CompareAndSwapInt32(&peakInFlight, peak, current) {
+				break
+			}
+		}
+
+		time.Sleep(25 * time.Millisecond)
+		atomic.AddInt32(&inFlight, -1)
+		return &model.Diagram{}, nil, nil
+	}}
+
+	h := api.NewHandler(mockP, engine.New())
+	h.SetParserConcurrencyLimit(limit)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
+
+	start := make(chan struct{})
+	var requestsWG sync.WaitGroup
+	for i := 0; i < totalCalls; i++ {
+		requestsWG.Add(1)
+		go func() {
+			defer requestsWG.Done()
+			<-start
+
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK && w.Code != http.StatusServiceUnavailable {
+				t.Errorf("expected 200 or 503 under contention, got %d", w.Code)
+			}
+		}()
+	}
+
+	updatesDone := make(chan struct{})
+	go func() {
+		defer close(updatesDone)
+		<-start
+		for i := 0; i < 200; i++ {
+			h.SetParserConcurrencyLimit(limit)
+		}
+	}()
+
+	close(start)
+	requestsWG.Wait()
+	<-updatesDone
+
+	if got := int(atomic.LoadInt32(&peakInFlight)); got > limit {
+		t.Fatalf("peak parser in-flight calls exceeded limit during runtime updates: got %d want <= %d", got, limit)
+	}
+}
+
 func TestAnalyzeBearerAuthMiddleware_RequiresTokenInProduction(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{}, nil, nil
