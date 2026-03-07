@@ -4,13 +4,12 @@ graph TD
     C["Process Path 2"]
     D["Merge"]
     E["Isolated Component"]
-    F["More Isolated"]
     
     A --> B
     B --> D
     A --> C
     C --> D
     
-    %% E and F are completely disconnected
+    %% E is completely disconnected
     
     %% @rule: no-disconnected-nodes

@@ -63,8 +63,21 @@ func extractAllNodeIDsFromSource(source string) []string {
 	seen := make(map[string]bool)
 	var result []string
 
+	// Remove comments before processing to avoid false matches in comment text
+	// Comments in Mermaid flowcharts start with %% and continue to end of line
+	lines := strings.Split(source, "\n")
+	var cleanedLines []string
+	for _, line := range lines {
+		// Remove comment portion from the line
+		if idx := strings.Index(line, "%%"); idx >= 0 {
+			line = line[:idx]
+		}
+		cleanedLines = append(cleanedLines, line)
+	}
+	cleanedSource := strings.Join(cleanedLines, "\n")
+
 	// Extract from explicit node definitions
-	for _, match := range nodeDefinitionPattern.FindAllStringSubmatch(source, -1) {
+	for _, match := range nodeDefinitionPattern.FindAllStringSubmatch(cleanedSource, -1) {
 		nodeID := match[1]
 		if !seen[nodeID] && !isKeyword(nodeID) {
 			result = append(result, nodeID)

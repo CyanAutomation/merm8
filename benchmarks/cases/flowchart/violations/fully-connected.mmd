@@ -1,0 +1,13 @@
+graph TD
+    A["Start"]
+    B["Process A"]
+    C["Process B"]
+    D["End"]
+    E["Orphan Node"]
+    
+    A --> B
+    B --> C
+    C --> D
+    
+    %% @rule: no-disconnected-nodes
+    %% Node E is disconnected—should trigger violation
