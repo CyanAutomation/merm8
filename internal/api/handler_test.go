@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -3428,6 +3429,155 @@ func TestAnalyzeRateLimitMiddleware_Returns429(t *testing.T) {
 		t.Fatalf("expected 429 when request rate is exceeded, got %d", secondW.Code)
 	}
 	assertExactErrorResponse(t, secondW.Body.Bytes(), "rate_limited", "rate limit exceeded")
+}
+
+func TestRateLimiterCheck_ConcurrentDecisionMetadata(t *testing.T) {
+	const limit = 25
+	limiter := api.NewRateLimiter(limit, time.Hour)
+	const total = 300
+
+	type decision struct {
+		allowed   bool
+		remaining int
+		resetUnix int64
+		limit     int
+	}
+
+	decisions := make([]decision, total)
+	var wg sync.WaitGroup
+	for i := 0; i < total; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			allowed, remaining, resetUnix, reportedLimit := limiter.Check("127.0.0.1")
+			decisions[i] = decision{allowed: allowed, remaining: remaining, resetUnix: resetUnix, limit: reportedLimit}
+		}(i)
+	}
+	wg.Wait()
+
+	allowedCount := 0
+	var baselineReset int64
+	seenRemaining := make(map[int]int, limit)
+	for i, d := range decisions {
+		if d.limit != limit {
+			t.Fatalf("decision %d expected limit %d, got %d", i, limit, d.limit)
+		}
+		if d.remaining < 0 {
+			t.Fatalf("decision %d returned negative remaining %d", i, d.remaining)
+		}
+		if d.remaining > limit-1 {
+			t.Fatalf("decision %d returned remaining %d above maximum %d", i, d.remaining, limit-1)
+		}
+		if baselineReset == 0 {
+			baselineReset = d.resetUnix
+		} else if d.resetUnix != baselineReset {
+			t.Fatalf("expected stable reset in one window, got %d and %d", baselineReset, d.resetUnix)
+		}
+		if d.allowed {
+			allowedCount++
+			seenRemaining[d.remaining]++
+		} else if d.remaining != 0 {
+			t.Fatalf("denied decision should return remaining=0, got %d", d.remaining)
+		}
+	}
+
+	if allowedCount != limit {
+		t.Fatalf("expected exactly %d allowed decisions, got %d", limit, allowedCount)
+	}
+	for want := 0; want < limit; want++ {
+		if seenRemaining[want] != 1 {
+			t.Fatalf("expected remaining=%d exactly once across allowed decisions, got %d", want, seenRemaining[want])
+		}
+	}
+}
+
+func TestAnalyzeRateLimitMiddleware_ConcurrentHeadersRemainNonNegativeAndMonotonic(t *testing.T) {
+	const limit = 20
+	const total = 150
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{}, nil, nil
+	})
+	limited := api.AnalyzeRateLimitMiddleware(api.NewRateLimiter(limit, time.Hour), mux)
+	body := []byte(`{"code":"graph TD\n  A-->B"}`)
+
+	type headerResult struct {
+		status    int
+		remaining int
+		resetUnix int64
+		limit     int
+	}
+
+	results := make([]headerResult, total)
+	var wg sync.WaitGroup
+	for i := 0; i < total; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.RemoteAddr = "127.0.0.1:1234"
+			w := httptest.NewRecorder()
+			limited.ServeHTTP(w, req)
+
+			remaining, err := strconv.Atoi(w.Header().Get("X-RateLimit-Remaining"))
+			if err != nil {
+				t.Fatalf("failed to parse X-RateLimit-Remaining: %v", err)
+			}
+			resetUnix, err := strconv.ParseInt(w.Header().Get("X-RateLimit-Reset"), 10, 64)
+			if err != nil {
+				t.Fatalf("failed to parse X-RateLimit-Reset: %v", err)
+			}
+			reportedLimit, err := strconv.Atoi(w.Header().Get("X-RateLimit-Limit"))
+			if err != nil {
+				t.Fatalf("failed to parse X-RateLimit-Limit: %v", err)
+			}
+
+			results[i] = headerResult{status: w.Code, remaining: remaining, resetUnix: resetUnix, limit: reportedLimit}
+		}(i)
+	}
+	wg.Wait()
+
+	allowedCount := 0
+	seenRemaining := make(map[int]int, limit)
+	var baselineReset int64
+	for i, r := range results {
+		if r.limit != limit {
+			t.Fatalf("result %d expected limit header %d, got %d", i, limit, r.limit)
+		}
+		if r.remaining < 0 {
+			t.Fatalf("result %d had negative remaining header %d", i, r.remaining)
+		}
+		if baselineReset == 0 {
+			baselineReset = r.resetUnix
+		} else if r.resetUnix != baselineReset {
+			t.Fatalf("expected one reset timestamp in one window, got %d and %d", baselineReset, r.resetUnix)
+		}
+
+		if r.status == http.StatusOK {
+			allowedCount++
+			seenRemaining[r.remaining]++
+			if r.remaining > limit-1 {
+				t.Fatalf("allowed result %d has remaining %d above max %d", i, r.remaining, limit-1)
+			}
+			continue
+		}
+		if r.status != http.StatusTooManyRequests {
+			t.Fatalf("unexpected status %d for result %d", r.status, i)
+		}
+		if r.remaining != 0 {
+			t.Fatalf("denied result %d should have remaining=0, got %d", i, r.remaining)
+		}
+	}
+
+	if allowedCount != limit {
+		t.Fatalf("expected %d successful requests, got %d", limit, allowedCount)
+	}
+	for want := 0; want < limit; want++ {
+		if seenRemaining[want] != 1 {
+			t.Fatalf("expected allowed headers to include remaining=%d exactly once, got %d", want, seenRemaining[want])
+		}
+	}
 }
 
 func TestAnalyzeAuthMiddleware_PrecedesRateLimitQuotaConsumption(t *testing.T) {
