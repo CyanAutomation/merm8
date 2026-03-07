@@ -109,6 +109,10 @@
           "$ref": "#/components/schemas/Error"
           "description": "API-level error details for non-200 responses."
           "nullable": true
+        "help-suggestion":
+          "$ref": "#/components/schemas/HelpSuggestion"
+          "description": "Structured remediation guidance with code examples. Provided for syntax and config errors when available."
+          "nullable": true
         "issues":
           "description": "Lint rule violations found in the diagram"
           "items":
@@ -766,6 +770,40 @@
       "required":
         - "version"
         - "runs"
+      "type": "object"
+    "HelpSuggestion":
+      "description": "Structured remediation guidance with before/after code examples"
+      "properties":
+        "correct-example":
+          "description": "Correct code snippet showing the fix (may be multiline)"
+          "example": "flowchart TD\n  A --> B"
+          "type": "string"
+        "doc-link":
+          "description": "URL fragment for additional documentation"
+          "example": "#arrow-syntax"
+          "type": "string"
+        "explanation":
+          "description": "Human-friendly explanation of the error or issue"
+          "example": "Mermaid uses '-->' (double dash) for connections, not '->'"
+          "type": "string"
+        "fix-action":
+          "description": "Brief description of what to do to fix the issue"
+          "example": "Replace '->' with '-->'"
+          "type": "string"
+        "title":
+          "description": "Title of the issue or error type"
+          "example": "Arrow operator syntax"
+          "type": "string"
+        "wrong-example":
+          "description": "Incorrect code snippet showing the error (may be multiline)"
+          "example": "flowchart TD\n  A -> B"
+          "type": "string"
+      "required":
+        - "title"
+        - "explanation"
+        - "wrong-example"
+        - "correct-example"
+        - "fix-action"
       "type": "object"
     "SyntaxError":
       "properties":

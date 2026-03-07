@@ -254,37 +254,47 @@ Content-Type: application/json
 
 ---
 
-## 5. Parse Error Response
+## 5. Parse Error Response with Help Suggestion
 
-**Scenario:** Invalid Mermaid syntax
+**Scenario:** Invalid Mermaid syntax with remediation guidance
 
 **Request:**
 ```http
-POST /v1/analyze HTTP/1.1
+POST /v1/analyze/raw HTTP/1.1
 Host: localhost:8080
-Content-Type: application/json
+Content-Type: text/plain
 
-{
-  "code": "graph TD\n  INVALID SYNTAX HERE @#$%",
-  "config": {"schema-version": "v1", "rules": {}}
-}
+flowchart TD
+    Start([Start]) -> Process[Process]
+    Process --> Decision{Is OK?}
+    Decision -->|Yes| End([End])
+    Decision -->|No| Process
 ```
 
 **Response (200 OK):**
 ```json
 {
   "valid": false,
-  "diagram-type": null,
+  "diagram-type": "flowchart",
   "lint-supported": false,
   "request-id": "990e8400-e29b-41d4-a716-446655440004",
   "timestamp": 1678123456400,
   "syntax-error": {
-    "line": 1,
-    "column": 19,
-    "message": "Unexpected token '@'",
-    "kind": "syntax_error",
-    "context": "graph TD\n  INVALID SYNTAX HERE @#$%"
+    "line": 2,
+    "column": 20,
+    "message": "Unexpected token '>'"
   },
+  "help-suggestion": {
+    "title": "Arrow operator syntax",
+    "explanation": "Mermaid requires '-->' (double dash) for flowchart connections. Single '->' is not valid.",
+    "wrong-example": "Start([Start]) -> Process[Process]",
+    "correct-example": "Start([Start]) --> Process[Process]",
+    "doc-link": "#arrow-syntax",
+    "fix-action": "Replace '->' with '-->' on line 2"
+  },
+  "suggestions": [
+    "Use '-->' for flowchart connections, not '->'."
+  ],
   "issues": [],
   "error": null,
   "metrics": {
@@ -295,9 +305,9 @@ Content-Type: application/json
 
 ---
 
-## 6. Config Error Response
+## 6. Config Error Response with Help Suggestion
 
-**Scenario:** Invalid configuration
+**Scenario:** Unknown rule ID with remediation guidance
 
 **Request:**
 ```http
@@ -310,7 +320,7 @@ Content-Type: application/json
   "config": {
     "schema-version": "v1",
     "rules": {
-      "unknown-rule": {}
+      "max-fanout": {}
     }
   }
 }
@@ -320,17 +330,18 @@ Content-Type: application/json
 ```json
 {
   "valid": false,
+  "lint-supported": false,
   "error": {
     "code": "unknown_rule",
-    "message": "unknown rule: unknown-rule",
-    "path": "config.rules.unknown-rule",
-    "supported": [
-      "core/max-fanout",
-      "core/max-depth",
-      "core/no-cycles",
-      "core/no-disconnected-nodes",
-      "core/no-duplicate-node-ids"
-    ]
+    "message": "unknown rule: max-fanout"
+  },
+  "help-suggestion": {
+    "title": "Unknown rule ID",
+    "explanation": "The rule ID in your config does not exist. Use one of the supported rules: core/no-cycles, core/max-depth, core/max-fanout, core/no-disconnected-nodes, core/no-duplicate-node-ids",
+    "wrong-example": "{\"config\": {\"rules\": {\"max-fanout\": {}}}}",
+    "correct-example": "{\"config\": {\"schema-version\": \"v1\", \"rules\": {\"core/max-fanout\": {}}}}",
+    "doc-link": "#supported-rules",
+    "fix-action": "Check /v1/rules endpoint to find the correct rule ID (includes 'core/' prefix)"
   },
   "request-id": "aa0e8400-e29b-41d4-a716-446655440005",
   "timestamp": 1678123456500
@@ -339,7 +350,47 @@ Content-Type: application/json
 
 ---
 
-## 7. Parser Timeout Response
+## 7. Config Structure Error Response
+
+**Scenario:** Invalid config structure
+
+**Request:**
+```http
+POST /v1/analyze HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
+
+{
+  "code": "graph TD\n  A-->B",
+  "config": "invalid string"
+}
+```
+
+**Response (400 Bad Request):**
+```json
+{
+  "valid": false,
+  "lint-supported": false,
+  "error": {
+    "code": "invalid_option",
+    "message": "config must be object"
+  },
+  "help-suggestion": {
+    "title": "Config must be an object",
+    "explanation": "The 'config' field must be a JSON object (key-value pairs), not a string or null.",
+    "wrong-example": "{\"code\": \"...\", \"config\": \"invalid\"}",
+    "correct-example": "{\"code\": \"...\", \"config\": {\"schema-version\": \"v1\", \"rules\": {}}}",
+    "doc-link": "#config-format",
+    "fix-action": "Change 'config' from a string to an object with 'schema-version' and 'rules' fields"
+  },
+  "request-id": "bb0e8400-e29b-41d4-a716-446655440006",
+  "timestamp": 1678123456600
+}
+```
+
+---
+
+## 8. Parser Timeout Response
 
 **Scenario:** Diagram too complex for timeout
 

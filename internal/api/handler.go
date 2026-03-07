@@ -375,6 +375,16 @@ type responseMeta struct {
 	Warnings []responseWarning `json:"warnings,omitempty"`
 }
 
+// helpSuggestion provides structured remediation guidance with code examples.
+type helpSuggestion struct {
+	Title         string `json:"title"`         // e.g., "Arrow operator syntax"
+	Explanation   string `json:"explanation"`   // e.g., "Mermaid uses '-->' for connections"
+	WrongExample  string `json:"wrong-example"` // Incorrect code snippet (multiline)
+	CorrectExample string `json:"correct-example"` // Correct code snippet (multiline)
+	DocLink       string `json:"doc-link"`     // URL fragment (e.g., "#arrow-syntax")
+	FixAction     string `json:"fix-action"`   // Brief action to take
+}
+
 type analyzeResponse struct {
 	Valid         bool                 `json:"valid"`
 	DiagramType   model.DiagramType    `json:"diagram-type,omitempty"`
@@ -384,6 +394,7 @@ type analyzeResponse struct {
 	SyntaxError   *syntaxErrorResponse `json:"syntax-error"`
 	Issues        []model.Issue        `json:"issues"`
 	Suggestions   []string             `json:"suggestions,omitempty"`
+	HelpSuggestion *helpSuggestion      `json:"help-suggestion,omitempty"`
 	Warnings      []string             `json:"warnings,omitempty"`
 	Meta          *responseMeta        `json:"meta,omitempty"`
 	Error         *apiErrorDetails     `json:"error,omitempty"`
@@ -1209,6 +1220,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
 		suggestions := suggestionsForSyntaxError(syntaxErr, req.Code)
+		helpSugg := helpForSyntaxError(syntaxErr, req.Code)
 		// On syntax errors, lint-supported is always false because the diagram cannot be linted
 		resp := analyzeResponse{
 			Valid:         false,
@@ -1217,6 +1229,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			RequestID:     RequestIDFromContext(r.Context()),
 			Timestamp:     time.Now().UnixMilli(),
 			Suggestions:   suggestions,
+			HelpSuggestion: helpSugg,
 			Warnings:      deprecationWarnings,
 			Meta:          responseMetaForWarnings(deprecationWarnings),
 			SyntaxError: &syntaxErrorResponse{
@@ -1420,6 +1433,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
 		suggestions := suggestionsForSyntaxError(syntaxErr, req.Code)
+		helpSugg := helpForSyntaxError(syntaxErr, req.Code)
 		// On syntax errors, only set lint-supported=true if we detected a diagram type
 		// AND that type's family supports linting. If no type detected, always false.
 		var lintSupported bool
@@ -1435,6 +1449,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 			RequestID:     RequestIDFromContext(r.Context()),
 			Timestamp:     time.Now().UnixMilli(),
 			Suggestions:   suggestions,
+			HelpSuggestion: helpSugg,
 			Warnings:      nil,
 			Meta:          nil,
 			SyntaxError: &syntaxErrorResponse{
@@ -1910,6 +1925,186 @@ func suggestionsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []str
 	return suggestions
 }
 
+// helpForSyntaxError generates structured remediation guidance for syntax errors.
+// It returns the primary help suggestion based on the error type and code context.
+func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggestion {
+	lines := strings.Split(code, "\n")
+
+	// Detect Graphviz syntax (high confidence error)
+	if strings.Contains(code, "digraph") || strings.Contains(code, "rankdir") {
+		return &helpSuggestion{
+			Title:       "Graphviz syntax detected",
+			Explanation: "This looks like Graphviz (GraphQL visualization) syntax. merm8 uses Mermaid diagrams, which have different syntax.",
+			WrongExample: "digraph G {\n  A -> B -> C\n}",
+			CorrectExample: "flowchart TD\n  A --> B --> C",
+			DocLink:     "#common-mistakes",
+			FixAction:   "Replace Graphviz syntax (digraph, rankdir, etc.) with Mermaid diagram type keywords (flowchart, sequenceDiagram, etc.)",
+		}
+	}
+
+	// Detect YAML frontmatter
+	if strings.HasPrefix(strings.TrimSpace(code), "---") {
+		return &helpSuggestion{
+			Title:       "YAML frontmatter not supported",
+			Explanation: "Mermaid code should not include YAML frontmatter. Remove the --- lines and start directly with the diagram type.",
+			WrongExample: "---\ntitle: My Diagram\n---\nflowchart TD\n  A --> B",
+			CorrectExample: "flowchart TD\n  A --> B",
+			DocLink:     "#yaml-frontmatter",
+			FixAction:   "Remove the YAML frontmatter (--- lines) from the start of your diagram",
+		}
+	}
+
+	// Detect tabs instead of spaces (get the problematic line if possible)
+	if strings.Contains(code, "\t") {
+		probableLine := "    A --> B"
+		if syntaxErr.Line > 0 && syntaxErr.Line <= len(lines) {
+			probableLine = lines[syntaxErr.Line-1]
+		}
+		// Show what it looks like with tabs (represented visually)
+		wrongExample := probableLine // This line contains tabs
+		correctExample := strings.ReplaceAll(probableLine, "\t", "    ")
+		
+		return &helpSuggestion{
+			Title:       "Indent with spaces, not tabs",
+			Explanation: "Mermaid requires space indentation. Tabs in diagram syntax cause parse errors.",
+			WrongExample: wrongExample,
+			CorrectExample: correctExample,
+			DocLink:     "#indentation",
+			FixAction:   "Replace all tab characters with 4 spaces for indentation",
+		}
+	}
+
+	// Detect arrow syntax issues (looking at the specific error line)
+	if syntaxErr.Line > 0 && syntaxErr.Line <= len(lines) {
+		probLine := lines[syntaxErr.Line-1]
+		if strings.Contains(probLine, "->") && !strings.Contains(probLine, "-->") {
+			return &helpSuggestion{
+				Title:       "Arrow operator syntax",
+				Explanation: "Mermaid requires '-->' (double dash) for flowchart connections. Single '->' is not valid.",
+				WrongExample: "Process" + " -> Decision",
+				CorrectExample: "Process" + " --> Decision",
+				DocLink:     "#arrow-syntax",
+				FixAction:   "Replace '->' with '-->' on line " + fmt.Sprintf("%d", syntaxErr.Line),
+			}
+		}
+	}
+
+	// Detect missing diagram type keyword
+	if strings.Contains(syntaxErr.Message, "No diagram type") || strings.Contains(syntaxErr.Message, "Unexpected") {
+		firstLine := strings.TrimSpace(strings.SplitN(code, "\n", 2)[0])
+		if firstLine != "" && !isDiagramTypeKeyword(firstLine) {
+			return &helpSuggestion{
+				Title:       "Missing diagram type keyword",
+				Explanation: "Every Mermaid diagram must start with a type keyword (flowchart, sequenceDiagram, etc.) on the first line.",
+				WrongExample: "A --> B\nB --> C",
+				CorrectExample: "flowchart TD\n  A --> B\n  B --> C",
+				DocLink:     "#diagram-types",
+				FixAction:   "Add a diagram type keyword to the first line: 'flowchart TD', 'sequenceDiagram', 'classDiagram', 'erDiagram', or 'stateDiagram-v2'",
+			}
+		}
+	}
+
+	return nil
+}
+
+// isDiagramTypeKeyword checks if a line starts with a valid diagram type keyword.
+func isDiagramTypeKeyword(line string) bool {
+	keywords := []string{"flowchart", "graph", "sequenceDiagram", "classDiagram", "erDiagram", "stateDiagram"}
+	for _, kw := range keywords {
+		if strings.HasPrefix(strings.TrimSpace(line), kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// helpForConfigError generates structured remediation guidance for config errors.
+func helpForConfigError(validErr *validationError) *helpSuggestion {
+	switch validErr.Code {
+	case "unknown_rule":
+		helpText := "Make sure the rule ID matches one from /v1/rules exactly."
+		if len(validErr.Supported) > 0 {
+			helpText = "Use one of the supported rules: " + strings.Join(validErr.Supported, ", ")
+		}
+		
+		wrongExample := `{"config": {"rules": {"max-fanout": {}}}}`
+		correctExample := `{"config": {"schema-version": "v1", "rules": {"core/max-fanout": {}}}}`
+		
+		return &helpSuggestion{
+			Title:       "Unknown rule ID",
+			Explanation: "The rule ID in your config does not exist. " + helpText,
+			WrongExample: wrongExample,
+			CorrectExample: correctExample,
+			DocLink:     "#supported-rules",
+			FixAction:   "Check /v1/rules endpoint to find the correct rule ID (includes 'core/' prefix)",
+		}
+
+	case "invalid_option":
+		// Detect sub-cases within invalid_option
+		if strings.Contains(validErr.Message, "must be object") {
+			return &helpSuggestion{
+				Title:       "Config must be an object",
+				Explanation: "The 'config' field must be a JSON object (key-value pairs), not a string or null.",
+				WrongExample: `{"code": "...", "config": "invalid"}`,
+				CorrectExample: `{"code": "...", "config": {"schema-version": "v1", "rules": {}}}`,
+				DocLink:     "#config-format",
+				FixAction:   "Change 'config' from a string to an object with 'schema-version' and 'rules' fields",
+			}
+		}
+		if strings.Contains(validErr.Message, "schema-version") {
+			return &helpSuggestion{
+				Title:       "Invalid or missing schema-version",
+				Explanation: "When using strict validation, the 'schema-version' field must be 'v1'.",
+				WrongExample: `{"schema-version": "v2", "rules": {}}`,
+				CorrectExample: `{"schema-version": "v1", "rules": {}}`,
+				DocLink:     "#schema-version",
+				FixAction:   "Set 'schema-version' to 'v1' in your config",
+			}
+		}
+		if strings.Contains(validErr.Message, "rules") && strings.Contains(validErr.Message, "required") {
+			return &helpSuggestion{
+				Title:       "Missing 'rules' field",
+				Explanation: "When 'schema-version' is set, the 'rules' field is required (it can be empty {})",
+				WrongExample: `{"schema-version": "v1"}`,
+				CorrectExample: `{"schema-version": "v1", "rules": {}}`,
+				DocLink:     "#config-format",
+				FixAction:   "Add the 'rules' field to your config",
+			}
+		}
+		// Generic invalid_option help
+		return &helpSuggestion{
+			Title:       "Invalid configuration option",
+			Explanation: "Your config contains an invalid value or structure. " + validErr.Message,
+			WrongExample: `{"rules": "invalid"}`,
+			CorrectExample: `{"schema-version": "v1", "rules": {}}`,
+			DocLink:     "#config-format",
+			FixAction:   "Check the path '" + validErr.Path + "' in your config",
+		}
+
+	case "unsupported_schema_version":
+		return &helpSuggestion{
+			Title:       "Unsupported schema version",
+			Explanation: "The 'schema-version' you provided is not supported. Only 'v1' is currently supported.",
+			WrongExample: `{"schema-version": "v2", "rules": {}}`,
+			CorrectExample: `{"schema-version": "v1", "rules": {}}`,
+			DocLink:     "#schema-version",
+			FixAction:   "Update 'schema-version' to 'v1'",
+		}
+
+	case "invalid_suppression_selector":
+		return &helpSuggestion{
+			Title:       "Invalid suppression selector",
+			Explanation: "The suppression selector syntax is invalid. Selectors must be valid CSS-like syntax.",
+			WrongExample: `"suppressions": {"node[invalid]]": {}}`,
+			CorrectExample: `"suppressions": {"node[id='A']": {"rule-ids": ["core/max-fanout"]}}`,
+			DocLink:     "#suppressions",
+			FixAction:   "Check the selector syntax. Use node[attr='value'] format.",
+		}
+	}
+
+	return nil
+}
+
 func writeConfigValidationError(w http.ResponseWriter, configValidationErr *validationError) {
 	details := map[string]any{}
 	if configValidationErr.Path != "" {
@@ -1922,6 +2117,8 @@ func writeConfigValidationError(w http.ResponseWriter, configValidationErr *vali
 		details = nil
 	}
 
+	helpSugg := helpForConfigError(configValidationErr)
+
 	writeJSON(w, http.StatusBadRequest, analyzeResponse{
 		Valid: false,
 		Error: &apiErrorDetails{
@@ -1929,10 +2126,11 @@ func writeConfigValidationError(w http.ResponseWriter, configValidationErr *vali
 			Message: configValidationErr.Message,
 			Details: details,
 		},
-		LintSupported: false,
-		SyntaxError:   nil,
-		Issues:        []model.Issue{},
-		Metrics:       defaultMetrics(model.DiagramTypeUnknown),
+		HelpSuggestion: helpSugg,
+		LintSupported:  false,
+		SyntaxError:    nil,
+		Issues:         []model.Issue{},
+		Metrics:        defaultMetrics(model.DiagramTypeUnknown),
 	})
 }
 
