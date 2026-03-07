@@ -50,6 +50,11 @@ steps:
         apt-get install -y --no-install-recommends nodejs npm
         rm -rf /var/lib/apt/lists/*
 
+        if [ ! -d "parser-node" ]; then
+          echo "Error: parser-node directory not found"
+          exit 1
+        fi
+
         cd parser-node
         npm ci --omit=dev
         cd ..
