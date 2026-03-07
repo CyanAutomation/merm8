@@ -1266,7 +1266,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 	}
 
 	family := diagram.Type.Family()
-	if family != model.DiagramFamilyFlowchart {
+	if !h.isLintSupported(family) {
 		observeAnalyzeOutcome("unsupported_diagram_type")
 		setAnalyzeLogFields(r.Context(), "unsupported_diagram_type", string(diagram.Type))
 		// Keep metrics in the response for parsed diagrams, even when linting is
@@ -1500,7 +1500,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 	}
 
 	family := diagram.Type.Family()
-	if family != model.DiagramFamilyFlowchart {
+	if !h.isLintSupported(family) {
 		observeAnalyzeOutcome("unsupported_diagram_type")
 		setAnalyzeLogFields(r.Context(), "unsupported_diagram_type", string(diagram.Type))
 		unsupportedIssue := model.Issue{
@@ -1750,7 +1750,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 	}
 
 	family := diagram.Type.Family()
-	if family != model.DiagramFamilyFlowchart {
+	if !h.isLintSupported(family) {
 		observeAnalyzeOutcome("unsupported_diagram_type")
 		setAnalyzeLogFields(r.Context(), "unsupported_diagram_type", string(diagram.Type))
 		// For unsupported diagram types, return an error in SARIF format
