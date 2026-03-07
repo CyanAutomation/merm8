@@ -81,14 +81,18 @@ func (r NoDisconnectedNodes) Run(d *model.Diagram, cfg Config) []model.Issue {
 
 	issues := make([]model.Issue, 0, len(sortedIDs))
 	for _, nodeID := range sortedIDs {
-		node := nodeByID[nodeID]
-		issues = append(issues, model.Issue{
+		issue := model.Issue{
 			RuleID:   r.ID(),
 			Severity: severity,
 			Message:  "node is disconnected: " + nodeID,
-			Line:     node.Line,
-			Column:   node.Column,
-		})
+		}
+
+		if node, ok := nodeByID[nodeID]; ok {
+			issue.Line = node.Line
+			issue.Column = node.Column
+		}
+
+		issues = append(issues, issue)
 	}
 
 	return issues
