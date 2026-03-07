@@ -3,8 +3,8 @@ package benchmarks
 
 import (
 	"bytes"
-	"encoding/json"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"math"
@@ -44,10 +44,10 @@ func NewRunner(benchmarkDir string, parserScript string) *Runner {
 
 // RunOptions defines options for running benchmarks.
 type RunOptions struct {
-	RuleFilter        string // "no-cycles" or "" for all
-	CategoryFilter    string // "valid", "violation", "edge-case" or "" for all
-	Verbose           bool
-	CompareTo         string // Path to baseline JSON or ""
+	RuleFilter          string // "no-cycles" or "" for all
+	CategoryFilter      string // "valid", "violation", "edge-case" or "" for all
+	Verbose             bool
+	CompareTo           string  // Path to baseline JSON or ""
 	RegressionThreshold float64 // e.g., 5.0 for 5%
 }
 
@@ -527,12 +527,12 @@ func (r *Runner) compareToBaseline(results *BenchmarkResults, baselinePath strin
 		dropPercent := (baselineMetrics.DetectionRate - currentMetrics.DetectionRate) * 100
 		if dropPercent > threshold {
 			alerts = append(alerts, RegressionAlert{
-				RuleID:                 ruleID,
+				RuleID:                ruleID,
 				BaselineDetectionRate: baselineMetrics.DetectionRate,
 				CurrentDetectionRate:  currentMetrics.DetectionRate,
-				DropPercent:            math.Round(dropPercent*100) / 100,
-				Threshold:              threshold,
-				IsFailing:              dropPercent > threshold,
+				DropPercent:           math.Round(dropPercent*100) / 100,
+				Threshold:             threshold,
+				IsFailing:             dropPercent > threshold,
 			})
 		}
 	}
