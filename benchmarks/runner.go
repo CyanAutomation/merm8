@@ -26,6 +26,7 @@ type Runner struct {
 	casesDir       string
 	baselinesDir   string
 	reportsDir     string
+	htmlOutputPath string
 	ruleFilter     string
 	categoryFilter string
 	verbose        bool
@@ -39,6 +40,10 @@ func NewRunner(benchmarkDir string, parserScript string) *Runner {
 		casesDir:     filepath.Join(benchmarkDir, "cases"),
 		baselinesDir: filepath.Join(benchmarkDir, "baselines"),
 		reportsDir:   filepath.Join(benchmarkDir, "reports"),
+		htmlOutputPath: filepath.Join(
+			filepath.Dir(benchmarkDir),
+			"benchmark.html",
+		),
 	}
 }
 
@@ -443,14 +448,31 @@ func (r *Runner) generateReports(results *BenchmarkResults) error {
 		return err
 	}
 
-	// HTML report
-	htmlPath := filepath.Join(r.reportsDir, "index.html")
+	// HTML report (new path + one-release compatibility file)
+	htmlPath := r.htmlOutputPath
+	if htmlPath == "" {
+		htmlPath = filepath.Join(filepath.Dir(r.benchmarkDir), "benchmark.html")
+	}
+	if err := os.MkdirAll(filepath.Dir(htmlPath), 0755); err != nil {
+		return err
+	}
+
 	htmlContent := r.generateHTMLReport(results)
 	if err := os.WriteFile(htmlPath, []byte(htmlContent), 0644); err != nil {
 		return err
 	}
 
+	legacyHTMLPath := filepath.Join(r.reportsDir, "index.html")
+	if legacyHTMLPath != htmlPath {
+		if err := os.WriteFile(legacyHTMLPath, []byte(htmlContent), 0644); err != nil {
+			return err
+		}
+	}
+
 	fmt.Printf("\nReports generated:\n  JSON: %s\n  HTML: %s\n", jsonPath, htmlPath)
+	if legacyHTMLPath != htmlPath {
+		fmt.Printf("  HTML (legacy): %s\n", legacyHTMLPath)
+	}
 	return nil
 }
 
