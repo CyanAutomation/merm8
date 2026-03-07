@@ -1,0 +1,85 @@
+{
+  "timestamp": "2026-03-06T00:00:00Z",
+  "version": "v0.1.0",
+  "execution_time_ms": 5000,
+  "total_cases": 15,
+  "total_passed": 13,
+  "rule_metrics": {
+    "no-duplicate-node-ids": {
+      "rule_id": "no-duplicate-node-ids",
+      "total_cases": 3,
+      "passed": 3,
+      "detection_rate": 1.0,
+      "false_positives": 0,
+      "false_positive_rate": 0.0,
+      "selected_cases": [],
+      "avg_parse_time_ms": 45,
+      "avg_lint_time_ms": 2
+    },
+    "no-disconnected-nodes": {
+      "rule_id": "no-disconnected-nodes",
+      "total_cases": 3,
+      "passed": 3,
+      "detection_rate": 1.0,
+      "false_positives": 0,
+      "false_positive_rate": 0.0,
+      "selected_cases": [],
+      "avg_parse_time_ms": 45,
+      "avg_lint_time_ms": 2
+    },
+    "max-fanout": {
+      "rule_id": "max-fanout",
+      "total_cases": 3,
+      "passed": 3,
+      "detection_rate": 1.0,
+      "false_positives": 0,
+      "false_positive_rate": 0.0,
+      "selected_cases": [],
+      "avg_parse_time_ms": 45,
+      "avg_lint_time_ms": 2
+    },
+    "no-cycles": {
+      "rule_id": "no-cycles",
+      "total_cases": 3,
+      "passed": 3,
+      "detection_rate": 1.0,
+      "false_positives": 0,
+      "false_positive_rate": 0.0,
+      "selected_cases": [],
+      "avg_parse_time_ms": 45,
+      "avg_lint_time_ms": 2
+    },
+    "max-depth": {
+      "rule_id": "max-depth",
+      "total_cases": 3,
+      "passed": 2,
+      "detection_rate": 0.6667,
+      "false_positives": 1,
+      "false_positive_rate": 0.1,
+      "selected_cases": [
+        {
+          "case_id": "flowchart-vio-deep-tree",
+          "passed": true,
+          "expected": ["max-depth:warning"],
+          "actual": ["max-depth:warning"],
+          "issues": [],
+          "parse_time_ms": 45,
+          "lint_time_ms": 2,
+          "actual_issues_full": [
+            {
+              "rule_id": "max-depth",
+              "severity": "warning",
+              "message": "Tree depth exceeds configured limit of 8",
+              "line": null,
+              "column": null,
+              "fingerprint": ""
+            }
+          ]
+        }
+      ],
+      "avg_parse_time_ms": 45,
+      "avg_lint_time_ms": 2
+    }
+  },
+  "failed_cases": []
+}

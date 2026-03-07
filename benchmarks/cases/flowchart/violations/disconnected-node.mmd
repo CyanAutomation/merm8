@@ -1,0 +1,11 @@
+graph TD
+    A["Start"]
+    B["Middle"]
+    C["End"]
+    D["Orphan"]
+    
+    A --> B
+    B --> C
+    
+    %% D is disconnected from the main flow
+    %% @rule: no-disconnected-nodes

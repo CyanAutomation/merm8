@@ -1,0 +1,18 @@
+graph TD
+    Start["Begin"]
+    A["Process A"]
+    B["Process B"]
+    C["Process C"]
+    D["Process D"]
+    E["Process E"]
+    End["Terminate"]
+    
+    Start --> A
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> End
+    
+    %% @rule: *
+    %% Well-formed linear workflow with no rule violations

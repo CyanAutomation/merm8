@@ -1,0 +1,12 @@
+graph TD
+    A["Component A"]
+    B["Component B"]
+    C["Component C"]
+    D["Component D"]
+    
+    A --> B
+    B --> C
+    C --> D
+    
+    %% @rule: no-disconnected-nodes
+    %% All 4 nodes form a connected chain—should pass
