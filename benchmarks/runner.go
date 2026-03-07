@@ -246,27 +246,46 @@ func (r *Runner) executeCases(cases []*BenchmarkCase) (*BenchmarkResults, error)
 		}
 
 		// Track by rule
-		ruleID := bc.RuleID
-		if ruleID == "*" {
-			// Case tests all rules; track by rules found in actual issues
-			for _, actual := range caseResult.ActualIssuesFull {
-				ruleID = actual.RuleID
-				if rr, ok := ruleResults[ruleID]; !ok {
-					ruleResults[ruleID] = &RuleResult{
-						RuleID: ruleID,
+		ruleIDs := []string{}
+		if bc.RuleID == "*" {
+			// Extract rule IDs from expected issues
+			seen := make(map[string]bool)
+			for _, exp := range caseResult.Expected {
+				parts := strings.Split(exp, ":")
+				if len(parts) > 0 && !seen[parts[0]] {
+					ruleIDs = append(ruleIDs, parts[0])
+					seen[parts[0]] = true
+				}
+			}
+			// If no expected issues, extract from actual
+			if len(ruleIDs) == 0 {
+				for _, actual := range caseResult.ActualIssuesFull {
+					if !seen[actual.RuleID] {
+						ruleIDs = append(ruleIDs, actual.RuleID)
+						seen[actual.RuleID] = true
 					}
-				} else {
-					rr.TotalCases++
 				}
 			}
 		} else {
+			ruleIDs = []string{bc.RuleID}
+		}
+
+		// Update metrics for each rule
+		for _, ruleID := range ruleIDs {
 			if rr, ok := ruleResults[ruleID]; !ok {
 				ruleResults[ruleID] = &RuleResult{
 					RuleID:     ruleID,
 					TotalCases: 1,
+					Passed:     0,
+				}
+				if caseResult.Passed {
+					ruleResults[ruleID].Passed = 1
 				}
 			} else {
 				rr.TotalCases++
+				if caseResult.Passed {
+					rr.Passed++
+				}
 			}
 		}
 
@@ -437,7 +456,19 @@ func (r *Runner) generateReports(results *BenchmarkResults) error {
 
 // generateHTMLReport creates an HTML representation of benchmark results.
 func (r *Runner) generateHTMLReport(results *BenchmarkResults) string {
-	tmpl := template.Must(template.New("report").Parse(htmlReportTemplate))
+	funcs := template.FuncMap{
+		"mul": func(a, b float64) float64 {
+			return a * b
+		},
+		"formatPct": func(f float64) string {
+			return fmt.Sprintf("%.2f", f*100)
+		},
+		"join": func(arr []string, sep string) string {
+			return strings.Join(arr, sep)
+		},
+	}
+
+	tmpl := template.Must(template.New("report").Funcs(funcs).Parse(htmlReportTemplate))
 	var buf bytes.Buffer
 
 	// Prepare data for template
@@ -753,9 +784,10 @@ const htmlReportTemplate = `<!DOCTYPE html>
                     <td>{{.Passed}}</td>
                     <td>{{.TotalCases}}</td>
                     <td>
-                        {{if ge .DetectionRate 0.9}}<span class="rate-high">{{printf "%.2f" (mul .DetectionRate 100)}}%</span>
-                        {{else if ge .DetectionRate 0.7}}<span class="rate-medium">{{printf "%.2f" (mul .DetectionRate 100)}}%</span>
-                        {{else}}<span class="rate-low">{{printf "%.2f" (mul .DetectionRate 100)}}%</span>{{end}}
+                        {{$pct := mul .DetectionRate 100}}
+                        {{if ge .DetectionRate 0.9}}<span class="rate-high">{{printf "%.2f" $pct}}%</span>
+                        {{else if ge .DetectionRate 0.7}}<span class="rate-medium">{{printf "%.2f" $pct}}%</span>
+                        {{else}}<span class="rate-low">{{printf "%.2f" $pct}}%</span>{{end}}
                     </td>
                     <td>{{.AvgParseTimeMs}}ms</td>
                     <td>{{.AvgLintTimeMs}}ms</td>
@@ -786,12 +818,6 @@ const htmlReportTemplate = `<!DOCTYPE html>
             <p>For more information, see <a href="../../BENCHMARK.md">BENCHMARK.md</a></p>
         </footer>
     </div>
-
-    <script>
-        // Utility for template to multiply
-        var mul = (a, b) => a * b;
-        var join = (arr, sep) => arr.join(sep);
-    </script>
 </body>
 </html>
 `
