@@ -1340,6 +1340,107 @@
       "summary": "Get OpenAPI specification (legacy alias)"
       "tags":
         - "Documentation"
+  "/v1/analyse":
+    "post":
+      "deprecated": true
+      "description": "Deprecated compatibility alias for POST /v1/analyze. Use the canonical American English spelling endpoint instead. Planned removal in v1.2.0 (Q2 2026)."
+      "operationId": "analyzeCodeSpellingAlias"
+      "requestBody":
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/AnalyzeRequest"
+        "required": true
+      "responses":
+        "200":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalyzeResponse"
+          "description": "Success"
+        "400":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalyzeResponse"
+          "description": "Bad request"
+        "413":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalyzeResponse"
+          "description": "Request too large"
+        "500":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalyzeResponse"
+          "description": "Parser/service internal failure"
+        "504":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalyzeResponse"
+          "description": "Parser timeout"
+      "summary": "Analyze and lint a Mermaid diagram (deprecated spelling alias)"
+      "tags":
+        - "Linting"
+  "/v1/analyse/raw":
+    "post":
+      "deprecated": true
+      "description": "Deprecated compatibility alias for POST /v1/analyze/raw. Use the canonical American English spelling endpoint instead. Planned removal in v1.2.0 (Q2 2026)."
+      "operationId": "analyzeCodeRawSpellingAlias"
+      "requestBody":
+        "content":
+          "application/json":
+            "schema":
+              "description": "Auto-detected JSON with code field"
+              "properties":
+                "code":
+                  "description": "Mermaid diagram code"
+                  "type": "string"
+              "required":
+                - "code"
+              "type": "object"
+          "text/plain":
+            "schema":
+              "description": "Raw mermaid diagram code"
+              "type": "string"
+        "required": true
+      "responses":
+        "200":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalyzeResponse"
+          "description": "Analysis complete"
+        "400":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+          "description": "Bad request"
+        "413":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+          "description": "Request too large"
+        "500":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalyzeResponse"
+          "description": "Parser/service internal failure"
+        "504":
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AnalyzeResponse"
+          "description": "Parser timeout"
+      "summary": "Analyze and lint a Mermaid diagram (raw text, deprecated spelling alias)"
+      "tags":
+        - "Linting"
   "/v1/analyze":
     "post":
       "description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nLegacy config acceptance: Phase 1 accepts legacy flat/nested/snake_case config and emits deprecation signals. Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned), where legacy config is rejected with HTTP 400 `deprecated_config_format`.\n\nOperational note: tune `PARSER_CONCURRENCY_LIMIT` and `PARSER_MAX_OLD_SPACE_MB` (documented in API_GUIDE.md under Operational environment variables). When parser concurrency is exhausted, `/analyze` returns HTTP 503 with `error.code=server_busy`; parser subprocess heap is capped with Node `--max-old-space-size`. Per-request parser overrides remain bounded (timeout 1-60s, memory 128-4096 MiB). For oversized/complex diagrams, split work into smaller diagrams and batch requests.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)\n- `parser_memory_limit` (HTTP 500)"
@@ -1952,7 +2053,7 @@
         - "Documentation"
   "/v1/analyze/raw":
     "post":
-      "description": "Accepts raw mermaid code (plain text) directly in the request body. Auto-detects format: attempts to parse as JSON first (looks for {\"code\": \"...\"} structure), then falls back to treating the entire body as raw mermaid syntax.\n\nDoes NOT support lint configuration; use POST /v1/analyze if you need to configure rules. Maximum request body size is 1 MiB.\n\nReturns the same structured analysis as /v1/analyze, including syntax errors, structured hints for fixing errors, and lint results. When syntax errors occur, the 'hints' field contains machine-readable entries for common mistakes (e.g., Graphviz syntax, tab indentation, arrow operators). The legacy 'suggestions' field remains for backward compatibility and is deprecated."
+      "description": "Accepts raw mermaid code (plain text) directly in the request body. Auto-detects format: attempts to parse as JSON first (supports {\"code\": \"...\"} and optional config/parser fields), then falls back to treating the entire body as raw mermaid syntax.\n\nIf Content-Type is JSON and the payload appears JSON-like (for example starts with `{`/`[`), but decoding fails, the request is still analyzed as raw text and a request-level hint code `raw_json_decode_failed_fallback_to_text` explains that decode fallback. Non-JSON raw text sent with JSON content type still falls back successfully without that decode-fallback hint. Maximum request body size is 1 MiB.\n\nReturns the same structured analysis as /v1/analyze, including syntax errors, structured hints for fixing errors, and lint results. When syntax errors occur, the 'hints' field contains machine-readable entries for common mistakes (e.g., Graphviz syntax, tab indentation, arrow operators). The legacy 'suggestions' field remains for backward compatibility and is deprecated."
       "operationId": "analyzeCodeRaw"
       "requestBody":
         "content":

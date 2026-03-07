@@ -446,7 +446,7 @@ The `/v1/analyze/raw` endpoint allows you to send raw Mermaid code directly with
 
 The endpoint auto-detects the input format:
 - **Plain text** (Content-Type: `text/plain`) — Entire body is treated as raw Mermaid code
-- **JSON** (Content-Type: `application/json`) — Attempts to parse `{"code": "..."}` structure, falls back to raw text if parsing fails
+- **JSON** (Content-Type: `application/json`) — Attempts to parse `{"code": "..."}` structure. If parsing fails, the body is analyzed as raw text. The `raw_json_decode_failed_fallback_to_text` hint is emitted only when the payload is JSON-like but malformed (for example starting with `{` or `[`), not for plain Mermaid or markdown-fenced Mermaid text sent under JSON content type.
 
 ### Using the Swagger UI
 
