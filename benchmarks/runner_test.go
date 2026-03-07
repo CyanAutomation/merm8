@@ -77,6 +77,24 @@ func TestRunner_DiscoverCases(t *testing.T) {
 			t.Fatalf("invalid fixture should be ignored, got case %+v", bc)
 		}
 	}
+
+	// Assert rule extraction via public discovery path.
+	wantRuleByID := map[string]string{
+		"flowchart-val-a-first":  "no-cycles",
+		"flowchart-val-b-second": "*",
+		"flowchart-vio-c-third":  "max-depth",
+		"flowchart-edg-d-fourth": "*",
+		"alpha":                  "*",
+	}
+	for _, bc := range cases {
+		wantRule, ok := wantRuleByID[bc.ID]
+		if !ok {
+			t.Fatalf("unexpected discovered case %q", bc.ID)
+		}
+		if bc.RuleID != wantRule {
+			t.Fatalf("case %q rule_id = %q, want %q", bc.ID, bc.RuleID, wantRule)
+		}
+	}
 }
 
 func TestExtractRuleID(t *testing.T) {
@@ -107,6 +125,39 @@ func TestExtractRuleID(t *testing.T) {
   A --> B
 `,
 			want: "*",
+		},
+		{
+			name: "rule with extra whitespace",
+			content: `graph TD
+  A --> B
+  %%     @rule:    no-cycles    
+`,
+			want: "no-cycles",
+		},
+		{
+			name: "malformed annotation missing colon",
+			content: `graph TD
+  A --> B
+  %% @rule no-cycles
+`,
+			want: "*",
+		},
+		{
+			name: "malformed annotation empty rule",
+			content: `graph TD
+  A --> B
+  %% @rule:
+`,
+			want: "",
+		},
+		{
+			name: "multiple rule lines returns first",
+			content: `graph TD
+  A --> B
+  %% @rule: no-cycles
+  %% @rule: max-depth
+`,
+			want: "no-cycles",
 		},
 	}
 
