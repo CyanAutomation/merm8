@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>merm8 Benchmark Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        header p { font-size: 1.1em; opacity: 0.95; }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .summary-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #667eea;
+        }
+        .summary-card h3 { color: #667eea; font-size: 0.9em; text-transform: uppercase; margin-bottom: 10px; }
+        .summary-card .value { font-size: 2em; font-weight: bold; color: #333; }
+        .summary-card.passed { border-left-color: #48bb78; }
+        .summary-card.passed h3 { color: #48bb78; }
+        .summary-card.failed { border-left-color: #f56565; }
+        .summary-card.failed h3 { color: #f56565; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+        th {
+            background: #f7fafc;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #4a5568;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        tr:hover { background: #f8f9fa; }
+        .rate-high { color: #48bb78; font-weight: 600; }
+        .rate-medium { color: #ed8936; font-weight: 600; }
+        .rate-low { color: #f56565; font-weight: 600; }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            font-weight: 500;
+            margin: 2px;
+        }
+        .badge.pass { background: #c6f6d5; color: #22543d; }
+        .badge.fail { background: #fed7d7; color: #742a2a; }
+        h2 {
+            margin-top: 40px;
+            margin-bottom: 20px;
+            color: #2d3748;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+        .details-row { margin: 10px 0; }
+        .details-row strong { color: #4a5568; }
+        .failed-cases {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .failed-case {
+            padding: 15px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #fff5f5;
+        }
+        .failed-case:last-child { border-bottom: none; }
+        .failed-case h4 { color: #f56565; margin-bottom: 8px; }
+        .failed-case pre {
+            background: #f7fafc;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 0.85em;
+            margin: 5px 0;
+        }
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            color: #718096;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 merm8 Benchmark Report</h1>
+            <p>Mermaid Linting Rule Efficacy Analysis</p>
+        </header>
+
+        <div class="summary">
+            <div class="summary-card passed">
+                <h3>Passed</h3>
+                <div class="value">0</div>
+                <p>of 18 cases</p>
+            </div>
+            <div class="summary-card failed">
+                <h3>Failed</h3>
+                <div class="value">18</div>
+                <p>quality failures</p>
+            </div>
+            <div class="summary-card">
+                <h3>Pass Rate</h3>
+                <div class="value">0.0%</div>
+                <p>overall success</p>
+            </div>
+            <div class="summary-card">
+                <h3>Execution Time</h3>
+                <div class="value">0.93s</div>
+                <p>total runtime</p>
+            </div>
+        </div>
+
+        <h2>Test Metadata</h2>
+        <div class="details-row">
+            <strong>Timestamp:</strong> 2026-03-07 21:38:13
+        </div>
+        <div class="details-row">
+            <strong>Version:</strong> v0.1.0-dev
+        </div>
+
+        <h2>Rule Metrics</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Rule</th>
+                    <th>Passed</th>
+                    <th>Total</th>
+                    <th>Detection Rate</th>
+                    <th>Avg Parse Time</th>
+                    <th>Avg Lint Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td><strong>max-depth</strong></td>
+                    <td>0</td>
+                    <td>2</td>
+                    <td>
+                        
+                        <span class="rate-low">0.00%</span>
+                    </td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
+                <tr>
+                    <td><strong>max-fanout</strong></td>
+                    <td>0</td>
+                    <td>2</td>
+                    <td>
+                        
+                        <span class="rate-low">0.00%</span>
+                    </td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
+                <tr>
+                    <td><strong>no-cycles</strong></td>
+                    <td>0</td>
+                    <td>3</td>
+                    <td>
+                        
+                        <span class="rate-low">0.00%</span>
+                    </td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
+                <tr>
+                    <td><strong>no-disconnected-nodes</strong></td>
+                    <td>0</td>
+                    <td>8</td>
+                    <td>
+                        
+                        <span class="rate-low">0.00%</span>
+                    </td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
+                <tr>
+                    <td><strong>no-duplicate-node-ids</strong></td>
+                    <td>0</td>
+                    <td>3</td>
+                    <td>
+                        
+                        <span class="rate-low">0.00%</span>
+                    </td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
+            </tbody>
+        </table>
+
+        
+        <h2>Failed Cases</h2>
+        <div class="failed-cases">
+            
+            <div class="failed-case">
+                <h4>flowchart-val-branched-flow</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-val-complex-flow</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-val-fully-connected</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-val-long-linear-chain</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-val-parallel-paths</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-val-simple-linear</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-vio-complex-cycle</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-cycles:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-cycles:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-vio-deep-tree</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, max-depth:warning</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error max-depth:warning]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-vio-disconnected-node</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-vio-duplicate-nodes</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-vio-high-fanout</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, max-fanout:warning</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error max-fanout:warning]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-vio-self-loop</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-vio-simple-cycle</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-cycles:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-cycles:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-vio-triple-duplicate</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-vio-two-isolated</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-edg-fanout-at-limit</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-duplicate-node-ids:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-duplicate-node-ids:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-edg-max-depth-at-limit</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+            <div class="failed-case">
+                <h4>flowchart-edg-single-node</h4>
+                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error</span></div>
+                
+                <div><strong>Issues:</strong></div>
+                <pre>expected [], got [no-disconnected-nodes:error]</pre>
+                
+            </div>
+            
+        </div>
+        
+
+        <footer>
+            <p>Generated by <strong>merm8 Benchmark Runner</strong></p>
+            <p>For more information, see <a href="../../BENCHMARK.md">BENCHMARK.md</a></p>
+        </footer>
+    </div>
+</body>
+</html>
