@@ -38,6 +38,17 @@ type mockParser struct {
 	parseWithConfig func(string, parser.Config) (*model.Diagram, *parser.SyntaxError, error)
 }
 
+type mockParserWithoutConfig struct {
+	parseFunc func(string) (*model.Diagram, *parser.SyntaxError, error)
+}
+
+func (m *mockParserWithoutConfig) Parse(code string) (*model.Diagram, *parser.SyntaxError, error) {
+	if m.parseFunc != nil {
+		return m.parseFunc(code)
+	}
+	return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+}
+
 func (m *mockParser) Parse(code string) (*model.Diagram, *parser.SyntaxError, error) {
 	if m.parseFunc != nil {
 		return m.parseFunc(code)
@@ -5138,6 +5149,37 @@ func TestAnalyze_InvalidParserOverrideValidation(t *testing.T) {
 				t.Fatalf("error.code=%v want invalid_option", errObj["code"])
 			}
 		})
+	}
+}
+
+func TestAnalyze_ParserOverridesRejectedWhenParserLacksPerRequestConfig(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParserWithoutConfig{}, engine.New())
+	h.RegisterRoutes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":8}}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusBadRequest)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	errObj := body["error"].(map[string]any)
+	if errObj["code"] != "invalid_option" {
+		t.Fatalf("error.code=%v want invalid_option", errObj["code"])
+	}
+	msg, _ := errObj["message"].(string)
+	if !strings.Contains(msg, "per-request parser settings are unsupported") {
+		t.Fatalf("error.message=%q want contains unsupported parser settings", msg)
 	}
 }
 
