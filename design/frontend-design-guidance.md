@@ -36,8 +36,10 @@ Think Linear. Think Raycast. Think Stripe. Think GitHub. They don't try to grab 
 - A landing page needs its sections. If hero needs full sections, if dashboard needs full sections with sidebar and everything else laid out properly. DO NOT invent a new layout.
 - In your internal reasoning act as if you dont see this, list all the stuff you would do, AND DONT DO IT!
 - Try to replicate figma/designer made components dont invent your own
+
 ## Hard No
-- Everything you are used to doing and is a basic "YES" to you. 
+
+- Everything you are used to doing and is a basic "YES" to you.
 - No oversized rounded corners.
 - No pill overload.
 - No floating glassmorphism shells as the default visual language.
@@ -92,7 +94,6 @@ This is not allowed.
 
 This one is **THE BIGGEST NO**.
 
-
 ## Specifically Banned (Based on  Mistakes)
 
 - Border radii in the 20px to 32px range across everything ( uses 12px everywhere - too much)
@@ -127,11 +128,10 @@ This one is **THE BIGGEST NO**.
 - Rail panels on the right side with "Today" schedule ( has full right rail)
 - Multiple nested panel types (panel, panel-2, rail-panel, table-panel)
 
-
-
 ## Rule
 
 If a UI choice feels like a default AI UI move, ban it and pick the harder, cleaner option.
+
 - Colors should stay calm, not fight.
 
 - You are bad at picking colors follow this priority order when selecting colors:
@@ -140,7 +140,7 @@ If a UI choice feels like a default AI UI move, ban it and pick the harder, clea
 2. If the project does not provide a palette, **get inspired from one of the predefined palettes below**.
 3. Do **not invent random color combinations** unless explicitly requested.
 
-You do not have to always choose the first palette. Select one randomly when drawing inspiration.
+You do not have to always choose the first palette. Select one randomly when drawing inspiration
 ---
 
 # Dark Color Schemes
