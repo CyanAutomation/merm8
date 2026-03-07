@@ -1,9 +1,11 @@
 graph TD
-    A["Node A"]
+    A["Node A - First Definition"]
     B["Node B"]
-    A_duplicate["Node A"]
     
     A --> B
-    B --> A_duplicate
+    
+    %% This next definition redeclares A with a different label (duplicate ID)
+    A["Node A - Second Definition"]
+    B --> A
     
     %% @rule: no-duplicate-node-ids

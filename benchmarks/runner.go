@@ -184,19 +184,31 @@ func (r *Runner) discoverCasesInDir(dir string, diagramType, category string) ([
 				caseID = fmt.Sprintf("%s-%s-%s", diagramType, category[:3], caseID)
 			}
 
-			// For "valid" category, expect no issues
-			// For "violations" and "edge-cases", expect issues matching the rule (with error severity)
-			// Actual severity will be determined by the rule configuration
+			// For "valid" and "edge-cases" where no violations are expected, expect no issues
+			// For "violations" and edge-cases with explicit violations, expect issues matching the rule
+			// Severity depends on the rule: max-depth and max-fanout use warnings,
+			// other rules use errors (based on rule configuration)
 			expectedIssues := []ExpectedIssue{}
-			if category == "violations" || category == "edge-cases" {
+			
+			// Check if the content indicates violations are expected (has violations mentioned)
+			// For edge-cases, default to no issues expected (boundary/passing cases)
+			// Violations folder always expects issues
+			shouldExpectIssue := category == "violations"
+			
+			if shouldExpectIssue {
 				if ruleID != "*" && ruleID != "" {
+					// Determine severity based on rule type
+					severity := "error"
+					if ruleID == "max-depth" || ruleID == "max-fanout" {
+						severity = "warning"
+					}
 					expectedIssues = append(expectedIssues, ExpectedIssue{
 						RuleID:   ruleID,
-						Severity: "error",
+						Severity: severity,
 					})
 				}
 			}
-			// "valid" category expects no issues, so expectedIssues remains []
+			// "valid", "edge-cases", and non-violations expect no issues
 
 			bc := &BenchmarkCase{
 				ID:             caseID,

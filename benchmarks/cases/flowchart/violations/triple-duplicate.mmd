@@ -1,14 +1,13 @@
 graph TD
-    A["Item 1"]
+    A["Item 1 - First Definition"]
     B["Item 2"]
     C["Item 3"]
-    D["Item 1"]
-    E["Item 4"]
     
     A --> B
     B --> C
-    C --> D
-    D --> E
+    
+    %% Redefine A with a different label (duplicate ID)
+    A["Item 1 - Redefined"]
+    C --> A
     
     %% @rule: no-duplicate-node-ids
-    %% Multiple violations: Item 1 appears twice (A and D)
