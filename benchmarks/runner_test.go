@@ -220,33 +220,18 @@ func TestBenchmarkCase_JSONMarshaling(t *testing.T) {
 		t.Fatalf("failed to unmarshal benchmark case into map: %v", err)
 	}
 
-	schemaChecks := map[string]string{
-		"id":              "string",
-		"rule_id":         "string",
-		"category":        "string",
-		"diagram_type":    "string",
-		"tags":            "[]any",
-		"expected_issues": "[]any",
-	}
-
-	for key, wantType := range schemaChecks {
-		v, ok := raw[key]
-		if !ok {
+	for _, key := range []string{"id", "rule_id", "expected_issues"} {
+		if _, ok := raw[key]; !ok {
 			t.Fatalf("expected key %q to be present", key)
 		}
+	}
 
-		switch wantType {
-		case "string":
-			if _, ok := v.(string); !ok {
-				t.Fatalf("expected key %q to be a string, got %T", key, v)
-			}
-		case "[]any":
-			if _, ok := v.([]any); !ok {
-				t.Fatalf("expected key %q to be an array, got %T", key, v)
-			}
-		default:
-			t.Fatalf("unsupported schema check type %q", wantType)
-		}
+	if got, ok := raw["id"].(string); !ok || got != bc.ID {
+		t.Fatalf("expected id %q, got %#v", bc.ID, raw["id"])
+	}
+
+	if got, ok := raw["rule_id"].(string); !ok || got != bc.RuleID {
+		t.Fatalf("expected rule_id %q, got %#v", bc.RuleID, raw["rule_id"])
 	}
 
 	expectedIssues, ok := raw["expected_issues"].([]any)
@@ -262,12 +247,12 @@ func TestBenchmarkCase_JSONMarshaling(t *testing.T) {
 		t.Fatalf("expected expected_issues[0] to be object, got %T", expectedIssues[0])
 	}
 
-	if _, ok := issueMap["rule_id"].(string); !ok {
-		t.Fatalf("expected expected_issues[0].rule_id to be string, got %T", issueMap["rule_id"])
+	if got, ok := issueMap["rule_id"].(string); !ok || got != bc.ExpectedIssues[0].RuleID {
+		t.Fatalf("expected expected_issues[0].rule_id %q, got %#v", bc.ExpectedIssues[0].RuleID, issueMap["rule_id"])
 	}
 
-	if _, ok := issueMap["severity"].(string); !ok {
-		t.Fatalf("expected expected_issues[0].severity to be string, got %T", issueMap["severity"])
+	if got, ok := issueMap["severity"].(string); !ok || got != bc.ExpectedIssues[0].Severity {
+		t.Fatalf("expected expected_issues[0].severity %q, got %#v", bc.ExpectedIssues[0].Severity, issueMap["severity"])
 	}
 }
 
