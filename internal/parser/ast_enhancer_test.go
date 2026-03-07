@@ -194,6 +194,73 @@ func TestFindDuplicateNodeIDs_VariousCounts(t *testing.T) {
 	}
 }
 
+func TestExtractAllNodeIDsFromSource_HyphenatedAndMixedStyles(t *testing.T) {
+	source := `graph TD
+    service-node[Service]
+    node_2(Round)
+    alpha123{Decision}
+    service-node[Service Updated]`
+
+	got := extractAllNodeIDsFromSource(source)
+	want := []string{"service-node", "node_2", "alpha123"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d node IDs, got %d: %v", len(want), len(got), got)
+	}
+	for i, id := range want {
+		if got[i] != id {
+			t.Fatalf("expected %q at position %d, got %q", id, i, got[i])
+		}
+	}
+}
+
+func TestFindDuplicateNodeIDs_HyphenatedAndMixedStyles(t *testing.T) {
+	source := `graph TD
+    service-node[First]
+    service-node[Second]
+    node_2(One)
+    node_2(Two)
+    alpha123{Single}`
+
+	got := findDuplicateNodeIDs(source)
+	want := []string{"node_2", "service-node"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d duplicate IDs, got %d: %v", len(want), len(got), got)
+	}
+	for i, id := range want {
+		if got[i] != id {
+			t.Fatalf("expected %q at position %d, got %q", id, i, got[i])
+		}
+	}
+}
+
+func TestEnhanceASTWithSourceAnalysis_HyphenatedDuplicateAndDisconnected(t *testing.T) {
+	source := `graph TD
+    service-node[Start]
+    service-node[Updated]
+    service-node --> node_2
+    node_2[Worker]
+    extra-node[Orphan]`
+
+	diagram := &model.Diagram{
+		Type: model.DiagramTypeFlowchart,
+		Nodes: []model.Node{
+			{ID: "service-node"},
+			{ID: "node_2"},
+		},
+		Edges: []model.Edge{
+			{From: "service-node", To: "node_2"},
+		},
+	}
+
+	EnhanceASTWithSourceAnalysis(diagram, source)
+
+	if len(diagram.DuplicateNodeIDs) != 1 || diagram.DuplicateNodeIDs[0] != "service-node" {
+		t.Fatalf("expected duplicate [service-node], got %v", diagram.DuplicateNodeIDs)
+	}
+	if len(diagram.DisconnectedNodeIDs) != 1 || diagram.DisconnectedNodeIDs[0] != "extra-node" {
+		t.Fatalf("expected disconnected [extra-node], got %v", diagram.DisconnectedNodeIDs)
+	}
+}
 func TestEnhanceASTWithSourceAnalysis_NilDiagram(t *testing.T) {
 	// Should not panic
 	EnhanceASTWithSourceAnalysis(nil, "A --> B")
