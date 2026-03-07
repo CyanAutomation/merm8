@@ -4254,6 +4254,46 @@ func TestAnalyzeRateLimitMiddleware_AppliesOnProtectedAnalyzeRoutes(t *testing.T
 	}
 }
 
+func TestAnalyzeBearerAuthMiddleware_DoesNotProtectAnalyzeHelpRoute(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{}, nil, nil
+	})
+	secured := api.AnalyzeBearerAuthMiddleware("s3cr3t", mux)
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze/help", nil)
+	w := httptest.NewRecorder()
+	secured.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected help route to remain unprotected and return 405 for unsupported POST, got %d", w.Code)
+	}
+}
+
+func TestAnalyzeRateLimitMiddleware_DoesNotProtectAnalyzeHelpRoute(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{}, nil, nil
+	})
+	limited := api.AnalyzeRateLimitMiddleware(api.NewRateLimiter(1, time.Minute), mux)
+
+	firstReq := httptest.NewRequest(http.MethodPost, "/analyze/help", nil)
+	firstReq.RemoteAddr = "127.0.0.1:1234"
+	firstW := httptest.NewRecorder()
+	limited.ServeHTTP(firstW, firstReq)
+
+	if firstW.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected help route to remain unprotected and return 405 for unsupported POST, got %d", firstW.Code)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/analyze/help", nil)
+	secondReq.RemoteAddr = "127.0.0.1:5678"
+	secondW := httptest.NewRecorder()
+	limited.ServeHTTP(secondW, secondReq)
+
+	if secondW.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected help route to remain unprotected and return 405 for unsupported POST, got %d", secondW.Code)
+	}
+}
+
 func TestAnalyzeBearerAuthMiddleware_RequiresTokenOnV1Endpoint(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{}, nil, nil
