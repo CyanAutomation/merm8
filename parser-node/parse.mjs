@@ -46,9 +46,10 @@ if (versionInfoMode) {
 }
 
 // Read all stdin synchronously (Go sends the full payload before reading output)
-const input = readFileSync('/dev/stdin', 'utf8').trim();
+const input = readFileSync('/dev/stdin', 'utf8');
+const trimmedInput = input.trim();
 
-if (!input) {
+if (!trimmedInput) {
   writeResult({ valid: false, error: { message: 'empty input', line: 0, column: 0 } });
   process.exit(0);
 }
