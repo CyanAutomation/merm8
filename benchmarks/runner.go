@@ -106,6 +106,14 @@ func (r *Runner) Run(opts RunOptions) error {
 	return nil
 }
 
+// DiscoverCases scans the fixtures directory and discovers all test cases.
+//
+// This public wrapper supports direct testing of discovery behavior without
+// running the full benchmark execution pipeline.
+func (r *Runner) DiscoverCases() ([]*BenchmarkCase, error) {
+	return r.discoverCases()
+}
+
 // discoverCases scans the fixtures directory and discovers all test cases.
 func (r *Runner) discoverCases() ([]*BenchmarkCase, error) {
 	var cases []*BenchmarkCase
@@ -225,6 +233,12 @@ func extractRuleIDFromContent(content string) string {
 		}
 	}
 	return "*"
+}
+
+// ExtractRuleIDFromContent parses mermaid metadata comments and returns the
+// first declared rule ID, or "*" when no metadata is present.
+func ExtractRuleIDFromContent(content string) string {
+	return extractRuleIDFromContent(content)
 }
 
 // executeCases runs all benchmark cases and aggregates results.
