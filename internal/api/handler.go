@@ -1931,13 +1931,68 @@ func defaultMetrics(diagramType model.DiagramType) *metricsResponse {
 	}
 }
 
+type syntaxInputSignals struct {
+	trimmedCode               string
+	firstLine                 string
+	diagramType               model.DiagramType
+	hasGraphviz               bool
+	hasYAMLFrontmatter        bool
+	hasTabs                   bool
+	hasFlowchartSingleArrow   bool
+	missingDiagramTypeLikely  bool
+	hasMarkdownFence          bool
+	hasStateDiagramKeyword    bool
+	stateSyntaxErrorMentioned bool
+	hasSmartQuotes            bool
+	hasUnicodeArrowDash       bool
+	hasFlowchartLowercaseEnd  bool
+	hasMalformedBracketClose  bool
+}
+
+func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInputSignals {
+	trimmed := strings.TrimSpace(code)
+	firstLine := strings.TrimSpace(strings.SplitN(code, "\n", 2)[0])
+	lowerCode := strings.ToLower(code)
+	lowerErr := ""
+	if syntaxErr != nil {
+		lowerErr = strings.ToLower(syntaxErr.Message)
+	}
+
+	openBrackets := strings.Count(code, "[")
+	closeBrackets := strings.Count(code, "]")
+
+	missingDiagramTypeLikely := false
+	if syntaxErr != nil && (strings.Contains(syntaxErr.Message, "No diagram type") || strings.Contains(syntaxErr.Message, "Unexpected")) {
+		missingDiagramTypeLikely = !isDiagramTypeKeyword(firstLine)
+	}
+
+	return syntaxInputSignals{
+		trimmedCode:               trimmed,
+		firstLine:                 firstLine,
+		diagramType:               defaultDiagramTypeForSyntaxError(code),
+		hasGraphviz:               strings.Contains(code, "digraph") || strings.Contains(code, "rankdir"),
+		hasYAMLFrontmatter:        strings.HasPrefix(trimmed, "---"),
+		hasTabs:                   strings.Contains(code, "\t"),
+		hasFlowchartSingleArrow:   (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && strings.Contains(strings.ReplaceAll(code, "-->", ""), "->"),
+		missingDiagramTypeLikely:  missingDiagramTypeLikely,
+		hasMarkdownFence:          strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "```mermaid"),
+		hasStateDiagramKeyword:    strings.Contains(lowerCode, "statediagram"),
+		stateSyntaxErrorMentioned: strings.Contains(lowerErr, "state") && (strings.Contains(lowerErr, "syntax") || strings.Contains(lowerErr, "parse") || strings.Contains(lowerErr, "expect")),
+		hasSmartQuotes:            strings.ContainsAny(code, "“”‘’"),
+		hasUnicodeArrowDash:       strings.Contains(code, "—>") || strings.Contains(code, "–>") || strings.Contains(code, "—->") || strings.Contains(code, "–->"),
+		hasFlowchartLowercaseEnd:  (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && strings.Contains(code, "\nend\n"),
+		hasMalformedBracketClose:  openBrackets != closeBrackets || strings.Contains(code, "[[") && strings.Count(code, "]]") < strings.Count(code, "[["),
+	}
+}
+
 // hintsForSyntaxError analyzes a syntax error and code to provide smart, actionable hints.
 func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseHint {
-	hints := make([]responseHint, 0, 5)
-	diagramType := defaultDiagramTypeForSyntaxError(code)
+	hints := make([]responseHint, 0, 9)
+	signals := analyzeInputSignals(code, syntaxErr)
+	diagramType := signals.diagramType
 
 	// Detect Graphviz syntax.
-	if strings.Contains(code, "digraph") || strings.Contains(code, "rankdir") {
+	if signals.hasGraphviz {
 		hints = append(hints, responseHint{
 			Code:       "graphviz_syntax_detected",
 			Message:    "This looks like Graphviz syntax. Use Mermaid syntax instead: 'flowchart TD' for directed graphs.",
@@ -1949,7 +2004,7 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 	}
 
 	// Detect YAML frontmatter.
-	if strings.HasPrefix(strings.TrimSpace(code), "---") {
+	if signals.hasYAMLFrontmatter {
 		hints = append(hints, responseHint{
 			Code:       "yaml_frontmatter_detected",
 			Message:    "Remove YAML frontmatter (---); Mermaid code should start directly with the diagram type.",
@@ -1961,7 +2016,7 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 	}
 
 	// Detect tabs instead of spaces.
-	if strings.Contains(code, "	") {
+	if signals.hasTabs {
 		hints = append(hints, responseHint{
 			Code:       "tab_indentation_detected",
 			Message:    "Replace tabs with spaces (Mermaid uses space indentation).",
@@ -1973,38 +2028,102 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 	}
 
 	// Detect arrow syntax issues based on error message and code content.
-	if strings.Contains(strings.ReplaceAll(code, "-->", ""), "->") {
-		firstLine := strings.TrimSpace(strings.SplitN(code, "\n", 2)[0])
-		if strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph") {
-			hints = append(hints, responseHint{
-				Code:       "flowchart_arrow_operator_detected",
-				Message:    "Use '-->' for flowchart connections, not '->'.",
-				Severity:   "warning",
-				Confidence: 0.97,
-				AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
-				FixExample: "A --> B",
-			})
-		}
+	if signals.hasFlowchartSingleArrow {
+		hints = append(hints, responseHint{
+			Code:       "flowchart_arrow_operator_detected",
+			Message:    "Use '-->' for flowchart connections, not '->'.",
+			Severity:   "warning",
+			Confidence: 0.97,
+			AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
+			FixExample: "A --> B",
+		})
+	}
+
+	if signals.hasMarkdownFence {
+		hints = append(hints, responseHint{
+			Code:       "markdown_fence_detected",
+			Message:    "Remove Markdown code fences (``` or ```mermaid); send raw Mermaid text only.",
+			Severity:   "warning",
+			Confidence: 0.99,
+			AppliesTo:  &responseHintAppliesTo{Line: 1, DiagramType: diagramType},
+			FixExample: "flowchart TD\n  A --> B",
+		})
+	}
+
+	if signals.hasStateDiagramKeyword && signals.stateSyntaxErrorMentioned {
+		hints = append(hints, responseHint{
+			Code:       "state_diagram_variant_migration",
+			Message:    "State diagram syntax mismatch detected. Try `stateDiagram-v2` and Mermaid state transitions like `[*] --> Idle`.",
+			Severity:   "warning",
+			Confidence: 0.96,
+			AppliesTo:  &responseHintAppliesTo{DiagramType: model.DiagramTypeState},
+			FixExample: "stateDiagram-v2\n  [*] --> Idle",
+		})
+	}
+
+	if signals.hasSmartQuotes || signals.hasUnicodeArrowDash {
+		hints = append(hints, responseHint{
+			Code:       "smart_punctuation_detected",
+			Message:    "Replace smart quotes/dashes with plain ASCII characters (" + `"` + `'` + `, -, -->` + ").",
+			Severity:   "warning",
+			Confidence: 0.98,
+			AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
+			FixExample: "A --> B\nC[\"Quoted label\"]",
+		})
+	}
+
+	if signals.hasFlowchartLowercaseEnd {
+		hints = append(hints, responseHint{
+			Code:       "flowchart_reserved_end_keyword",
+			Message:    "`end` is reserved in flowcharts. If used as a node label/id, rename it (for example `EndNode`).",
+			Severity:   "warning",
+			Confidence: 0.92,
+			AppliesTo:  &responseHintAppliesTo{DiagramType: model.DiagramTypeFlowchart},
+			FixExample: "flowchart TD\n  Start --> EndNode",
+		})
+	}
+
+	if signals.hasMalformedBracketClose {
+		hints = append(hints, responseHint{
+			Code:       "malformed_label_brackets",
+			Message:    "Unbalanced label delimiters detected. Check that every '[' has a matching ']'.",
+			Severity:   "warning",
+			Confidence: 0.91,
+			AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
+			FixExample: "A[Start] --> B[End]",
+		})
 	}
 
 	// Detect missing diagram type keyword.
-	if strings.Contains(syntaxErr.Message, "No diagram type") || strings.Contains(syntaxErr.Message, "Unexpected") {
-		firstLine := strings.TrimSpace(strings.SplitN(code, "\n", 2)[0])
-		if !strings.Contains(firstLine, "flowchart") && !strings.Contains(firstLine, "sequenceDiagram") &&
-			!strings.Contains(firstLine, "classDiagram") && !strings.Contains(firstLine, "erDiagram") &&
-			!strings.Contains(firstLine, "stateDiagram") && !strings.Contains(firstLine, "graph") {
-			hints = append(hints, responseHint{
-				Code:       "missing_diagram_type_keyword",
-				Message:    "Start your diagram with a type keyword: 'flowchart TD', 'sequenceDiagram', 'classDiagram', 'erDiagram', or 'stateDiagram-v2'.",
-				Severity:   "warning",
-				Confidence: 0.90,
-				AppliesTo:  &responseHintAppliesTo{Line: 1},
-				FixExample: "flowchart TD\n  A --> B",
-			})
-		}
+	if signals.missingDiagramTypeLikely {
+		hints = append(hints, responseHint{
+			Code:       "missing_diagram_type_keyword",
+			Message:    "Start your diagram with a type keyword: 'flowchart TD', 'sequenceDiagram', 'classDiagram', 'erDiagram', or 'stateDiagram-v2'.",
+			Severity:   "warning",
+			Confidence: 0.90,
+			AppliesTo:  &responseHintAppliesTo{Line: 1},
+			FixExample: "flowchart TD\n  A --> B",
+		})
 	}
 
-	return hints
+	sort.SliceStable(hints, func(i, j int) bool {
+		if hints[i].Confidence == hints[j].Confidence {
+			return hints[i].Code < hints[j].Code
+		}
+		return hints[i].Confidence > hints[j].Confidence
+	})
+
+	deduped := make([]responseHint, 0, len(hints))
+	seenCodes := make(map[string]struct{}, len(hints))
+	for _, hint := range hints {
+		if _, exists := seenCodes[hint.Code]; exists {
+			continue
+		}
+		seenCodes[hint.Code] = struct{}{}
+		deduped = append(deduped, hint)
+	}
+
+	return deduped
 }
 
 func suggestionsFromHints(hints []responseHint) []string {
@@ -2022,9 +2141,10 @@ func suggestionsFromHints(hints []responseHint) []string {
 // It returns the primary help suggestion based on the error type and code context.
 func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggestion {
 	lines := strings.Split(code, "\n")
+	signals := analyzeInputSignals(code, syntaxErr)
 
 	// Detect Graphviz syntax (high confidence error)
-	if strings.Contains(code, "digraph") || strings.Contains(code, "rankdir") {
+	if signals.hasGraphviz {
 		return &helpSuggestion{
 			Title:          "Graphviz syntax detected",
 			Explanation:    "This looks like Graphviz (GraphQL visualization) syntax. merm8 uses Mermaid diagrams, which have different syntax.",
@@ -2036,7 +2156,7 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 	}
 
 	// Detect YAML frontmatter
-	if strings.HasPrefix(strings.TrimSpace(code), "---") {
+	if signals.hasYAMLFrontmatter {
 		return &helpSuggestion{
 			Title:          "YAML frontmatter not supported",
 			Explanation:    "Mermaid code should not include YAML frontmatter. Remove the --- lines and start directly with the diagram type.",
@@ -2047,8 +2167,41 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 		}
 	}
 
+	if signals.hasMarkdownFence {
+		return &helpSuggestion{
+			Title:          "Markdown code fence detected",
+			Explanation:    "The analyzer expects Mermaid source only, not Markdown fences. Remove surrounding ``` or ```mermaid lines.",
+			WrongExample:   "```mermaid\nflowchart TD\n  A --> B\n```",
+			CorrectExample: "flowchart TD\n  A --> B",
+			DocLink:        "#common-mistakes",
+			FixAction:      "Remove Markdown fences before sending Mermaid to /v1/analyze or /v1/analyze/raw",
+		}
+	}
+
+	if signals.hasSmartQuotes || signals.hasUnicodeArrowDash {
+		return &helpSuggestion{
+			Title:          "Smart punctuation detected",
+			Explanation:    "Copied text can replace ASCII quotes/dashes with typographic characters that Mermaid cannot parse in operators or labels.",
+			WrongExample:   "flowchart TD\n  A —> B\n  B[“Quoted”]",
+			CorrectExample: "flowchart TD\n  A --> B\n  B[\"Quoted\"]",
+			DocLink:        "#arrow-syntax",
+			FixAction:      "Replace typographic quotes/dashes with plain ASCII characters",
+		}
+	}
+
+	if signals.hasStateDiagramKeyword && signals.stateSyntaxErrorMentioned {
+		return &helpSuggestion{
+			Title:          "State diagram variant mismatch",
+			Explanation:    "Your parser error points to state syntax. Migrate to `stateDiagram-v2` and standard Mermaid state transitions.",
+			WrongExample:   "stateDiagram\n  state idle",
+			CorrectExample: "stateDiagram-v2\n  [*] --> Idle",
+			DocLink:        "#diagram-types",
+			FixAction:      "Switch to `stateDiagram-v2` style syntax for state diagrams",
+		}
+	}
+
 	// Detect tabs instead of spaces (get the problematic line if possible)
-	if strings.Contains(code, "\t") {
+	if signals.hasTabs {
 		probableLine := "    A --> B"
 		if syntaxErr.Line > 0 && syntaxErr.Line <= len(lines) {
 			probableLine = lines[syntaxErr.Line-1]
@@ -2083,17 +2236,14 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 	}
 
 	// Detect missing diagram type keyword
-	if strings.Contains(syntaxErr.Message, "No diagram type") || strings.Contains(syntaxErr.Message, "Unexpected") {
-		firstLine := strings.TrimSpace(strings.SplitN(code, "\n", 2)[0])
-		if firstLine != "" && !isDiagramTypeKeyword(firstLine) {
-			return &helpSuggestion{
-				Title:          "Missing diagram type keyword",
-				Explanation:    "Every Mermaid diagram must start with a type keyword (flowchart, sequenceDiagram, etc.) on the first line.",
-				WrongExample:   "A --> B\nB --> C",
-				CorrectExample: "flowchart TD\n  A --> B\n  B --> C",
-				DocLink:        "#diagram-types",
-				FixAction:      "Add a diagram type keyword to the first line: 'flowchart TD', 'sequenceDiagram', 'classDiagram', 'erDiagram', or 'stateDiagram-v2'",
-			}
+	if signals.missingDiagramTypeLikely && signals.firstLine != "" {
+		return &helpSuggestion{
+			Title:          "Missing diagram type keyword",
+			Explanation:    "Every Mermaid diagram must start with a type keyword (flowchart, sequenceDiagram, etc.) on the first line.",
+			WrongExample:   "A --> B\nB --> C",
+			CorrectExample: "flowchart TD\n  A --> B\n  B --> C",
+			DocLink:        "#diagram-types",
+			FixAction:      "Add a diagram type keyword to the first line: 'flowchart TD', 'sequenceDiagram', 'classDiagram', 'erDiagram', or 'stateDiagram-v2'",
 		}
 	}
 

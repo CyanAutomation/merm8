@@ -744,6 +744,49 @@ func containsString(values []string, target string) bool {
 	return false
 }
 
+func syntaxErrorResponseForEndpoint(t *testing.T, endpoint, payload, contentType string, syntaxErr *parser.SyntaxError) map[string]interface{} {
+	t.Helper()
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+
+	var req *http.Request
+	if endpoint == "/v1/analyze" {
+		body, err := json.Marshal(map[string]string{"code": payload})
+		if err != nil {
+			t.Fatalf("marshal analyze body: %v", err)
+		}
+		req = httptest.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+	} else {
+		req = httptest.NewRequest(http.MethodPost, endpoint, strings.NewReader(payload))
+		req.Header.Set("Content-Type", contentType)
+	}
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for %s, got %d", endpoint, w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response for %s: %v", endpoint, err)
+	}
+	return resp
+}
+
+func assertHintCodePresentForAnalyzeAndRaw(t *testing.T, syntaxErr *parser.SyntaxError, payload, hintCode string) {
+	t.Helper()
+	for _, endpoint := range []string{"/v1/analyze", "/v1/analyze/raw"} {
+		resp := syntaxErrorResponseForEndpoint(t, endpoint, payload, "text/plain", syntaxErr)
+		hintCodes := hintCodesFromResponse(t, resp)
+		if !containsString(hintCodes, hintCode) {
+			t.Fatalf("expected %s hint for %s, got %v", hintCode, endpoint, hintCodes)
+		}
+	}
+}
+
 // TestAnalyze_SyntaxError_SuggestionsGraphvizDetection tests suggestions for Graphviz syntax.
 func TestAnalyze_SyntaxError_SuggestionsGraphvizDetection(t *testing.T) {
 	syntaxErr := &parser.SyntaxError{
@@ -866,6 +909,85 @@ func TestAnalyze_SyntaxError_SuggestionsMissingDiagramType(t *testing.T) {
 	hintCodes := hintCodesFromResponse(t, resp)
 	if !containsString(hintCodes, "missing_diagram_type_keyword") {
 		t.Errorf("expected missing_diagram_type_keyword hint code, got %v", hintCodes)
+	}
+}
+
+func TestAnalyze_SyntaxError_Detectors_MarkdownFence(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{Message: "Unexpected token", Line: 1, Column: 1}
+	assertHintCodePresentForAnalyzeAndRaw(t, syntaxErr, "```mermaid\nflowchart TD\n  A --> B\n```", "markdown_fence_detected")
+
+	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", "```\nflowchart TD\n  A --> B\n```", "text/plain", syntaxErr)
+	helpSuggestion, ok := resp["help-suggestion"].(map[string]interface{})
+	if !ok || helpSuggestion == nil {
+		t.Fatalf("expected help-suggestion for markdown fence")
+	}
+}
+
+func TestAnalyze_SyntaxError_Detectors_StateVariantMigration(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{Message: "State syntax parse error", Line: 2, Column: 3}
+	payload := "stateDiagram\n  state idle"
+	assertHintCodePresentForAnalyzeAndRaw(t, syntaxErr, payload, "state_diagram_variant_migration")
+
+	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", payload, "text/plain", syntaxErr)
+	helpSuggestion, ok := resp["help-suggestion"].(map[string]interface{})
+	if !ok || helpSuggestion == nil {
+		t.Fatalf("expected help-suggestion for state diagram variant migration")
+	}
+}
+
+func TestAnalyze_SyntaxError_Detectors_SmartPunctuation(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{Message: "Unexpected token", Line: 2, Column: 4}
+	payload := "flowchart TD\n  A —> B\n  B[“Quoted”]"
+	assertHintCodePresentForAnalyzeAndRaw(t, syntaxErr, payload, "smart_punctuation_detected")
+
+	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", payload, "text/plain", syntaxErr)
+	helpSuggestion, ok := resp["help-suggestion"].(map[string]interface{})
+	if !ok || helpSuggestion == nil {
+		t.Fatalf("expected help-suggestion for smart punctuation")
+	}
+}
+
+func TestAnalyze_SyntaxError_Detectors_FlowchartReservedEnd(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{Message: "Unexpected token", Line: 2, Column: 1}
+	payload := "flowchart TD\nend\nA --> B"
+	assertHintCodePresentForAnalyzeAndRaw(t, syntaxErr, payload, "flowchart_reserved_end_keyword")
+
+	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", payload, "text/plain", syntaxErr)
+	if _, ok := resp["help-suggestion"]; ok {
+		t.Fatalf("did not expect help-suggestion for reserved end detector")
+	}
+}
+
+func TestAnalyze_SyntaxError_Detectors_MalformedLabelBrackets(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{Message: "Unexpected token", Line: 2, Column: 8}
+	payload := "flowchart TD\n  A[Start --> B[End]"
+	assertHintCodePresentForAnalyzeAndRaw(t, syntaxErr, payload, "malformed_label_brackets")
+
+	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", payload, "text/plain", syntaxErr)
+	if _, ok := resp["help-suggestion"]; ok {
+		t.Fatalf("did not expect help-suggestion for malformed bracket detector")
+	}
+}
+
+func TestAnalyze_SyntaxError_HintsSortedByConfidence(t *testing.T) {
+	syntaxErr := &parser.SyntaxError{Message: "Unexpected state syntax", Line: 2, Column: 4}
+	payload := "```mermaid\nstateDiagram\n\tA —> B[Unclosed\n```"
+	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", payload, "text/plain", syntaxErr)
+	hintsRaw := resp["hints"].([]interface{})
+	if len(hintsRaw) < 2 {
+		t.Fatalf("expected multiple hints, got %d", len(hintsRaw))
+	}
+	prev := 2.0
+	for _, raw := range hintsRaw {
+		hint := raw.(map[string]interface{})
+		confidence, ok := hint["confidence"].(float64)
+		if !ok {
+			t.Fatalf("expected confidence number, got %#v", hint["confidence"])
+		}
+		if confidence > prev {
+			t.Fatalf("expected non-increasing confidence ordering, got %v then %v", prev, confidence)
+		}
+		prev = confidence
 	}
 }
 
