@@ -1,10 +1,12 @@
 package benchmarks_test
 
 import (
+	"errors"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/CyanAutomation/merm8/benchmarks"
@@ -259,19 +261,24 @@ func TestBenchmarkCase_JSONMarshaling(t *testing.T) {
 func TestBenchmarkCase_JSONMarshaling_InvalidRawConfig(t *testing.T) {
 	bc := benchmarks.BenchmarkCase{
 		ID:          "test-invalid",
-		Description: "Invalid config raw JSON should fail marshaling",
+		Description: "Invalid benchmark config should be rejected",
 		RuleID:      "no-cycles",
 		Category:    "violation",
 		DiagramType: "flowchart",
 		Config:      json.RawMessage(`{"enabled":`),
 	}
 
-	if _, err := json.Marshal(bc.Config); err == nil {
-		t.Fatal("expected json.Marshal on invalid json.RawMessage to fail")
-	}
-
 	_, err := benchmarks.MarshalBenchmarkCase(bc)
 	if err == nil {
-		t.Fatal("expected marshal error for invalid benchmark case config, got nil")
+		t.Fatal("expected invalid benchmark config to be rejected during marshaling")
+	}
+
+	var marshalerErr *json.MarshalerError
+	if !errors.As(err, &marshalerErr) {
+		t.Fatalf("expected json marshaler error classification, got %T: %v", err, err)
+	}
+
+	if !strings.Contains(err.Error(), "unexpected end of JSON input") {
+		t.Fatalf("expected user-facing parse failure in error message, got %q", err.Error())
 	}
 }
