@@ -86,7 +86,7 @@ For production stability:
 
 Canonical endpoints are versioned under `/v1`. Legacy unversioned routes are still served as migration aliases and are deprecated, with planned removal in **v1.2.0 (Q2 2026)**.
 
-Use `/v1/analyze`, `/v1/analyze/raw`, and `/v1/analyze/sarif` for all new integrations. Legacy unversioned analyze routes (`/analyze`, `/analyze/raw`, `/analyze/sarif`) are deprecated compatibility aliases only.
+Use `/v1/analyze`, `/v1/analyze/raw`, and `/v1/analyze/sarif` for all new integrations. British-English spelling aliases (`/v1/analyse`, `/v1/analyse/raw`) and legacy unversioned analyze routes (`/analyze`, `/analyze/raw`, `/analyze/sarif`) are deprecated compatibility aliases only.
 
 ## Interactive API Testing with Swagger UI
 
@@ -561,6 +561,8 @@ curl -X POST http://localhost:8080/v1/analyze \
 #### Legacy analyze aliases (deprecated)
 
 Legacy unversioned analyze routes remain available for migration only and are deprecated:
+- `POST /v1/analyse`
+- `POST /v1/analyse/raw`
 - `POST /analyze`
 - `POST /analyze/raw`
 - `POST /analyze/sarif`
@@ -776,7 +778,9 @@ curl http://localhost:8080/version
 curl http://localhost:8080/spec | jq .
 ```
 
-### POST `/analyze`
+### POST `/v1/analyze` (canonical)
+
+> Spelling note: `analyze` is canonical. `/v1/analyse` and `/v1/analyse/raw` are temporary compatibility aliases that emit deprecation `Warning` headers and are planned for removal in v1.2.0 (Q2 2026).
 
 #### Source-level suppression directives
 
