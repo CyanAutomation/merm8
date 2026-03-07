@@ -157,6 +157,34 @@ func (otherProbeRule) Run(_ *model.Diagram, _ rules.Config) []model.Issue {
 	return []model.Issue{{RuleID: "other-probe", Severity: "warning", Message: "other rule issue", Line: &line}}
 }
 
+type metricsConditionalRuleA struct{}
+
+func (metricsConditionalRuleA) ID() string { return "custom/test/metrics-conditional-a" }
+
+func (metricsConditionalRuleA) Run(d *model.Diagram, _ rules.Config) []model.Issue {
+	if d.Direction != "BT" {
+		return nil
+	}
+	line1 := 2
+	line2 := 3
+	return []model.Issue{
+		{RuleID: "custom/test/metrics-conditional-a", Severity: "warning", Message: "first conditional warning", Line: &line1},
+		{RuleID: "custom/test/metrics-conditional-a", Severity: "error", Message: "conditional error", Line: &line2},
+	}
+}
+
+type metricsConditionalRuleB struct{}
+
+func (metricsConditionalRuleB) ID() string { return "custom/test/metrics-conditional-b" }
+
+func (metricsConditionalRuleB) Run(d *model.Diagram, _ rules.Config) []model.Issue {
+	if d.Direction != "BT" {
+		return nil
+	}
+	line := 4
+	return []model.Issue{{RuleID: "custom/test/metrics-conditional-b", Severity: "warning", Message: "second conditional warning", Line: &line}}
+}
+
 func getParserScriptPath(t *testing.T) string {
 	t.Helper()
 
@@ -5867,32 +5895,100 @@ func TestAnalyze_SARIFOutputFormat(t *testing.T) {
 
 // TestAnalyze_MetricsTracking tests that metrics are correctly tracked for analyze requests.
 func TestAnalyze_MetricsTracking(t *testing.T) {
-	diagram := &model.Diagram{
+	cleanDiagram := &model.Diagram{
 		Type:      model.DiagramTypeFlowchart,
 		Direction: "TD",
 		Nodes:     []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
 		Edges:     []model.Edge{{From: "A", To: "B"}, {From: "B", To: "C"}},
 	}
 
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return diagram, nil, nil
-	})
+	violationsDiagram := &model.Diagram{
+		Type:      model.DiagramTypeFlowchart,
+		Direction: "BT",
+		Nodes:     []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}, {ID: "D"}},
+		Edges:     []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}},
+	}
+
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		switch code {
+		case "clean":
+			return cleanDiagram, nil, nil
+		case "violations":
+			return violationsDiagram, nil, nil
+		case "parser-error":
+			return nil, nil, parser.ErrSubprocess
+		case "internal-error":
+			return nil, nil, nil
+		default:
+			return &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}}, Edges: []model.Edge{}}, nil, nil
+		}
+	}}, engine.NewWithRules(metricsConditionalRuleA{}, metricsConditionalRuleB{}))
+	h.RegisterRoutes(mux)
 
 	tests := []struct {
-		name         string
-		code         string
-		expectIssues int
+		name              string
+		code              string
+		expectStatus      int
+		expectIssueCount  int
+		expectNodeCount   float64
+		expectEdgeCount   float64
+		expectDiagramType string
+		expectBySeverity  map[string]float64
+		expectByRule      map[string]float64
+		expectErrorCode   string
 	}{
 		{
-			name:         "clean diagram",
-			code:         "graph TD\n  A-->B\n  B-->C",
-			expectIssues: 0,
+			name:              "clean diagram",
+			code:              "clean",
+			expectStatus:      http.StatusOK,
+			expectIssueCount:  0,
+			expectNodeCount:   3,
+			expectEdgeCount:   2,
+			expectDiagramType: "flowchart",
+			expectBySeverity:  map[string]float64{},
+			expectByRule:      map[string]float64{},
 		},
 		{
-			name: "diagram with violations",
-			code: "graph TD\n  A-->B\n  B-->C",
-			// Same diagram, should have no violations (it's clean)
-			expectIssues: 0,
+			name:              "diagram with violations",
+			code:              "violations",
+			expectStatus:      http.StatusOK,
+			expectIssueCount:  3,
+			expectNodeCount:   4,
+			expectEdgeCount:   3,
+			expectDiagramType: "flowchart",
+			expectBySeverity: map[string]float64{
+				"warning": 2,
+				"error":   1,
+			},
+			expectByRule: map[string]float64{
+				"custom/test/metrics-conditional-a": 2,
+				"custom/test/metrics-conditional-b": 1,
+			},
+		},
+		{
+			name:              "parser error",
+			code:              "parser-error",
+			expectStatus:      http.StatusInternalServerError,
+			expectIssueCount:  0,
+			expectNodeCount:   0,
+			expectEdgeCount:   0,
+			expectDiagramType: "unknown",
+			expectBySeverity:  map[string]float64{},
+			expectByRule:      map[string]float64{},
+			expectErrorCode:   "parser_subprocess_error",
+		},
+		{
+			name:              "internal error",
+			code:              "internal-error",
+			expectStatus:      http.StatusInternalServerError,
+			expectIssueCount:  0,
+			expectNodeCount:   0,
+			expectEdgeCount:   0,
+			expectDiagramType: "unknown",
+			expectBySeverity:  map[string]float64{},
+			expectByRule:      map[string]float64{},
+			expectErrorCode:   "internal_error",
 		},
 	}
 
@@ -5904,35 +6000,77 @@ func TestAnalyze_MetricsTracking(t *testing.T) {
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
 
-			if w.Code != http.StatusOK {
-				t.Fatalf("expected 200, got %d", w.Code)
+			if w.Code != tt.expectStatus {
+				t.Fatalf("expected %d, got %d", tt.expectStatus, w.Code)
 			}
 
-			var resp struct {
-				Issues  []model.Issue          `json:"issues"`
-				Metrics map[string]interface{} `json:"metrics"`
-			}
+			var resp map[string]any
 			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 				t.Fatalf("failed to unmarshal response: %v", err)
 			}
 
-			if len(resp.Issues) != tt.expectIssues {
-				t.Errorf("expected %d issues, got %d", tt.expectIssues, len(resp.Issues))
+			issues, ok := resp["issues"].([]any)
+			if !ok {
+				t.Fatalf("expected issues array, got %T", resp["issues"])
+			}
+			if len(issues) != tt.expectIssueCount {
+				t.Errorf("expected %d issues, got %d", tt.expectIssueCount, len(issues))
 			}
 
-			// Verify metrics structure
-			if resp.Metrics == nil {
-				t.Fatal("expected metrics object")
+			metrics, ok := resp["metrics"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected metrics object, got %T", resp["metrics"])
+			}
+			if got := metrics["node-count"]; got != tt.expectNodeCount {
+				t.Errorf("expected metrics.node-count=%v, got %v", tt.expectNodeCount, got)
+			}
+			if got := metrics["edge-count"]; got != tt.expectEdgeCount {
+				t.Errorf("expected metrics.edge-count=%v, got %v", tt.expectEdgeCount, got)
+			}
+			if got := metrics["diagram-type"]; got != tt.expectDiagramType {
+				t.Errorf("expected metrics.diagram-type=%q, got %v", tt.expectDiagramType, got)
 			}
 
-			requiredMetrics := []string{"node-count", "edge-count", "diagram-type"}
-			for _, metric := range requiredMetrics {
-				if _, ok := resp.Metrics[metric]; !ok {
-					t.Errorf("expected metric %q in response", metric)
+			issueCounts, ok := metrics["issue-counts"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected issue-counts object, got %T", metrics["issue-counts"])
+			}
+
+			bySeverity, ok := issueCounts["by-severity"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected by-severity object, got %T", issueCounts["by-severity"])
+			}
+			if !reflect.DeepEqual(bySeverity, anyFromFloat64Map(tt.expectBySeverity)) {
+				t.Errorf("expected by-severity=%v, got %v", tt.expectBySeverity, bySeverity)
+			}
+
+			byRule, ok := issueCounts["by-rule"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected by-rule object, got %T", issueCounts["by-rule"])
+			}
+			if !reflect.DeepEqual(byRule, anyFromFloat64Map(tt.expectByRule)) {
+				t.Errorf("expected by-rule=%v, got %v", tt.expectByRule, byRule)
+			}
+
+			if tt.expectErrorCode != "" {
+				errPayload, ok := resp["error"].(map[string]any)
+				if !ok {
+					t.Fatalf("expected error object, got %T", resp["error"])
+				}
+				if got := errPayload["code"]; got != tt.expectErrorCode {
+					t.Errorf("expected error.code=%q, got %v", tt.expectErrorCode, got)
 				}
 			}
 		})
 	}
+}
+
+func anyFromFloat64Map(in map[string]float64) map[string]any {
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 // TestAnalyze_MaxDepthViolation tests that nodes violating the max-depth limit are detected.
