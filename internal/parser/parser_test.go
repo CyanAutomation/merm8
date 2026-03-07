@@ -166,6 +166,52 @@ func TestParser_FlowchartIncludesNodeAndEdgeLocations(t *testing.T) {
 	}
 }
 
+func TestParser_FlowchartLocationLookupIsCaseInsensitive(t *testing.T) {
+	script := getParserScript(t)
+	p := mustNewParser(t, script)
+
+	mermaidCode := `graph TD
+  A[Start] --> B[End]`
+	diagram, syntaxErr, err := p.Parse(mermaidCode)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if syntaxErr != nil {
+		t.Fatalf("unexpected syntax error: %+v", syntaxErr)
+	}
+	if diagram == nil {
+		t.Fatal("expected diagram, got nil")
+	}
+
+	var nodeA *model.Node
+	for i := range diagram.Nodes {
+		if diagram.Nodes[i].ID == "a" {
+			nodeA = &diagram.Nodes[i]
+			break
+		}
+	}
+	if nodeA == nil {
+		t.Fatalf("expected node a in diagram nodes: %#v", diagram.Nodes)
+	}
+	if nodeA.Line == nil || *nodeA.Line != 2 {
+		t.Fatalf("expected node line=2 for lowercase DB id against uppercase source, got %v", nodeA.Line)
+	}
+	if nodeA.Column == nil || *nodeA.Column != 3 {
+		t.Fatalf("expected node column=3 for lowercase DB id against uppercase source, got %v", nodeA.Column)
+	}
+
+	if len(diagram.Edges) == 0 {
+		t.Fatal("expected at least one edge")
+	}
+	edge := diagram.Edges[0]
+	if edge.Line == nil || *edge.Line != 2 {
+		t.Fatalf("expected edge line=2 for lowercase DB ids against uppercase source, got %v", edge.Line)
+	}
+	if edge.Column == nil || *edge.Column != 3 {
+		t.Fatalf("expected edge column=3 for lowercase DB ids against uppercase source, got %v", edge.Column)
+	}
+}
+
 // TestParser_InvalidMermaid tests parsing invalid Mermaid code.
 
 func TestParser_FlowchartLocationWithLeadingAndTrailingBlankLines(t *testing.T) {
