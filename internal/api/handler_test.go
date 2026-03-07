@@ -5866,30 +5866,97 @@ func TestAnalyze_SARIFOutputFormat(t *testing.T) {
 		t.Fatalf("expected 200 for SARIF endpoint, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var sarifOutput map[string]interface{}
+	var sarifOutput sarif.Report
 	if err := json.Unmarshal(w.Body.Bytes(), &sarifOutput); err != nil {
 		t.Fatalf("failed to unmarshal SARIF response: %v", err)
 	}
 
 	// Verify basic SARIF structure
-	if version, ok := sarifOutput["version"].(string); !ok || version != "2.1.0" {
-		t.Errorf("expected SARIF version 2.1.0, got %v", sarifOutput["version"])
+	if sarifOutput.Version != "2.1.0" {
+		t.Errorf("expected SARIF version 2.1.0, got %q", sarifOutput.Version)
 	}
 
-	if runs, ok := sarifOutput["runs"].([]interface{}); !ok || len(runs) == 0 {
-		t.Errorf("expected runs array in SARIF output, got %v", sarifOutput["runs"])
-	} else {
-		run := runs[0].(map[string]interface{})
-		if results, ok := run["results"].([]interface{}); ok && len(results) > 0 {
-			// Verify rule and level mapping
-			result := results[0].(map[string]interface{})
-			if ruleID, ok := result["ruleId"].(string); !ok || ruleID == "" {
-				t.Errorf("expected ruleId in SARIF result, got %v", result["ruleId"])
-			}
-			if level, ok := result["level"].(string); !ok || (level != "error" && level != "warning" && level != "none") {
-				t.Errorf("expected valid SARIF level, got %v", result["level"])
+	if len(sarifOutput.Runs) == 0 {
+		t.Fatalf("expected non-empty runs array in SARIF output")
+	}
+
+	type finding struct {
+		ruleID  string
+		level   string
+		message string
+		line    int
+		column  int
+		hasLoc  bool
+	}
+
+	toFinding := func(result sarif.Result) finding {
+		f := finding{
+			ruleID:  result.RuleID,
+			level:   result.Level,
+			message: result.Message.Text,
+		}
+		if len(result.Locations) > 0 {
+			region := result.Locations[0].PhysicalLocation.Region
+			f.hasLoc = region != nil
+			if region != nil {
+				f.line = region.StartLine
+				f.column = region.StartColumn
 			}
 		}
+		return f
+	}
+
+	got := make([]finding, 0, len(sarifOutput.Runs[0].Results))
+	for _, result := range sarifOutput.Runs[0].Results {
+		got = append(got, toFinding(result))
+	}
+
+	want := []finding{{
+		ruleID:  "no-duplicate-node-ids",
+		level:   "error",
+		message: "duplicate node ID: A",
+		hasLoc:  false,
+	}}
+
+	sort.Slice(got, func(i, j int) bool {
+		if got[i].ruleID != got[j].ruleID {
+			return got[i].ruleID < got[j].ruleID
+		}
+		if got[i].level != got[j].level {
+			return got[i].level < got[j].level
+		}
+		if got[i].message != got[j].message {
+			return got[i].message < got[j].message
+		}
+		if got[i].hasLoc != got[j].hasLoc {
+			return !got[i].hasLoc
+		}
+		if got[i].line != got[j].line {
+			return got[i].line < got[j].line
+		}
+		return got[i].column < got[j].column
+	})
+	sort.Slice(want, func(i, j int) bool {
+		if want[i].ruleID != want[j].ruleID {
+			return want[i].ruleID < want[j].ruleID
+		}
+		if want[i].level != want[j].level {
+			return want[i].level < want[j].level
+		}
+		if want[i].message != want[j].message {
+			return want[i].message < want[j].message
+		}
+		if want[i].hasLoc != want[j].hasLoc {
+			return !want[i].hasLoc
+		}
+		if want[i].line != want[j].line {
+			return want[i].line < want[j].line
+		}
+		return want[i].column < want[j].column
+	})
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("unexpected SARIF findings (-want +got)\nwant: %#v\n got: %#v", want, got)
 	}
 }
 
