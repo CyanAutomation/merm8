@@ -195,6 +195,49 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	}
 }
 
+// Check evaluates a request and returns the decision metadata in one locked operation.
+// remaining reflects requests left after this decision.
+func (rl *RateLimiter) Check(clientID string) (allowed bool, remaining int, resetUnix int64, limit int) {
+	if rl == nil {
+		return true, 0, 0, 0
+	}
+
+	limit = rl.limit
+	if rl.limit <= 0 || rl.window <= 0 {
+		return true, rl.limit, rl.now().Unix(), rl.limit
+	}
+
+	now := rl.now()
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	if len(rl.clients) > rl.maxClients {
+		rl.deleteExpiredEntries(now, rl.cleanupBatchSize)
+	}
+
+	entry := rl.clients[clientID]
+	if entry == nil {
+		entry = &clientWindow{windowStart: now, count: 0}
+		rl.clients[clientID] = entry
+	} else if now.Sub(entry.windowStart) >= rl.window {
+		entry.windowStart = now
+		entry.count = 0
+	}
+
+	if entry.count < rl.limit {
+		entry.count++
+		allowed = true
+	}
+
+	remaining = rl.limit - entry.count
+	if remaining < 0 {
+		remaining = 0
+	}
+	resetUnix = entry.windowStart.Add(rl.window).Unix()
+
+	return allowed, remaining, resetUnix, limit
+}
+
 // Remaining returns the number of requests remaining for the client in current window.
 func (rl *RateLimiter) Remaining(clientID string) int {
 	if rl == nil || rl.limit <= 0 || rl.window <= 0 {
@@ -223,36 +266,8 @@ func (rl *RateLimiter) Remaining(clientID string) int {
 
 // AllowWithMetrics checks if request is allowed and updates metrics without setting headers.
 func (rl *RateLimiter) AllowWithMetrics(clientID string) bool {
-	if rl == nil || rl.limit <= 0 || rl.window <= 0 {
-		return true
-	}
-
-	now := rl.now()
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	if len(rl.clients) > rl.maxClients {
-		rl.deleteExpiredEntries(now, rl.cleanupBatchSize)
-	}
-
-	entry := rl.clients[clientID]
-	if entry == nil {
-		rl.clients[clientID] = &clientWindow{windowStart: now, count: 1}
-		return true
-	}
-
-	if now.Sub(entry.windowStart) >= rl.window {
-		entry.windowStart = now
-		entry.count = 1
-		return true
-	}
-
-	if entry.count >= rl.limit {
-		return false
-	}
-
-	entry.count++
-	return true
+	allowed, _, _, _ := rl.Check(clientID)
+	return allowed
 }
 
 // Allow checks if a request is allowed (deprecated: use AllowWithMetrics).
@@ -286,25 +301,16 @@ func AnalyzeRateLimitMiddleware(limiter *RateLimiter, next http.Handler) http.Ha
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && isProtectedAnalyzePath(r.URL.Path) {
 			clientID := clientIdentifier(r)
+			allowed, remaining, reset, limit := limiter.Check(clientID)
 
-			// Calculate current window reset time
-			now := time.Now()
-			reset := now.Add(limiter.window).Unix()
+			w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limit))
+			w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+			w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", reset))
 
-			if !limiter.AllowWithMetrics(clientID) {
-				// Rate limit exceeded
-				w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limiter.limit))
-				w.Header().Set("X-RateLimit-Remaining", "0")
-				w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", reset))
+			if !allowed {
 				writeError(w, http.StatusTooManyRequests, "rate_limited", "rate limit exceeded")
 				return
 			}
-
-			// Request allowed, set remaining headers
-			remaining := limiter.Remaining(clientID)
-			w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limiter.limit))
-			w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
-			w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", reset))
 		}
 		next.ServeHTTP(w, r)
 	})
