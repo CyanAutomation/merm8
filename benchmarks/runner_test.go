@@ -24,6 +24,7 @@ func TestRunner_DiscoverCases(t *testing.T) {
 
 	// Create runner
 	runner := benchmarks.NewRunner(benchDir, "/path/to/parser")
+	_ = runner
 
 	// This would require exposing discoverCases as a public method
 	// For now, we'll test at a higher level via Run()
