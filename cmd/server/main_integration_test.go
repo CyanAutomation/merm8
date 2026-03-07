@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/CyanAutomation/merm8/internal/api"
 	"github.com/CyanAutomation/merm8/internal/engine"
@@ -186,6 +187,8 @@ func TestServerStack_CORSHeaders_AllowedOrigin(t *testing.T) {
 	rootHandler = api.RequestIDMiddleware(rootHandler)
 	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
 	allowedOrigins := "https://example.com,https://app.example.com"
+	rootHandler = api.MetricsMiddleware(rootHandler, map[string]string{"GET /health": "/health"}, nil)
+	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, api.NewLogger("test"))
 	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
 
 	server := httptest.NewServer(rootHandler)
@@ -225,6 +228,8 @@ func TestServerStack_CORSHeaders_DisallowedOrigin(t *testing.T) {
 	rootHandler = api.RequestIDMiddleware(rootHandler)
 	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
 	allowedOrigins := "https://example.com"
+	rootHandler = api.MetricsMiddleware(rootHandler, map[string]string{"GET /health": "/health"}, nil)
+	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, api.NewLogger("test"))
 	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
 
 	server := httptest.NewServer(rootHandler)
@@ -264,6 +269,8 @@ func TestServerStack_CORSPreflight_AllowedOrigin(t *testing.T) {
 	rootHandler = api.RequestIDMiddleware(rootHandler)
 	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
 	allowedOrigins := "https://example.com"
+	rootHandler = api.MetricsMiddleware(rootHandler, map[string]string{"POST /v1/analyze": "/v1/analyze"}, nil)
+	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, api.NewLogger("test"))
 	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
 
 	server := httptest.NewServer(rootHandler)
@@ -299,4 +306,110 @@ type mockParser struct{}
 
 func (p *mockParser) Parse(string) (*model.Diagram, *parser.SyntaxError, error) {
 	return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+}
+
+func TestServerStack_CORSHeadersOnAuthAndRateLimitEarlyReturns(t *testing.T) {
+	h := api.NewHandler(&mockParser{}, engine.New())
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	allowedOrigins := "https://example.com"
+	rootHandler := http.Handler(mux)
+	rootHandler = api.RequestIDMiddleware(rootHandler)
+	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
+	limiter := api.NewRateLimiter(1, time.Minute)
+	rootHandler = api.AnalyzeRateLimitMiddleware(limiter, rootHandler)
+	rootHandler = api.AnalyzeBearerAuthMiddleware("s3cr3t", rootHandler)
+	rootHandler = api.MetricsMiddleware(rootHandler, map[string]string{"POST /analyze": "/analyze"}, nil)
+	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, api.NewLogger("test"))
+	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
+
+	server := httptest.NewServer(rootHandler)
+	defer server.Close()
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\nA-->B"})
+
+	unauthorizedReq, err := http.NewRequest(http.MethodPost, server.URL+"/analyze", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("failed to create unauthorized request: %v", err)
+	}
+	unauthorizedReq.Header.Set("Content-Type", "application/json")
+	unauthorizedReq.Header.Set("Origin", "https://example.com")
+
+	unauthorizedRes, err := server.Client().Do(unauthorizedReq)
+	if err != nil {
+		t.Fatalf("unauthorized request failed: %v", err)
+	}
+	defer unauthorizedRes.Body.Close()
+
+	if unauthorizedRes.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for missing bearer token, got %d", unauthorizedRes.StatusCode)
+	}
+	if got := unauthorizedRes.Header.Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+		t.Fatalf("expected CORS header on 401 response, got %q", got)
+	}
+	var unauthorizedPayload struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(unauthorizedRes.Body).Decode(&unauthorizedPayload); err != nil {
+		t.Fatalf("failed to decode unauthorized response JSON: %v", err)
+	}
+	if unauthorizedPayload.Error.Code != "unauthorized" || unauthorizedPayload.Error.Message != "missing or invalid bearer token" {
+		t.Fatalf("unexpected unauthorized payload: %#v", unauthorizedPayload)
+	}
+
+	authorizedReq, err := http.NewRequest(http.MethodPost, server.URL+"/analyze", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("failed to create authorized request: %v", err)
+	}
+	authorizedReq.Header.Set("Content-Type", "application/json")
+	authorizedReq.Header.Set("Origin", "https://example.com")
+	authorizedReq.Header.Set("Authorization", "Bearer s3cr3t")
+	firstAuthorizedRes, err := server.Client().Do(authorizedReq)
+	if err != nil {
+		t.Fatalf("first authorized request failed: %v", err)
+	}
+	defer firstAuthorizedRes.Body.Close()
+	if firstAuthorizedRes.StatusCode != http.StatusOK {
+		t.Fatalf("expected first authorized request to pass, got %d", firstAuthorizedRes.StatusCode)
+	}
+
+	secondAuthorizedReq, err := http.NewRequest(http.MethodPost, server.URL+"/analyze", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("failed to create second authorized request: %v", err)
+	}
+	secondAuthorizedReq.Header.Set("Content-Type", "application/json")
+	secondAuthorizedReq.Header.Set("Origin", "https://example.com")
+	secondAuthorizedReq.Header.Set("Authorization", "Bearer s3cr3t")
+	rateLimitedRes, err := server.Client().Do(secondAuthorizedReq)
+	if err != nil {
+		t.Fatalf("rate-limited request failed: %v", err)
+	}
+	defer rateLimitedRes.Body.Close()
+
+	if rateLimitedRes.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 for second authorized request, got %d", rateLimitedRes.StatusCode)
+	}
+	if got := rateLimitedRes.Header.Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+		t.Fatalf("expected CORS header on 429 response, got %q", got)
+	}
+	if got := rateLimitedRes.Header.Get("X-RateLimit-Limit"); got == "" {
+		t.Fatal("expected rate limit headers on 429 response")
+	}
+
+	var rateLimitedPayload struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rateLimitedRes.Body).Decode(&rateLimitedPayload); err != nil {
+		t.Fatalf("failed to decode rate-limited response JSON: %v", err)
+	}
+	if rateLimitedPayload.Error.Code != "rate_limited" || rateLimitedPayload.Error.Message != "rate limit exceeded" {
+		t.Fatalf("unexpected rate-limited payload: %#v", rateLimitedPayload)
+	}
 }
