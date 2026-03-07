@@ -4336,6 +4336,84 @@ func TestAnalyze_ConfigSuppressionSelectors_Node(t *testing.T) {
 	}
 }
 
+func TestAnalyze_ConfigSuppressionSelectors_RuleAndNegationAffectReportedIssues(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		lineA := 2
+		lineD := 5
+		return &model.Diagram{
+			Type: model.DiagramTypeFlowchart,
+			Nodes: []model.Node{
+				{ID: "A", Line: &lineA}, {ID: "B"}, {ID: "C"},
+				{ID: "D", Line: &lineD}, {ID: "E"}, {ID: "F"},
+			},
+			Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "D", To: "E"}, {From: "D", To: "F"}},
+		}, nil, nil
+	})
+
+	tests := []struct {
+		name            string
+		selectors       []string
+		wantMaxFanoutAt []float64
+	}{
+		{name: "rule selector suppresses all rule issues", selectors: []string{"rule:max-fanout"}, wantMaxFanoutAt: nil},
+		{name: "negated node selector re-enables excluded node", selectors: []string{"rule:max-fanout", "!node:D"}, wantMaxFanoutAt: []float64{5}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]any{
+				"code": "graph TD\nA-->B\nA-->C\nD-->E\nD-->F",
+				"config": map[string]any{
+					"schema-version": "v1",
+					"rules": map[string]any{
+						"max-fanout": map[string]any{
+							"limit":                 1,
+							"suppression-selectors": tc.selectors,
+						},
+					},
+				},
+			})
+
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+			}
+
+			var resp map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			issues, ok := resp["issues"].([]any)
+			if !ok {
+				t.Fatalf("expected issues array, got %T", resp["issues"])
+			}
+
+			var gotMaxFanoutAt []float64
+			for _, rawIssue := range issues {
+				issue, ok := rawIssue.(map[string]any)
+				if !ok {
+					continue
+				}
+				if issue["rule-id"] != "max-fanout" {
+					continue
+				}
+				if line, ok := issue["line"].(float64); ok {
+					gotMaxFanoutAt = append(gotMaxFanoutAt, line)
+				}
+			}
+
+			if !reflect.DeepEqual(gotMaxFanoutAt, tc.wantMaxFanoutAt) {
+				t.Fatalf("unexpected max-fanout lines: got %v want %v (issues=%#v)", gotMaxFanoutAt, tc.wantMaxFanoutAt, issues)
+			}
+		})
+	}
+}
+
 func TestAnalyze_MetricsIssueCountsReflectUnsuppressedIssuesOnly(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		lineA := 2
