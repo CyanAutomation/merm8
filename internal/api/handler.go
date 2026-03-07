@@ -351,6 +351,16 @@ func parseRawMermaidInput(body []byte) (analyzeRequest, bool, error) {
 	return analyzeRequest{Code: string(body)}, false, nil
 }
 
+// likelyJSONIntendedBody reports whether the trimmed request body appears to
+// intentionally be JSON content.
+func likelyJSONIntendedBody(body []byte) bool {
+	trimmed := strings.TrimSpace(string(body))
+	if trimmed == "" {
+		return false
+	}
+	return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
+}
+
 // syntaxErrorResponse mirrors parser.SyntaxError for the JSON response.
 type syntaxErrorResponse struct {
 	Message string `json:"message"`
@@ -465,21 +475,21 @@ type apiErrorDetails struct {
 
 // Handler holds the dependencies needed to serve HTTP requests.
 type Handler struct {
-	parser              ParserInterface
-	engine              *engine.Engine
-	logger              Logger
-	serviceVersion      string
-	buildCommit         string
-	buildTime           string
-	metricsHandler      http.Handler
-	telemetryMetrics    *telemetry.Metrics
-	analyzeCounters     analyzeOutcomeCounters
-	startTime           time.Time
-	mu                  sync.RWMutex
-	strictConfigSchema  bool
+	parser             ParserInterface
+	engine             *engine.Engine
+	logger             Logger
+	serviceVersion     string
+	buildCommit        string
+	buildTime          string
+	metricsHandler     http.Handler
+	telemetryMetrics   *telemetry.Metrics
+	analyzeCounters    analyzeOutcomeCounters
+	startTime          time.Time
+	mu                 sync.RWMutex
+	strictConfigSchema bool
 	// parserConcurrency is initialized once in NewHandler and intentionally never
 	// replaced, so all requests share one stable limiter instance.
-	parserConcurrency   *parserConcurrencyLimiter
+	parserConcurrency *parserConcurrencyLimiter
 }
 
 type parserConcurrencyLimiter struct {
@@ -1488,7 +1498,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 	jsonContentType := contentType == "application/json" || strings.HasSuffix(contentType, "+json")
 
 	requestHints := make([]responseHint, 0, 1)
-	if jsonContentType && !parsedAsJSON && jsonDecodeErr != nil {
+	if jsonContentType && !parsedAsJSON && jsonDecodeErr != nil && likelyJSONIntendedBody(body) {
 		requestHints = append(requestHints, responseHint{
 			Code:       "raw_json_decode_failed_fallback_to_text",
 			Message:    "request Content-Type is JSON but body failed JSON decoding; falling back to treating body as raw mermaid text",

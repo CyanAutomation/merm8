@@ -5252,6 +5252,35 @@ A-->B"`
 	}
 }
 
+func TestAnalyzeRaw_JSONContentTypePlainMermaid_NoFallbackHint(t *testing.T) {
+	const code = "graph TD\n  A-->B"
+	var capturedCode string
+	mux := newTestMux(func(input string) (*model.Diagram, *parser.SyntaxError, error) {
+		capturedCode = input
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", strings.NewReader(code))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if capturedCode != code {
+		t.Fatalf("expected parser to receive raw body as-is, got %q", capturedCode)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if _, hasHints := resp["hints"]; hasHints {
+		t.Fatalf("expected no request-level hints for plain mermaid body with JSON content-type, got %v", resp["hints"])
+	}
+}
+
 func TestAnalyzeRaw_TextPlain_ParsesAsRawWithoutFallbackHint(t *testing.T) {
 	const code = "graph TD\n  A-->B"
 	var capturedCode string
