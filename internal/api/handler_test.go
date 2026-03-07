@@ -4966,6 +4966,98 @@ setTimeout(() => {
 	}
 }
 
+func TestAnalyzeRaw_MalformedJSONContentType_FallbackHint(t *testing.T) {
+	var capturedCode string
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		capturedCode = code
+		return nil, &parser.SyntaxError{Message: "Unexpected token", Line: 1, Column: 1}, nil
+	})
+
+	body := `{"code": "graph TD
+A-->B"`
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	if capturedCode != body {
+		t.Fatalf("expected parser input to fall back to raw body, got %q", capturedCode)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	hintCodes := hintCodesFromResponse(t, resp)
+	if !containsString(hintCodes, "raw_json_decode_failed_fallback_to_text") {
+		t.Fatalf("expected raw_json_decode_failed_fallback_to_text hint code, got %v", hintCodes)
+	}
+}
+
+func TestAnalyzeRaw_TextPlain_ParsesAsRawWithoutFallbackHint(t *testing.T) {
+	const code = "graph TD\n  A-->B"
+	var capturedCode string
+	mux := newTestMux(func(input string) (*model.Diagram, *parser.SyntaxError, error) {
+		capturedCode = input
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", strings.NewReader(code))
+	req.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if capturedCode != code {
+		t.Fatalf("expected parser to receive plain-text body as-is, got %q", capturedCode)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if _, hasHints := resp["hints"]; hasHints {
+		t.Fatalf("expected no request-level hints for plain text body, got %v", resp["hints"])
+	}
+}
+
+func TestAnalyzeRaw_ValidJSONWithCode_UsesCodeField(t *testing.T) {
+	const code = "graph LR\n  X-->Y"
+	var capturedCode string
+	mux := newTestMux(func(input string) (*model.Diagram, *parser.SyntaxError, error) {
+		capturedCode = input
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]any{"code": code})
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if capturedCode != code {
+		t.Fatalf("expected parser to receive code field value, got %q", capturedCode)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if _, hasHints := resp["hints"]; hasHints {
+		t.Fatalf("expected no request-level hints for valid JSON body, got %v", resp["hints"])
+	}
+}
+
 // TestAnalyzeRaw_ValidDiagram_PlainText tests /analyze/raw with raw mermaid text.
 func TestAnalyzeRaw_ValidDiagram_PlainText(t *testing.T) {
 	validDiagram := &model.Diagram{
