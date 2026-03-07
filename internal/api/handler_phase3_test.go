@@ -217,6 +217,65 @@ func TestAnalyzeSARIF_MissingCode(t *testing.T) {
 	}
 }
 
+// TestAnalyzeSARIF_InvalidParserOptionReturnsSARIF verifies invalid parser options return SARIF-formatted errors.
+func TestAnalyzeSARIF_InvalidParserOptionReturnsSARIF(t *testing.T) {
+	mockP := &mockParserWithTimeout{}
+	h := NewHandler(mockP, engine.New())
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	body := []byte(`{"code":"graph LR; A --> B","parser":{"timeout_seconds":0}}`)
+	resp, err := http.Post(server.URL+"/analyze/sarif", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	if got := resp.Header.Get("Content-Type"); got != "application/sarif+json" {
+		t.Fatalf("content-type = %q, want %q", got, "application/sarif+json")
+	}
+
+	var report sarif.Report
+	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+
+	if report.Version != "2.1.0" {
+		t.Fatalf("SARIF version = %q, want %q", report.Version, "2.1.0")
+	}
+	if report.Schema != "https://json.schemastore.org/sarif-2.1.0.json" {
+		t.Fatalf("SARIF schema = %q, want %q", report.Schema, "https://json.schemastore.org/sarif-2.1.0.json")
+	}
+	if len(report.Runs) == 0 {
+		t.Fatalf("expected at least one run in SARIF response")
+	}
+
+	run := report.Runs[0]
+	if len(run.Results) == 0 {
+		t.Fatalf("expected at least one result in SARIF error response")
+	}
+	if run.Results[0].RuleID == "" {
+		t.Fatalf("expected non-empty SARIF result rule id")
+	}
+	if run.Results[0].Message.Text == "" {
+		t.Fatalf("expected non-empty SARIF error message")
+	}
+	if !strings.Contains(run.Results[0].Message.Text, "parser.timeout_seconds") {
+		t.Fatalf("unexpected SARIF message: %q", run.Results[0].Message.Text)
+	}
+	if len(run.Invocations) == 0 || run.Invocations[0].Properties == nil {
+		t.Fatalf("expected invocation properties in SARIF response")
+	}
+	if got := run.Invocations[0].Properties["error-code"]; got != "invalid_option" {
+		t.Fatalf("invocation error-code = %q, want %q", got, "invalid_option")
+	}
+}
+
 // TestAnalyzeSARIF_ValidDiagram verifies SARIF success response
 func TestAnalyzeSARIF_ValidDiagram(t *testing.T) {
 	diagram := &model.Diagram{
@@ -728,7 +787,6 @@ func TestSuppressionSelectorValidation_UnknownRuleID(t *testing.T) {
 		t.Fatalf("expected max-fanout issues since unknown suppression didn't suppress them")
 	}
 }
-
 
 func TestParseConfig_NestedRulesDetection(t *testing.T) {
 	knownRuleIDs := map[string]struct{}{
