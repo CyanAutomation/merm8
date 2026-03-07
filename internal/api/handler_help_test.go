@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -173,11 +174,11 @@ func TestAnalyze_ConfigError_UnknownRuleHelp(t *testing.T) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
 
-	// Config with typo in rule name (missing "core/" prefix)
+	// Config with unknown rule name
 	config := map[string]interface{}{
 		"schema-version": "v1",
 		"rules": map[string]interface{}{
-			"max-fanout": map[string]interface{}{},
+			"unknown-rule": map[string]interface{}{},
 		},
 	}
 	body, _ := json.Marshal(map[string]interface{}{
@@ -185,7 +186,7 @@ func TestAnalyze_ConfigError_UnknownRuleHelp(t *testing.T) {
 		"config": config,
 	})
 
-	req := httptest.NewRequest("POST", "/v1/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -231,7 +232,7 @@ func TestAnalyze_ConfigError_InvalidStructureHelp(t *testing.T) {
 	// Config as string instead of object (common mistake)
 	body, _ := json.Marshal(map[string]interface{}{
 		"code":   "graph TD\n  A-->B",
-		"config": "invalid",  // This should be an object
+		"config": "invalid", // This should be an object
 	})
 
 	req := httptest.NewRequest("POST", "/v1/analyze", bytes.NewReader(body))
