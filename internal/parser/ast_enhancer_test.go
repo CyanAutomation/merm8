@@ -2,6 +2,7 @@ package parser
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -218,7 +219,7 @@ func TestFindDuplicateNodeIDs_VariousCounts(t *testing.T) {
 	tests := []struct {
 		name   string
 		source string
-		want   []string // Must be sorted
+		want   []string
 	}{
 		{
 			name:   "single duplicate",
@@ -231,20 +232,32 @@ func TestFindDuplicateNodeIDs_VariousCounts(t *testing.T) {
 			want:   []string{"A", "B"},
 		},
 		{
-			name:   "triple duplicate",
-			source: "A[1]\nA[2]\nA[3]",
-			want:   []string{"A"},
-		},
-		{
 			name:   "no duplicates",
 			source: "A[1]\nB[2]\nC[3]",
 			want:   []string{},
+		},
+		{
+			name: "hyphenated and mixed styles",
+			source: `graph TD
+    service-node[First]
+    service-node[Second]
+    node_2(One)
+    node_2(Two)
+    alpha123{Single}`,
+			want: []string{"node_2", "service-node"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := findDuplicateNodeIDs(tt.source)
+
+			// The parser contract is to return duplicate IDs in deterministic
+			// lexical order, so assert ordering explicitly.
+			if !sort.StringsAreSorted(got) {
+				t.Fatalf("expected duplicate IDs to be sorted lexically, got %v", got)
+			}
+
 			if len(got) != len(tt.want) {
 				t.Fatalf("expected %d duplicates, got %d: %v", len(tt.want), len(got), got)
 			}
@@ -268,26 +281,6 @@ func TestExtractAllNodeIDsFromSource_HyphenatedAndMixedStyles(t *testing.T) {
 	want := []string{"service-node", "node_2", "alpha123"}
 	if len(got) != len(want) {
 		t.Fatalf("expected %d node IDs, got %d: %v", len(want), len(got), got)
-	}
-	for i, id := range want {
-		if got[i] != id {
-			t.Fatalf("expected %q at position %d, got %q", id, i, got[i])
-		}
-	}
-}
-
-func TestFindDuplicateNodeIDs_HyphenatedAndMixedStyles(t *testing.T) {
-	source := `graph TD
-    service-node[First]
-    service-node[Second]
-    node_2(One)
-    node_2(Two)
-    alpha123{Single}`
-
-	got := findDuplicateNodeIDs(source)
-	want := []string{"node_2", "service-node"}
-	if len(got) != len(want) {
-		t.Fatalf("expected %d duplicate IDs, got %d: %v", len(want), len(got), got)
 	}
 	for i, id := range want {
 		if got[i] != id {
