@@ -252,6 +252,9 @@ func assertExactErrorResponse(t *testing.T, body []byte, wantCode, wantMessage s
 	if syntaxErr, exists := resp["syntax-error"]; !exists || syntaxErr != nil {
 		t.Fatalf("expected syntax-error=null, got %#v", resp["syntax-error"])
 	}
+	if _, exists := resp["help-suggestion"]; exists {
+		t.Fatalf("expected help-suggestion to be omitted for non-syntax errors, got %#v", resp["help-suggestion"])
+	}
 
 	metrics, ok := resp["metrics"].(map[string]interface{})
 	if !ok {
@@ -294,6 +297,10 @@ func assertValidationErrorResponse(t *testing.T, body []byte, wantCode, wantMess
 	if err := json.Unmarshal(body, &resp); err != nil {
 		t.Fatalf("failed to decode error response: %v", err)
 	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		t.Fatalf("failed to decode raw error response: %v", err)
+	}
 	if resp.Valid {
 		t.Fatal("expected valid=false")
 	}
@@ -302,6 +309,9 @@ func assertValidationErrorResponse(t *testing.T, body []byte, wantCode, wantMess
 	}
 	if resp.SyntaxError != nil {
 		t.Fatalf("expected syntax-error=null, got %#v", resp.SyntaxError)
+	}
+	if _, exists := raw["help-suggestion"]; exists {
+		t.Fatalf("expected help-suggestion to be omitted for validation errors, got %#v", raw["help-suggestion"])
 	}
 	if len(resp.Issues) != 0 {
 		t.Fatalf("expected empty issues array, got %#v", resp.Issues)
@@ -787,6 +797,32 @@ func syntaxErrorResponseForEndpoint(t *testing.T, endpoint, payload, contentType
 	return resp
 }
 
+
+func assertHelpSuggestionContract(t *testing.T, resp map[string]interface{}, wantPresent bool) {
+	t.Helper()
+
+	raw, exists := resp["help-suggestion"]
+	if !wantPresent {
+		if exists {
+			t.Fatalf("expected help-suggestion to be omitted, got %#v", raw)
+		}
+		return
+	}
+	if !exists {
+		t.Fatal("expected help-suggestion key to be present")
+	}
+	helpSuggestion, ok := raw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected help-suggestion object, got %#v", raw)
+	}
+	for _, key := range []string{"title", "explanation", "wrong-example", "correct-example", "doc-link", "fix-action"} {
+		val, ok := helpSuggestion[key].(string)
+		if !ok || val == "" {
+			t.Fatalf("expected help-suggestion.%s non-empty string, got %#v", key, helpSuggestion[key])
+		}
+	}
+}
+
 func assertHintCodePresentForAnalyzeAndRaw(t *testing.T, syntaxErr *parser.SyntaxError, payload, hintCode string) {
 	t.Helper()
 	for _, endpoint := range []string{"/v1/analyze", "/v1/analyze/raw"} {
@@ -928,10 +964,7 @@ func TestAnalyze_SyntaxError_Detectors_MarkdownFence(t *testing.T) {
 	assertHintCodePresentForAnalyzeAndRaw(t, syntaxErr, "```mermaid\nflowchart TD\n  A --> B\n```", "markdown_fence_detected")
 
 	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", "```\nflowchart TD\n  A --> B\n```", "text/plain", syntaxErr)
-	helpSuggestion, ok := resp["help-suggestion"].(map[string]interface{})
-	if !ok || helpSuggestion == nil {
-		t.Fatalf("expected help-suggestion for markdown fence")
-	}
+	assertHelpSuggestionContract(t, resp, true)
 }
 
 func TestAnalyze_SyntaxError_Detectors_StateVariantMigration(t *testing.T) {
@@ -940,10 +973,7 @@ func TestAnalyze_SyntaxError_Detectors_StateVariantMigration(t *testing.T) {
 	assertHintCodePresentForAnalyzeAndRaw(t, syntaxErr, payload, "state_diagram_variant_migration")
 
 	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", payload, "text/plain", syntaxErr)
-	helpSuggestion, ok := resp["help-suggestion"].(map[string]interface{})
-	if !ok || helpSuggestion == nil {
-		t.Fatalf("expected help-suggestion for state diagram variant migration")
-	}
+	assertHelpSuggestionContract(t, resp, true)
 }
 
 func TestAnalyze_SyntaxError_Detectors_SmartPunctuation(t *testing.T) {
@@ -952,10 +982,7 @@ func TestAnalyze_SyntaxError_Detectors_SmartPunctuation(t *testing.T) {
 	assertHintCodePresentForAnalyzeAndRaw(t, syntaxErr, payload, "smart_punctuation_detected")
 
 	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", payload, "text/plain", syntaxErr)
-	helpSuggestion, ok := resp["help-suggestion"].(map[string]interface{})
-	if !ok || helpSuggestion == nil {
-		t.Fatalf("expected help-suggestion for smart punctuation")
-	}
+	assertHelpSuggestionContract(t, resp, true)
 }
 
 func TestAnalyze_SyntaxError_Detectors_FlowchartReservedEnd(t *testing.T) {
@@ -964,9 +991,7 @@ func TestAnalyze_SyntaxError_Detectors_FlowchartReservedEnd(t *testing.T) {
 	assertHintCodePresentForAnalyzeAndRaw(t, syntaxErr, payload, "flowchart_reserved_end_keyword")
 
 	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", payload, "text/plain", syntaxErr)
-	if _, ok := resp["help-suggestion"]; ok {
-		t.Fatalf("did not expect help-suggestion for reserved end detector")
-	}
+	assertHelpSuggestionContract(t, resp, false)
 }
 
 func TestAnalyze_SyntaxError_Detectors_MalformedLabelBrackets(t *testing.T) {
@@ -975,9 +1000,7 @@ func TestAnalyze_SyntaxError_Detectors_MalformedLabelBrackets(t *testing.T) {
 	assertHintCodePresentForAnalyzeAndRaw(t, syntaxErr, payload, "malformed_label_brackets")
 
 	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", payload, "text/plain", syntaxErr)
-	if _, ok := resp["help-suggestion"]; ok {
-		t.Fatalf("did not expect help-suggestion for malformed bracket detector")
-	}
+	assertHelpSuggestionContract(t, resp, false)
 }
 
 func TestAnalyze_SyntaxError_HintsSortedByConfidence(t *testing.T) {
