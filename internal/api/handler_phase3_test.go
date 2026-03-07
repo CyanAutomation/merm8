@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -614,5 +615,62 @@ func TestSuppressionSelectorValidation_UnknownRuleID(t *testing.T) {
 	// The request should still succeed and return issues (since the suppression didn't match)
 	if len(resp.Issues) == 0 {
 		t.Fatalf("expected max-fanout issues since unknown suppression didn't suppress them")
+	}
+}
+
+
+func TestParseConfig_NestedRulesDetection(t *testing.T) {
+	knownRuleIDs := map[string]struct{}{
+		"max-fanout": {},
+	}
+
+	tests := []struct {
+		name    string
+		raw     json.RawMessage
+		want    map[string]map[string]any
+		wantErr bool
+	}{
+		{
+			name: "empty nested rules returns empty config",
+			raw:  json.RawMessage(`{"rules":{}}`),
+			want: map[string]map[string]any{},
+		},
+		{
+			name: "nested rules parses rule settings",
+			raw:  json.RawMessage(`{"rules":{"max-fanout":{"limit":2}}}`),
+			want: map[string]map[string]any{
+				"max-fanout": {
+					"limit": float64(2),
+				},
+			},
+		},
+		{
+			name: "flat config still parses",
+			raw:  json.RawMessage(`{"max-fanout":{"limit":2}}`),
+			want: map[string]map[string]any{
+				"max-fanout": {
+					"limit": float64(2),
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, _, validationErr := parseConfig(tt.raw, knownRuleIDs, false)
+			if tt.wantErr {
+				if validationErr == nil {
+					t.Fatal("expected validation error, got nil")
+				}
+				return
+			}
+			if validationErr != nil {
+				t.Fatalf("expected no validation error, got %v", validationErr)
+			}
+
+			if !reflect.DeepEqual(map[string]map[string]any(cfg), tt.want) {
+				t.Fatalf("parseConfig() config mismatch: got %#v, want %#v", cfg, tt.want)
+			}
+		})
 	}
 }
