@@ -5,81 +5,79 @@ import (
 	"time"
 )
 
-func TestParserConfig_AppliesDefaultsAndBounds(t *testing.T) {
-	tests := []struct {
-		name       string
-		config     Config
-		envVars    map[string]string
-		wantErr    bool
-		wantMinMax bool
-	}{
-		{
-			name:    "empty config uses defaults",
-			config:  Config{},
-			envVars: map[string]string{"PARSER_MAX_OLD_SPACE_MB": ""},
-		},
-		{
-			name:   "clamps timeout to max",
-			config: Config{Timeout: 999 * time.Second},
-		},
-		{
-			name:   "clamps memory to max",
-			config: Config{NodeMaxOldSpaceMB: 999999},
-		},
-		{
-			name:       "clamps timeout and memory to min",
-			config:     Config{Timeout: 100 * time.Millisecond, NodeMaxOldSpaceMB: 1},
-			wantMinMax: true,
-		},
-		{
-			name:    "env var invalid uses default",
-			envVars: map[string]string{"PARSER_MAX_OLD_SPACE_MB": "not-a-number"},
-		},
-		{
-			name:    "env var out of range uses default",
-			envVars: map[string]string{"PARSER_MAX_OLD_SPACE_MB": "999999"},
-		},
-		{
-			name:    "env var valid value applied",
-			envVars: map[string]string{"PARSER_MAX_OLD_SPACE_MB": "256"},
-		},
+func TestParserConfig_EffectiveConfig_Defaults(t *testing.T) {
+	effective := Config{}.EffectiveConfig()
+
+	if effective.Timeout != defaultTimeout {
+		t.Fatalf("expected default timeout %s, got %s", defaultTimeout, effective.Timeout)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.envVars != nil {
-				for k, v := range tt.envVars {
-					t.Setenv(k, v)
-				}
-			}
-
-			effective := tt.config.EffectiveConfig()
-
-			// Verify defaults are applied
-			if effective.Timeout == 0 {
-				t.Fatal("timeout should never be zero")
-			}
-			if effective.NodeMaxOldSpaceMB == 0 {
-				t.Fatal("NodeMaxOldSpaceMB should never be zero")
-			}
-
-			// Verify bounds are respected
-			if effective.Timeout < minTimeout || effective.Timeout > maxTimeout {
-				t.Fatalf("timeout out of bounds: %v not in [%s, %s]", effective.Timeout, minTimeout, maxTimeout)
-			}
-			if effective.NodeMaxOldSpaceMB < minNodeMaxOldSpaceSizeMB || effective.NodeMaxOldSpaceMB > maxNodeMaxOldSpaceSizeMB {
-				t.Fatalf("memory out of bounds: %d not in [%d, %d]", effective.NodeMaxOldSpaceMB, minNodeMaxOldSpaceSizeMB, maxNodeMaxOldSpaceSizeMB)
-			}
-
-			// For min/max case, verify clamping
-			if tt.wantMinMax {
-				if effective.Timeout != minTimeout {
-					t.Errorf("expected min timeout %s, got %s", minTimeout, effective.Timeout)
-				}
-				if effective.NodeMaxOldSpaceMB != minNodeMaxOldSpaceSizeMB {
-					t.Errorf("expected min memory, got %d", effective.NodeMaxOldSpaceMB)
-				}
-			}
-		})
+	if effective.NodeMaxOldSpaceMB != defaultNodeMaxOldSpaceSizeMB {
+		t.Fatalf("expected default NodeMaxOldSpaceMB %d, got %d", defaultNodeMaxOldSpaceSizeMB, effective.NodeMaxOldSpaceMB)
 	}
+}
+
+func TestParserConfig_EffectiveConfig_MaxClamp(t *testing.T) {
+	effective := Config{Timeout: 999 * time.Second, NodeMaxOldSpaceMB: 999999}.EffectiveConfig()
+
+	if effective.Timeout != maxTimeout {
+		t.Fatalf("expected max timeout %s, got %s", maxTimeout, effective.Timeout)
+	}
+	if effective.NodeMaxOldSpaceMB != maxNodeMaxOldSpaceSizeMB {
+		t.Fatalf("expected max NodeMaxOldSpaceMB %d, got %d", maxNodeMaxOldSpaceSizeMB, effective.NodeMaxOldSpaceMB)
+	}
+}
+
+func TestParserConfig_EffectiveConfig_MinClamp(t *testing.T) {
+	effective := Config{Timeout: 100 * time.Millisecond, NodeMaxOldSpaceMB: 1}.EffectiveConfig()
+
+	if effective.Timeout != minTimeout {
+		t.Fatalf("expected min timeout %s, got %s", minTimeout, effective.Timeout)
+	}
+	if effective.NodeMaxOldSpaceMB != minNodeMaxOldSpaceSizeMB {
+		t.Fatalf("expected min NodeMaxOldSpaceMB %d, got %d", minNodeMaxOldSpaceSizeMB, effective.NodeMaxOldSpaceMB)
+	}
+}
+
+func TestParserConfigFromEnv_OverrideValid(t *testing.T) {
+	t.Setenv("PARSER_TIMEOUT_SECONDS", "12")
+	t.Setenv("PARSER_MAX_OLD_SPACE_MB", "256")
+
+	effective := ConfigFromEnv().EffectiveConfig()
+
+	if effective.Timeout != 12*time.Second {
+		t.Fatalf("expected timeout %s, got %s", 12*time.Second, effective.Timeout)
+	}
+	if effective.NodeMaxOldSpaceMB != 256 {
+		t.Fatalf("expected NodeMaxOldSpaceMB %d, got %d", 256, effective.NodeMaxOldSpaceMB)
+	}
+}
+
+func TestParserConfigFromEnv_OverrideInvalid(t *testing.T) {
+	t.Run("non-numeric values use defaults", func(t *testing.T) {
+		t.Setenv("PARSER_TIMEOUT_SECONDS", "not-a-number")
+		t.Setenv("PARSER_MAX_OLD_SPACE_MB", "not-a-number")
+
+		effective := ConfigFromEnv().EffectiveConfig()
+
+		if effective.Timeout != defaultTimeout {
+			t.Fatalf("expected default timeout %s, got %s", defaultTimeout, effective.Timeout)
+		}
+		if effective.NodeMaxOldSpaceMB != defaultNodeMaxOldSpaceSizeMB {
+			t.Fatalf("expected default NodeMaxOldSpaceMB %d, got %d", defaultNodeMaxOldSpaceSizeMB, effective.NodeMaxOldSpaceMB)
+		}
+	})
+
+	t.Run("out-of-range values use defaults", func(t *testing.T) {
+		t.Setenv("PARSER_TIMEOUT_SECONDS", "999")
+		t.Setenv("PARSER_MAX_OLD_SPACE_MB", "999999")
+
+		effective := ConfigFromEnv().EffectiveConfig()
+
+		if effective.Timeout != defaultTimeout {
+			t.Fatalf("expected default timeout %s, got %s", defaultTimeout, effective.Timeout)
+		}
+		if effective.NodeMaxOldSpaceMB != defaultNodeMaxOldSpaceSizeMB {
+			t.Fatalf("expected default NodeMaxOldSpaceMB %d, got %d", defaultNodeMaxOldSpaceSizeMB, effective.NodeMaxOldSpaceMB)
+		}
+	})
 }
