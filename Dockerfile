@@ -90,7 +90,7 @@ USER appuser
 ENV PARSER_SCRIPT=/app/parser-node/parse.mjs \
     PORT=8080 \
     MERM8_API_URL=https://api.example.com \
-    ALLOWED_ORIGINS=https://merm8-splash.vercel.app
+    ALLOWED_ORIGINS=https://merm8.example.app
 
 # Expose the server port
 EXPOSE 8080
