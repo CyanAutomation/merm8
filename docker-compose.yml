@@ -9,4 +9,5 @@ services:
       PORT: "8080"
       PARSER_SCRIPT: "/app/parser-node/parse.mjs"
       MERM8_API_URL: "http://localhost:8080"
+      ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3001"
     restart: unless-stopped

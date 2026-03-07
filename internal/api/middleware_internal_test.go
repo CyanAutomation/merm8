@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -105,5 +106,164 @@ func TestClientIdentifier_IgnoresXFFForUntrustedProxy(t *testing.T) {
 
 	if got := clientIdentifier(req); got != "192.0.2.50" {
 		t.Fatalf("expected remote address for untrusted proxy, got %q", got)
+	}
+}
+
+func TestCORSMiddleware_AllowsMatchingOrigin(t *testing.T) {
+	allowedOrigins := "https://example.com"
+	middleware := CORSMiddleware(allowedOrigins)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Header.Set("Origin", "https://example.com")
+	rec := httptest.NewRecorder()
+
+	middleware(next).ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+		t.Fatalf("expected CORS header with allowed origin, got %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); got == "" {
+		t.Fatal("expected Access-Control-Allow-Methods header")
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); got == "" {
+		t.Fatal("expected Access-Control-Allow-Headers header")
+	}
+	if got := rec.Code; got != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", got)
+	}
+}
+
+func TestCORSMiddleware_RejectsNonMatchingOrigin(t *testing.T) {
+	allowedOrigins := "https://example.com"
+	middleware := CORSMiddleware(allowedOrigins)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Header.Set("Origin", "https://other.com")
+	rec := httptest.NewRecorder()
+
+	middleware(next).ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("expected no CORS header for rejected origin, got %q", got)
+	}
+}
+
+func TestCORSMiddleware_SupportsMultipleAllowedOrigins(t *testing.T) {
+	allowedOrigins := "https://example.com, https://app.example.com, https://test.example.com"
+	middleware := CORSMiddleware(allowedOrigins)
+
+	testCases := []struct {
+		origin      string
+		shouldAllow bool
+	}{
+		{"https://example.com", true},
+		{"https://app.example.com", true},
+		{"https://test.example.com", true},
+		{"https://other.com", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.origin, func(t *testing.T) {
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+			req.Header.Set("Origin", tc.origin)
+			rec := httptest.NewRecorder()
+
+			middleware(next).ServeHTTP(rec, req)
+
+			got := rec.Header().Get("Access-Control-Allow-Origin")
+			if tc.shouldAllow && got != tc.origin {
+				t.Fatalf("expected CORS header with origin %q, got %q", tc.origin, got)
+			}
+			if !tc.shouldAllow && got != "" {
+				t.Fatalf("expected no CORS header, got %q", got)
+			}
+		})
+	}
+}
+
+func TestCORSMiddleware_HandlesPreflight(t *testing.T) {
+	allowedOrigins := "https://example.com"
+	middleware := CORSMiddleware(allowedOrigins)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/test", nil)
+	req.Header.Set("Origin", "https://example.com")
+	rec := httptest.NewRecorder()
+
+	middleware(next).ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+		t.Fatalf("expected CORS header in preflight, got %q", got)
+	}
+	if got := rec.Code; got != http.StatusNoContent {
+		t.Fatalf("expected status 204 for preflight, got %d", got)
+	}
+	// Verify body is empty for preflight
+	if got := rec.Body.String(); got != "" {
+		t.Fatalf("expected empty body for preflight, got %q", got)
+	}
+}
+
+func TestCORSMiddleware_ExposesHeaders(t *testing.T) {
+	allowedOrigins := "https://example.com"
+	middleware := CORSMiddleware(allowedOrigins)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Header.Set("Origin", "https://example.com")
+	rec := httptest.NewRecorder()
+
+	middleware(next).ServeHTTP(rec, req)
+
+	exposeHeaders := rec.Header().Get("Access-Control-Expose-Headers")
+	if exposeHeaders == "" {
+		t.Fatal("expected Access-Control-Expose-Headers header")
+	}
+	// Verify that rate limit and content version headers are exposed
+	if !strings.Contains(exposeHeaders, "X-RateLimit") {
+		t.Fatalf("expected X-RateLimit headers to be exposed, got %q", exposeHeaders)
+	}
+	if !strings.Contains(exposeHeaders, "Content-Version") {
+		t.Fatalf("expected Content-Version header to be exposed, got %q", exposeHeaders)
+	}
+}
+
+func TestCORSMiddleware_EmptyAllowedOrigins(t *testing.T) {
+	allowedOrigins := ""
+	middleware := CORSMiddleware(allowedOrigins)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Header.Set("Origin", "https://example.com")
+	rec := httptest.NewRecorder()
+
+	middleware(next).ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("expected no CORS header when no origins are configured, got %q", got)
 	}
 }

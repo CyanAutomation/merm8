@@ -172,3 +172,131 @@ func TestServerStack_ParserConcurrencyBusySARIF_IncludeRetryAfter(t *testing.T) 
 	close(release)
 	<-firstDone
 }
+
+// TestServerStack_CORSHeaders_AllowedOrigin verifies CORS headers are set for allowed origins.
+func TestServerStack_CORSHeaders_AllowedOrigin(t *testing.T) {
+	t.Setenv("ALLOWED_ORIGINS", "https://example.com,https://app.example.com")
+
+	h := api.NewHandler(&mockParser{}, engine.New())
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	// Simulate the middleware chain from main.go
+	rootHandler := http.Handler(mux)
+	rootHandler = api.RequestIDMiddleware(rootHandler)
+	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
+	allowedOrigins := "https://example.com,https://app.example.com"
+	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
+
+	server := httptest.NewServer(rootHandler)
+	defer server.Close()
+
+	// Test request from allowed origin
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/health", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Origin", "https://example.com")
+
+	res, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if got := res.Header.Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+		t.Fatalf("expected CORS header, got %q", got)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", res.StatusCode)
+	}
+}
+
+// TestServerStack_CORSHeaders_DisallowedOrigin verifies CORS headers are NOT set for disallowed origins.
+func TestServerStack_CORSHeaders_DisallowedOrigin(t *testing.T) {
+	t.Setenv("ALLOWED_ORIGINS", "https://example.com")
+
+	h := api.NewHandler(&mockParser{}, engine.New())
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	// Simulate the middleware chain from main.go
+	rootHandler := http.Handler(mux)
+	rootHandler = api.RequestIDMiddleware(rootHandler)
+	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
+	allowedOrigins := "https://example.com"
+	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
+
+	server := httptest.NewServer(rootHandler)
+	defer server.Close()
+
+	// Test request from non-allowed origin
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/health", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Origin", "https://attacker.com")
+
+	res, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if got := res.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("expected no CORS header for disallowed origin, got %q", got)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", res.StatusCode)
+	}
+}
+
+// TestServerStack_CORSPreflight_AllowedOrigin verifies preflight OPTIONS requests are handled correctly.
+func TestServerStack_CORSPreflight_AllowedOrigin(t *testing.T) {
+	t.Setenv("ALLOWED_ORIGINS", "https://example.com")
+
+	h := api.NewHandler(&mockParser{}, engine.New())
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	// Simulate the middleware chain from main.go
+	rootHandler := http.Handler(mux)
+	rootHandler = api.RequestIDMiddleware(rootHandler)
+	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
+	allowedOrigins := "https://example.com"
+	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
+
+	server := httptest.NewServer(rootHandler)
+	defer server.Close()
+
+	// Test preflight OPTIONS request
+	req, err := http.NewRequest(http.MethodOptions, server.URL+"/v1/analyze", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	req.Header.Set("Access-Control-Request-Headers", "Content-Type")
+
+	res, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("preflight request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if got := res.Header.Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+		t.Fatalf("expected CORS header in preflight, got %q", got)
+	}
+	if got := res.Header.Get("Access-Control-Allow-Methods"); got == "" {
+		t.Fatal("expected Access-Control-Allow-Methods header in preflight")
+	}
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected status 204 for preflight, got %d", res.StatusCode)
+	}
+}
+
+type mockParser struct{}
+
+func (p *mockParser) Parse(string) (*model.Diagram, *parser.SyntaxError, error) {
+	return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+}

@@ -198,6 +198,125 @@ async function analyzeWithRateLimit(diagram, retries = 3) {
 
 ---
 
+## Cross-Origin Resource Sharing (CORS)
+
+### Overview
+
+The merm8 API supports CORS (Cross-Origin Resource Sharing) to allow browser-based clients to make requests from different domains. This is essential for frontend applications (like Vercel-hosted UIs) calling the API from a different origin.
+
+### Configuration
+
+CORS is configured via the `ALLOWED_ORIGINS` environment variable. This variable accepts a **comma-separated list of allowed origins**:
+
+```bash
+# Single origin
+ALLOWED_ORIGINS=https://example.com
+
+# Multiple origins
+ALLOWED_ORIGINS=https://example.com,https://app.example.com,https://vercel-app.com
+
+# For local development (multiple ports)
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+```
+
+**Default value:** `https://merm8-splash-nazb4dydy-cyanautomations-projects.vercel.app` (Vercel frontend)
+
+### CORS Headers
+
+When a request originates from an allowed origin, the API responds with standard CORS headers:
+
+```
+Access-Control-Allow-Origin: https://example.com
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Request-Id
+Access-Control-Expose-Headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Content-Version, X-Request-Id
+Access-Control-Max-Age: 300
+```
+
+Requests from disallowed origins **will not receive CORS headers**, and the browser will block the response.
+
+### Preflight Requests
+
+Modern browsers send an `OPTIONS` preflight request before POST requests with custom headers. The API handles these automatically:
+
+```bash
+# Browser sends a preflight OPTIONS request
+curl -X OPTIONS http://localhost:8080/v1/analyze \
+  -H "Origin: https://example.com" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: Content-Type"
+
+# API responds with status 204 No Content
+# Response includes CORS headers, allowing the browser to proceed
+```
+
+### Browser CORS Example
+
+```javascript
+// JavaScript fetch from https://example.com calling API at https://api.example.com
+const response = await fetch('https://api.example.com/v1/analyze', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept-Version': '1.0'
+  },
+  body: JSON.stringify({
+    code: 'graph TD; A-->B',
+    config: { 'schema-version': 'v1', rules: {} }
+  })
+});
+
+const result = await response.json();
+console.log(result);
+```
+
+### Troubleshooting CORS Errors
+
+**Error:** `"is not allowed by Access-Control-Allow-Origin"`
+
+**Causes:**
+- Your frontend origin is not in `ALLOWED_ORIGINS`
+- The API is not configured with CORS support
+
+**Solution:**
+1. Check your frontend domain/origin
+2. Ensure `ALLOWED_ORIGINS` includes your domain
+3. Verify the origin header matches exactly (protocol, domain, port)
+
+**Example:**
+```javascript
+// ❌ Won't work if ALLOWED_ORIGINS contains "https://app.example.com"
+fetch('https://api.example.com/v1/analyze', {...})
+// Origin sent is: https://page.example.com <- Different subdomain!
+
+// ✅ Will work
+fetch('https://api.example.com/v1/analyze', {...})
+// Origin sent is: https://app.example.com <- Exact match
+```
+
+### Deployment Configuration
+
+#### Docker Compose (Local Development)
+```yaml
+services:
+  mermaid-lint:
+    environment:
+      ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3001"
+```
+
+#### Cloud Run (GCP)
+```bash
+gcloud run deploy merm8-api \
+  --set-env-vars ALLOWED_ORIGINS=https://your-vercel-domain.vercel.app
+```
+
+#### Dockerfile
+```dockerfile
+ENV ALLOWED_ORIGINS=https://merm8-splash-nazb4dydy-cyanautomations-projects.vercel.app
+```
+
+---
+
 ## Request/Response Examples
 
 ### 1. Valid Diagram, No Issues
