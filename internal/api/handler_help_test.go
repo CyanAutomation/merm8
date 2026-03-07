@@ -30,6 +30,126 @@ func assertHintCodePresent(t *testing.T, resp map[string]interface{}, expected s
 	t.Fatalf("expected hint code %q, got %#v", expected, hints)
 }
 
+func assertHintMessageContains(t *testing.T, resp map[string]interface{}, expectedCode, expectedMessageFragment string) {
+	t.Helper()
+	hints, ok := resp["hints"].([]interface{})
+	if !ok {
+		t.Fatalf("expected hints array, got %#v", resp["hints"])
+	}
+
+	for _, rawHint := range hints {
+		hint, ok := rawHint.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		code, _ := hint["code"].(string)
+		if code != expectedCode {
+			continue
+		}
+		message, _ := hint["message"].(string)
+		if !strings.Contains(strings.ToLower(message), strings.ToLower(expectedMessageFragment)) {
+			t.Fatalf("expected hint %q message to contain %q, got %q", expectedCode, expectedMessageFragment, message)
+		}
+		return
+	}
+
+	t.Fatalf("expected hint code %q, got %#v", expectedCode, hints)
+}
+
+func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                     string
+		syntaxErr                *parser.SyntaxError
+		code                     string
+		expectedHintCode         string
+		expectedHintMessage      string
+		expectedHelpTitle        string
+		expectedHelpExplanation  string
+	}{
+		{
+			name: "graphviz syntax maps to graphviz help",
+			syntaxErr: &parser.SyntaxError{Message: "No diagram type detected", Line: 1, Column: 1},
+			code:                    "digraph G {\n  A -> B\n}",
+			expectedHintCode:        "graphviz_syntax_detected",
+			expectedHintMessage:     "graphviz",
+			expectedHelpTitle:       "Graphviz",
+			expectedHelpExplanation: "Mermaid",
+		},
+		{
+			name: "tab indentation maps to spacing help",
+			syntaxErr: &parser.SyntaxError{Message: "Unexpected token", Line: 2, Column: 1},
+			code:                    "flowchart TD\n\tA --> B",
+			expectedHintCode:        "tab_indentation_detected",
+			expectedHintMessage:     "spaces",
+			expectedHelpTitle:       "spaces",
+			expectedHelpExplanation: "tabs",
+		},
+		{
+			name: "single arrow maps to flowchart arrow help",
+			syntaxErr: &parser.SyntaxError{Message: "Unexpected token '>'", Line: 2, Column: 17},
+			code:                    "flowchart TD\n  A -> B",
+			expectedHintCode:        "flowchart_arrow_operator_detected",
+			expectedHintMessage:     "-->",
+			expectedHelpTitle:       "Arrow",
+			expectedHelpExplanation: "-->",
+		},
+		{
+			name: "missing diagram type maps to keyword help",
+			syntaxErr: &parser.SyntaxError{Message: "No diagram type detected", Line: 0, Column: 0},
+			code:                    "A --> B\nB --> C",
+			expectedHintCode:        "missing_diagram_type_keyword",
+			expectedHintMessage:     "type keyword",
+			expectedHelpTitle:       "diagram type",
+			expectedHelpExplanation: "first line",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mux := newTestMux(func(string) (*model.Diagram, *parser.SyntaxError, error) {
+				return nil, tt.syntaxErr, nil
+			})
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", bytes.NewReader([]byte(tt.code)))
+			req.Header.Set("Content-Type", "text/plain")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", w.Code)
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			assertHintCodePresent(t, resp, tt.expectedHintCode)
+			assertHintMessageContains(t, resp, tt.expectedHintCode, tt.expectedHintMessage)
+
+			helpSugg, ok := resp["help-suggestion"].(map[string]interface{})
+			if !ok || helpSugg == nil {
+				t.Fatalf("expected help-suggestion object, got %#v", resp["help-suggestion"])
+			}
+
+			title, _ := helpSugg["title"].(string)
+			if !strings.Contains(strings.ToLower(title), strings.ToLower(tt.expectedHelpTitle)) {
+				t.Fatalf("expected help title to contain %q, got %q", tt.expectedHelpTitle, title)
+			}
+
+			explanation, _ := helpSugg["explanation"].(string)
+			if !strings.Contains(strings.ToLower(explanation), strings.ToLower(tt.expectedHelpExplanation)) {
+				t.Fatalf("expected help explanation to contain %q, got %q", tt.expectedHelpExplanation, explanation)
+			}
+		})
+	}
+}
+
 // TestAnalyze_SyntaxError_ArrowOperatorHelp tests help-suggestion for arrow syntax errors.
 func TestAnalyze_SyntaxError_ArrowOperatorHelp(t *testing.T) {
 	syntaxErr := &parser.SyntaxError{
