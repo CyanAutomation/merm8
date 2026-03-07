@@ -301,11 +301,48 @@ func TestEnhanceASTWithSourceAnalysis_NilDiagram_DefensiveNoPanicAndNoBehaviorMu
 }
 
 func TestEnhanceASTWithSourceAnalysis_EmptySource(t *testing.T) {
-	diagram := &model.Diagram{Type: model.DiagramTypeFlowchart}
-	// Should not panic
-	EnhanceASTWithSourceAnalysis(diagram, "")
+	tests := []struct {
+		name   string
+		source string
+	}{
+		{name: "empty source", source: ""},
+		{name: "whitespace only source", source: "  \n\t  "},
+	}
 
-	if len(diagram.SourceNodeIDs) != 0 {
-		t.Fatalf("expected empty SourceNodeIDs for empty source")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diagram := &model.Diagram{
+				Type: model.DiagramTypeFlowchart,
+				Nodes: []model.Node{
+					{ID: "A", Label: "Alpha"},
+					{ID: "B", Label: "Beta"},
+				},
+				Edges: []model.Edge{
+					{From: "A", To: "B"},
+				},
+			}
+
+			expectedNodes := append([]model.Node(nil), diagram.Nodes...)
+			expectedEdges := append([]model.Edge(nil), diagram.Edges...)
+
+			EnhanceASTWithSourceAnalysis(diagram, tt.source)
+
+			if len(diagram.SourceNodeIDs) != 0 {
+				t.Fatalf("expected empty SourceNodeIDs, got %v", diagram.SourceNodeIDs)
+			}
+			if len(diagram.DuplicateNodeIDs) != 0 {
+				t.Fatalf("expected empty DuplicateNodeIDs, got %v", diagram.DuplicateNodeIDs)
+			}
+			if len(diagram.DisconnectedNodeIDs) != 0 {
+				t.Fatalf("expected empty DisconnectedNodeIDs, got %v", diagram.DisconnectedNodeIDs)
+			}
+
+			if !reflect.DeepEqual(diagram.Nodes, expectedNodes) {
+				t.Fatalf("expected diagram nodes to remain unchanged; expected=%v actual=%v", expectedNodes, diagram.Nodes)
+			}
+			if !reflect.DeepEqual(diagram.Edges, expectedEdges) {
+				t.Fatalf("expected diagram edges to remain unchanged; expected=%v actual=%v", expectedEdges, diagram.Edges)
+			}
+		})
 	}
 }
