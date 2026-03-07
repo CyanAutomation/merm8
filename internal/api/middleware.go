@@ -340,6 +340,49 @@ func AnalyzeBearerAuthMiddleware(token string, next http.Handler) http.Handler {
 	})
 }
 
+// CORSMiddleware handles CORS (Cross-Origin Resource Sharing) headers.
+// allowedOrigins is a comma-separated list of allowed origins (e.g., "https://example.com,https://app.example.com").
+// If an origin matches one in the allowed list, Access-Control-Allow-Origin is set to that origin.
+// Otherwise, no CORS headers are sent (treating the request as disallowed by CORS).
+// Preflight OPTIONS requests are handled with an empty response (204 No Content).
+func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
+	// Parse allowed origins into a set for O(1) lookup
+	allowedSet := make(map[string]bool)
+	if strings.TrimSpace(allowedOrigins) != "" {
+		for _, origin := range strings.Split(allowedOrigins, ",") {
+			origin = strings.TrimSpace(origin)
+			if origin != "" {
+				allowedSet[origin] = true
+			}
+		}
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			
+			// Check if origin is allowed
+			if origin != "" && allowedSet[origin] {
+				// Set CORS headers for allowed origins
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-Id")
+				w.Header().Set("Access-Control-Expose-Headers", "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Content-Version, X-Request-Id")
+				w.Header().Set("Access-Control-Max-Age", "300") // 5 minutes
+
+				// Handle preflight OPTIONS requests
+				if r.Method == http.MethodOptions {
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+			}
+
+			// For actual requests, continue to next handler
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func isAnalyzePath(path string) bool {
 	return isAnalyzeJSONPath(path) || path == "/analyze/sarif" || path == "/v1/analyze/sarif"
 }

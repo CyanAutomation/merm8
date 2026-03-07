@@ -70,6 +70,14 @@ func main() {
 	rootHandler = api.RequestIDMiddleware(rootHandler)
 	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
 
+	// Configure CORS with allowed origins from environment variable
+	allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
+	if allowedOrigins == "" {
+		// Default to Vercel frontend domain for merm8
+		allowedOrigins = "https://merm8-splash-nazb4dydy-cyanautomations-projects.vercel.app"
+	}
+	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
+
 	authToken := strings.TrimSpace(os.Getenv("ANALYZE_AUTH_TOKEN"))
 	rateLimitPerMinute := envInt("ANALYZE_RATE_LIMIT_PER_MINUTE", 0)
 	if deploymentMode == "production" && rateLimitPerMinute <= 0 {
@@ -100,7 +108,7 @@ func main() {
 
 	addr := fmt.Sprintf(":%s", port)
 	parserCfg := parser.ConfigFromEnv().EffectiveConfig()
-	logger.Info("server starting", "addr", addr, "parser", scriptPath, "mode", deploymentMode, "parser_concurrency_limit", parserConcurrencyLimit, "parser_timeout_seconds", int(parserCfg.Timeout.Seconds()), "parser_max_old_space_mb", parserCfg.NodeMaxOldSpaceMB, "analyze_rate_limit_per_minute", rateLimitPerMinute, "analyze_auth_enabled", authToken != "")
+	logger.Info("server starting", "addr", addr, "parser", scriptPath, "mode", deploymentMode, "parser_concurrency_limit", parserConcurrencyLimit, "parser_timeout_seconds", int(parserCfg.Timeout.Seconds()), "parser_max_old_space_mb", parserCfg.NodeMaxOldSpaceMB, "analyze_rate_limit_per_minute", rateLimitPerMinute, "analyze_auth_enabled", authToken != "", "cors_allowed_origins", allowedOrigins)
 	if err := http.ListenAndServe(addr, rootHandler); err != nil {
 		logger.Error("server error", "error", err.Error())
 		panic(fmt.Sprintf("server error: %v", err))

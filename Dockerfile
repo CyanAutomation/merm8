@@ -89,7 +89,8 @@ USER appuser
 # Set environment variables with defaults
 ENV PARSER_SCRIPT=/app/parser-node/parse.mjs \
     PORT=8080 \
-    MERM8_API_URL=https://api.example.com
+    MERM8_API_URL=https://api.example.com \
+    ALLOWED_ORIGINS=https://merm8-splash-nazb4dydy-cyanautomations-projects.vercel.app
 
 # Expose the server port
 EXPOSE 8080
