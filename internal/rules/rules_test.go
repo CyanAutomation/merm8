@@ -45,6 +45,45 @@ func TestNoDuplicateNodeIDs_MultiDuplicate(t *testing.T) {
 	}
 }
 
+func TestNoDuplicateNodeIDs_UsesDuplicateNodeIDsFromSourceAnalysis(t *testing.T) {
+	d := &model.Diagram{
+		Nodes:            []model.Node{{ID: "A"}, {ID: "B"}},
+		DuplicateNodeIDs: []string{"A"},
+	}
+
+	issues := rules.NoDuplicateNodeIDs{}.Run(d, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Message != "duplicate node ID: A" {
+		t.Fatalf("expected duplicate issue for A, got %q", issues[0].Message)
+	}
+	if issues[0].Severity != "error" {
+		t.Fatalf("expected severity error, got %q", issues[0].Severity)
+	}
+	if issues[0].Line != nil || issues[0].Column != nil {
+		t.Fatalf("expected location to be unset without AST duplicate node, got line=%v column=%v", issues[0].Line, issues[0].Column)
+	}
+}
+
+func TestNoDuplicateNodeIDs_MergesASTAndSourceAnalysisDuplicates(t *testing.T) {
+	d := &model.Diagram{
+		Nodes:            []model.Node{{ID: "B"}, {ID: "B"}, {ID: "C"}},
+		DuplicateNodeIDs: []string{"A", "B"},
+	}
+
+	issues := rules.NoDuplicateNodeIDs{}.Run(d, nil)
+	if len(issues) != 2 {
+		t.Fatalf("expected 2 issues, got %d", len(issues))
+	}
+	if issues[0].Message != "duplicate node ID: A" {
+		t.Fatalf("expected first issue for A (deterministic ordering), got %q", issues[0].Message)
+	}
+	if issues[1].Message != "duplicate node ID: B" {
+		t.Fatalf("expected second issue for B, got %q", issues[1].Message)
+	}
+}
+
 func TestNoDisconnectedNodes_AllConnected(t *testing.T) {
 	d := &model.Diagram{
 		Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
