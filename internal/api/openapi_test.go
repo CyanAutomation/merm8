@@ -397,6 +397,42 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 	}
 }
 
+
+func TestServeSpec_AnalyzeResponseIncludesHelpSuggestionAndHintsSchemas(t *testing.T) {
+	spec := loadServedSpec(t)
+
+	if got := lookup(t, spec, "components", "schemas", "AnalyzeResponse", "properties", "help-suggestion", "$ref"); got != "#/components/schemas/HelpSuggestion" {
+		t.Fatalf("expected AnalyzeResponse.help-suggestion to reference HelpSuggestion schema, got %#v", got)
+	}
+	if nullable, ok := lookup(t, spec, "components", "schemas", "AnalyzeResponse", "properties", "help-suggestion", "nullable").(bool); !ok || !nullable {
+		t.Fatalf("expected AnalyzeResponse.help-suggestion nullable=true, got %#v", lookup(t, spec, "components", "schemas", "AnalyzeResponse", "properties", "help-suggestion", "nullable"))
+	}
+
+	if got := lookup(t, spec, "components", "schemas", "AnalyzeResponse", "properties", "hints", "items", "$ref"); got != "#/components/schemas/Hint" {
+		t.Fatalf("expected AnalyzeResponse.hints items to reference Hint schema, got %#v", got)
+	}
+
+	hintRequired := lookup(t, spec, "components", "schemas", "Hint", "required").([]interface{})
+	for _, field := range []string{"code", "message", "severity", "confidence"} {
+		if !slices.Contains(hintRequired, interface{}(field)) {
+			t.Fatalf("expected Hint.required to include %q, got %#v", field, hintRequired)
+		}
+	}
+	if got := lookup(t, spec, "components", "schemas", "Hint", "properties", "applies-to", "$ref"); got != "#/components/schemas/HintAppliesTo" {
+		t.Fatalf("expected Hint.applies-to to reference HintAppliesTo, got %#v", got)
+	}
+
+	helpRequired := lookup(t, spec, "components", "schemas", "HelpSuggestion", "required").([]interface{})
+	for _, field := range []string{"title", "explanation", "wrong-example", "correct-example", "doc-link", "fix-action"} {
+		if !slices.Contains(helpRequired, interface{}(field)) {
+			t.Fatalf("expected HelpSuggestion.required to include %q, got %#v", field, helpRequired)
+		}
+		if got := lookup(t, spec, "components", "schemas", "HelpSuggestion", "properties", field, "type"); got != "string" {
+			t.Fatalf("expected HelpSuggestion.%s type=string, got %#v", field, got)
+		}
+	}
+}
+
 func TestServeSpec_IssueLocationFieldsAreOptionalAndNullable(t *testing.T) {
 	spec := loadServedSpec(t)
 
