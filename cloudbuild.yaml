@@ -43,7 +43,7 @@ steps:
     id: generate-benchmark
     entrypoint: bash
     args:
-      - -lc
+      - -c
       - |
         apt-get update
         apt-get install -y --no-install-recommends nodejs npm
