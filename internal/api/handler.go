@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"sort"
 	"strconv"
@@ -329,13 +330,16 @@ func readBody(body io.ReadCloser) ([]byte, error) {
 }
 
 // parseRawMermaidInput attempts to parse JSON first, falling back to treating the entire input as raw mermaid code.
-func parseRawMermaidInput(body []byte) (analyzeRequest, error) {
+// It also reports whether JSON mode was used and any JSON decode error encountered.
+func parseRawMermaidInput(body []byte) (analyzeRequest, bool, error) {
 	var req analyzeRequest
 	if err := json.Unmarshal(body, &req); err == nil && req.Code != "" {
-		return req, nil
+		return req, true, nil
+	} else if err != nil {
+		return analyzeRequest{Code: string(body)}, false, err
 	}
 	// Not JSON or missing code field - treat entire body as raw mermaid code
-	return analyzeRequest{Code: string(body)}, nil
+	return analyzeRequest{Code: string(body)}, false, nil
 }
 
 // syntaxErrorResponse mirrors parser.SyntaxError for the JSON response.
@@ -1403,8 +1407,22 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	req, err := parseRawMermaidInput(body)
-	if err != nil || req.Code == "" {
+	req, parsedAsJSON, jsonDecodeErr := parseRawMermaidInput(body)
+
+	contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	jsonContentType := contentType == "application/json" || strings.HasSuffix(contentType, "+json")
+
+	requestHints := make([]responseHint, 0, 1)
+	if jsonContentType && jsonDecodeErr != nil {
+		requestHints = append(requestHints, responseHint{
+			Code:       "raw_json_decode_failed_fallback_to_text",
+			Message:    "request Content-Type is JSON but body failed JSON decoding; falling back to treating body as raw mermaid text",
+			Severity:   "info",
+			Confidence: 1.0,
+		})
+	}
+
+	if req.Code == "" {
 		observeAnalyzeOutcome("missing_code")
 		writeError(w, http.StatusBadRequest, "missing_code", "request body is empty or does not contain mermaid code")
 		return
@@ -1476,7 +1494,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
-		hints := hintsForSyntaxError(syntaxErr, req.Code)
+		hints := append(requestHints, hintsForSyntaxError(syntaxErr, req.Code)...)
 		suggestions := suggestionsFromHints(hints)
 		helpSugg := helpForSyntaxError(syntaxErr, req.Code)
 		// On syntax errors, only set lint-supported=true if we detected a diagram type
@@ -1583,6 +1601,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		Timestamp:     time.Now().UnixMilli(),
 		SyntaxError:   nil,
 		Issues:        issues,
+		Hints:         requestHints,
 		Warnings:      deprecationWarnings,
 		Meta:          responseMetaForWarnings(deprecationWarnings),
 		Metrics:       computeMetrics(diagram, issues),
