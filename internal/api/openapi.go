@@ -1300,7 +1300,7 @@ var openapi = map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Analyze and lint a Mermaid diagram (raw text)",
-				"description": "Accepts raw mermaid code (plain text) directly in the request body. Auto-detects format: attempts to parse as JSON first (looks for {\"code\": \"...\"} structure), then falls back to treating the entire body as raw mermaid syntax.\n\nDoes NOT support lint configuration; use POST /v1/analyze if you need to configure rules. Maximum request body size is 1 MiB.\n\nReturns the same structured analysis as /v1/analyze, including syntax errors, actionable suggestions for fixing errors, and lint results. When syntax errors occur, the 'suggestions' field contains smart hints for common mistakes (e.g., Graphviz syntax, tab indentation, arrow operators).",
+				"description": "Accepts raw mermaid code (plain text) directly in the request body. Auto-detects format: attempts to parse as JSON first (looks for {\"code\": \"...\"} structure), then falls back to treating the entire body as raw mermaid syntax.\n\nDoes NOT support lint configuration; use POST /v1/analyze if you need to configure rules. Maximum request body size is 1 MiB.\n\nReturns the same structured analysis as /v1/analyze, including syntax errors, structured hints for fixing errors, and lint results. When syntax errors occur, the 'hints' field contains machine-readable entries for common mistakes (e.g., Graphviz syntax, tab indentation, arrow operators). The legacy 'suggestions' field remains for backward compatibility and is deprecated.",
 				"operationId": "analyzeCodeRaw",
 				"requestBody": map[string]interface{}{
 					"required": true,
@@ -2119,6 +2119,26 @@ var openapi = map[string]interface{}{
 					},
 				},
 			},
+			"HintAppliesTo": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"line":         map[string]interface{}{"type": "integer", "minimum": 0},
+					"column":       map[string]interface{}{"type": "integer", "minimum": 0},
+					"diagram-type": map[string]interface{}{"type": "string", "enum": []string{"flowchart", "sequence", "class", "er", "state", "unknown"}},
+				},
+			},
+			"ResponseHint": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"code", "message", "severity", "confidence"},
+				"properties": map[string]interface{}{
+					"code":        map[string]interface{}{"type": "string", "description": "Stable machine-readable hint code.", "example": "graphviz_syntax_detected"},
+					"message":     map[string]interface{}{"type": "string", "description": "Human-readable hint message."},
+					"severity":    map[string]interface{}{"type": "string", "enum": []string{"info", "warning"}},
+					"confidence":  map[string]interface{}{"type": "number", "minimum": 0, "maximum": 1},
+					"applies-to":  map[string]interface{}{"$ref": "#/components/schemas/HintAppliesTo"},
+					"fix-example": map[string]interface{}{"type": "string", "description": "Optional concise replacement snippet."},
+				},
+			},
 			"AnalyzeResponse": map[string]interface{}{
 				"type":     "object",
 				"required": []string{"valid", "lint-supported", "issues", "syntax-error", "metrics"},
@@ -2164,9 +2184,15 @@ var openapi = map[string]interface{}{
 						"description": "Aggregate statistics about the diagram. Present for successful analyze responses, including syntax errors (zeroed counters with fallback diagram-type) and parsed but lint-unsupported families.",
 						"nullable":    true,
 					},
+					"hints": map[string]interface{}{
+						"type":        "array",
+						"description": "Structured syntax remediation hints. Provided when valid=false and syntax-error is present.",
+						"items":       map[string]interface{}{"$ref": "#/components/schemas/ResponseHint"},
+					},
 					"suggestions": map[string]interface{}{
 						"type":        "array",
-						"description": "Actionable hints for fixing syntax errors in the Mermaid diagram. Provided when valid=false.",
+						"description": "Deprecated: use hints. Backward-compatible derived text messages from hints.",
+						"deprecated":  true,
 						"items":       map[string]interface{}{"type": "string"},
 					},
 				},
