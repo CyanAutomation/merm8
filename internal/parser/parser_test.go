@@ -167,6 +167,41 @@ func TestParser_FlowchartIncludesNodeAndEdgeLocations(t *testing.T) {
 }
 
 // TestParser_InvalidMermaid tests parsing invalid Mermaid code.
+
+func TestParser_FlowchartLocationWithLeadingAndTrailingBlankLines(t *testing.T) {
+	script := getParserScript(t)
+	p := mustNewParser(t, script)
+
+	mermaidCode := `
+
+graph TD
+  A[Start] --> B[End]
+
+`
+
+	diagram, syntaxErr, err := p.Parse(mermaidCode)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if syntaxErr != nil {
+		t.Fatalf("unexpected syntax error: %+v", syntaxErr)
+	}
+	if diagram == nil {
+		t.Fatal("expected diagram, got nil")
+	}
+
+	if len(diagram.Edges) == 0 {
+		t.Fatal("expected at least one edge")
+	}
+	edge := diagram.Edges[0]
+	if edge.Line == nil || *edge.Line != 4 {
+		t.Fatalf("expected edge line=4 with leading blanks preserved, got %v", edge.Line)
+	}
+	if edge.Column == nil || *edge.Column != 3 {
+		t.Fatalf("expected edge column=3, got %v", edge.Column)
+	}
+}
+
 func TestParser_InvalidMermaid(t *testing.T) {
 	script := getParserScript(t)
 
@@ -209,6 +244,26 @@ func TestParser_EmptyCode(t *testing.T) {
 	}
 	if diagram != nil {
 		t.Error("expected nil diagram for empty input")
+	}
+}
+
+func TestParser_WhitespaceOnlyCode(t *testing.T) {
+	script := getParserScript(t)
+
+	p := mustNewParser(t, script)
+
+	diagram, syntaxErr, err := p.Parse(`  
+	
+  `)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if syntaxErr == nil {
+		t.Fatal("expected syntax error for whitespace-only input, got nil")
+	}
+	if diagram != nil {
+		t.Error("expected nil diagram for whitespace-only input")
 	}
 }
 
