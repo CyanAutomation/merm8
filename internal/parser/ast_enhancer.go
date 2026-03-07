@@ -50,9 +50,10 @@ func EnhanceASTWithSourceAnalysis(diagram *model.Diagram, sourceCode string) {
 // Matches explicit node definitions (A[...], B(...), etc.) and node references in edges.
 // Returns unique node IDs in order of appearance.
 func extractAllNodeIDsFromSource(source string) []string {
-	// Match node definitions: identifier followed by node type brackets
-	// This captures: A[label], B(label), C{label}, A[[label]], etc.
-	nodeDefinitionPattern := regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[|\(|{)`)
+	// Match flowchart node IDs used in explicit node definitions.
+	// Keep this aligned with parser normalization support for common IDs like:
+	// A[label], service-node[label], node_2(label), etc.
+	nodeDefinitionPattern := regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_-]*)\s*(?:\[|\(|{)`)
 
 	seen := make(map[string]bool)
 	var result []string
@@ -99,8 +100,8 @@ func isKeyword(s string) bool {
 // Counts explicit node definitions (A[...], A(...), etc.).
 // Returns sorted list of node IDs that are defined more than once.
 func findDuplicateNodeIDs(source string) []string {
-	// Match node definitions
-	nodeDefinitionPattern := regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[|\(|{)`)
+	// Match node definitions with the same ID format used by extractAllNodeIDsFromSource.
+	nodeDefinitionPattern := regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_-]*)\s*(?:\[|\(|{)`)
 
 	counts := make(map[string]int)
 
