@@ -42,7 +42,7 @@ const (
 	legacyOptionKeyWarningTemplate    = `legacy key config.%s.%s is deprecated; use config.%s.%s. Example: {"%s": ["node:A"]}`
 )
 
-var strictConfigSchema = false
+var strictConfigSchema atomic.Bool
 
 var errInvalidRequest = errors.New("invalid request")
 
@@ -607,13 +607,17 @@ func NewHandlerWithScript(scriptPath string) (*Handler, error) {
 // When strict mode is enabled, legacy config formats are rejected.
 // Default is false for v1.0 compatibility; should be true for production deployments.
 func SetStrictConfigSchema(strict bool) {
-	strictConfigSchema = strict
+	strictConfigSchema.Store(strict)
 }
 
 // SetStrictConfigSchemaForTesting is a deprecated alias for SetStrictConfigSchema.
 // It is kept for backward compatibility with existing tests.
 func SetStrictConfigSchemaForTesting(strict bool) {
 	SetStrictConfigSchema(strict)
+}
+
+func strictConfigSchemaEnabled() bool {
+	return strictConfigSchema.Load()
 }
 
 // RegisterRoutes attaches all routes to mux.
@@ -1138,7 +1142,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		return
 	}
 
-	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchema)
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchemaEnabled())
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
 		writeConfigValidationError(w, configValidationErr)
@@ -1590,7 +1594,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		return
 	}
 
-	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchema)
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchemaEnabled())
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
 		statusCode := http.StatusBadRequest
