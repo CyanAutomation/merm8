@@ -70,7 +70,7 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				"PARSER_TIMEOUT_SECONDS":  "12",
 				"PARSER_MAX_OLD_SPACE_MB": "256",
 			},
-			expectedConfig: Config{Timeout: 12 * time.Second, NodeMaxOldSpaceMB: 256},
+			expectedConfig: Config{Timeout: 12 * time.Second, NodeMaxOldSpaceMB: 256}.EffectiveConfig(),
 		},
 		{
 			name: "invalid non-numeric environment values fall back to defaults",
