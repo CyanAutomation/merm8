@@ -329,13 +329,13 @@ func readBody(body io.ReadCloser) ([]byte, error) {
 }
 
 // parseRawMermaidInput attempts to parse JSON first, falling back to treating the entire input as raw mermaid code.
-func parseRawMermaidInput(body []byte) (string, error) {
+func parseRawMermaidInput(body []byte) (analyzeRequest, error) {
 	var req analyzeRequest
 	if err := json.Unmarshal(body, &req); err == nil && req.Code != "" {
-		return req.Code, nil
+		return req, nil
 	}
 	// Not JSON or missing code field - treat entire body as raw mermaid code
-	return string(body), nil
+	return analyzeRequest{Code: string(body)}, nil
 }
 
 // syntaxErrorResponse mirrors parser.SyntaxError for the JSON response.
@@ -1336,7 +1336,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 // AnalyzeRaw handles POST /analyze/raw.
 // Accepts raw mermaid code (plain text) directly in the request body.
 // Auto-detects format: tries JSON with "code" field first, falls back to treating body as raw mermaid.
-// Does NOT support lint configuration; use /analyze for that.
+// JSON requests can also include config and parser settings, matching /analyze behavior.
 func (h *Handler) AnalyzeRaw(w http.ResponseWriter, r *http.Request) {
 	h.analyzeRawWithCallback(w, r, func(resp analyzeResponse) {
 		writeJSON(w, http.StatusOK, resp)
@@ -1373,15 +1373,29 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	code, err := parseRawMermaidInput(body)
-	if err != nil || code == "" {
+	req, err := parseRawMermaidInput(body)
+	if err != nil || req.Code == "" {
 		observeAnalyzeOutcome("missing_code")
 		writeError(w, http.StatusBadRequest, "missing_code", "request body is empty or does not contain mermaid code")
 		return
 	}
 
-	// Create a minimal analyzeRequest for parseWithRequestSettings
-	req := analyzeRequest{Code: code}
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchemaEnabled())
+	if configValidationErr != nil {
+		observeAnalyzeOutcome(configValidationErr.Code)
+		writeConfigValidationError(w, configValidationErr)
+		return
+	}
+
+	deprecationWarnings = uniqueStrings(deprecationWarnings)
+	emitLegacyConfigWarnings(r.Context(), logger, w, deprecationWarnings)
+
+	normalizedCfg, err := h.engine.NormalizeConfig(cfg)
+	if err != nil {
+		observeAnalyzeOutcome("invalid_config")
+		writeError(w, http.StatusBadRequest, "invalid_config", err.Error())
+		return
+	}
 
 	h.mu.RLock()
 	parserConcurrencyCh := h.parserConcurrencyCh
@@ -1450,8 +1464,8 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 			Timestamp:      time.Now().UnixMilli(),
 			Suggestions:    suggestions,
 			HelpSuggestion: helpSugg,
-			Warnings:       nil,
-			Meta:           nil,
+			Warnings:       deprecationWarnings,
+			Meta:           responseMetaForWarnings(deprecationWarnings),
 			SyntaxError: &syntaxErrorResponse{
 				Message: syntaxErr.Message,
 				Line:    syntaxErr.Line,
@@ -1502,8 +1516,8 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 			Timestamp:     time.Now().UnixMilli(),
 			SyntaxError:   nil,
 			Issues:        []model.Issue{unsupportedIssue},
-			Warnings:      nil,
-			Meta:          nil,
+			Warnings:      deprecationWarnings,
+			Meta:          responseMetaForWarnings(deprecationWarnings),
 			Error: &apiErrorDetails{
 				Code:    "unsupported_diagram_type",
 				Message: "diagram type is parsed but linting is not supported",
@@ -1515,7 +1529,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 	}
 
 	ruleMetricsSink := newRequestRuleMetricsSink()
-	issues := h.engine.RunWithInstrumentation(diagram, rules.Config{}, ruleMetricsSink)
+	issues := h.engine.RunWithInstrumentation(diagram, normalizedCfg, ruleMetricsSink)
 	for _, ruleMetrics := range ruleMetricsSink.Snapshot() {
 		logger.Info(
 			"engine rule metrics",
@@ -1537,8 +1551,8 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		Timestamp:     time.Now().UnixMilli(),
 		SyntaxError:   nil,
 		Issues:        issues,
-		Warnings:      nil,
-		Meta:          nil,
+		Warnings:      deprecationWarnings,
+		Meta:          responseMetaForWarnings(deprecationWarnings),
 		Metrics:       computeMetrics(diagram, issues),
 	}
 	onValid(resp)
