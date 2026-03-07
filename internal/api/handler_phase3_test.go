@@ -208,7 +208,11 @@ func TestAnalyzeSARIF_MissingCode(t *testing.T) {
 
 // TestAnalyzeSARIF_ValidDiagram verifies SARIF success response
 func TestAnalyzeSARIF_ValidDiagram(t *testing.T) {
-	diagram := &model.Diagram{Nodes: []model.Node{{ID: "A"}, {ID: "B"}}}
+	diagram := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
+		Edges: []model.Edge{{From: "A", To: "B"}},
+	}
 	mockP := &mockParserWithTimeout{diagram: diagram}
 	h := NewHandler(mockP, engine.New())
 	mux := http.NewServeMux()
@@ -235,8 +239,61 @@ func TestAnalyzeSARIF_ValidDiagram(t *testing.T) {
 	if report.Version != "2.1.0" {
 		t.Errorf("SARIF version = %s, want 2.1.0", report.Version)
 	}
+	if report.Schema != "https://json.schemastore.org/sarif-2.1.0.json" {
+		t.Errorf("SARIF schema = %s, want https://json.schemastore.org/sarif-2.1.0.json", report.Schema)
+	}
 	if len(report.Runs) == 0 {
-		t.Errorf("expected at least one run in SARIF report")
+		t.Fatalf("expected at least one run in SARIF report")
+	}
+
+	run := report.Runs[0]
+	if run.Tool.Driver.Name != "merm8" {
+		t.Errorf("tool.driver.name = %q, want %q", run.Tool.Driver.Name, "merm8")
+	}
+	if run.Tool.Driver.InformationURI != "https://github.com/CyanAutomation/merm8" {
+		t.Errorf("tool.driver.informationUri = %q, want %q", run.Tool.Driver.InformationURI, "https://github.com/CyanAutomation/merm8")
+	}
+	if len(run.Tool.Driver.Rules) != 0 {
+		t.Errorf("tool.driver.rules length = %d, want 0 for clean input", len(run.Tool.Driver.Rules))
+	}
+
+	if got := len(run.Results); got != 0 {
+		t.Fatalf("results length = %d, want 0 for clean input", got)
+	}
+
+	if len(run.Artifacts) != 0 {
+		t.Errorf("artifacts length = %d, want 0 when there are no results", len(run.Artifacts))
+	}
+
+	if len(run.Invocations) == 0 {
+		t.Fatalf("expected invocation metadata in SARIF success response")
+	}
+	invocation := run.Invocations[0]
+	if !invocation.ExecutionSuccessful {
+		t.Errorf("invocation.executionSuccessful = %v, want true", invocation.ExecutionSuccessful)
+	}
+	if invocation.Properties == nil {
+		t.Fatalf("expected invocation properties to be non-nil")
+	}
+	if invocation.Properties["request-uri"] != "/analyze/sarif" {
+		t.Errorf("invocation properties request-uri = %q, want %q", invocation.Properties["request-uri"], "/analyze/sarif")
+	}
+
+	// With no findings there are no result-level fields to populate. Verify clean
+	// input behavior directly to guard against accidental placeholder findings.
+	for i, result := range run.Results {
+		if result.RuleID == "" {
+			t.Errorf("result[%d].ruleId is empty", i)
+		}
+		if result.Level == "" {
+			t.Errorf("result[%d].level is empty", i)
+		}
+		if strings.TrimSpace(result.Message.Text) == "" {
+			t.Errorf("result[%d].message.text is empty", i)
+		}
+		if len(result.Locations) == 0 {
+			t.Errorf("result[%d].locations is empty", i)
+		}
 	}
 }
 
