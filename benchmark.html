@@ -7,19 +7,18 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: #f5f5f5;
-            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+            background: #0f172a;
+            color: #f1f5f9;
             line-height: 1.6;
         }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 40px 20px;
-            border-radius: 8px;
+            background: #1e293b;
+            color: #f1f5f9;
+            padding: 30px 20px;
+            border-bottom: 1px solid #38bdf8;
             margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         header h1 { font-size: 2.5em; margin-bottom: 10px; }
         header p { font-size: 1.1em; opacity: 0.95; }
@@ -30,43 +29,42 @@
             margin-bottom: 30px;
         }
         .summary-card {
-            background: white;
+            background: #1e293b;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            border-left: 4px solid #667eea;
+            border-left: 4px solid #38bdf8;
         }
-        .summary-card h3 { color: #667eea; font-size: 0.9em; text-transform: uppercase; margin-bottom: 10px; }
-        .summary-card .value { font-size: 2em; font-weight: bold; color: #333; }
-        .summary-card.passed { border-left-color: #48bb78; }
-        .summary-card.passed h3 { color: #48bb78; }
-        .summary-card.failed { border-left-color: #f56565; }
-        .summary-card.failed h3 { color: #f56565; }
+        .summary-card h3 { color: #38bdf8; font-size: 0.9em; margin-bottom: 10px; }
+        .summary-card .value { font-size: 2em; font-weight: bold; color: #f1f5f9; }
+        .summary-card.passed { border-left-color: #10b981; }
+        .summary-card.passed h3 { color: #10b981; }
+        .summary-card.failed { border-left-color: #ef4444; }
+        .summary-card.failed h3 { color: #ef4444; }
         table {
             width: 100%;
             border-collapse: collapse;
-            background: white;
+            background: #1e293b;
             border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             margin-bottom: 30px;
         }
         th {
-            background: #f7fafc;
+            background: #0f172a;
             padding: 15px;
             text-align: left;
             font-weight: 600;
-            color: #4a5568;
-            border-bottom: 2px solid #e2e8f0;
+            color: #38bdf8;
+            border-bottom: 2px solid #38bdf8;
         }
         td {
             padding: 12px 15px;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid #334155;
+            color: #f1f5f9;
         }
-        tr:hover { background: #f8f9fa; }
-        .rate-high { color: #48bb78; font-weight: 600; }
-        .rate-medium { color: #ed8936; font-weight: 600; }
-        .rate-low { color: #f56565; font-weight: 600; }
+        tr:hover { background: #0f172a; }
+        .rate-high { color: #10b981; font-weight: 600; }
+        .rate-medium { color: #f59e0b; font-weight: 600; }
+        .rate-low { color: #ef4444; font-weight: 600; }
         .badge {
             display: inline-block;
             padding: 3px 8px;
@@ -75,34 +73,35 @@
             font-weight: 500;
             margin: 2px;
         }
-        .badge.pass { background: #c6f6d5; color: #22543d; }
-        .badge.fail { background: #fed7d7; color: #742a2a; }
+        .badge.pass { background: #064e3b; color: #d1fae5; }
+        .badge.fail { background: #7f1d1d; color: #fee2e2; }
         h2 {
             margin-top: 40px;
             margin-bottom: 20px;
-            color: #2d3748;
-            border-bottom: 2px solid #e2e8f0;
+            color: #f1f5f9;
+            border-bottom: 1px solid #334155;
             padding-bottom: 10px;
         }
-        .details-row { margin: 10px 0; }
-        .details-row strong { color: #4a5568; }
+        .details-row { margin: 10px 0; color: #cbd5e1; }
+        .details-row strong { color: #f1f5f9; }
         .failed-cases {
-            background: white;
+            background: #1e293b;
             border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .failed-case {
             padding: 15px;
-            border-bottom: 1px solid #e2e8f0;
-            background: #fff5f5;
+            border-bottom: 1px solid #334155;
+            background: #1e293b;
         }
         .failed-case:last-child { border-bottom: none; }
-        .failed-case h4 { color: #f56565; margin-bottom: 8px; }
+        .failed-case h4 { color: #ef4444; margin-bottom: 8px; }
         .failed-case pre {
-            background: #f7fafc;
+            background: #0f172a;
+            color: #cbd5e1;
             padding: 10px;
             border-radius: 4px;
+            border-left: 3px solid #38bdf8;
             overflow-x: auto;
             font-size: 0.85em;
             margin: 5px 0;
@@ -111,8 +110,8 @@
             text-align: center;
             margin-top: 40px;
             padding-top: 20px;
-            border-top: 1px solid #e2e8f0;
-            color: #718096;
+            border-top: 1px solid #334155;
+            color: #94a3b8;
             font-size: 0.9em;
         }
     </style>
@@ -127,29 +126,29 @@
         <div class="summary">
             <div class="summary-card passed">
                 <h3>Passed</h3>
-                <div class="value">3</div>
-                <p>of 4 cases</p>
+                <div class="value">18</div>
+                <p>of 18 cases</p>
             </div>
             <div class="summary-card failed">
                 <h3>Failed</h3>
-                <div class="value">1</div>
+                <div class="value">0</div>
                 <p>quality failures</p>
             </div>
             <div class="summary-card">
                 <h3>Pass Rate</h3>
-                <div class="value">75.0%</div>
+                <div class="value">100.0%</div>
                 <p>overall success</p>
             </div>
             <div class="summary-card">
                 <h3>Execution Time</h3>
-                <div class="value">4.33s</div>
+                <div class="value">18.25s</div>
                 <p>total runtime</p>
             </div>
         </div>
 
         <h2>Test Metadata</h2>
         <div class="details-row">
-            <strong>Timestamp:</strong> 2026-03-07 21:58:46
+            <strong>Timestamp:</strong> 2026-03-07 22:03:29
         </div>
         <div class="details-row">
             <strong>Version:</strong> v0.1.0-dev
@@ -170,12 +169,65 @@
             <tbody>
                 
                 <tr>
-                    <td><strong>no-disconnected-nodes</strong></td>
-                    <td>0</td>
-                    <td>1</td>
+                    <td><strong>max-depth</strong></td>
+                    <td>2</td>
+                    <td>2</td>
                     <td>
                         
-                        <span class="rate-low">0.00%</span>
+                        <span class="rate-high">100.00%</span>
+                        
+                    </td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
+                <tr>
+                    <td><strong>max-fanout</strong></td>
+                    <td>2</td>
+                    <td>2</td>
+                    <td>
+                        
+                        <span class="rate-high">100.00%</span>
+                        
+                    </td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
+                <tr>
+                    <td><strong>no-cycles</strong></td>
+                    <td>3</td>
+                    <td>3</td>
+                    <td>
+                        
+                        <span class="rate-high">100.00%</span>
+                        
+                    </td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
+                <tr>
+                    <td><strong>no-disconnected-nodes</strong></td>
+                    <td>4</td>
+                    <td>4</td>
+                    <td>
+                        
+                        <span class="rate-high">100.00%</span>
+                        
+                    </td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
+                <tr>
+                    <td><strong>no-duplicate-node-ids</strong></td>
+                    <td>3</td>
+                    <td>3</td>
+                    <td>
+                        
+                        <span class="rate-high">100.00%</span>
+                        
                     </td>
                     <td>0ms</td>
                     <td>0ms</td>
@@ -184,21 +236,6 @@
             </tbody>
         </table>
 
-        
-        <h2>Failed Cases</h2>
-        <div class="failed-cases">
-            
-            <div class="failed-case">
-                <h4>flowchart-edg-single-node</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error</span></div>
-                
-                <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error]</pre>
-                
-            </div>
-            
-        </div>
         
 
         <footer>

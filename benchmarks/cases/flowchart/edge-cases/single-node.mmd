@@ -1,5 +1,8 @@
 graph TD
-    A["Single Node"]
+    A["Node A"]
+    B["Node B"]
     
-    %% Single node should be valid for almost all rules
+    A --> B
+    
+    %% Two connected nodes should always pass
     %% @rule: *

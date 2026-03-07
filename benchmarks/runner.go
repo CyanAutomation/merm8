@@ -189,12 +189,12 @@ func (r *Runner) discoverCasesInDir(dir string, diagramType, category string) ([
 			// Severity depends on the rule: max-depth and max-fanout use warnings,
 			// other rules use errors (based on rule configuration)
 			expectedIssues := []ExpectedIssue{}
-			
+
 			// Check if the content indicates violations are expected (has violations mentioned)
 			// For edge-cases, default to no issues expected (boundary/passing cases)
 			// Violations folder always expects issues
 			shouldExpectIssue := category == "violations"
-			
+
 			if shouldExpectIssue {
 				if ruleID != "*" && ruleID != "" {
 					// Determine severity based on rule type
