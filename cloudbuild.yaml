@@ -122,6 +122,7 @@ steps:
       - --allow-unauthenticated
       - --set-env-vars
       - ALLOWED_ORIGINS=https://merm8-splash.vercel.app
+      - MERM8_API_URL=https://merm8-api-482194634678.europe-west1.run.app
     waitFor:
       - push-image
 
