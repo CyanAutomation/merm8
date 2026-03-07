@@ -1,10 +1,21 @@
 package parser
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/CyanAutomation/merm8/internal/model"
 )
+
+func assertNoPanic(t *testing.T, fn func()) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("unexpected panic: %v", r)
+		}
+	}()
+	fn()
+}
 
 func TestEnhanceASTWithSourceAnalysis_DisconnectedNodes(t *testing.T) {
 	source := `graph TD
@@ -261,9 +272,28 @@ func TestEnhanceASTWithSourceAnalysis_HyphenatedDuplicateAndDisconnected(t *test
 		t.Fatalf("expected disconnected [extra-node], got %v", diagram.DisconnectedNodeIDs)
 	}
 }
-func TestEnhanceASTWithSourceAnalysis_NilDiagram(t *testing.T) {
-	// Should not panic
-	EnhanceASTWithSourceAnalysis(nil, "A --> B")
+func TestEnhanceASTWithSourceAnalysis_NilDiagram_DefensiveNoPanicAndNoSharedStateMutation(t *testing.T) {
+	// Defensive API contract:
+	// nil diagram is treated as a no-op that returns immediately,
+	// never panics, and does not mutate any shared/parser-wide state.
+	probeSource := "graph TD\nA[One]\nA[Two]\nservice-node[Three]"
+
+	beforeNodeIDs := extractAllNodeIDsFromSource(probeSource)
+	beforeDuplicates := findDuplicateNodeIDs(probeSource)
+
+	assertNoPanic(t, func() {
+		EnhanceASTWithSourceAnalysis(nil, "A --> B")
+	})
+
+	afterNodeIDs := extractAllNodeIDsFromSource(probeSource)
+	afterDuplicates := findDuplicateNodeIDs(probeSource)
+
+	if !reflect.DeepEqual(beforeNodeIDs, afterNodeIDs) {
+		t.Fatalf("expected no parser shared-state mutation for node extraction; before=%v after=%v", beforeNodeIDs, afterNodeIDs)
+	}
+	if !reflect.DeepEqual(beforeDuplicates, afterDuplicates) {
+		t.Fatalf("expected no parser shared-state mutation for duplicate detection; before=%v after=%v", beforeDuplicates, afterDuplicates)
+	}
 }
 
 func TestEnhanceASTWithSourceAnalysis_EmptySource(t *testing.T) {
