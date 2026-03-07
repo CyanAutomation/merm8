@@ -4619,13 +4619,72 @@ A-->B`},
 	}
 }
 
+func TestV1AnalyseAliases_Integration_EmitDeprecationWarningAndMatchCanonicalResponse(t *testing.T) {
+	mux := newTestMuxWithRealParser(t, getParserScriptPath(t))
+
+	tests := []struct {
+		name          string
+		canonicalPath string
+		aliasPath     string
+		body          string
+		contentType   string
+	}{
+		{name: "json analyze", canonicalPath: "/v1/analyze", aliasPath: "/v1/analyse", body: `{"code":"graph TD;A-->B"}`, contentType: "application/json"},
+		{name: "raw analyze", canonicalPath: "/v1/analyze/raw", aliasPath: "/v1/analyse/raw", body: "graph TD\nA-->B", contentType: "text/plain"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			canonicalReq := httptest.NewRequest(http.MethodPost, tc.canonicalPath, strings.NewReader(tc.body))
+			canonicalReq.Header.Set("Content-Type", tc.contentType)
+			canonicalW := httptest.NewRecorder()
+			mux.ServeHTTP(canonicalW, canonicalReq)
+
+			if canonicalW.Code != http.StatusOK {
+				t.Fatalf("canonical route expected 200, got %d body=%s", canonicalW.Code, canonicalW.Body.String())
+			}
+
+			aliasReq := httptest.NewRequest(http.MethodPost, tc.aliasPath, strings.NewReader(tc.body))
+			aliasReq.Header.Set("Content-Type", tc.contentType)
+			aliasW := httptest.NewRecorder()
+			mux.ServeHTTP(aliasW, aliasReq)
+
+			if aliasW.Code != http.StatusOK {
+				t.Fatalf("alias route expected 200, got %d body=%s", aliasW.Code, aliasW.Body.String())
+			}
+			var canonicalResp map[string]any
+			if err := json.Unmarshal(canonicalW.Body.Bytes(), &canonicalResp); err != nil {
+				t.Fatalf("failed to decode canonical response: %v", err)
+			}
+			var aliasResp map[string]any
+			if err := json.Unmarshal(aliasW.Body.Bytes(), &aliasResp); err != nil {
+				t.Fatalf("failed to decode alias response: %v", err)
+			}
+			delete(canonicalResp, "timestamp")
+			delete(aliasResp, "timestamp")
+			if !reflect.DeepEqual(canonicalResp, aliasResp) {
+				t.Fatalf("expected alias response body to match canonical body (excluding timestamp)\ncanonical=%s\nalias=%s", canonicalW.Body.String(), aliasW.Body.String())
+			}
+			if got := canonicalW.Header().Get("Warning"); got != "" {
+				t.Fatalf("expected no Warning header on canonical route, got %q", got)
+			}
+			if got := aliasW.Header().Get("Warning"); got == "" {
+				t.Fatal("expected Warning header on /v1/analyse* alias route")
+			}
+			if got := aliasW.Header().Get("Deprecation"); got != "true" {
+				t.Fatalf("expected Deprecation=true on alias route, got %q", got)
+			}
+		})
+	}
+}
+
 func TestAnalyzeBearerAuthMiddleware_RequiresTokenOnProtectedAnalyzeRoutes(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{}, nil, nil
 	})
 	secured := api.AnalyzeBearerAuthMiddleware("s3cr3t", mux)
 
-	for _, path := range []string{"/analyze/raw", "/v1/analyze/raw", "/analyze/sarif", "/v1/analyze/sarif"} {
+	for _, path := range []string{"/analyze/raw", "/v1/analyze/raw", "/v1/analyse/raw", "/analyze/sarif", "/v1/analyze/sarif", "/v1/analyse"} {
 		t.Run(path, func(t *testing.T) {
 			var body string
 			contentType := "application/json"
@@ -4649,7 +4708,7 @@ func TestAnalyzeBearerAuthMiddleware_RequiresTokenOnProtectedAnalyzeRoutes(t *te
 }
 
 func TestAnalyzeRateLimitMiddleware_AppliesOnProtectedAnalyzeRoutes(t *testing.T) {
-	for _, path := range []string{"/analyze/raw", "/v1/analyze/raw", "/analyze/sarif", "/v1/analyze/sarif"} {
+	for _, path := range []string{"/analyze/raw", "/v1/analyze/raw", "/v1/analyse/raw", "/analyze/sarif", "/v1/analyze/sarif", "/v1/analyse"} {
 		t.Run(path, func(t *testing.T) {
 			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 				return &model.Diagram{}, nil, nil
