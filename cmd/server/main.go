@@ -70,14 +70,6 @@ func main() {
 	rootHandler = api.RequestIDMiddleware(rootHandler)
 	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
 
-	// Configure CORS with allowed origins from environment variable
-	allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
-	if allowedOrigins == "" {
-		// Default to Vercel frontend domain for merm8
-		allowedOrigins = "https://merm8-splash.vercel.app"
-	}
-	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
-
 	authToken := strings.TrimSpace(os.Getenv("ANALYZE_AUTH_TOKEN"))
 	rateLimitPerMinute := envInt("ANALYZE_RATE_LIMIT_PER_MINUTE", 0)
 	if deploymentMode == "production" && rateLimitPerMinute <= 0 {
@@ -105,6 +97,16 @@ func main() {
 	}
 	rootHandler = api.MetricsMiddleware(rootHandler, routePatterns, metrics)
 	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, logger)
+
+	// Configure CORS with allowed origins from environment variable.
+	// Apply this middleware last so it executes first on request entry,
+	// including short-circuit 401/429 responses from inner middleware.
+	allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
+	if allowedOrigins == "" {
+		// Default to Vercel frontend domain for merm8
+		allowedOrigins = "https://merm8-splash.vercel.app"
+	}
+	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
 
 	addr := fmt.Sprintf(":%s", port)
 	parserCfg := parser.ConfigFromEnv().EffectiveConfig()
