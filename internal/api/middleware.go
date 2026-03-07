@@ -351,7 +351,7 @@ func isProtectedAnalyzePath(path string) bool {
 func clientIdentifier(r *http.Request) string {
 	if remoteIP, ok := remoteIPFromAddr(r.RemoteAddr); ok {
 		if isTrustedProxy(remoteIP) {
-			if forwardedIP, ok := rightmostForwardedForIP(r.Header.Get("X-Forwarded-For")); ok {
+			if forwardedIP, ok := leftmostForwardedForIP(r.Header.Get("X-Forwarded-For")); ok {
 				return forwardedIP.String()
 			}
 		}
@@ -370,10 +370,9 @@ func clientIdentifier(r *http.Request) string {
 	return "unknown"
 }
 
-func rightmostForwardedForIP(header string) (netip.Addr, bool) {
-	parts := strings.Split(header, ",")
-	for i := len(parts) - 1; i >= 0; i-- {
-		candidate := strings.TrimSpace(parts[i])
+func leftmostForwardedForIP(header string) (netip.Addr, bool) {
+	for _, part := range strings.Split(header, ",") {
+		candidate := strings.TrimSpace(part)
 		if candidate == "" {
 			continue
 		}
