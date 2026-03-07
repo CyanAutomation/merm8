@@ -20,15 +20,17 @@ go run ./benchmarks/main.go
 ```
 
 This generates:
-- **HTML Report**: `benchmarks/reports/index.html` (interactive dashboard)
+- **HTML Report**: `benchmark.html` (interactive dashboard)
 - **JSON Results**: `benchmarks/reports/latest-results.json` (structured data)
 - **Text Summary**: Printed to stdout
 
 ### View Results
 
+> Historical note: `benchmarks/reports/index.html` may still be present as a temporary compatibility path, but `benchmark.html` is the canonical user-facing report location.
+
 ```bash
 # Open HTML report in browser
-open benchmarks/reports/index.html
+open benchmark.html
 
 # Or JSON results
 cat benchmarks/reports/latest-results.json | jq '.'
@@ -122,7 +124,7 @@ Baselines are snapshots of benchmark results at specific version points (e.g., v
 
 The benchmark runner generates two reports:
 
-1. **HTML Report** (`index.html`) — Interactive dashboard
+1. **HTML Report** (`benchmark.html`) — Interactive dashboard
    - Overall pass rate
    - Per-rule metrics (color-coded: green/yellow/red)
    - Failed case details

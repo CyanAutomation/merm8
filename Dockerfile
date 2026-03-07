@@ -61,6 +61,9 @@ COPY parser-node/parse.mjs ./parser-node/
 # Copy compiled Go binary from builder stage
 COPY --from=go-builder /app/mermaid-lint .
 
+# Copy prebuilt benchmark report for runtime access
+COPY benchmark.html ./benchmark.html
+
 # Copy go.mod so parser can locate repository root
 COPY go.mod .
 
