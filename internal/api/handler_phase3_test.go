@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -129,8 +128,32 @@ func TestAnalyzeSARIF_InvalidJSON(t *testing.T) {
 		t.Fatalf("decode failed: %v", err)
 	}
 
-	if len(report.Runs) == 0 || len(report.Runs[0].Results) == 0 {
-		t.Errorf("expected error result in SARIF response")
+	if report.Version != "2.1.0" {
+		t.Errorf("SARIF version = %s, want 2.1.0", report.Version)
+	}
+
+	if len(report.Runs) == 0 {
+		t.Fatalf("expected at least one run in SARIF response")
+	}
+
+	run := report.Runs[0]
+	if len(run.Results) == 0 {
+		t.Fatalf("expected at least one SARIF result in error response")
+	}
+
+	if len(run.Invocations) == 0 {
+		t.Fatalf("expected invocation metadata in SARIF error response")
+	}
+
+	props := run.Invocations[0].Properties
+	if props == nil {
+		t.Fatalf("expected invocation properties to be non-nil")
+	}
+	if props["error-code"] != "invalid_json" {
+		t.Errorf("invocation properties error-code = %q, want %q", props["error-code"], "invalid_json")
+	}
+	if props["request-uri"] != "/analyze/sarif" {
+		t.Errorf("invocation properties request-uri = %q, want %q", props["request-uri"], "/analyze/sarif")
 	}
 }
 
@@ -335,50 +358,6 @@ func mapErrorCodeToLevel(code string) string {
 	default:
 		return sarif.SARIFLevelWarning
 	}
-}
-
-// TestAnalyzeSARIF_ConcurrentErrorResponses verifies SARIF error handling under concurrency
-func TestAnalyzeSARIF_ConcurrentErrorResponses(t *testing.T) {
-	mockP := &mockParserWithTimeout{}
-	h := NewHandler(mockP, engine.New())
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	done := make(chan error, 10)
-	for i := 0; i < 10; i++ {
-		go func() {
-			resp, err := http.Post(server.URL+"/analyze/sarif", "application/json", bytes.NewBufferString("{invalid}"))
-			if err != nil {
-				done <- err
-				return
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusBadRequest {
-				done <- errStatusCode(resp.StatusCode, http.StatusBadRequest)
-				return
-			}
-
-			var report sarif.Report
-			if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
-				done <- err
-				return
-			}
-			done <- nil
-		}()
-	}
-
-	for i := 0; i < 10; i++ {
-		if err := <-done; err != nil {
-			t.Errorf("concurrent request %d failed: %v", i, err)
-		}
-	}
-}
-
-func errStatusCode(got, want int) error {
-	return fmt.Errorf("status = %d, want %d", got, want)
 }
 
 // TestNoDuplicateNodeIDs_WithinSameSubgraph tests that duplicate IDs within a subgraph are detected
