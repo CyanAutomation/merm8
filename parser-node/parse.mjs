@@ -243,7 +243,7 @@ async function extractAST(mermaidAPI, source, diagramType) {
     return ast;
   }
 
-  ast.direction = db.direction ?? 'TD';
+  ast.direction = normalizeFlowchartDirection(db.direction);
 
   const rawEdges = Array.isArray(db.edges) ? db.edges : [];
   for (const e of rawEdges) {
@@ -347,6 +347,15 @@ function findEdgeLocation(lines, from, to) {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeFlowchartDirection(dir) {
+  const normalized = String(dir || '').trim().toUpperCase();
+  if (normalized === 'TB') return 'TD';
+  if (normalized === 'TD' || normalized === 'LR' || normalized === 'RL' || normalized === 'BT') {
+    return normalized;
+  }
+  return 'TD';
 }
 
 function normalizeNodeID(id) {
