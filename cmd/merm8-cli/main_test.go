@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -64,8 +65,53 @@ func TestParseArgsDefaultsToStdin(t *testing.T) {
 }
 
 func TestParseArgsFormatValidation(t *testing.T) {
-	if _, err := parseArgs([]string{"--format", "xml"}); err == nil {
-		t.Fatalf("expected format validation error")
+	t.Parallel()
+
+	validTests := []struct {
+		name       string
+		formatFlag string
+		wantFormat string
+	}{
+		{name: "text preserved", formatFlag: "text", wantFormat: "text"},
+		{name: "json preserved", formatFlag: "json", wantFormat: "json"},
+		{name: "text normalized to lower", formatFlag: "TEXT", wantFormat: "text"},
+		{name: "json normalized and trimmed", formatFlag: " Json ", wantFormat: "json"},
+	}
+
+	for _, tt := range validTests {
+		tt := tt
+		t.Run("valid_"+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			opts, err := parseArgs([]string{"--format", tt.formatFlag})
+			if err != nil {
+				t.Fatalf("parseArgs error: %v", err)
+			}
+			if opts.Format != tt.wantFormat {
+				t.Fatalf("expected normalized format %q, got %q", tt.wantFormat, opts.Format)
+			}
+		})
+	}
+
+	invalidFormats := []string{"xml", "yaml", "", "  "}
+	for _, invalidFormat := range invalidFormats {
+		invalidFormat := invalidFormat
+		t.Run("invalid_"+invalidFormat, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := parseArgs([]string{"--format", invalidFormat})
+			if err == nil {
+				t.Fatalf("expected format validation error for format %q", invalidFormat)
+			}
+
+			errText := err.Error()
+			if !strings.Contains(errText, "unsupported --format") {
+				t.Fatalf("expected error to mention unsupported format, got %q", errText)
+			}
+			if !strings.Contains(errText, "text or json") {
+				t.Fatalf("expected error to mention allowed formats, got %q", errText)
+			}
+		})
 	}
 }
 
