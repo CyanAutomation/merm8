@@ -22,7 +22,7 @@ func TestHelpForSyntaxError_CompileCheck(t *testing.T) {
 	t.Logf("Testing basic help suggestion functionality")
 	t.Logf("Syntax Error: %+v", syntaxErr)
 	t.Logf("Code length: %d", len(code))
-	
+
 	// Verify we can create a syntax error without panicking
 	if syntaxErr == nil {
 		t.Fatal("expected non-nil syntax error")
