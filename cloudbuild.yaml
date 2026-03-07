@@ -121,7 +121,7 @@ steps:
       - ${_SERVICE_PORT}
       - --allow-unauthenticated
       - --set-env-vars
-      - ALLOWED_ORIGINS=https://merm8-splash-nazb4dydv-cyanautomations-projects.vercel.app,https://merm8-splash.vercel.app
+      - ALLOWED_ORIGINS=https://merm8-splash.vercel.app
     waitFor:
       - push-image
 
