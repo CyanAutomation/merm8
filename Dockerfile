@@ -28,6 +28,12 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-X main.appVersion=${VERSION}" \
     -o /app/mermaid-lint ./cmd/server
 
+# Ensure benchmark artifact always exists for downstream image stages.
+# CI can pre-generate benchmark.html in the workspace, but local builds may not.
+RUN if [ ! -f /src/benchmark.html ]; then \
+      printf '%s\n' '<!doctype html><html><body><p>benchmark.html was not pre-generated. Run `go run ./benchmarks/main.go` for a full report.</p></body></html>' > /src/benchmark.html; \
+    fi
+
 # ─────────────────────────────────────────────────────────────────
 # Stage 2 – Lightweight runtime with Node + Mermaid
 # ─────────────────────────────────────────────────────────────────
@@ -61,8 +67,8 @@ COPY parser-node/parse.mjs ./parser-node/
 # Copy compiled Go binary from builder stage
 COPY --from=go-builder /app/mermaid-lint .
 
-# Copy prebuilt benchmark report for runtime access
-COPY benchmark.html ./benchmark.html
+# Copy benchmark report (CI-prebuilt if present, fallback placeholder otherwise)
+COPY --from=go-builder /src/benchmark.html ./benchmark.html
 
 # Copy go.mod so parser can locate repository root
 COPY go.mod .
