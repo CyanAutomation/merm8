@@ -184,10 +184,15 @@
             "description": "API-level error details for non-200 responses.",
             "nullable": true
           },
+          "help-suggestion": {
+            "$ref": "#/components/schemas/HelpSuggestion",
+            "description": "Focused remediation guidance for common syntax/config mistakes.",
+            "nullable": true
+          },
           "hints": {
             "description": "Structured syntax remediation hints. Provided when valid=false and syntax-error is present.",
             "items": {
-              "$ref": "#/components/schemas/ResponseHint"
+              "$ref": "#/components/schemas/Hint"
             },
             "type": "array"
           },
@@ -476,6 +481,83 @@
           "parser-ready",
           "lint-supported",
           "total-requests"
+        ],
+        "type": "object"
+      },
+      "HelpSuggestion": {
+        "properties": {
+          "correct-example": {
+            "description": "Corrected code snippet.",
+            "type": "string"
+          },
+          "doc-link": {
+            "description": "Reference documentation URL or path fragment.",
+            "type": "string"
+          },
+          "explanation": {
+            "description": "One-paragraph explanation of the likely issue.",
+            "type": "string"
+          },
+          "fix-action": {
+            "description": "Actionable one-line remediation instruction.",
+            "type": "string"
+          },
+          "title": {
+            "description": "Short help topic title.",
+            "example": "Arrow operator syntax",
+            "type": "string"
+          },
+          "wrong-example": {
+            "description": "Incorrect code snippet.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "explanation",
+          "wrong-example",
+          "correct-example",
+          "doc-link",
+          "fix-action"
+        ],
+        "type": "object"
+      },
+      "Hint": {
+        "properties": {
+          "applies-to": {
+            "$ref": "#/components/schemas/HintAppliesTo"
+          },
+          "code": {
+            "description": "Stable machine-readable hint code.",
+            "example": "graphviz_syntax_detected",
+            "type": "string"
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "fix-example": {
+            "description": "Optional concise replacement snippet.",
+            "type": "string"
+          },
+          "message": {
+            "description": "Human-readable hint message.",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "warning"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "severity",
+          "confidence"
         ],
         "type": "object"
       },
