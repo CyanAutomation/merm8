@@ -63,14 +63,21 @@ func (m *mockParserWithReturn) VersionInfo() (*parser.VersionInfo, error) {
 	return &parser.VersionInfo{}, nil
 }
 
-type repeatedByteReader struct {
-	b byte
+type repeatedPatternReader struct {
+	pattern []byte
+	offset  int
 }
 
-func (r repeatedByteReader) Read(p []byte) (int, error) {
-	for i := range p {
-		p[i] = r.b
+func (r *repeatedPatternReader) Read(p []byte) (int, error) {
+	if len(r.pattern) == 0 {
+		return 0, io.EOF
 	}
+
+	for i := range p {
+		p[i] = r.pattern[r.offset]
+		r.offset = (r.offset + 1) % len(r.pattern)
+	}
+
 	return len(p), nil
 }
 
@@ -242,11 +249,18 @@ func TestAnalyzeSARIF_RequestTooLarge(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	// Build a bounded streaming body that exceeds maxAnalyzeBodyBytes by 1 byte
-	// without creating a large JSON string in memory.
+	// Build a bounded streaming body that exceeds maxAnalyzeBodyBytes by at
+	// least one byte without creating a large JSON string in memory. The code
+	// payload uses repeated JSON escape sequences (\u0041) so the request body
+	// remains valid JSON if read in full.
+	escapedUnit := []byte(`\u0041`)
+	escapedUnitLen := int64(len(escapedUnit))
+	minCodeBytes := maxAnalyzeBodyBytes + 1
+	codeBytes := ((minCodeBytes + escapedUnitLen - 1) / escapedUnitLen) * escapedUnitLen
+
 	bodyReader := io.MultiReader(
 		strings.NewReader(`{"code":"`),
-		io.LimitReader(repeatedByteReader{b: 'A'}, maxAnalyzeBodyBytes+1),
+		io.LimitReader(&repeatedPatternReader{pattern: escapedUnit}, codeBytes),
 		strings.NewReader(`"}`),
 	)
 
