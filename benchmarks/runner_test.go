@@ -220,7 +220,7 @@ func TestBenchmarkCase_JSONMarshaling(t *testing.T) {
 	}
 }
 
-func TestBenchmarkCase_JSONMarshaling_InvalidInput(t *testing.T) {
+func TestBenchmarkCase_JSONMarshaling_InvalidRawConfig(t *testing.T) {
 	bc := benchmarks.BenchmarkCase{
 		ID:          "test-invalid",
 		Description: "Invalid config raw JSON should fail marshaling",
@@ -228,6 +228,10 @@ func TestBenchmarkCase_JSONMarshaling_InvalidInput(t *testing.T) {
 		Category:    "violation",
 		DiagramType: "flowchart",
 		Config:      json.RawMessage(`{"enabled":`),
+	}
+
+	if _, err := json.Marshal(bc.Config); err == nil {
+		t.Fatal("expected json.Marshal on invalid json.RawMessage to fail")
 	}
 
 	_, err := benchmarks.MarshalBenchmarkCase(bc)
