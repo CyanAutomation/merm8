@@ -272,27 +272,31 @@ func TestEnhanceASTWithSourceAnalysis_HyphenatedDuplicateAndDisconnected(t *test
 		t.Fatalf("expected disconnected [extra-node], got %v", diagram.DisconnectedNodeIDs)
 	}
 }
-func TestEnhanceASTWithSourceAnalysis_NilDiagram_DefensiveNoPanicAndNoSharedStateMutation(t *testing.T) {
+func TestEnhanceASTWithSourceAnalysis_NilDiagram_DefensiveNoPanicAndNoBehaviorMutation(t *testing.T) {
 	// Defensive API contract:
-	// nil diagram is treated as a no-op that returns immediately,
-	// never panics, and does not mutate any shared/parser-wide state.
-	probeSource := "graph TD\nA[One]\nA[Two]\nservice-node[Three]"
+	// nil diagram is treated as a no-op that returns immediately and never panics.
+	// To guard against accidental parser-wide state mutation, verify the nil call
+	// does not change behavior of a subsequent non-nil enhancement.
+	source := "graph TD\nA[One]\nA[Two]\nservice-node[Three]\nA --> service-node"
 
-	beforeNodeIDs := extractAllNodeIDsFromSource(probeSource)
-	beforeDuplicates := findDuplicateNodeIDs(probeSource)
+	expected := &model.Diagram{Type: model.DiagramTypeFlowchart}
+	EnhanceASTWithSourceAnalysis(expected, source)
 
 	assertNoPanic(t, func() {
 		EnhanceASTWithSourceAnalysis(nil, "A --> B")
 	})
 
-	afterNodeIDs := extractAllNodeIDsFromSource(probeSource)
-	afterDuplicates := findDuplicateNodeIDs(probeSource)
+	actual := &model.Diagram{Type: model.DiagramTypeFlowchart}
+	EnhanceASTWithSourceAnalysis(actual, source)
 
-	if !reflect.DeepEqual(beforeNodeIDs, afterNodeIDs) {
-		t.Fatalf("expected no parser shared-state mutation for node extraction; before=%v after=%v", beforeNodeIDs, afterNodeIDs)
+	if !reflect.DeepEqual(expected.SourceNodeIDs, actual.SourceNodeIDs) {
+		t.Fatalf("expected SourceNodeIDs to be unchanged after nil-call; expected=%v actual=%v", expected.SourceNodeIDs, actual.SourceNodeIDs)
 	}
-	if !reflect.DeepEqual(beforeDuplicates, afterDuplicates) {
-		t.Fatalf("expected no parser shared-state mutation for duplicate detection; before=%v after=%v", beforeDuplicates, afterDuplicates)
+	if !reflect.DeepEqual(expected.DisconnectedNodeIDs, actual.DisconnectedNodeIDs) {
+		t.Fatalf("expected DisconnectedNodeIDs to be unchanged after nil-call; expected=%v actual=%v", expected.DisconnectedNodeIDs, actual.DisconnectedNodeIDs)
+	}
+	if !reflect.DeepEqual(expected.DuplicateNodeIDs, actual.DuplicateNodeIDs) {
+		t.Fatalf("expected DuplicateNodeIDs to be unchanged after nil-call; expected=%v actual=%v", expected.DuplicateNodeIDs, actual.DuplicateNodeIDs)
 	}
 }
 
