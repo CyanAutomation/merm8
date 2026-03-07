@@ -29,6 +29,8 @@ func MetricsMiddleware(next http.Handler, routePatterns map[string]string, metri
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		start := time.Now()
 		next.ServeHTTP(recorder, r)
-		metrics.ObserveHTTPRequest(route, r.Method, recorder.status, time.Since(start))
+		if metrics != nil {
+			metrics.ObserveHTTPRequest(route, r.Method, recorder.status, time.Since(start))
+		}
 	})
 }
