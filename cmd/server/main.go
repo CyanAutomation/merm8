@@ -74,7 +74,7 @@ func main() {
 	allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
 	if allowedOrigins == "" {
 		// Default to Vercel frontend domain for merm8
-		allowedOrigins = "https://merm8-splash-nazb4dydy-cyanautomations-projects.vercel.app"
+		allowedOrigins = "https://merm8-splash.vercel.app"
 	}
 	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
 
