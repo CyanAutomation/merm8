@@ -4382,6 +4382,8 @@ func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
 		{method: http.MethodGet, path: "/spec", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/docs", want: http.StatusOK},
 		{method: http.MethodGet, path: "/docs", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/benchmark.html", want: http.StatusNotFound},
+		{method: http.MethodGet, path: "/benchmark.html", want: http.StatusNotFound},
 		{method: http.MethodGet, path: "/v1/healthz", want: http.StatusOK},
 		{method: http.MethodGet, path: "/healthz", want: http.StatusOK},
 		{method: http.MethodGet, path: "/", want: http.StatusOK},
@@ -4409,6 +4411,89 @@ func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
 		})
 	}
 
+}
+
+func TestServeBenchmark_Returns200WhenFileExists(t *testing.T) {
+	t.Setenv("MERM8_BENCHMARK_HTML_PATH", filepath.Join(t.TempDir(), "benchmark.html"))
+
+	benchmarkPath := os.Getenv("MERM8_BENCHMARK_HTML_PATH")
+	if err := os.WriteFile(benchmarkPath, []byte("<html><body>benchmark ok</body></html>"), 0o644); err != nil {
+		t.Fatalf("failed to write benchmark html fixture: %v", err)
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/benchmark.html", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
+		t.Fatalf("expected text/html content type, got %q", got)
+	}
+	if got := w.Body.String(); got != "<html><body>benchmark ok</body></html>" {
+		t.Fatalf("unexpected benchmark body: %q", got)
+	}
+}
+
+func TestServeBenchmark_Returns404WhenFileMissing(t *testing.T) {
+	t.Setenv("MERM8_BENCHMARK_HTML_PATH", filepath.Join(t.TempDir(), "missing-benchmark.html"))
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/benchmark.html", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("expected application/json content type, got %q", got)
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected JSON response body, got decode error: %v", err)
+	}
+	if payload["error"] == "" {
+		t.Fatalf("expected non-empty error message, got payload=%v", payload)
+	}
+}
+
+func TestServeBenchmark_DoesNotInterfereWithHealthEndpoints(t *testing.T) {
+	t.Setenv("MERM8_BENCHMARK_HTML_PATH", filepath.Join(t.TempDir(), "missing-benchmark.html"))
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	healthReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	healthW := httptest.NewRecorder()
+	mux.ServeHTTP(healthW, healthReq)
+	if healthW.Code != http.StatusOK {
+		t.Fatalf("expected GET / to remain healthy with 200, got %d", healthW.Code)
+	}
+
+	healthzReq := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	healthzW := httptest.NewRecorder()
+	mux.ServeHTTP(healthzW, healthzReq)
+	if healthzW.Code != http.StatusOK {
+		t.Fatalf("expected GET /healthz to remain healthy with 200, got %d", healthzW.Code)
+	}
+
+	benchmarkReq := httptest.NewRequest(http.MethodGet, "/benchmark.html", nil)
+	benchmarkW := httptest.NewRecorder()
+	mux.ServeHTTP(benchmarkW, benchmarkReq)
+	if benchmarkW.Code != http.StatusNotFound {
+		t.Fatalf("expected benchmark endpoint 404 for missing file, got %d", benchmarkW.Code)
+	}
 }
 
 func TestLegacyAnalyzeAliases_WithLegacyConfigEmitsDeprecationHeaders(t *testing.T) {

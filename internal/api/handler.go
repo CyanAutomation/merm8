@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +27,12 @@ import (
 )
 
 const maxAnalyzeBodyBytes int64 = 1 << 20 // 1 MiB
+
+const (
+	defaultBenchmarkHTMLPath = "/app/benchmark.html"
+	benchmarkHTMLPathEnvVar  = "MERM8_BENCHMARK_HTML_PATH"
+)
+
 // serverBusyRetryAfterSeconds defines the stable API contract for 503 server_busy
 // responses on analyze endpoints. Clients should combine this floor with
 // jittered exponential backoff to avoid synchronized retries.
@@ -682,6 +689,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/analyze/sarif", h.AnalyzeSARIF)
 	mux.HandleFunc("GET /v1/spec", h.ServeSpec)
 	mux.HandleFunc("GET /v1/docs", h.ServeSwagger)
+	mux.HandleFunc("GET /v1/benchmark.html", h.ServeBenchmark)
 	mux.HandleFunc("GET /v1/config-versions", h.ConfigVersions)
 
 	// Legacy unversioned compatibility aliases (including probe-friendly root path).
@@ -703,6 +711,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /analyze/sarif", h.AnalyzeSARIF)
 	mux.HandleFunc("GET /spec", h.ServeSpec)
 	mux.HandleFunc("GET /docs", h.ServeSwagger)
+	mux.HandleFunc("GET /benchmark.html", h.ServeBenchmark)
 	mux.HandleFunc("GET /config-versions", h.ConfigVersions)
 }
 
@@ -2474,6 +2483,32 @@ func (h *Handler) ServeSwagger(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	w.Write(swaggerHTML)
+}
+
+// ServeBenchmark serves a benchmark HTML asset from disk.
+func (h *Handler) ServeBenchmark(w http.ResponseWriter, r *http.Request) {
+	benchmarkPath := strings.TrimSpace(os.Getenv(benchmarkHTMLPathEnvVar))
+	if benchmarkPath == "" {
+		benchmarkPath = defaultBenchmarkHTMLPath
+	}
+
+	content, err := os.ReadFile(benchmarkPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeJSON(w, http.StatusNotFound, map[string]string{
+				"error": fmt.Sprintf("benchmark file not found at %q", benchmarkPath),
+			})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to read benchmark file",
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(content)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
