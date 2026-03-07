@@ -29,8 +29,12 @@ import (
 const maxAnalyzeBodyBytes int64 = 1 << 20 // 1 MiB
 
 const (
-	defaultBenchmarkHTMLPath = "/app/benchmark.html"
-	benchmarkHTMLPathEnvVar  = "MERM8_BENCHMARK_HTML_PATH"
+	defaultBenchmarkHTMLPath      = "/app/benchmark.html"
+	benchmarkHTMLPathEnvVar       = "MERM8_BENCHMARK_HTML_PATH"
+	benchmarkStatusHeader         = "X-Merm8-Benchmark-Status"
+	benchmarkStatusGenerated      = "generated"
+	benchmarkStatusPlaceholder    = "placeholder"
+	benchmarkPlaceholderSignature = "benchmark.html was not pre-generated"
 )
 
 // serverBusyRetryAfterSeconds defines the stable API contract for 503 server_busy
@@ -2568,7 +2572,13 @@ func (h *Handler) ServeBenchmark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	status := benchmarkStatusGenerated
+	if strings.Contains(string(content), benchmarkPlaceholderSignature) {
+		status = benchmarkStatusPlaceholder
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set(benchmarkStatusHeader, status)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(content)
 }

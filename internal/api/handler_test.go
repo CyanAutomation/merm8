@@ -797,7 +797,6 @@ func syntaxErrorResponseForEndpoint(t *testing.T, endpoint, payload, contentType
 	return resp
 }
 
-
 func assertHelpSuggestionContract(t *testing.T, resp map[string]interface{}, wantPresent bool) {
 	t.Helper()
 
@@ -4536,8 +4535,36 @@ func TestServeBenchmark_Returns200WhenFileExists(t *testing.T) {
 	if got := w.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
 		t.Fatalf("expected text/html content type, got %q", got)
 	}
+	if got := w.Header().Get("X-Merm8-Benchmark-Status"); got != "generated" {
+		t.Fatalf("expected generated benchmark status header, got %q", got)
+	}
 	if got := w.Body.String(); got != "<html><body>benchmark ok</body></html>" {
 		t.Fatalf("unexpected benchmark body: %q", got)
+	}
+}
+
+func TestServeBenchmark_ReturnsPlaceholderStatusForPlaceholderContent(t *testing.T) {
+	t.Setenv("MERM8_BENCHMARK_HTML_PATH", filepath.Join(t.TempDir(), "benchmark.html"))
+
+	benchmarkPath := os.Getenv("MERM8_BENCHMARK_HTML_PATH")
+	placeholder := "<html><body>benchmark.html was not pre-generated for this deployment</body></html>"
+	if err := os.WriteFile(benchmarkPath, []byte(placeholder), 0o644); err != nil {
+		t.Fatalf("failed to write benchmark html fixture: %v", err)
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/benchmark.html", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("X-Merm8-Benchmark-Status"); got != "placeholder" {
+		t.Fatalf("expected placeholder benchmark status header, got %q", got)
 	}
 }
 
