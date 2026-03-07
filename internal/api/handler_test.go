@@ -4848,6 +4848,150 @@ func TestAnalyzeRaw_ValidDiagram_JSON(t *testing.T) {
 	}
 }
 
+func TestAnalyzeRaw_ConfigOverrideChangesOutput(t *testing.T) {
+	diagram := &model.Diagram{
+		Type: model.DiagramTypeFlowchart,
+		Nodes: []model.Node{
+			{ID: "A"}, {ID: "B"}, {ID: "C"},
+		},
+		Edges: []model.Edge{
+			{From: "A", To: "B"},
+			{From: "A", To: "C"},
+		},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	baseBody, _ := json.Marshal(map[string]any{
+		"code": "graph TD\n  A-->B\n  A-->C",
+	})
+	baseReq := httptest.NewRequest(http.MethodPost, "/analyze/raw", bytes.NewReader(baseBody))
+	baseReq.Header.Set("Content-Type", "application/json")
+	baseW := httptest.NewRecorder()
+	mux.ServeHTTP(baseW, baseReq)
+	if baseW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for baseline request, got %d body=%s", baseW.Code, baseW.Body.String())
+	}
+
+	var baseResp map[string]any
+	if err := json.Unmarshal(baseW.Body.Bytes(), &baseResp); err != nil {
+		t.Fatalf("decode baseline response: %v", err)
+	}
+	baseIssues, ok := baseResp["issues"].([]any)
+	if !ok {
+		t.Fatalf("expected baseline issues array, got %T", baseResp["issues"])
+	}
+	if len(baseIssues) != 0 {
+		t.Fatalf("expected no baseline issues with default config, got %#v", baseIssues)
+	}
+
+	overrideBody, _ := json.Marshal(map[string]any{
+		"code": "graph TD\n  A-->B\n  A-->C",
+		"config": map[string]any{
+			"schema-version": "v1",
+			"rules": map[string]any{
+				"max-fanout": map[string]any{"limit": 1},
+			},
+		},
+	})
+	overrideReq := httptest.NewRequest(http.MethodPost, "/analyze/raw", bytes.NewReader(overrideBody))
+	overrideReq.Header.Set("Content-Type", "application/json")
+	overrideW := httptest.NewRecorder()
+	mux.ServeHTTP(overrideW, overrideReq)
+	if overrideW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for override request, got %d body=%s", overrideW.Code, overrideW.Body.String())
+	}
+
+	var overrideResp map[string]any
+	if err := json.Unmarshal(overrideW.Body.Bytes(), &overrideResp); err != nil {
+		t.Fatalf("decode override response: %v", err)
+	}
+	overrideIssues, ok := overrideResp["issues"].([]any)
+	if !ok {
+		t.Fatalf("expected override issues array, got %T", overrideResp["issues"])
+	}
+	if len(overrideIssues) != 1 {
+		t.Fatalf("expected exactly one issue with max-fanout.limit=1, got %#v", overrideIssues)
+	}
+	overrideIssue, ok := overrideIssues[0].(map[string]any)
+	if !ok || overrideIssue["rule-id"] != "max-fanout" {
+		t.Fatalf("expected max-fanout issue, got %#v", overrideIssues[0])
+	}
+}
+
+func TestAnalyze_ConfigConsistencyAcrossAnalyzeRawAndSARIF(t *testing.T) {
+	diagram := &model.Diagram{
+		Type: model.DiagramTypeFlowchart,
+		Nodes: []model.Node{
+			{ID: "A"}, {ID: "B"}, {ID: "C"},
+		},
+		Edges: []model.Edge{
+			{From: "A", To: "B"},
+			{From: "A", To: "C"},
+		},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]any{
+		"code": "graph TD\n  A-->B\n  A-->C",
+		"config": map[string]any{
+			"schema-version": "v1",
+			"rules": map[string]any{
+				"max-fanout": map[string]any{"limit": 1},
+			},
+		},
+	})
+
+	for _, endpoint := range []string{"/analyze", "/analyze/raw", "/analyze/sarif"} {
+		t.Run(endpoint, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200 for %s, got %d body=%s", endpoint, w.Code, w.Body.String())
+			}
+
+			if endpoint == "/analyze/sarif" {
+				var report map[string]any
+				if err := json.Unmarshal(w.Body.Bytes(), &report); err != nil {
+					t.Fatalf("decode sarif report: %v", err)
+				}
+				runs := report["runs"].([]any)
+				results := runs[0].(map[string]any)["results"].([]any)
+				if len(results) != 1 {
+					t.Fatalf("expected exactly one SARIF result, got %#v", results)
+				}
+				if got := results[0].(map[string]any)["ruleId"]; got != "max-fanout" {
+					t.Fatalf("expected SARIF ruleId max-fanout, got %#v", got)
+				}
+				return
+			}
+
+			var resp map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			issues, ok := resp["issues"].([]any)
+			if !ok {
+				t.Fatalf("expected issues array, got %T", resp["issues"])
+			}
+			if len(issues) != 1 {
+				t.Fatalf("expected exactly one issue for %s, got %#v", endpoint, issues)
+			}
+			if got := issues[0].(map[string]any)["rule-id"]; got != "max-fanout" {
+				t.Fatalf("expected rule-id max-fanout for %s, got %#v", endpoint, got)
+			}
+		})
+	}
+}
+
 // TestAnalyzeRaw_EmptyRequest tests /analyze/raw with empty body.
 func TestAnalyzeRaw_EmptyRequest(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
