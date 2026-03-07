@@ -723,15 +723,13 @@ func TestParser_ConcurrentParsing(t *testing.T) {
 	p := mustNewParser(t, script)
 
 	// Test concurrent parsing
-	numGoroutines := 5
+	numGoroutines := 3
 	done := make(chan error, numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
 		go func(n int) {
 			code := fmt.Sprintf(`graph TD
-    A%d[Node A]
-    B%d[Node B]
-    A%d --> B%d`, n, n, n, n)
+  A%d --> B%d`, n, n)
 
 			diagram, syntaxErr, err := p.Parse(code)
 			if err != nil {

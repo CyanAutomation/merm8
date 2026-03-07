@@ -267,3 +267,27 @@ func TestCORSMiddleware_EmptyAllowedOrigins(t *testing.T) {
 		t.Fatalf("expected no CORS header when no origins are configured, got %q", got)
 	}
 }
+
+func TestCORSMiddleware_AllowsErrorResponsesWithCORS(t *testing.T) {
+	allowedOrigins := "https://example.com"
+	middleware := CORSMiddleware(allowedOrigins)
+
+	// Test that CORS headers are set even for error responses (e.g., 503)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("Service Unavailable"))
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", nil)
+	req.Header.Set("Origin", "https://example.com")
+	rec := httptest.NewRecorder()
+
+	middleware(next).ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+		t.Fatalf("expected CORS header on 503 response, got %q", got)
+	}
+	if got := rec.Code; got != http.StatusServiceUnavailable {
+		t.Fatalf("expected status 503, got %d", got)
+	}
+}
