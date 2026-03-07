@@ -477,6 +477,8 @@ type Handler struct {
 	startTime           time.Time
 	mu                  sync.RWMutex
 	strictConfigSchema  bool
+	// parserConcurrency is initialized once in NewHandler and intentionally never
+	// replaced, so all requests share one stable limiter instance.
 	parserConcurrency   *parserConcurrencyLimiter
 }
 
@@ -651,19 +653,11 @@ func (h *Handler) SetParserConcurrencyLimit(limit int) {
 }
 
 func (h *Handler) tryAcquireParserSlot() (func(), bool) {
-	h.mu.RLock()
-	limiter := h.parserConcurrency
-	h.mu.RUnlock()
-
-	if limiter == nil {
-		return func() {}, true
-	}
-
-	if !limiter.TryAcquire() {
+	if !h.parserConcurrency.TryAcquire() {
 		return nil, false
 	}
 
-	return limiter.Release, true
+	return h.parserConcurrency.Release, true
 }
 
 // SetMetricsHandler configures the exporter used by GET /metrics.
