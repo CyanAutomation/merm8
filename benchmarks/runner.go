@@ -184,6 +184,20 @@ func (r *Runner) discoverCasesInDir(dir string, diagramType, category string) ([
 				caseID = fmt.Sprintf("%s-%s-%s", diagramType, category[:3], caseID)
 			}
 
+			// For "valid" category, expect no issues
+			// For "violations" and "edge-cases", expect issues matching the rule (with error severity)
+			// Actual severity will be determined by the rule configuration
+			expectedIssues := []ExpectedIssue{}
+			if category == "violations" || category == "edge-cases" {
+				if ruleID != "*" && ruleID != "" {
+					expectedIssues = append(expectedIssues, ExpectedIssue{
+						RuleID:   ruleID,
+						Severity: "error",
+					})
+				}
+			}
+			// "valid" category expects no issues, so expectedIssues remains []
+
 			bc := &BenchmarkCase{
 				ID:             caseID,
 				Description:    fmt.Sprintf("%s (%s)", strings.ReplaceAll(caseID, "-", " "), category),
@@ -192,7 +206,7 @@ func (r *Runner) discoverCasesInDir(dir string, diagramType, category string) ([
 				Category:       category,
 				DiagramType:    diagramType,
 				Tags:           []string{},
-				ExpectedIssues: []ExpectedIssue{},
+				ExpectedIssues: expectedIssues,
 				CreatedDate:    time.Now().Format(time.RFC3339),
 				AddedInVersion: "v0.1.0",
 			}
