@@ -31,41 +31,42 @@ func (r NoDisconnectedNodes) Run(d *model.Diagram, cfg Config) []model.Issue {
 
 	disconnectedIDs := make(map[string]struct{})
 
+	// Single-node diagram with no edges is fully exempt (both graph and source analysis).
+	singleNodeNoEdgesExempt := len(d.Nodes) == 1 && len(d.Edges) == 0
+
 	// Keep current graph-based logic as one source of disconnected nodes.
-	switch {
-	// Single-node diagram with no edges is exempt to avoid false positives.
-	case len(d.Nodes) == 1 && len(d.Edges) == 0:
-		// No graph-derived disconnected node IDs.
+	if !singleNodeNoEdgesExempt {
+		switch {
+		// If we have no nodes there is nothing graph-derived to report.
+		case len(d.Nodes) == 0:
+			// No graph-derived disconnected node IDs.
 
-	// If we have no nodes there is nothing graph-derived to report.
-	case len(d.Nodes) == 0:
-		// No graph-derived disconnected node IDs.
-
-	// If no edges at all but multiple nodes, all are disconnected.
-	case len(d.Edges) == 0:
-		for i := range d.Nodes {
-			disconnectedIDs[d.Nodes[i].ID] = struct{}{}
-		}
-
-	default:
-		// Build set of nodes referenced in edges.
-		nodeInEdges := make(map[string]bool)
-		for _, edge := range d.Edges {
-			nodeInEdges[edge.From] = true
-			nodeInEdges[edge.To] = true
-		}
-
-		// Find nodes not referenced in any edge.
-		for i := range d.Nodes {
-			if !nodeInEdges[d.Nodes[i].ID] {
+		// If no edges at all but multiple nodes, all are disconnected.
+		case len(d.Edges) == 0:
+			for i := range d.Nodes {
 				disconnectedIDs[d.Nodes[i].ID] = struct{}{}
 			}
-		}
-	}
 
-	// Union graph-derived IDs with parser/source-derived disconnected IDs.
-	for _, nodeID := range d.DisconnectedNodeIDs {
-		disconnectedIDs[nodeID] = struct{}{}
+		default:
+			// Build set of nodes referenced in edges.
+			nodeInEdges := make(map[string]bool)
+			for _, edge := range d.Edges {
+				nodeInEdges[edge.From] = true
+				nodeInEdges[edge.To] = true
+			}
+
+			// Find nodes not referenced in any edge.
+			for i := range d.Nodes {
+				if !nodeInEdges[d.Nodes[i].ID] {
+					disconnectedIDs[d.Nodes[i].ID] = struct{}{}
+				}
+			}
+		}
+
+		// Union graph-derived IDs with parser/source-derived disconnected IDs.
+		for _, nodeID := range d.DisconnectedNodeIDs {
+			disconnectedIDs[nodeID] = struct{}{}
+		}
 	}
 
 	if len(disconnectedIDs) == 0 {
