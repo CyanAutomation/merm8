@@ -2634,6 +2634,11 @@ func (h *Handler) parseWithRequestSettings(req analyzeRequest) (*model.Diagram, 
 	if req.Parser == nil {
 		return h.parser.Parse(req.Code)
 	}
+	hasOverride := req.Parser.TimeoutSeconds != nil || req.Parser.MaxOldSpaceMB != nil
+	parserWithConfig, supportsConfig := h.parser.(ParserWithConfig)
+	if hasOverride && !supportsConfig {
+		return nil, nil, fmt.Errorf("%w: per-request parser settings are unsupported by the configured parser", errInvalidRequest)
+	}
 	minTimeout, maxTimeout, minMem, maxMem := parser.LimitBounds()
 	if req.Parser.TimeoutSeconds != nil {
 		// Validate timeout is in allowed range
@@ -2650,7 +2655,7 @@ func (h *Handler) parseWithRequestSettings(req analyzeRequest) (*model.Diagram, 
 		}
 		cfg.NodeMaxOldSpaceMB = *req.Parser.MaxOldSpaceMB
 	}
-	if parserWithConfig, ok := h.parser.(ParserWithConfig); ok {
+	if supportsConfig {
 		return parserWithConfig.ParseWithConfig(req.Code, cfg)
 	}
 	return h.parser.Parse(req.Code)
