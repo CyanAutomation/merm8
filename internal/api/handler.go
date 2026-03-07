@@ -2454,7 +2454,8 @@ func writeConfigValidationError(w http.ResponseWriter, configValidationErr *vali
 		details = nil
 	}
 
-	helpSugg := helpForConfigError(configValidationErr)
+	// Config validation errors do not include help-suggestion.
+	// Help suggestions are only provided for syntax errors.
 
 	writeJSON(w, http.StatusBadRequest, analyzeResponse{
 		Valid: false,
@@ -2463,7 +2464,7 @@ func writeConfigValidationError(w http.ResponseWriter, configValidationErr *vali
 			Message: configValidationErr.Message,
 			Details: details,
 		},
-		HelpSuggestion: helpSugg,
+		HelpSuggestion: nil,
 		LintSupported:  false,
 		SyntaxError:    nil,
 		Issues:         []model.Issue{},

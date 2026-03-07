@@ -3,6 +3,7 @@ package parser
 import (
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/CyanAutomation/merm8/internal/model"
 )
@@ -21,6 +22,8 @@ func EnhanceASTWithSourceAnalysis(diagram *model.Diagram, sourceCode string) {
 	allNodeIDs := extractAllNodeIDsFromSource(sourceCode)
 
 	// Identify disconnected nodes (defined but not referenced in edges)
+	// Note: parser normalizes node IDs to lowercase, so we must normalize
+	// source-extracted IDs for comparison
 	edgeNodes := make(map[string]bool)
 	for _, edge := range diagram.Edges {
 		edgeNodes[edge.From] = true
@@ -32,7 +35,9 @@ func EnhanceASTWithSourceAnalysis(diagram *model.Diagram, sourceCode string) {
 
 	disconnected := []string{}
 	for _, nodeID := range allNodeIDs {
-		if !edgeNodes[nodeID] {
+		// Parser normalizes node IDs to lowercase; normalize source ID for comparison
+		normalizedID := strings.ToLower(nodeID)
+		if !edgeNodes[normalizedID] {
 			disconnected = append(disconnected, nodeID)
 		}
 	}

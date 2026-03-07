@@ -127,29 +127,29 @@
         <div class="summary">
             <div class="summary-card passed">
                 <h3>Passed</h3>
-                <div class="value">0</div>
+                <div class="value">8</div>
                 <p>of 18 cases</p>
             </div>
             <div class="summary-card failed">
                 <h3>Failed</h3>
-                <div class="value">18</div>
+                <div class="value">10</div>
                 <p>quality failures</p>
             </div>
             <div class="summary-card">
                 <h3>Pass Rate</h3>
-                <div class="value">0.0%</div>
+                <div class="value">44.4%</div>
                 <p>overall success</p>
             </div>
             <div class="summary-card">
                 <h3>Execution Time</h3>
-                <div class="value">0.93s</div>
+                <div class="value">17.82s</div>
                 <p>total runtime</p>
             </div>
         </div>
 
         <h2>Test Metadata</h2>
         <div class="details-row">
-            <strong>Timestamp:</strong> 2026-03-07 21:38:13
+            <strong>Timestamp:</strong> 2026-03-07 21:45:25
         </div>
         <div class="details-row">
             <strong>Version:</strong> v0.1.0-dev
@@ -195,11 +195,11 @@
                 
                 <tr>
                     <td><strong>no-cycles</strong></td>
-                    <td>0</td>
+                    <td>2</td>
                     <td>3</td>
                     <td>
                         
-                        <span class="rate-low">0.00%</span>
+                        <span class="rate-low">66.67%</span>
                     </td>
                     <td>0ms</td>
                     <td>0ms</td>
@@ -207,11 +207,11 @@
                 
                 <tr>
                     <td><strong>no-disconnected-nodes</strong></td>
-                    <td>0</td>
-                    <td>8</td>
+                    <td>2</td>
+                    <td>5</td>
                     <td>
                         
-                        <span class="rate-low">0.00%</span>
+                        <span class="rate-low">40.00%</span>
                     </td>
                     <td>0ms</td>
                     <td>0ms</td>
@@ -219,11 +219,11 @@
                 
                 <tr>
                     <td><strong>no-duplicate-node-ids</strong></td>
-                    <td>0</td>
+                    <td>1</td>
                     <td>3</td>
                     <td>
                         
-                        <span class="rate-low">0.00%</span>
+                        <span class="rate-low">33.33%</span>
                     </td>
                     <td>0ms</td>
                     <td>0ms</td>
@@ -237,172 +237,92 @@
         <div class="failed-cases">
             
             <div class="failed-case">
-                <h4>flowchart-val-branched-flow</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
-                
-                <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
-                
-            </div>
-            
-            <div class="failed-case">
-                <h4>flowchart-val-complex-flow</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
-                
-                <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
-                
-            </div>
-            
-            <div class="failed-case">
                 <h4>flowchart-val-fully-connected</h4>
                 <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error</span></div>
                 
                 <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
-                
-            </div>
-            
-            <div class="failed-case">
-                <h4>flowchart-val-long-linear-chain</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
-                
-                <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
-                
-            </div>
-            
-            <div class="failed-case">
-                <h4>flowchart-val-parallel-paths</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
-                
-                <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
-                
-            </div>
-            
-            <div class="failed-case">
-                <h4>flowchart-val-simple-linear</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
-                
-                <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
-                
-            </div>
-            
-            <div class="failed-case">
-                <h4>flowchart-vio-complex-cycle</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-cycles:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
-                
-                <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-cycles:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                <pre>expected [], got [no-disconnected-nodes:error]</pre>
                 
             </div>
             
             <div class="failed-case">
                 <h4>flowchart-vio-deep-tree</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, max-depth:warning</span></div>
+                <div><strong>Expected:</strong> <span class="badge fail">max-depth:error</span></div>
+                <div><strong>Got:</strong> <span class="badge fail">max-depth:warning</span></div>
                 
                 <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error max-depth:warning]</pre>
-                
-            </div>
-            
-            <div class="failed-case">
-                <h4>flowchart-vio-disconnected-node</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
-                
-                <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                <pre>expected [max-depth:error], got [max-depth:warning]</pre>
                 
             </div>
             
             <div class="failed-case">
                 <h4>flowchart-vio-duplicate-nodes</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                <div><strong>Expected:</strong> <span class="badge fail">no-duplicate-node-ids:error</span></div>
+                <div><strong>Got:</strong> <span class="badge fail"></span></div>
                 
                 <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                <pre>expected [no-duplicate-node-ids:error], got []</pre>
                 
             </div>
             
             <div class="failed-case">
                 <h4>flowchart-vio-high-fanout</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, max-fanout:warning</span></div>
+                <div><strong>Expected:</strong> <span class="badge fail">max-fanout:error</span></div>
+                <div><strong>Got:</strong> <span class="badge fail">max-fanout:warning</span></div>
                 
                 <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error max-fanout:warning]</pre>
+                <pre>expected [max-fanout:error], got [max-fanout:warning]</pre>
                 
             </div>
             
             <div class="failed-case">
                 <h4>flowchart-vio-self-loop</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                <div><strong>Expected:</strong> <span class="badge fail">no-cycles:error</span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-cycles:error, no-disconnected-nodes:error</span></div>
                 
                 <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
-                
-            </div>
-            
-            <div class="failed-case">
-                <h4>flowchart-vio-simple-cycle</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-cycles:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
-                
-                <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-cycles:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                <pre>expected [no-cycles:error], got [no-cycles:error no-disconnected-nodes:error]</pre>
                 
             </div>
             
             <div class="failed-case">
                 <h4>flowchart-vio-triple-duplicate</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                <div><strong>Expected:</strong> <span class="badge fail">no-duplicate-node-ids:error</span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error</span></div>
                 
                 <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                <pre>expected [no-duplicate-node-ids:error], got [no-disconnected-nodes:error]</pre>
                 
             </div>
             
             <div class="failed-case">
                 <h4>flowchart-vio-two-isolated</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                <div><strong>Expected:</strong> <span class="badge fail">no-disconnected-nodes:error</span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
                 
                 <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                <pre>expected [no-disconnected-nodes:error], got [no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
                 
             </div>
             
             <div class="failed-case">
                 <h4>flowchart-edg-fanout-at-limit</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-duplicate-node-ids:error</span></div>
+                <div><strong>Expected:</strong> <span class="badge fail">max-fanout:error</span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-duplicate-node-ids:error</span></div>
                 
                 <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-duplicate-node-ids:error]</pre>
+                <pre>expected [max-fanout:error], got [no-duplicate-node-ids:error]</pre>
                 
             </div>
             
             <div class="failed-case">
                 <h4>flowchart-edg-max-depth-at-limit</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error, no-disconnected-nodes:error</span></div>
+                <div><strong>Expected:</strong> <span class="badge fail">max-depth:error</span></div>
+                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error</span></div>
                 
                 <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error no-disconnected-nodes:error]</pre>
+                <pre>expected [max-depth:error], got [no-disconnected-nodes:error]</pre>
                 
             </div>
             
