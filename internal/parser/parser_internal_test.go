@@ -101,8 +101,6 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 			if effective.Timeout != tc.expectedConfig.Timeout || effective.NodeMaxOldSpaceMB != tc.expectedConfig.NodeMaxOldSpaceMB {
 				t.Fatalf("expected config %#v, got %#v", tc.expectedConfig, effective)
 			}
-				t.Fatalf("expected config %#v, got %#v", tc.expectedConfig, effective)
-			}
 		})
 	}
 }

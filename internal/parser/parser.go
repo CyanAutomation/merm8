@@ -494,7 +494,7 @@ func toDiagram(result ParseResult) *model.Diagram {
 		return &model.Diagram{}
 	}
 	diagramType := normalizeDiagramType(result.DiagramType)
-	if diagramType == model.DiagramTypeUnknown && ast != nil {
+	if diagramType == model.DiagramTypeUnknown {
 		diagramType = normalizeDiagramType(ast.Type)
 	}
 
