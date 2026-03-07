@@ -308,28 +308,48 @@ func (p *mockParser) Parse(string) (*model.Diagram, *parser.SyntaxError, error) 
 	return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 }
 
-func TestServerStack_CORSHeadersOnAuthAndRateLimitEarlyReturns(t *testing.T) {
+func newMainLikeTestServer(t *testing.T, allowedOrigins string, rateLimitPerMinute int, authToken string) *httptest.Server {
+	t.Helper()
+
 	h := api.NewHandler(&mockParser{}, engine.New())
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	allowedOrigins := "https://example.com"
 	rootHandler := http.Handler(mux)
 	rootHandler = api.RequestIDMiddleware(rootHandler)
 	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
-	limiter := api.NewRateLimiter(1, time.Minute)
-	rootHandler = api.AnalyzeRateLimitMiddleware(limiter, rootHandler)
-	rootHandler = api.AnalyzeBearerAuthMiddleware("s3cr3t", rootHandler)
-	rootHandler = api.MetricsMiddleware(rootHandler, map[string]string{"POST /analyze": "/analyze"}, nil)
+	if rateLimitPerMinute > 0 {
+		limiter := api.NewRateLimiter(rateLimitPerMinute, time.Minute)
+		rootHandler = api.AnalyzeRateLimitMiddleware(limiter, rootHandler)
+	}
+	rootHandler = api.AnalyzeBearerAuthMiddleware(authToken, rootHandler)
+	routePatterns := map[string]string{
+		"GET /":             "/",
+		"GET /health":       "/health",
+		"GET /healthz":      "/healthz",
+		"GET /ready":        "/ready",
+		"GET /version":      "/version",
+		"GET /info":         "/info",
+		"GET /metrics":      "/metrics",
+		"POST /analyze":     "/analyze",
+		"POST /analyze/raw": "/analyze/raw",
+	}
+	rootHandler = api.MetricsMiddleware(rootHandler, routePatterns, nil)
 	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, api.NewLogger("test"))
 	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
 
-	server := httptest.NewServer(rootHandler)
+	return httptest.NewServer(rootHandler)
+}
+
+func TestServerStack_AnalyzeAuthFailure_IncludesCORSHeader(t *testing.T) {
+	allowedOrigins := "https://example.com"
+	server := newMainLikeTestServer(t, allowedOrigins, 0, "s3cr3t")
+
 	defer server.Close()
 
 	body, _ := json.Marshal(map[string]string{"code": "graph TD\nA-->B"})
 
-	unauthorizedReq, err := http.NewRequest(http.MethodPost, server.URL+"/analyze", bytes.NewReader(body))
+	unauthorizedReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/analyze", bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("failed to create unauthorized request: %v", err)
 	}
@@ -360,15 +380,23 @@ func TestServerStack_CORSHeadersOnAuthAndRateLimitEarlyReturns(t *testing.T) {
 	if unauthorizedPayload.Error.Code != "unauthorized" || unauthorizedPayload.Error.Message != "missing or invalid bearer token" {
 		t.Fatalf("unexpected unauthorized payload: %#v", unauthorizedPayload)
 	}
+}
 
-	authorizedReq, err := http.NewRequest(http.MethodPost, server.URL+"/analyze", bytes.NewReader(body))
+func TestServerStack_AnalyzeRateLimited_IncludesCORSAndRateLimitHeaders(t *testing.T) {
+	allowedOrigins := "https://example.com"
+	server := newMainLikeTestServer(t, allowedOrigins, 1, "s3cr3t")
+	defer server.Close()
+
+	body, _ := json.Marshal(map[string]string{"code": "graph TD\nA-->B"})
+
+	firstReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/analyze", bytes.NewReader(body))
 	if err != nil {
-		t.Fatalf("failed to create authorized request: %v", err)
+		t.Fatalf("failed to create first request: %v", err)
 	}
-	authorizedReq.Header.Set("Content-Type", "application/json")
-	authorizedReq.Header.Set("Origin", "https://example.com")
-	authorizedReq.Header.Set("Authorization", "Bearer s3cr3t")
-	firstAuthorizedRes, err := server.Client().Do(authorizedReq)
+	firstReq.Header.Set("Content-Type", "application/json")
+	firstReq.Header.Set("Origin", "https://example.com")
+	firstReq.Header.Set("Authorization", "Bearer s3cr3t")
+	firstAuthorizedRes, err := server.Client().Do(firstReq)
 	if err != nil {
 		t.Fatalf("first authorized request failed: %v", err)
 	}
@@ -377,7 +405,7 @@ func TestServerStack_CORSHeadersOnAuthAndRateLimitEarlyReturns(t *testing.T) {
 		t.Fatalf("expected first authorized request to pass, got %d", firstAuthorizedRes.StatusCode)
 	}
 
-	secondAuthorizedReq, err := http.NewRequest(http.MethodPost, server.URL+"/analyze", bytes.NewReader(body))
+	secondAuthorizedReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/analyze", bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("failed to create second authorized request: %v", err)
 	}
@@ -397,7 +425,13 @@ func TestServerStack_CORSHeadersOnAuthAndRateLimitEarlyReturns(t *testing.T) {
 		t.Fatalf("expected CORS header on 429 response, got %q", got)
 	}
 	if got := rateLimitedRes.Header.Get("X-RateLimit-Limit"); got == "" {
-		t.Fatal("expected rate limit headers on 429 response")
+		t.Fatal("expected X-RateLimit-Limit header on 429 response")
+	}
+	if got := rateLimitedRes.Header.Get("X-RateLimit-Remaining"); got == "" {
+		t.Fatal("expected X-RateLimit-Remaining header on 429 response")
+	}
+	if got := rateLimitedRes.Header.Get("X-RateLimit-Reset"); got == "" {
+		t.Fatal("expected X-RateLimit-Reset header on 429 response")
 	}
 
 	var rateLimitedPayload struct {
