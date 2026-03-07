@@ -87,21 +87,18 @@ func (l *captureLogger) warningText() string {
 
 // newTestMux creates a test HTTP server backed by a handler using a mock parser.
 func newTestMux(mockParseFn func(string) (*model.Diagram, *parser.SyntaxError, error)) *http.ServeMux {
+	mux, _ := newTestMuxWithHandler(mockParseFn)
+	return mux
+}
+
+func newTestMuxWithHandler(mockParseFn func(string) (*model.Diagram, *parser.SyntaxError, error)) (*http.ServeMux, *api.Handler) {
 	mux := http.NewServeMux()
 	mockP := &mockParser{
 		parseFunc: mockParseFn,
 	}
 	h := api.NewHandler(mockP, engine.New())
 	h.RegisterRoutes(mux)
-	return mux
-}
-
-func setStrictConfigSchemaForTest(t *testing.T, strict bool) {
-	t.Helper()
-	api.SetStrictConfigSchemaForTesting(strict)
-	t.Cleanup(func() {
-		api.SetStrictConfigSchemaForTesting(false)
-	})
+	return mux, h
 }
 
 // newTestMuxWithRealParser creates a test mux that uses the real parser subprocess.
@@ -1449,10 +1446,10 @@ func TestAnalyze_LegacyConfigWarningsIncludeStructuredMetadataAndLogHint(t *test
 }
 
 func TestAnalyze_ConfigLegacySnakeCaseKeysRejectedWhenPhaseFlips(t *testing.T) {
-	setStrictConfigSchemaForTest(t, true)
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+	mux, h := newTestMuxWithHandler(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
+	h.SetStrictConfigSchema(true)
 
 	bodyJSON, _ := json.Marshal(map[string]any{
 		"code": "graph TD\n  A --> B",
@@ -1531,16 +1528,16 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 	})
 
 	t.Run("legacy formats are rejected in strict mode", func(t *testing.T) {
-		setStrictConfigSchemaForTest(t, true)
 		for _, config := range []map[string]any{
 			{"max-fanout": map[string]any{"limit": 2}},
 			{"rules": map[string]any{"max-fanout": map[string]any{"limit": 2}}},
 		} {
 			parserCalled := false
-			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+			mux, h := newTestMuxWithHandler(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 				parserCalled = true
 				return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 			})
+			h.SetStrictConfigSchema(true)
 			body, _ := json.Marshal(map[string]any{"code": "graph TD; A-->B", "config": config})
 			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
@@ -4305,11 +4302,10 @@ func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
 }
 
 func TestLegacyAnalyzeAliases_WithLegacyConfigEmitsDeprecationHeaders(t *testing.T) {
-	setStrictConfigSchemaForTest(t, false)
-
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+	mux, h := newTestMuxWithHandler(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
+	h.SetStrictConfigSchema(false)
 
 	// Test with legacy snake_case config format (should emit Deprecation headers)
 	legacyConfigTests := []struct {
@@ -6127,11 +6123,7 @@ func TestAnalyze_ConcurrentRequests(t *testing.T) {
 }
 
 func TestAnalyze_ConcurrentRequestsWithStrictConfigToggling(t *testing.T) {
-	t.Cleanup(func() {
-		api.SetStrictConfigSchemaForTesting(false)
-	})
-
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+	mux, h := newTestMuxWithHandler(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
 
@@ -6155,7 +6147,7 @@ func TestAnalyze_ConcurrentRequestsWithStrictConfigToggling(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < toggleIterations; i++ {
-			api.SetStrictConfigSchemaForTesting(i%2 == 0)
+			h.SetStrictConfigSchema(i%2 == 0)
 		}
 	}()
 

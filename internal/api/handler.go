@@ -42,7 +42,7 @@ const (
 	legacyOptionKeyWarningTemplate    = `legacy key config.%s.%s is deprecated; use config.%s.%s. Example: {"%s": ["node:A"]}`
 )
 
-var strictConfigSchema atomic.Bool
+var defaultStrictConfigSchema atomic.Bool
 
 var errInvalidRequest = errors.New("invalid request")
 
@@ -446,6 +446,7 @@ type Handler struct {
 	analyzeCounters     analyzeOutcomeCounters
 	startTime           time.Time
 	mu                  sync.RWMutex
+	strictConfigSchema  bool
 	parserConcurrencyCh chan struct{}
 }
 
@@ -541,11 +542,26 @@ type healthMetricsOutcome struct {
 // This constructor allows dependency injection for testing.
 func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
 	return &Handler{
-		parser:    p,
-		engine:    e,
-		logger:    normalizeLogger(NewLogger("api")),
-		startTime: time.Now(),
+		parser:             p,
+		engine:             e,
+		logger:             normalizeLogger(NewLogger("api")),
+		startTime:          time.Now(),
+		strictConfigSchema: defaultStrictConfigSchema.Load(),
 	}
+}
+
+// SetStrictConfigSchema toggles strict config schema enforcement for this handler.
+// When strict mode is enabled, legacy config formats are rejected.
+func (h *Handler) SetStrictConfigSchema(strict bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.strictConfigSchema = strict
+}
+
+func (h *Handler) strictConfigSchemaEnabled() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.strictConfigSchema
 }
 
 // SetParserConcurrencyLimit configures a limit for concurrent parser invocations.
@@ -614,21 +630,16 @@ func NewHandlerWithScript(scriptPath string) (*Handler, error) {
 	), nil
 }
 
-// SetStrictConfigSchema toggles strict config schema enforcement.
-// When strict mode is enabled, legacy config formats are rejected.
-// Default is false for v1.0 compatibility; should be true for production deployments.
+// SetStrictConfigSchema sets the default strict config schema enforcement for newly
+// constructed handlers.
+// Deprecated: prefer per-handler configuration via (*Handler).SetStrictConfigSchema.
 func SetStrictConfigSchema(strict bool) {
-	strictConfigSchema.Store(strict)
+	defaultStrictConfigSchema.Store(strict)
 }
 
 // SetStrictConfigSchemaForTesting is a deprecated alias for SetStrictConfigSchema.
-// It is kept for backward compatibility with existing tests.
 func SetStrictConfigSchemaForTesting(strict bool) {
 	SetStrictConfigSchema(strict)
-}
-
-func strictConfigSchemaEnabled() bool {
-	return strictConfigSchema.Load()
 }
 
 // RegisterRoutes attaches all routes to mux.
@@ -1153,7 +1164,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		return
 	}
 
-	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchemaEnabled())
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled())
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
 		writeConfigValidationError(w, configValidationErr)
@@ -1380,7 +1391,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchemaEnabled())
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled())
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
 		writeConfigValidationError(w, configValidationErr)
@@ -1623,7 +1634,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		return
 	}
 
-	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), strictConfigSchemaEnabled())
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled())
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
 		statusCode := http.StatusBadRequest
