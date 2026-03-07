@@ -146,6 +146,9 @@ func TestAnalyzeSARIF_InvalidJSON(t *testing.T) {
 	}
 
 	props := run.Invocations[0].Properties
+	if props == nil {
+		t.Fatalf("expected invocation properties to be non-nil")
+	}
 	if props["error-code"] != "invalid_json" {
 		t.Errorf("invocation properties error-code = %q, want %q", props["error-code"], "invalid_json")
 	}
