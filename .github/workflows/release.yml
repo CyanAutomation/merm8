@@ -110,8 +110,9 @@ jobs:
 
       - name: Generate benchmark HTML artifact
         run: |
-          go run ./benchmarks/main.go
-          test -f benchmark.html
+          set -e
+          go run ./benchmarks/main.go || { echo "Benchmark generation failed"; exit 1; }
+          test -f benchmark.html || { echo "benchmark.html was not generated"; exit 1; }
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
