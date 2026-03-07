@@ -66,19 +66,30 @@ func (m *mockParserWithReturn) VersionInfo() (*parser.VersionInfo, error) {
 type repeatedPatternReader struct {
 	pattern []byte
 	offset  int
+	remain  int64
 }
 
 func (r *repeatedPatternReader) Read(p []byte) (int, error) {
-	if len(r.pattern) == 0 {
+	if len(r.pattern) == 0 || r.remain <= 0 {
 		return 0, io.EOF
 	}
 
-	for i := range p {
+	max := len(p)
+	if int64(max) > r.remain {
+		max = int(r.remain)
+	}
+
+	for i := 0; i < max; i++ {
 		p[i] = r.pattern[r.offset]
 		r.offset = (r.offset + 1) % len(r.pattern)
 	}
+	r.remain -= int64(max)
 
-	return len(p), nil
+	if r.remain == 0 {
+		return max, io.EOF
+	}
+
+	return max, nil
 }
 
 // TestInfo_ParserTimeout verifies timeout is exposed in /info response
@@ -260,7 +271,7 @@ func TestAnalyzeSARIF_RequestTooLarge(t *testing.T) {
 
 	bodyReader := io.MultiReader(
 		strings.NewReader(`{"code":"`),
-		io.LimitReader(&repeatedPatternReader{pattern: escapedUnit}, codeBytes),
+		&repeatedPatternReader{pattern: escapedUnit, remain: codeBytes},
 		strings.NewReader(`"}`),
 	)
 
