@@ -7,6 +7,7 @@ FROM golang:1.24-alpine AS go-builder
 ARG VERSION=v1.0.0
 ARG BUILD_DATE
 ARG VCS_REF
+ARG REQUIRE_BENCHMARK_HTML=false
 
 WORKDIR /src
 
@@ -28,9 +29,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-X main.appVersion=${VERSION}" \
     -o /app/mermaid-lint ./cmd/server
 
-# Ensure benchmark artifact always exists for downstream image stages.
-# CI can pre-generate benchmark.html in the workspace, but local builds may not.
+# Ensure benchmark artifact exists for downstream image stages.
+# Strict mode is intended for CI/deploy, while local builds keep a placeholder fallback.
 RUN if [ ! -f /src/benchmark.html ]; then \
+      if [ "${REQUIRE_BENCHMARK_HTML}" = "true" ]; then \
+        echo "Error: benchmark.html is required but missing. Generate it with: go run ./benchmarks/main.go" >&2; \
+        exit 1; \
+      fi; \
       printf '%s\n' '<!doctype html><html><body><p>benchmark.html was not pre-generated. Run `go run ./benchmarks/main.go` for a full report.</p></body></html>' > /src/benchmark.html; \
     fi
 

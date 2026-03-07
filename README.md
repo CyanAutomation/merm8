@@ -81,6 +81,17 @@ docker compose up --build
 
 The service listens on **port 8080**.
 
+#### Benchmark artifact requirement in container builds
+
+- Local/default Docker builds keep developer ergonomics: if `benchmark.html` is missing, the image build generates a placeholder report.
+- CI/deploy builds should enable strict mode so production images only ship with a real benchmark report:
+
+```bash
+docker build --build-arg REQUIRE_BENCHMARK_HTML=true .
+```
+
+`cloudbuild.yaml` is configured to use strict mode for Cloud Run image builds.
+
 ## CLI (`cmd/merm8-cli`)
 
 A first-party CLI is available for local development and CI workflows.
