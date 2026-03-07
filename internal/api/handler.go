@@ -1649,7 +1649,11 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 	if err != nil {
 		if errors.Is(err, errInvalidRequest) {
 			observeAnalyzeOutcome("invalid_option")
-			writeErrorWithDetailsAndContext(w, r, http.StatusBadRequest, "invalid_option", strings.TrimPrefix(err.Error(), errInvalidRequest.Error()+": "), nil)
+			report := sarif.TransformError(sarif.ErrorInfo{
+				Code:    "invalid_option",
+				Message: strings.TrimPrefix(err.Error(), errInvalidRequest.Error()+": "),
+			}, meta)
+			writeSARIF(w, http.StatusBadRequest, report)
 			return
 		}
 		outcome := parserFailureOutcome(err)
