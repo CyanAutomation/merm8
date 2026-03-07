@@ -1,5 +1,6 @@
-Docs available at: https://merm8-api-482194634678.europe-west1.run.app/docs
+Docs available at: <https://merm8-api-482194634678.europe-west1.run.app/docs>
 Reminder:
+
 ```bash
 gcloud run deploy merm8-api-482194634678
 --region=europe-west1
@@ -292,7 +293,6 @@ Internal JSON counters for analyze/parser outcomes (fixed key set, no labels). I
 
 In production, this endpoint should be restricted at network/ingress layers.
 
-
 ### `GET /v1/rules` (canonical) and legacy alias `GET /rules`
 
 Live discovery endpoint for enforceable lint rules and their metadata.
@@ -306,6 +306,7 @@ Use this endpoint to power UI/docs so runtime and documentation remain in sync.
 Returns a generated JSON Schema for the `config` object accepted by `POST /analyze`.
 
 The schema includes:
+
 - allowed rule IDs,
 - allowed options per rule (`enabled`, `severity`, `limit`, `suppression-selectors`),
 - option types/constraints (e.g. `max-fanout.limit` must be an integer `>= 1`), and
@@ -501,13 +502,13 @@ curl -s -X POST http://localhost:8080/analyze \
 **OpenAPI Specification** is available at `http://localhost:8080/v1/spec` (legacy alias: `/spec`) in JSON format, useful for code generation and API tooling integration.
 
 **For detailed usage instructions**, see [API_GUIDE.md](API_GUIDE.md) which covers:
+
 - How to use the Swagger UI dashboard
 - Direct HTTP request examples (curl, Python, JavaScript)
 - Rule configuration guide
 - Integration tips and troubleshooting
 
 ---
-
 
 ## Security & Production Hardening
 
@@ -643,6 +644,7 @@ unescaped-char = any-char - ":" ;
 ```
 
 Notes:
+
 - Parsing trims surrounding whitespace from the full selector, prefix, and value.
 - Prefix matching is case-insensitive (`NoDe:A` is treated as `node:A`).
 - The first unescaped `:` splits prefix/value; `\:` is a literal colon inside `value`.
@@ -692,7 +694,7 @@ func (r MyRule) Run(d *model.Diagram, cfg Config) []model.Issue {
 }
 ```
 
-2. Register it in `internal/engine/engine.go`:
+1. Register it in `internal/engine/engine.go`:
 
 ```go
 rules: []rules.Rule{
@@ -785,6 +787,7 @@ bash smoke-test.sh
 ```
 
 The smoke test validates:
+
 - ✅ Valid diagram parsing with correct response structure
 - ✅ Syntax error handling (200 response with error details)
 - ✅ Missing 'code' field rejection
@@ -812,6 +815,7 @@ The test suite uses two complementary approaches:
    - Examples: `TestParser_ValidFlowchart`, `TestParser_InvalidMermaid`, `TestParser_MultipleEdges`, `TestParser_TimeoutCategory`
 
 **Current guarantees and limitations:**
+
 - Parser integration tests are active (not intentionally skipped) when `PARSER_SCRIPT` is configured.
 - Timeout handling is validated by `TestParser_TimeoutCategory`, which uses a controlled hanging parser script.
 - Results still depend on the Mermaid parser version and Node.js runtime available in the test environment.
@@ -827,12 +831,12 @@ The test suite uses two complementary approaches:
 
 ---
 
-
 ## OpenAPI Spec Regeneration (Contributors)
 
 The canonical OpenAPI source is `internal/api/openapi.go`.
 
 Generated artifacts:
+
 - `openapi.json`
 - `openapi.yaml` (generated output; do not edit manually)
 
@@ -849,6 +853,7 @@ Before opening a PR, run the sync check used by CI:
 ```
 
 Workflow summary:
+
 1. Update `internal/api/openapi.go`.
 2. Run `go run ./scripts/generate_openapi.go`.
 3. Commit the updated generated files with your API change.
