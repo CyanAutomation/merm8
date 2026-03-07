@@ -38,11 +38,47 @@ substitutions:
   _SERVICE_PORT: "8080"
 
 steps:
-  # ---- Step 1: Build image ----
+  # ---- Step 1: Generate benchmark artifact ----
+  - name: golang:1.24-bookworm
+    id: generate-benchmark
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        apt-get update
+        apt-get install -y --no-install-recommends nodejs npm
+        rm -rf /var/lib/apt/lists/*
+
+        set -e
+        apt-get update
+        apt-get install -y --no-install-recommends nodejs npm
+        rm -rf /var/lib/apt/lists/*
+
+        if [ ! -d "parser-node" ]; then
+          echo "Error: parser-node directory not found"
+          exit 1
+        fi
+
+        cd parser-node
+        npm ci --omit=dev
+        cd ..
+
+        go run ./benchmarks/main.go
+
+        if [ ! -f "benchmark.html" ]; then
+          echo "Error: benchmark.html was not generated"
+          exit 1
+        fi
+        echo "Successfully generated benchmark.html"
+
+  # ---- Step 2: Build image ----
   # Plain docker build with BuildKit enabled — no Buildx or QEMU needed.
   # Cloud Run only runs linux/amd64, so cross-compilation is unnecessary here.
   - name: gcr.io/cloud-builders/docker
     id: build-and-push
+    waitFor:
+      - generate-benchmark
     env:
       - DOCKER_BUILDKIT=1
     args:
@@ -55,7 +91,7 @@ steps:
       - ${_GAR_REGION}-docker.pkg.dev/$PROJECT_ID/${_GAR_REPO}/${_IMAGE_NAME}:$SHORT_SHA
       - .
 
-  # ---- Step 2: Push image to GAR ----
+  # ---- Step 3: Push image to GAR ----
   - name: gcr.io/cloud-builders/docker
     id: push-image
     args:
@@ -65,7 +101,7 @@ steps:
     waitFor:
       - build-and-push
 
-  # ---- Step 3: Deploy to Cloud Run (demo) ----
+  # ---- Step 4: Deploy to Cloud Run (demo) ----
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy-cloud-run
     entrypoint: gcloud
