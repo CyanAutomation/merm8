@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -60,6 +61,17 @@ func (m *mockParserWithReturn) Ready() error {
 
 func (m *mockParserWithReturn) VersionInfo() (*parser.VersionInfo, error) {
 	return &parser.VersionInfo{}, nil
+}
+
+type repeatedByteReader struct {
+	b byte
+}
+
+func (r repeatedByteReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = r.b
+	}
+	return len(p), nil
 }
 
 // TestInfo_ParserTimeout verifies timeout is exposed in /info response
@@ -221,7 +233,7 @@ func TestAnalyzeSARIF_ValidDiagram(t *testing.T) {
 	}
 }
 
-// TestAnalyzeSARIF_RequestTooLarge verifies 413 status for oversized request
+// TestAnalyzeSARIF_RequestTooLarge verifies 413 status and SARIF error contract for oversized request.
 func TestAnalyzeSARIF_RequestTooLarge(t *testing.T) {
 	mockP := &mockParserWithTimeout{}
 	h := NewHandler(mockP, engine.New())
@@ -230,12 +242,21 @@ func TestAnalyzeSARIF_RequestTooLarge(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	// Create a payload larger than maxRequestSize (25MB)
-	largeCode := bytes.Repeat([]byte("A"), 26*1024*1024)
-	payload := map[string]interface{}{"code": string(largeCode)}
-	body, _ := json.Marshal(payload)
+	// Build a bounded streaming body that exceeds maxAnalyzeBodyBytes by 1 byte
+	// without creating a large JSON string in memory.
+	bodyReader := io.MultiReader(
+		strings.NewReader(`{"code":"`),
+		io.LimitReader(repeatedByteReader{b: 'A'}, maxAnalyzeBodyBytes+1),
+		strings.NewReader(`"}`),
+	)
 
-	resp, err := http.Post(server.URL+"/analyze/sarif", "application/json", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/analyze/sarif", bodyReader)
+	if err != nil {
+		t.Fatalf("build request failed: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -243,6 +264,45 @@ func TestAnalyzeSARIF_RequestTooLarge(t *testing.T) {
 
 	if resp.StatusCode != http.StatusRequestEntityTooLarge {
 		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusRequestEntityTooLarge)
+	}
+
+	var report sarif.Report
+	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+
+	if report.Version != "2.1.0" {
+		t.Errorf("SARIF version = %s, want 2.1.0", report.Version)
+	}
+	if len(report.Runs) == 0 {
+		t.Fatalf("expected at least one run in SARIF response")
+	}
+
+	run := report.Runs[0]
+	if len(run.Results) == 0 {
+		t.Fatalf("expected at least one SARIF result in error response")
+	}
+
+	result := run.Results[0]
+	if result.RuleID != "merm8-api" {
+		t.Errorf("result ruleId = %q, want %q", result.RuleID, "merm8-api")
+	}
+	if result.Message.Text != "request body exceeds 1 MiB limit" {
+		t.Errorf("result message = %q, want %q", result.Message.Text, "request body exceeds 1 MiB limit")
+	}
+
+	if len(run.Invocations) == 0 {
+		t.Fatalf("expected invocation metadata in SARIF error response")
+	}
+	props := run.Invocations[0].Properties
+	if props == nil {
+		t.Fatalf("expected invocation properties to be non-nil")
+	}
+	if props["error-code"] != "request_too_large" {
+		t.Errorf("invocation properties error-code = %q, want %q", props["error-code"], "request_too_large")
+	}
+	if props["request-uri"] != "/analyze/sarif" {
+		t.Errorf("invocation properties request-uri = %q, want %q", props["request-uri"], "/analyze/sarif")
 	}
 }
 
