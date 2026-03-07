@@ -4185,6 +4185,75 @@ A-->B`},
 	}
 }
 
+func TestAnalyzeBearerAuthMiddleware_RequiresTokenOnProtectedAnalyzeRoutes(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{}, nil, nil
+	})
+	secured := api.AnalyzeBearerAuthMiddleware("s3cr3t", mux)
+
+	for _, path := range []string{"/analyze/raw", "/v1/analyze/raw", "/analyze/sarif", "/v1/analyze/sarif"} {
+		t.Run(path, func(t *testing.T) {
+			var body string
+			contentType := "application/json"
+			if strings.Contains(path, "/raw") {
+				body = "graph TD\nA-->B"
+				contentType = "text/plain"
+			} else {
+				body = `{"code":"graph TD;A-->B"}`
+			}
+
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+			req.Header.Set("Content-Type", contentType)
+			w := httptest.NewRecorder()
+			secured.ServeHTTP(w, req)
+
+			if w.Code != http.StatusUnauthorized {
+				t.Fatalf("expected 401 when token is missing for %s, got %d", path, w.Code)
+			}
+		})
+	}
+}
+
+func TestAnalyzeRateLimitMiddleware_AppliesOnProtectedAnalyzeRoutes(t *testing.T) {
+	for _, path := range []string{"/analyze/raw", "/v1/analyze/raw", "/analyze/sarif", "/v1/analyze/sarif"} {
+		t.Run(path, func(t *testing.T) {
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				return &model.Diagram{}, nil, nil
+			})
+			limited := api.AnalyzeRateLimitMiddleware(api.NewRateLimiter(1, time.Minute), mux)
+
+			var body string
+			contentType := "application/json"
+			if strings.Contains(path, "/raw") {
+				body = "graph TD\nA-->B"
+				contentType = "text/plain"
+			} else {
+				body = `{"code":"graph TD;A-->B"}`
+			}
+
+			firstReq := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+			firstReq.Header.Set("Content-Type", contentType)
+			firstReq.RemoteAddr = "127.0.0.1:1234"
+			firstW := httptest.NewRecorder()
+			limited.ServeHTTP(firstW, firstReq)
+
+			if firstW.Code != http.StatusOK {
+				t.Fatalf("expected first request to pass for %s, got %d", path, firstW.Code)
+			}
+
+			secondReq := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+			secondReq.Header.Set("Content-Type", contentType)
+			secondReq.RemoteAddr = "127.0.0.1:5678"
+			secondW := httptest.NewRecorder()
+			limited.ServeHTTP(secondW, secondReq)
+
+			if secondW.Code != http.StatusTooManyRequests {
+				t.Fatalf("expected 429 when request rate is exceeded for %s, got %d", path, secondW.Code)
+			}
+		})
+	}
+}
+
 func TestAnalyzeBearerAuthMiddleware_RequiresTokenOnV1Endpoint(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{}, nil, nil

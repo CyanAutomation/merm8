@@ -284,7 +284,7 @@ func AnalyzeRateLimitMiddleware(limiter *RateLimiter, next http.Handler) http.Ha
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && isAnalyzeJSONPath(r.URL.Path) {
+		if r.Method == http.MethodPost && isProtectedAnalyzePath(r.URL.Path) {
 			clientID := clientIdentifier(r)
 
 			// Calculate current window reset time
@@ -318,7 +318,7 @@ func AnalyzeBearerAuthMiddleware(token string, next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && isAnalyzeJSONPath(r.URL.Path) {
+		if r.Method == http.MethodPost && isProtectedAnalyzePath(r.URL.Path) {
 			header := r.Header.Get("Authorization")
 			if !strings.HasPrefix(header, "Bearer ") {
 				writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
@@ -340,6 +340,12 @@ func isAnalyzePath(path string) bool {
 
 func isAnalyzeJSONPath(path string) bool {
 	return path == "/analyze" || path == "/v1/analyze"
+}
+
+func isProtectedAnalyzePath(path string) bool {
+	return isAnalyzeJSONPath(path) ||
+		path == "/analyze/raw" || path == "/v1/analyze/raw" ||
+		path == "/analyze/sarif" || path == "/v1/analyze/sarif"
 }
 
 func clientIdentifier(r *http.Request) string {
