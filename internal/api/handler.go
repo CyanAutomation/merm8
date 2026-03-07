@@ -1413,7 +1413,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 	jsonContentType := contentType == "application/json" || strings.HasSuffix(contentType, "+json")
 
 	requestHints := make([]responseHint, 0, 1)
-	if jsonContentType && jsonDecodeErr != nil {
+	if jsonContentType && !parsedAsJSON && jsonDecodeErr != nil {
 		requestHints = append(requestHints, responseHint{
 			Code:       "raw_json_decode_failed_fallback_to_text",
 			Message:    "request Content-Type is JSON but body failed JSON decoding; falling back to treating body as raw mermaid text",
