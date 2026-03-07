@@ -1407,7 +1407,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	req, _, jsonDecodeErr := parseRawMermaidInput(body)
+	req, parsedAsJSON, jsonDecodeErr := parseRawMermaidInput(body)
 
 	contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	jsonContentType := contentType == "application/json" || strings.HasSuffix(contentType, "+json")
