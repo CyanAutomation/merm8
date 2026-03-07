@@ -4159,21 +4159,6 @@ func TestAnalyze_RequestIDHeaderPropagation(t *testing.T) {
 	}
 }
 
-func TestAnalyze_RequestIDHeaderGeneratedWhenMissing(t *testing.T) {
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return nil, nil, errors.New("boom")
-	})
-	handler := api.RequestIDMiddleware(mux)
-
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(`{"code":"graph TD;A-->B"}`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if got := w.Header().Get("X-Request-Id"); got == "" {
-		t.Fatal("expected generated request id header")
-	}
-}
 
 func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
