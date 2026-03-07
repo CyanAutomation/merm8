@@ -385,6 +385,22 @@ type helpSuggestion struct {
 	FixAction      string `json:"fix-action"`      // Brief action to take
 }
 
+type responseHintAppliesTo struct {
+	Line        int               `json:"line,omitempty"`
+	Column      int               `json:"column,omitempty"`
+	DiagramType model.DiagramType `json:"diagram-type,omitempty"`
+}
+
+// responseHint provides structured, machine-readable syntax remediation hints.
+type responseHint struct {
+	Code       string                 `json:"code"`
+	Message    string                 `json:"message"`
+	Severity   string                 `json:"severity"`
+	Confidence float64                `json:"confidence"`
+	AppliesTo  *responseHintAppliesTo `json:"applies-to,omitempty"`
+	FixExample string                 `json:"fix-example,omitempty"`
+}
+
 type analyzeResponse struct {
 	Valid          bool                 `json:"valid"`
 	DiagramType    model.DiagramType    `json:"diagram-type,omitempty"`
@@ -393,7 +409,8 @@ type analyzeResponse struct {
 	Timestamp      int64                `json:"timestamp,omitempty"`
 	SyntaxError    *syntaxErrorResponse `json:"syntax-error"`
 	Issues         []model.Issue        `json:"issues"`
-	Suggestions    []string             `json:"suggestions,omitempty"`
+	Hints          []responseHint       `json:"hints,omitempty"`
+	Suggestions    []string             `json:"suggestions,omitempty"` // Deprecated: use hints.
 	HelpSuggestion *helpSuggestion      `json:"help-suggestion,omitempty"`
 	Warnings       []string             `json:"warnings,omitempty"`
 	Meta           *responseMeta        `json:"meta,omitempty"`
@@ -1230,7 +1247,8 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
-		suggestions := suggestionsForSyntaxError(syntaxErr, req.Code)
+		hints := hintsForSyntaxError(syntaxErr, req.Code)
+		suggestions := suggestionsFromHints(hints)
 		helpSugg := helpForSyntaxError(syntaxErr, req.Code)
 		// On syntax errors, lint-supported is always false because the diagram cannot be linted
 		resp := analyzeResponse{
@@ -1239,6 +1257,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			LintSupported:  false,
 			RequestID:      RequestIDFromContext(r.Context()),
 			Timestamp:      time.Now().UnixMilli(),
+			Hints:          hints,
 			Suggestions:    suggestions,
 			HelpSuggestion: helpSugg,
 			Warnings:       deprecationWarnings,
@@ -1457,7 +1476,8 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
 		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
-		suggestions := suggestionsForSyntaxError(syntaxErr, req.Code)
+		hints := hintsForSyntaxError(syntaxErr, req.Code)
+		suggestions := suggestionsFromHints(hints)
 		helpSugg := helpForSyntaxError(syntaxErr, req.Code)
 		// On syntax errors, only set lint-supported=true if we detected a diagram type
 		// AND that type's family supports linting. If no type detected, always false.
@@ -1473,6 +1493,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 			LintSupported:  lintSupported,
 			RequestID:      RequestIDFromContext(r.Context()),
 			Timestamp:      time.Now().UnixMilli(),
+			Hints:          hints,
 			Suggestions:    suggestions,
 			HelpSuggestion: helpSugg,
 			Warnings:       deprecationWarnings,
@@ -1910,43 +1931,90 @@ func defaultMetrics(diagramType model.DiagramType) *metricsResponse {
 	}
 }
 
-// suggestionsForSyntaxError analyzes a syntax error and code to provide smart, actionable hints
-func suggestionsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []string {
-	suggestions := []string{}
+// hintsForSyntaxError analyzes a syntax error and code to provide smart, actionable hints.
+func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseHint {
+	hints := make([]responseHint, 0, 5)
+	diagramType := defaultDiagramTypeForSyntaxError(code)
 
-	// Detect Graphviz syntax
+	// Detect Graphviz syntax.
 	if strings.Contains(code, "digraph") || strings.Contains(code, "rankdir") {
-		suggestions = append(suggestions, "This looks like Graphviz syntax. Use Mermaid syntax instead: 'flowchart TD' for directed graphs.")
+		hints = append(hints, responseHint{
+			Code:       "graphviz_syntax_detected",
+			Message:    "This looks like Graphviz syntax. Use Mermaid syntax instead: 'flowchart TD' for directed graphs.",
+			Severity:   "warning",
+			Confidence: 0.99,
+			AppliesTo:  &responseHintAppliesTo{DiagramType: diagramType},
+			FixExample: "flowchart TD\n  A --> B",
+		})
 	}
 
-	// Detect YAML frontmatter
+	// Detect YAML frontmatter.
 	if strings.HasPrefix(strings.TrimSpace(code), "---") {
-		suggestions = append(suggestions, "Remove YAML frontmatter (---); Mermaid code should start directly with the diagram type.")
+		hints = append(hints, responseHint{
+			Code:       "yaml_frontmatter_detected",
+			Message:    "Remove YAML frontmatter (---); Mermaid code should start directly with the diagram type.",
+			Severity:   "warning",
+			Confidence: 0.95,
+			AppliesTo:  &responseHintAppliesTo{Line: 1, DiagramType: diagramType},
+			FixExample: "flowchart TD\n  A --> B",
+		})
 	}
 
-	// Detect tabs instead of spaces
-	if strings.Contains(code, "\t") {
-		suggestions = append(suggestions, "Replace tabs with spaces (Mermaid uses space indentation).")
+	// Detect tabs instead of spaces.
+	if strings.Contains(code, "	") {
+		hints = append(hints, responseHint{
+			Code:       "tab_indentation_detected",
+			Message:    "Replace tabs with spaces (Mermaid uses space indentation).",
+			Severity:   "info",
+			Confidence: 0.98,
+			AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
+			FixExample: "    A --> B",
+		})
 	}
 
-	// Detect arrow syntax issues based on error message and code content
-	if strings.Contains(code, "->") && !strings.Contains(code, "-->") {
+	// Detect arrow syntax issues based on error message and code content.
+	if strings.Contains(strings.ReplaceAll(code, "-->", ""), "->") {
 		firstLine := strings.TrimSpace(strings.SplitN(code, "\n", 2)[0])
 		if strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph") {
-			suggestions = append(suggestions, "Use '-->' for flowchart connections, not '->'.")
+			hints = append(hints, responseHint{
+				Code:       "flowchart_arrow_operator_detected",
+				Message:    "Use '-->' for flowchart connections, not '->'.",
+				Severity:   "warning",
+				Confidence: 0.97,
+				AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
+				FixExample: "A --> B",
+			})
 		}
 	}
 
-	// Detect missing diagram type keyword
+	// Detect missing diagram type keyword.
 	if strings.Contains(syntaxErr.Message, "No diagram type") || strings.Contains(syntaxErr.Message, "Unexpected") {
 		firstLine := strings.TrimSpace(strings.SplitN(code, "\n", 2)[0])
 		if !strings.Contains(firstLine, "flowchart") && !strings.Contains(firstLine, "sequenceDiagram") &&
 			!strings.Contains(firstLine, "classDiagram") && !strings.Contains(firstLine, "erDiagram") &&
 			!strings.Contains(firstLine, "stateDiagram") && !strings.Contains(firstLine, "graph") {
-			suggestions = append(suggestions, "Start your diagram with a type keyword: 'flowchart TD', 'sequenceDiagram', 'classDiagram', 'erDiagram', or 'stateDiagram-v2'.")
+			hints = append(hints, responseHint{
+				Code:       "missing_diagram_type_keyword",
+				Message:    "Start your diagram with a type keyword: 'flowchart TD', 'sequenceDiagram', 'classDiagram', 'erDiagram', or 'stateDiagram-v2'.",
+				Severity:   "warning",
+				Confidence: 0.90,
+				AppliesTo:  &responseHintAppliesTo{Line: 1},
+				FixExample: "flowchart TD\n  A --> B",
+			})
 		}
 	}
 
+	return hints
+}
+
+func suggestionsFromHints(hints []responseHint) []string {
+	if len(hints) == 0 {
+		return nil
+	}
+	suggestions := make([]string, 0, len(hints))
+	for _, hint := range hints {
+		suggestions = append(suggestions, hint.Message)
+	}
 	return suggestions
 }
 

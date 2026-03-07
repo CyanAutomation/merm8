@@ -12,6 +12,24 @@ import (
 	"github.com/CyanAutomation/merm8/internal/parser"
 )
 
+func assertHintCodePresent(t *testing.T, resp map[string]interface{}, expected string) {
+	t.Helper()
+	hints, ok := resp["hints"].([]interface{})
+	if !ok {
+		t.Fatalf("expected hints array, got %#v", resp["hints"])
+	}
+	for _, rawHint := range hints {
+		hint, ok := rawHint.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if code, _ := hint["code"].(string); code == expected {
+			return
+		}
+	}
+	t.Fatalf("expected hint code %q, got %#v", expected, hints)
+}
+
 // TestAnalyze_SyntaxError_ArrowOperatorHelp tests help-suggestion for arrow syntax errors.
 func TestAnalyze_SyntaxError_ArrowOperatorHelp(t *testing.T) {
 	syntaxErr := &parser.SyntaxError{
@@ -45,6 +63,8 @@ func TestAnalyze_SyntaxError_ArrowOperatorHelp(t *testing.T) {
 	if valid, ok := resp["valid"].(bool); !ok || valid {
 		t.Errorf("expected valid=false, got %v", resp["valid"])
 	}
+
+	assertHintCodePresent(t, resp, "flowchart_arrow_operator_detected")
 
 	// Verify help-suggestion is present
 	helpSugg, ok := resp["help-suggestion"].(map[string]interface{})
@@ -102,6 +122,8 @@ func TestAnalyzeRaw_SyntaxError_MissingDiagramTypeHelp(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
+	assertHintCodePresent(t, resp, "missing_diagram_type_keyword")
+
 	// Verify help-suggestion for missing diagram type
 	helpSugg, ok := resp["help-suggestion"].(map[string]interface{})
 	if !ok || helpSugg == nil {
@@ -148,6 +170,8 @@ func TestAnalyzeRaw_SyntaxError_GraphvizDetectionHelp(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
+
+	assertHintCodePresent(t, resp, "graphviz_syntax_detected")
 
 	// Verify help-suggestion for Graphviz
 	helpSugg, ok := resp["help-suggestion"].(map[string]interface{})
@@ -295,6 +319,8 @@ func TestAnalyze_SyntaxError_TabDetectionHelp(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
+
+	assertHintCodePresent(t, resp, "tab_indentation_detected")
 
 	// Verify help-suggestion for tab indentation
 	helpSugg, ok := resp["help-suggestion"].(map[string]interface{})

@@ -714,6 +714,36 @@ func TestAnalyze_SyntaxError_UsesDetectedDiagramTypeForDefaults(t *testing.T) {
 	}
 }
 
+func hintCodesFromResponse(t *testing.T, resp map[string]interface{}) []string {
+	t.Helper()
+	rawHints, ok := resp["hints"].([]interface{})
+	if !ok {
+		t.Fatalf("expected hints array, got %#v", resp["hints"])
+	}
+	codes := make([]string, 0, len(rawHints))
+	for _, raw := range rawHints {
+		hint, ok := raw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected hint object, got %#v", raw)
+		}
+		code, ok := hint["code"].(string)
+		if !ok || code == "" {
+			t.Fatalf("expected non-empty hint code, got %#v", hint["code"])
+		}
+		codes = append(codes, code)
+	}
+	return codes
+}
+
+func containsString(values []string, target string) bool {
+	for _, v := range values {
+		if v == target {
+			return true
+		}
+	}
+	return false
+}
+
 // TestAnalyze_SyntaxError_SuggestionsGraphvizDetection tests suggestions for Graphviz syntax.
 func TestAnalyze_SyntaxError_SuggestionsGraphvizDetection(t *testing.T) {
 	syntaxErr := &parser.SyntaxError{
@@ -743,15 +773,15 @@ func TestAnalyze_SyntaxError_SuggestionsGraphvizDetection(t *testing.T) {
 		t.Errorf("expected at least one suggestion for Graphviz syntax")
 	}
 
-	found := false
-	for _, s := range suggestions {
-		if str, ok := s.(string); ok && strings.Contains(str, "Graphviz") {
-			found = true
-			break
-		}
+	hintCodes := hintCodesFromResponse(t, resp)
+	if !containsString(hintCodes, "graphviz_syntax_detected") {
+		t.Errorf("expected graphviz_syntax_detected hint code, got %v", hintCodes)
 	}
-	if !found {
-		t.Errorf("expected Graphviz suggestion, got %v", suggestions)
+	if len(suggestions) > 0 {
+		firstHint := resp["hints"].([]interface{})[0].(map[string]interface{})
+		if msg, _ := firstHint["message"].(string); suggestions[0] != msg {
+			t.Errorf("expected suggestions to be derived from hints, first suggestion=%q first hint message=%q", suggestions[0], msg)
+		}
 	}
 }
 
@@ -777,20 +807,9 @@ func TestAnalyze_SyntaxError_SuggestionsTabDetection(t *testing.T) {
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
-	suggestions, ok := resp["suggestions"].([]interface{})
-	if !ok {
-		t.Fatalf("expected suggestions array, got %#v", resp["suggestions"])
-	}
-
-	found := false
-	for _, s := range suggestions {
-		if str, ok := s.(string); ok && (strings.Contains(str, "tab") || strings.Contains(str, "space")) {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected tab/space suggestion, got %v", suggestions)
+	hintCodes := hintCodesFromResponse(t, resp)
+	if !containsString(hintCodes, "tab_indentation_detected") {
+		t.Errorf("expected tab_indentation_detected hint code, got %v", hintCodes)
 	}
 }
 
@@ -816,20 +835,9 @@ func TestAnalyze_SyntaxError_SuggestionsArrowSyntax(t *testing.T) {
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
-	suggestions, ok := resp["suggestions"].([]interface{})
-	if !ok {
-		t.Fatalf("expected suggestions array, got %#v", resp["suggestions"])
-	}
-
-	found := false
-	for _, s := range suggestions {
-		if str, ok := s.(string); ok && strings.Contains(str, "-->") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected arrow syntax suggestion, got %v", suggestions)
+	hintCodes := hintCodesFromResponse(t, resp)
+	if !containsString(hintCodes, "flowchart_arrow_operator_detected") {
+		t.Errorf("expected flowchart_arrow_operator_detected hint code, got %v", hintCodes)
 	}
 }
 
@@ -855,20 +863,9 @@ func TestAnalyze_SyntaxError_SuggestionsMissingDiagramType(t *testing.T) {
 	var resp map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 
-	suggestions, ok := resp["suggestions"].([]interface{})
-	if !ok {
-		t.Fatalf("expected suggestions array, got %#v", resp["suggestions"])
-	}
-
-	found := false
-	for _, s := range suggestions {
-		if str, ok := s.(string); ok && strings.Contains(str, "diagram") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected diagram-type suggestion, got %v", suggestions)
+	hintCodes := hintCodesFromResponse(t, resp)
+	if !containsString(hintCodes, "missing_diagram_type_keyword") {
+		t.Errorf("expected missing_diagram_type_keyword hint code, got %v", hintCodes)
 	}
 }
 
@@ -960,18 +957,9 @@ func TestAnalyzeRaw_SyntaxError_IncludesSuggestions(t *testing.T) {
 		t.Errorf("expected suggestions for /raw/ endpoint with Graphviz syntax")
 	}
 
-	// Verify at least one suggestion mentions diagram type or Graphviz
-	found := false
-	for _, s := range suggestions {
-		if str, ok := s.(string); ok {
-			if strings.Contains(str, "diagram") || strings.Contains(str, "Graphviz") {
-				found = true
-				break
-			}
-		}
-	}
-	if !found {
-		t.Errorf("expected suggestion about diagram type or Graphviz in /raw/ response, got %v", suggestions)
+	hintCodes := hintCodesFromResponse(t, resp)
+	if !containsString(hintCodes, "graphviz_syntax_detected") {
+		t.Errorf("expected graphviz_syntax_detected hint code in /raw/ response, got %v", hintCodes)
 	}
 
 	// Verify valid=false
