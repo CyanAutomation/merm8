@@ -123,8 +123,20 @@ func findDuplicateNodeIDs(source string) []string {
 
 	counts := make(map[string]int)
 
+	// Remove comments before processing (same as extractAllNodeIDsFromSource)
+	lines := strings.Split(source, "\n")
+	var cleanedLines []string
+	for _, line := range lines {
+		// Remove comment portion from the line
+		if idx := strings.Index(line, "%%"); idx >= 0 {
+			line = line[:idx]
+		}
+		cleanedLines = append(cleanedLines, line)
+	}
+	cleanedSource := strings.Join(cleanedLines, "\n")
+
 	// Count occurrences, filtering out keywords
-	for _, match := range nodeDefinitionPattern.FindAllStringSubmatch(source, -1) {
+	for _, match := range nodeDefinitionPattern.FindAllStringSubmatch(cleanedSource, -1) {
 		nodeID := match[1]
 		if !isKeyword(nodeID) {
 			counts[nodeID]++
