@@ -90,10 +90,18 @@ func TestInfo_ParserTimeout(t *testing.T) {
 		return
 	}
 
-	if val, ok := timeout.(float64); !ok || val <= 0 {
-		t.Errorf("ParserTimeoutSeconds = %v, want > 0", timeout)
+	val, ok := timeout.(float64)
+	if !ok {
+		t.Fatalf("parser-timeout-seconds type = %T, want JSON number", timeout)
 	}
-	t.Logf("Parser timeout seconds: %v", timeout)
+
+	if val != 5 {
+		t.Errorf("parser-timeout-seconds = %v, want 5", val)
+	}
+
+	if val != float64(int(val)) {
+		t.Errorf("parser-timeout-seconds = %v, want whole-number seconds", val)
+	}
 }
 
 // TestAnalyzeSARIF_InvalidJSON verifies SARIF error response for invalid JSON
@@ -325,24 +333,6 @@ func mapErrorCodeToLevel(code string) string {
 		return sarif.SARIFLevelWarning
 	default:
 		return sarif.SARIFLevelWarning
-	}
-}
-
-// TestInfo_TimeoutProviderInterface verifies TimeoutProvider interface is properly implemented
-func TestInfo_TimeoutProviderInterface(t *testing.T) {
-	mockP := &mockParserWithTimeout{timeout: 5 * time.Second}
-
-	// Verify parser implements TimeoutProvider
-	var _ TimeoutProvider = mockP
-
-	timeout := mockP.Timeout()
-	if timeout <= 0 {
-		t.Errorf("Timeout() = %v, want > 0", timeout)
-	}
-
-	// Timeout should be within reasonable bounds
-	if timeout < 1*time.Second || timeout > 60*time.Second {
-		t.Logf("Note: Timeout = %v (may be outside normal 1-60s range if explicitly set)", timeout)
 	}
 }
 
