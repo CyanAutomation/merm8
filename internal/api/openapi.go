@@ -2127,6 +2127,18 @@ var openapi = map[string]interface{}{
 					"diagram-type": map[string]interface{}{"type": "string", "enum": []string{"flowchart", "sequence", "class", "er", "state", "unknown"}},
 				},
 			},
+			"Hint": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"code", "message", "severity", "confidence"},
+				"properties": map[string]interface{}{
+					"code":        map[string]interface{}{"type": "string", "description": "Stable machine-readable hint code.", "example": "graphviz_syntax_detected"},
+					"message":     map[string]interface{}{"type": "string", "description": "Human-readable hint message."},
+					"severity":    map[string]interface{}{"type": "string", "enum": []string{"info", "warning"}},
+					"confidence":  map[string]interface{}{"type": "number", "minimum": 0, "maximum": 1},
+					"applies-to":  map[string]interface{}{"$ref": "#/components/schemas/HintAppliesTo"},
+					"fix-example": map[string]interface{}{"type": "string", "description": "Optional concise replacement snippet."},
+				},
+			},
 			"ResponseHint": map[string]interface{}{
 				"type":     "object",
 				"required": []string{"code", "message", "severity", "confidence"},
@@ -2137,6 +2149,18 @@ var openapi = map[string]interface{}{
 					"confidence":  map[string]interface{}{"type": "number", "minimum": 0, "maximum": 1},
 					"applies-to":  map[string]interface{}{"$ref": "#/components/schemas/HintAppliesTo"},
 					"fix-example": map[string]interface{}{"type": "string", "description": "Optional concise replacement snippet."},
+				},
+			},
+			"HelpSuggestion": map[string]interface{}{
+				"type":     "object",
+				"required": []string{"title", "explanation", "wrong-example", "correct-example", "doc-link", "fix-action"},
+				"properties": map[string]interface{}{
+					"title":           map[string]interface{}{"type": "string", "description": "Short help topic title.", "example": "Arrow operator syntax"},
+					"explanation":     map[string]interface{}{"type": "string", "description": "One-paragraph explanation of the likely issue."},
+					"wrong-example":   map[string]interface{}{"type": "string", "description": "Incorrect code snippet."},
+					"correct-example": map[string]interface{}{"type": "string", "description": "Corrected code snippet."},
+					"doc-link":        map[string]interface{}{"type": "string", "description": "Reference documentation URL or path fragment."},
+					"fix-action":      map[string]interface{}{"type": "string", "description": "Actionable one-line remediation instruction."},
 				},
 			},
 			"AnalyzeResponse": map[string]interface{}{
@@ -2187,7 +2211,12 @@ var openapi = map[string]interface{}{
 					"hints": map[string]interface{}{
 						"type":        "array",
 						"description": "Structured syntax remediation hints. Provided when valid=false and syntax-error is present.",
-						"items":       map[string]interface{}{"$ref": "#/components/schemas/ResponseHint"},
+						"items":       map[string]interface{}{"$ref": "#/components/schemas/Hint"},
+					},
+					"help-suggestion": map[string]interface{}{
+						"$ref":        "#/components/schemas/HelpSuggestion",
+						"description": "Focused remediation guidance for common syntax/config mistakes.",
+						"nullable":    true,
 					},
 					"suggestions": map[string]interface{}{
 						"type":        "array",
