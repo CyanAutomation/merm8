@@ -150,7 +150,10 @@ func TestBenchmarkCase_JSONMarshaling(t *testing.T) {
 		}
 	}
 
-	expectedIssues, _ := raw["expected_issues"].([]any)
+	expectedIssues, ok := raw["expected_issues"].([]any)
+	if !ok {
+		t.Fatal("expected expected_issues to be an array")
+	}
 	if len(expectedIssues) == 0 {
 		t.Fatal("expected expected_issues to contain at least one element")
 	}
