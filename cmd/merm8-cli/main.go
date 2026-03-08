@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -453,23 +454,57 @@ func canonicalizeConfigRuleKeys(cfg rules.Config) rules.Config {
 	}
 
 	canonical := make(rules.Config, len(cfg))
-	for ruleID, ruleCfg := range cfg {
-		canonicalRuleID := ruleID
-		if strings.HasPrefix(ruleID, "core/") {
-			canonicalRuleID = strings.TrimPrefix(ruleID, "core/")
-		}
 
-		if existing, ok := canonical[canonicalRuleID]; ok {
-			for optionKey, optionValue := range ruleCfg {
-				if _, exists := existing[optionKey]; !exists {
-					existing[optionKey] = optionValue
-				}
-			}
+	// First pass: apply canonical keys and clone options.
+	for _, ruleID := range sortedRuleIDs(cfg) {
+		if strings.HasPrefix(ruleID, "core/") {
+			continue
+		}
+		canonical[ruleID] = cloneRuleConfig(cfg[ruleID])
+	}
+
+	// Second pass: apply prefixed aliases only when canonical key is absent,
+	// otherwise only backfill missing option keys.
+	for _, ruleID := range sortedRuleIDs(cfg) {
+		if !strings.HasPrefix(ruleID, "core/") {
 			continue
 		}
 
-		canonical[canonicalRuleID] = ruleCfg
+		canonicalRuleID := strings.TrimPrefix(ruleID, "core/")
+		ruleCfg := cfg[ruleID]
+		existing, exists := canonical[canonicalRuleID]
+		if !exists {
+			canonical[canonicalRuleID] = cloneRuleConfig(ruleCfg)
+			continue
+		}
+
+		for optionKey, optionValue := range ruleCfg {
+			if _, alreadySet := existing[optionKey]; alreadySet {
+				continue
+			}
+			existing[optionKey] = optionValue
+		}
 	}
 
 	return canonical
+}
+
+func sortedRuleIDs(cfg rules.Config) []string {
+	keys := make([]string, 0, len(cfg))
+	for key := range cfg {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func cloneRuleConfig(ruleCfg map[string]any) map[string]any {
+	if ruleCfg == nil {
+		return nil
+	}
+	clone := make(map[string]any, len(ruleCfg))
+	for optionKey, optionValue := range ruleCfg {
+		clone[optionKey] = optionValue
+	}
+	return clone
 }

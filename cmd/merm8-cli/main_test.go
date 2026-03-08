@@ -384,3 +384,56 @@ func TestParseConfigFileVersionedShape(t *testing.T) {
 		})
 	}
 }
+
+func TestCanonicalizeConfigRuleKeysDeterministicAliasPrecedence(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		cfg      rules.Config
+		wantRule map[string]any
+	}{
+		{
+			name: "canonical key wins on conflicting options",
+			cfg: rules.Config{
+				"core/max-fanout": {"limit": 2.0, "severity": "warn"},
+				"max-fanout":      {"limit": 9.0},
+			},
+			wantRule: map[string]any{"limit": 9.0, "severity": "warn"},
+		},
+		{
+			name: "canonical key still wins with inverse declaration order",
+			cfg: rules.Config{
+				"max-fanout":      {"limit": 9.0},
+				"core/max-fanout": {"limit": 2.0, "severity": "warn"},
+			},
+			wantRule: map[string]any{"limit": 9.0, "severity": "warn"},
+		},
+		{
+			name: "prefixed key used when canonical key absent",
+			cfg: rules.Config{
+				"core/max-fanout": {"limit": 2.0},
+			},
+			wantRule: map[string]any{"limit": 2.0},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := canonicalizeConfigRuleKeys(tt.cfg)
+			ruleCfg, ok := got["max-fanout"]
+			if !ok {
+				t.Fatalf("expected canonical max-fanout key in %#v", got)
+			}
+			if _, hasPrefixed := got["core/max-fanout"]; hasPrefixed {
+				t.Fatalf("expected prefixed key to be removed, got %#v", got)
+			}
+			if !reflect.DeepEqual(ruleCfg, tt.wantRule) {
+				t.Fatalf("expected merged rule %#v, got %#v", tt.wantRule, ruleCfg)
+			}
+		})
+	}
+}
