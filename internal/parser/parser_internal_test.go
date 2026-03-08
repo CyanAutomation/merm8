@@ -217,3 +217,47 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 		}
 	})
 }
+
+func TestReadParserMode(t *testing.T) {
+	t.Run("defaults to subprocess", func(t *testing.T) {
+		t.Setenv("PARSER_MODE", "")
+		if got := readParserMode(); got != "subprocess" {
+			t.Fatalf("expected subprocess default, got %q", got)
+		}
+	})
+
+	t.Run("supports pool mode", func(t *testing.T) {
+		t.Setenv("PARSER_MODE", "pool")
+		if got := readParserMode(); got != "pool" {
+			t.Fatalf("expected pool mode, got %q", got)
+		}
+	})
+
+	t.Run("invalid mode falls back", func(t *testing.T) {
+		t.Setenv("PARSER_MODE", "garbage")
+		if got := readParserMode(); got != "subprocess" {
+			t.Fatalf("expected subprocess fallback, got %q", got)
+		}
+	})
+}
+
+func TestReadWorkerPoolSize(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		t.Setenv("PARSER_WORKER_POOL_SIZE", "")
+		if got := readWorkerPoolSize(); got != 4 {
+			t.Fatalf("expected default pool size 4, got %d", got)
+		}
+	})
+
+	t.Run("clamps min and max", func(t *testing.T) {
+		t.Setenv("PARSER_WORKER_POOL_SIZE", "0")
+		if got := readWorkerPoolSize(); got != 1 {
+			t.Fatalf("expected min pool size 1, got %d", got)
+		}
+
+		t.Setenv("PARSER_WORKER_POOL_SIZE", "999")
+		if got := readWorkerPoolSize(); got != 64 {
+			t.Fatalf("expected max pool size 64, got %d", got)
+		}
+	})
+}
