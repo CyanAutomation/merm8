@@ -2536,15 +2536,43 @@ func getServersFromEnv() []map[string]interface{} {
 	}
 }
 
+func cloneOpenAPISpec(src map[string]interface{}) (map[string]interface{}, error) {
+	specJSON, err := json.Marshal(src)
+	if err != nil {
+		return nil, err
+	}
+
+	var spec map[string]interface{}
+	if err := json.Unmarshal(specJSON, &spec); err != nil {
+		return nil, err
+	}
+
+	return spec, nil
+}
+
+func openAPIFallbackSpec(servers []map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"openapi": "3.0.0",
+		"info": map[string]interface{}{
+			"title":   "merm8 - Mermaid Lint API",
+			"version": "1.0.0",
+		},
+		"servers": servers,
+	}
+}
+
 // OpenAPISpec returns the OpenAPI spec with dynamic servers based on environment.
 func OpenAPISpec() map[string]interface{} {
-	// Deep copy the openapi spec to avoid modifying the global
-	specJSON, _ := json.Marshal(openapi)
-	var spec map[string]interface{}
-	json.Unmarshal(specJSON, &spec)
+	servers := getServersFromEnv()
 
-	// Update servers from environment
-	spec["servers"] = getServersFromEnv()
+	// Deep copy the openapi spec to avoid modifying the global.
+	spec, err := cloneOpenAPISpec(openapi)
+	if err != nil {
+		return openAPIFallbackSpec(servers)
+	}
+
+	// Update servers from environment.
+	spec["servers"] = servers
 
 	return spec
 }
