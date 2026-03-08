@@ -1147,6 +1147,105 @@ func TestAnalyze_SyntaxError_HintsSortedByConfidence(t *testing.T) {
 }
 
 // TestAnalyzeHelp_Returns200 tests that /analyze/help endpoint returns proper help data.
+
+func hintByCode(t *testing.T, resp map[string]interface{}, code string) map[string]interface{} {
+	t.Helper()
+	hintsRaw, ok := resp["hints"].([]interface{})
+	if !ok {
+		t.Fatalf("expected hints array, got %#v", resp["hints"])
+	}
+	for _, raw := range hintsRaw {
+		hint, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if hintCode, _ := hint["code"].(string); hintCode == code {
+			return hint
+		}
+	}
+	t.Fatalf("expected hint code %s in %#v", code, hintsRaw)
+	return nil
+}
+
+func TestAnalyze_SyntaxError_GenericFallbackContextAndBounds(t *testing.T) {
+	tests := []struct {
+		name                string
+		syntaxErr           *parser.SyntaxError
+		payload             string
+		wantHintContains    []string
+		wantHintNotContains []string
+		wantFixContains     []string
+		wantFixNotContains  []string
+	}{
+		{
+			name:                "line and column are zero",
+			syntaxErr:           &parser.SyntaxError{Message: "Unexpected token", Line: 0, Column: 0},
+			payload:             "flowchart TD\n  A --> B",
+			wantHintContains:    []string{"Check for incomplete edge definitions"},
+			wantHintNotContains: []string{"Check near column"},
+			wantFixContains:     []string{"Review the line near the reported syntax-error"},
+			wantFixNotContains:  []string{"Check near column"},
+		},
+		{
+			name:             "column out of range is clamped and excerpt included",
+			syntaxErr:        &parser.SyntaxError{Message: "Unexpected token", Line: 2, Column: 999},
+			payload:          "flowchart TD\n  A? B",
+			wantHintContains: []string{"Check near column 7 on line 2", "`  A? B`"},
+			wantFixContains:  []string{"Check near column 7 on line 2", "`  A? B`"},
+		},
+		{
+			name:                "line out of range stays stable",
+			syntaxErr:           &parser.SyntaxError{Message: "Unexpected token", Line: 99, Column: 3},
+			payload:             "flowchart TD\n  A --> B",
+			wantHintContains:    []string{"Check for incomplete edge definitions"},
+			wantHintNotContains: []string{"Check near column"},
+			wantFixContains:     []string{"Review the line near the reported syntax-error"},
+			wantFixNotContains:  []string{"Check near column"},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", tt.payload, "text/plain", tt.syntaxErr)
+			hint := hintByCode(t, resp, "generic_syntax_error")
+			msg, ok := hint["message"].(string)
+			if !ok {
+				t.Fatalf("expected generic hint message string, got %#v", hint["message"])
+			}
+			for _, want := range tt.wantHintContains {
+				if !strings.Contains(msg, want) {
+					t.Fatalf("expected generic hint message to include %q, got %q", want, msg)
+				}
+			}
+			for _, avoid := range tt.wantHintNotContains {
+				if strings.Contains(msg, avoid) {
+					t.Fatalf("expected generic hint message to not include %q, got %q", avoid, msg)
+				}
+			}
+
+			helpRaw, ok := resp["help-suggestion"].(map[string]interface{})
+			if !ok {
+				t.Fatalf("expected help-suggestion object, got %#v", resp["help-suggestion"])
+			}
+			fixAction, ok := helpRaw["fix-action"].(string)
+			if !ok {
+				t.Fatalf("expected fix-action string, got %#v", helpRaw["fix-action"])
+			}
+			for _, want := range tt.wantFixContains {
+				if !strings.Contains(fixAction, want) {
+					t.Fatalf("expected fix-action to include %q, got %q", want, fixAction)
+				}
+			}
+			for _, avoid := range tt.wantFixNotContains {
+				if strings.Contains(fixAction, avoid) {
+					t.Fatalf("expected fix-action to not include %q, got %q", avoid, fixAction)
+				}
+			}
+		})
+	}
+}
+
 func TestAnalyzeHelp_Returns200(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, nil
