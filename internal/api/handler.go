@@ -2515,9 +2515,10 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 	}
 
 	if syntaxErr != nil && len(deduped) == 0 {
+		syntaxCtx := syntaxErrorLineContext(code, syntaxErr)
 		deduped = append(deduped, responseHint{
 			Code:       "generic_syntax_error",
-			Message:    "Check for incomplete edge definitions, unclosed |label|, and unmatched brackets.",
+			Message:    genericSyntaxHintMessage(syntaxCtx),
 			Severity:   "warning",
 			Confidence: 0.70,
 			AppliesTo: &responseHintAppliesTo{
@@ -2548,6 +2549,7 @@ func suggestionsFromHints(hints []responseHint) []string {
 func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggestion {
 	lines := strings.Split(code, "\n")
 	signals := analyzeInputSignals(code, syntaxErr)
+	syntaxCtx := syntaxErrorLineContext(code, syntaxErr)
 
 	// Detect Graphviz syntax (high confidence error)
 	if signals.hasGraphviz {
@@ -2692,8 +2694,95 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 		WrongExample:   "A -->|No Retry\nB[Start",
 		CorrectExample: "flowchart TD\n  A -->|No| Retry\n  B[Start]",
 		DocLink:        "#common-mistakes",
-		FixAction:      "Review the line near the reported syntax-error and correct edge operators, delimiters, and required diagram keywords.",
+		FixAction:      genericSyntaxFixAction(syntaxCtx),
 	}
+}
+
+type syntaxErrorContext struct {
+	line       string
+	excerpt    string
+	lineNumber int
+	column     int
+}
+
+func syntaxErrorLineContext(code string, syntaxErr *parser.SyntaxError) syntaxErrorContext {
+	if syntaxErr == nil {
+		return syntaxErrorContext{}
+	}
+
+	ctx := syntaxErrorContext{lineNumber: syntaxErr.Line}
+	lines := strings.Split(code, "\n")
+	if syntaxErr.Line <= 0 || syntaxErr.Line > len(lines) {
+		return ctx
+	}
+
+	line := lines[syntaxErr.Line-1]
+	ctx.line = line
+	runes := []rune(line)
+
+	col := syntaxErr.Column
+	if col <= 0 {
+		col = 1
+	}
+	if col > len(runes)+1 {
+		col = len(runes) + 1
+	}
+	ctx.column = col
+
+	if len(runes) <= 80 {
+		ctx.excerpt = line
+		return ctx
+	}
+
+	pointerIndex := col - 1
+	if pointerIndex < 0 {
+		pointerIndex = 0
+	}
+	if pointerIndex > len(runes) {
+		pointerIndex = len(runes)
+	}
+
+	start := pointerIndex - 30
+	if start < 0 {
+		start = 0
+	}
+	end := pointerIndex + 30
+	if end > len(runes) {
+		end = len(runes)
+	}
+
+	prefix := ""
+	if start > 0 {
+		prefix = "…"
+	}
+	suffix := ""
+	if end < len(runes) {
+		suffix = "…"
+	}
+	ctx.excerpt = prefix + string(runes[start:end]) + suffix
+
+	return ctx
+}
+
+func genericSyntaxHintMessage(ctx syntaxErrorContext) string {
+	message := "Check for incomplete edge definitions, unclosed |label|, and unmatched brackets."
+	if ctx.lineNumber <= 0 || ctx.column <= 0 {
+		return message
+	}
+	if ctx.excerpt != "" {
+		return fmt.Sprintf("%s Check near column %d on line %d: `%s`.", message, ctx.column, ctx.lineNumber, ctx.excerpt)
+	}
+	return fmt.Sprintf("%s Check near column %d on line %d.", message, ctx.column, ctx.lineNumber)
+}
+
+func genericSyntaxFixAction(ctx syntaxErrorContext) string {
+	if ctx.lineNumber <= 0 || ctx.column <= 0 {
+		return "Review the line near the reported syntax-error and correct edge operators, delimiters, and required diagram keywords."
+	}
+	if ctx.excerpt != "" {
+		return fmt.Sprintf("Check near column %d on line %d (`%s`) and correct edge operators, delimiters, and required diagram keywords.", ctx.column, ctx.lineNumber, ctx.excerpt)
+	}
+	return fmt.Sprintf("Check near column %d on line %d and correct edge operators, delimiters, and required diagram keywords.", ctx.column, ctx.lineNumber)
 }
 
 // isDiagramTypeKeyword checks if a line starts with a valid diagram type keyword.
