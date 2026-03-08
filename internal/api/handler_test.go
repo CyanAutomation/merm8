@@ -1909,7 +1909,6 @@ func TestAnalyze_MetricsDisconnectedNodeUnionIncludesSourceAnalysisOnlyNodes(t *
 
 	if got := metrics["disconnected-node-count"]; got != float64(1) {
 		t.Fatalf("expected disconnected-node-count=1 (only 'orphan', B is connected), got %v", got)
-		t.Fatalf("expected disconnected-node-count=2 from unioned IDs, got %v", got)
 	}
 }
 
