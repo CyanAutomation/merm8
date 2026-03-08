@@ -5495,6 +5495,45 @@ func TestAnalyzeRaw_ValidJSONWithCode_UsesCodeField(t *testing.T) {
 	}
 }
 
+func TestAnalyzeRaw_ValidJSONMissingCode_ReturnsMissingCode(t *testing.T) {
+	mux := newTestMux(func(input string) (*model.Diagram, *parser.SyntaxError, error) {
+		t.Fatalf("parser should not be called when JSON code is missing, got %q", input)
+		return nil, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]any{"options": map[string]any{}})
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "missing_code", "field 'code' is required")
+}
+
+func TestAnalyzeRaw_InvalidJSONTextishBody_FallbackStillWorks(t *testing.T) {
+	const body = "{graph TD\n  A-->B"
+	var capturedCode string
+	mux := newTestMux(func(input string) (*model.Diagram, *parser.SyntaxError, error) {
+		capturedCode = input
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if capturedCode != body {
+		t.Fatalf("expected parser to receive raw body fallback, got %q", capturedCode)
+	}
+}
+
 // TestAnalyzeRaw_ValidDiagram_PlainText tests /analyze/raw with raw mermaid text.
 func TestAnalyzeRaw_ValidDiagram_PlainText(t *testing.T) {
 	validDiagram := &model.Diagram{
