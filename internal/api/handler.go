@@ -548,6 +548,7 @@ type analyzeOutcomeCounters struct {
 	mu                  sync.RWMutex
 	validSuccess        uint64
 	syntaxError         uint64
+	other               uint64
 	parserTimeout       uint64
 	parserSubprocess    uint64
 	parserDecode        uint64
@@ -558,6 +559,7 @@ type analyzeOutcomeCounters struct {
 type analyzeOutcomeSnapshot struct {
 	validSuccess        uint64
 	syntaxError         uint64
+	other               uint64
 	parserTimeout       uint64
 	parserSubprocess    uint64
 	parserDecode        uint64
@@ -572,6 +574,7 @@ func (c *analyzeOutcomeCounters) Snapshot() analyzeOutcomeSnapshot {
 	return analyzeOutcomeSnapshot{
 		validSuccess:        c.validSuccess,
 		syntaxError:         c.syntaxError,
+		other:               c.other,
 		parserTimeout:       c.parserTimeout,
 		parserSubprocess:    c.parserSubprocess,
 		parserDecode:        c.parserDecode,
@@ -599,6 +602,8 @@ func (c *analyzeOutcomeCounters) Increment(outcome string) {
 		c.parserContract++
 	case telemetry.OutcomeInternalError:
 		c.parserInternalError++
+	case telemetry.OutcomeOther:
+		c.other++
 	}
 }
 
@@ -675,6 +680,7 @@ type healthMetricsOutcome struct {
 	Total          uint64 `json:"total"`
 	SyntaxErrors   uint64 `json:"syntax-errors,omitempty"`
 	LintSuccess    uint64 `json:"lint-success,omitempty"`
+	Other          uint64 `json:"other,omitempty"`
 	ParserTimeout  uint64 `json:"parser-timeout,omitempty"`
 	ParserErrors   uint64 `json:"parser-errors,omitempty"`
 	InternalErrors uint64 `json:"internal-errors,omitempty"`
@@ -842,6 +848,7 @@ func (h *Handler) InternalMetrics(w http.ResponseWriter, _ *http.Request) {
 		Analyze: map[string]uint64{
 			"valid_success": snapshot.validSuccess,
 			"syntax_error":  snapshot.syntaxError,
+			"other":         snapshot.other,
 		},
 		Parser: map[string]uint64{
 			"timeout":    snapshot.parserTimeout,
@@ -849,6 +856,7 @@ func (h *Handler) InternalMetrics(w http.ResponseWriter, _ *http.Request) {
 			"decode":     snapshot.parserDecode,
 			"contract":   snapshot.parserContract,
 			"internal":   snapshot.parserInternalError,
+			"other":      snapshot.other,
 		},
 	})
 }
@@ -1043,6 +1051,7 @@ func (h *Handler) HealthMetrics(w http.ResponseWriter, _ *http.Request) {
 	snapshot := h.analyzeCounters.Snapshot()
 	validSuccess := snapshot.validSuccess
 	syntaxError := snapshot.syntaxError
+	other := snapshot.other
 	parserTimeout := snapshot.parserTimeout
 	parserSubprocess := snapshot.parserSubprocess
 	parserDecode := snapshot.parserDecode
@@ -1051,6 +1060,7 @@ func (h *Handler) HealthMetrics(w http.ResponseWriter, _ *http.Request) {
 
 	totalRequests := validSuccess +
 		syntaxError +
+		other +
 		parserTimeout +
 		parserSubprocess +
 		parserDecode +
@@ -1061,11 +1071,12 @@ func (h *Handler) HealthMetrics(w http.ResponseWriter, _ *http.Request) {
 		Total:       validSuccess,
 		LintSuccess: validSuccess,
 	}
-	failedTotal := syntaxError + parserTimeout + parserSubprocess + parserDecode + parserContract + parserInternalError
+	failedTotal := syntaxError + other + parserTimeout + parserSubprocess + parserDecode + parserContract + parserInternalError
 
 	failedAnalyses := healthMetricsOutcome{
 		Total:          failedTotal,
 		SyntaxErrors:   syntaxError,
+		Other:          other,
 		ParserTimeout:  parserTimeout,
 		ParserErrors:   parserSubprocess + parserDecode + parserContract,
 		InternalErrors: parserInternalError,
