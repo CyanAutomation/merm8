@@ -67,8 +67,10 @@ func (r MaxDepth) Run(d *model.Diagram, cfg Config) []model.Issue {
 
 	issues := make([]model.Issue, 0)
 	seenPaths := make(map[string]struct{})
+	memo := make(map[string]pathResult)
+	sort.Strings(starts)
 	for _, start := range starts {
-		depth, path := longestPathFrom(start, adj, map[string]bool{})
+		depth, path := longestPathFrom(start, adj, map[string]bool{}, memo)
 		if depth <= limit {
 			continue
 		}
@@ -95,9 +97,17 @@ func (r MaxDepth) Run(d *model.Diagram, cfg Config) []model.Issue {
 	return issues
 }
 
-func longestPathFrom(nodeID string, adj map[string][]string, visited map[string]bool) (int, []string) {
+type pathResult struct {
+	depth int
+	path  []string
+}
+
+func longestPathFrom(nodeID string, adj map[string][]string, visited map[string]bool, memo map[string]pathResult) (int, []string) {
 	if visited[nodeID] {
 		return 0, []string{nodeID}
+	}
+	if cached, ok := memo[nodeID]; ok {
+		return cached.depth, append([]string(nil), cached.path...)
 	}
 
 	visited[nodeID] = true
@@ -110,13 +120,21 @@ func longestPathFrom(nodeID string, adj map[string][]string, visited map[string]
 
 	bestDepth := 0
 	bestPath := []string{nodeID}
+	cacheable := true
 	for _, next := range nextNodes {
-		depth, path := longestPathFrom(next, adj, visited)
+		if visited[next] {
+			cacheable = false
+		}
+
+		depth, path := longestPathFrom(next, adj, visited, memo)
 		candidateDepth := depth + 1
 		if candidateDepth > bestDepth {
 			bestDepth = candidateDepth
 			bestPath = append([]string{nodeID}, path...)
 		}
+	}
+	if cacheable {
+		memo[nodeID] = pathResult{depth: bestDepth, path: append([]string(nil), bestPath...)}
 	}
 
 	return bestDepth, bestPath
