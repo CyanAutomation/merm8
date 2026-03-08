@@ -279,7 +279,7 @@ func scanNodeIDEnd(line string, start int) int {
 			i++
 			continue
 		}
-		if line[i] == '-' && i+1 < len(line) && isIdentifierCore(line[i-1]) && isIdentifierCore(line[i+1]) {
+		if line[i] == '-' && i > 0 && i+1 < len(line) && isIdentifierCore(line[i-1]) && isIdentifierCore(line[i+1]) {
 			i++
 			continue
 		}
