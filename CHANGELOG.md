@@ -92,6 +92,7 @@ Fixtures are discoverable and ready for rule implementation. As new rules are ad
   - Parser timeout: `504 Gateway Timeout`
   - Server busy: `503 Service Unavailable`
   - Internal errors: `500 Internal Server Error`
+- CORS allowlist origin matching now supports constrained wildcard entries (single `*` with explicit prefix/suffix, e.g. `https://merm8-splash-*.vercel.app`) while preserving exact-match behavior as the default fast path.
 
 ## [0.1.0] - 2026-03-03
 
