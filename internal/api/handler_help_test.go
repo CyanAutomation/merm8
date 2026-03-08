@@ -65,6 +65,7 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 		code                    string
 		expectedHintCode        string
 		expectedHintMessage     string
+		expectHelpSuggestion    bool
 		expectedHelpTitle       string
 		expectedHelpExplanation string
 	}{
@@ -74,6 +75,7 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			code:                    "digraph G {\n  A -> B\n}",
 			expectedHintCode:        "graphviz_syntax_detected",
 			expectedHintMessage:     "graphviz",
+			expectHelpSuggestion:    true,
 			expectedHelpTitle:       "Graphviz",
 			expectedHelpExplanation: "Mermaid",
 		},
@@ -83,6 +85,7 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			code:                    "flowchart TD\n\tA --> B",
 			expectedHintCode:        "tab_indentation_detected",
 			expectedHintMessage:     "spaces",
+			expectHelpSuggestion:    true,
 			expectedHelpTitle:       "spaces",
 			expectedHelpExplanation: "tabs",
 		},
@@ -92,6 +95,7 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			code:                    "flowchart TD\n  A -> B",
 			expectedHintCode:        "flowchart_arrow_operator_detected",
 			expectedHintMessage:     "-->",
+			expectHelpSuggestion:    true,
 			expectedHelpTitle:       "Arrow",
 			expectedHelpExplanation: "-->",
 		},
@@ -101,8 +105,19 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			code:                    "A --> B\nB --> C",
 			expectedHintCode:        "missing_diagram_type_keyword",
 			expectedHintMessage:     "type keyword",
+			expectHelpSuggestion:    true,
 			expectedHelpTitle:       "diagram type",
 			expectedHelpExplanation: "first line",
+		},
+		{
+			name:                    "unknown syntax falls back to generic hint",
+			syntaxErr:               &parser.SyntaxError{Message: "Parse failure near token", Line: 3, Column: 8},
+			code:                    "flowchart TD\n  A --> B\n  note right of A",
+			expectedHintCode:        "generic_syntax_error",
+			expectedHintMessage:     "unmatched brackets",
+			expectHelpSuggestion:    false,
+			expectedHelpTitle:       "syntax",
+			expectedHelpExplanation: "diagram",
 		},
 	}
 
@@ -129,22 +144,31 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 				t.Fatalf("failed to unmarshal response: %v", err)
 			}
 
+			hints, ok := resp["hints"].([]interface{})
+			if !ok || len(hints) == 0 {
+				t.Fatalf("expected non-empty hints array, got %#v", resp["hints"])
+			}
+
 			assertHintCodePresent(t, resp, tt.expectedHintCode)
 			assertHintMessageContains(t, resp, tt.expectedHintCode, tt.expectedHintMessage)
 
 			helpSugg, ok := resp["help-suggestion"].(map[string]interface{})
-			if !ok || helpSugg == nil {
-				t.Fatalf("expected help-suggestion object, got %#v", resp["help-suggestion"])
-			}
+			if tt.expectHelpSuggestion {
+				if !ok || helpSugg == nil {
+					t.Fatalf("expected help-suggestion object, got %#v", resp["help-suggestion"])
+				}
 
-			title, _ := helpSugg["title"].(string)
-			if !strings.Contains(strings.ToLower(title), strings.ToLower(tt.expectedHelpTitle)) {
-				t.Fatalf("expected help title to contain %q, got %q", tt.expectedHelpTitle, title)
-			}
+				title, _ := helpSugg["title"].(string)
+				if !strings.Contains(strings.ToLower(title), strings.ToLower(tt.expectedHelpTitle)) {
+					t.Fatalf("expected help title to contain %q, got %q", tt.expectedHelpTitle, title)
+				}
 
-			explanation, _ := helpSugg["explanation"].(string)
-			if !strings.Contains(strings.ToLower(explanation), strings.ToLower(tt.expectedHelpExplanation)) {
-				t.Fatalf("expected help explanation to contain %q, got %q", tt.expectedHelpExplanation, explanation)
+				explanation, _ := helpSugg["explanation"].(string)
+				if !strings.Contains(strings.ToLower(explanation), strings.ToLower(tt.expectedHelpExplanation)) {
+					t.Fatalf("expected help explanation to contain %q, got %q", tt.expectedHelpExplanation, explanation)
+				}
+			} else if ok && helpSugg != nil {
+				t.Fatalf("expected no help-suggestion object, got %#v", helpSugg)
 			}
 		})
 	}
