@@ -11,5 +11,8 @@
     "dompurify": "^3.3.2",
     "jsdom": "^24.0.0",
     "mermaid": "^11.12.3"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1"
   }
 }
