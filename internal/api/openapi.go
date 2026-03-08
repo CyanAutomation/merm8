@@ -180,8 +180,8 @@ var openapi = map[string]interface{}{
 									"parser-version":           "10.6.1",
 									"lint-supported":           []string{"flowchart", "graph"},
 									"total-requests":           1500,
-									"successful-analyses":      map[string]interface{}{"total": 1450, "lint-success": 1450},
-									"failed-analyses":          map[string]interface{}{"total": 50, "syntax-errors": 25, "parser-timeout": 10, "parser-errors": 10, "internal-errors": 5},
+								"successful-analyses":      map[string]interface{}{"total": 1450, "lint-success": 1450},
+								"failed-analyses":          map[string]interface{}{"total": 50, "syntax-errors": 24, "other": 1, "parser-timeout": 10, "parser-errors": 10, "internal-errors": 5},
 									"median-parser-latency-ms": 42.5,
 									"p95-parser-latency-ms":    150.0,
 								},
@@ -1881,6 +1881,11 @@ var openapi = map[string]interface{}{
 						"format":  "int64",
 						"example": 1450,
 					},
+					"other": map[string]interface{}{
+						"type":    "integer",
+						"format":  "int64",
+						"example": 1,
+					},
 					"parser-timeout": map[string]interface{}{
 						"type":    "integer",
 						"format":  "int64",
@@ -1955,21 +1960,23 @@ var openapi = map[string]interface{}{
 				"properties": map[string]interface{}{
 					"analyze": map[string]interface{}{
 						"type":     "object",
-						"required": []string{"valid_success", "syntax_error"},
+						"required": []string{"valid_success", "syntax_error", "other"},
 						"properties": map[string]interface{}{
 							"valid_success": map[string]interface{}{"type": "integer", "format": "int64"},
 							"syntax_error":  map[string]interface{}{"type": "integer", "format": "int64"},
+							"other":         map[string]interface{}{"type": "integer", "format": "int64"},
 						},
 					},
 					"parser": map[string]interface{}{
 						"type":     "object",
-						"required": []string{"timeout", "subprocess", "decode", "contract", "internal"},
+						"required": []string{"timeout", "subprocess", "decode", "contract", "internal", "other"},
 						"properties": map[string]interface{}{
 							"timeout":    map[string]interface{}{"type": "integer", "format": "int64"},
 							"subprocess": map[string]interface{}{"type": "integer", "format": "int64"},
 							"decode":     map[string]interface{}{"type": "integer", "format": "int64"},
 							"contract":   map[string]interface{}{"type": "integer", "format": "int64"},
 							"internal":   map[string]interface{}{"type": "integer", "format": "int64"},
+							"other":      map[string]interface{}{"type": "integer", "format": "int64"},
 						},
 					},
 				},
