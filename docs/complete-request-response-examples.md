@@ -9,6 +9,7 @@ Comprehensive examples of all analyze endpoint scenarios with actual JSON payloa
 **Scenario:** Empty diagram with no rules configured
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Host: localhost:8080
@@ -21,6 +22,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "valid": true,
@@ -50,6 +52,7 @@ Content-Type: application/json
 **Scenario:** Check max-fanout with limit of 2
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Host: localhost:8080
@@ -70,6 +73,7 @@ Accept-Version: 1.0
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "valid": true,
@@ -117,6 +121,7 @@ Accept-Version: 1.0
 **Scenario:** Check several rules simultaneously
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Host: localhost:8080
@@ -142,6 +147,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "valid": true,
@@ -203,6 +209,7 @@ Content-Type: application/json
 **Scenario:** Suppress specific node from rule
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Host: localhost:8080
@@ -223,6 +230,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "valid": true,
@@ -259,6 +267,7 @@ Content-Type: application/json
 **Scenario:** Invalid Mermaid syntax with remediation guidance
 
 **Request:**
+
 ```http
 POST /v1/analyze/raw HTTP/1.1
 Host: localhost:8080
@@ -272,6 +281,7 @@ flowchart TD
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "valid": false,
@@ -310,6 +320,7 @@ flowchart TD
 **Scenario:** Unknown rule ID with remediation guidance
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Host: localhost:8080
@@ -327,6 +338,7 @@ Content-Type: application/json
 ```
 
 **Response (400 Bad Request):**
+
 ```json
 {
   "valid": false,
@@ -355,6 +367,7 @@ Content-Type: application/json
 **Scenario:** Invalid config structure
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Host: localhost:8080
@@ -367,6 +380,7 @@ Content-Type: application/json
 ```
 
 **Response (400 Bad Request):**
+
 ```json
 {
   "valid": false,
@@ -395,6 +409,7 @@ Content-Type: application/json
 **Scenario:** Diagram too complex for timeout
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Host: localhost:8080
@@ -410,6 +425,7 @@ Content-Type: application/json
 ```
 
 **Response (503 Service Unavailable):**
+
 ```json
 {
   "valid": false,
@@ -433,6 +449,7 @@ Content-Type: application/json
 **Scenario:** Too many requests
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Host: localhost:8080
@@ -444,6 +461,7 @@ Content-Type: application/json
 ```
 
 **Response (429 Too Many Requests):**
+
 ```json
 {
   "valid": false,
@@ -458,6 +476,7 @@ Content-Type: application/json
 ```
 
 **Response Headers:**
+
 ```
 HTTP/1.1 429 Too Many Requests
 Content-Type: application/json
@@ -474,6 +493,7 @@ Retry-After: 60
 **Scenario:** Using legacy flat config (still accepted)
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Host: localhost:8080
@@ -490,6 +510,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "valid": true,
@@ -528,6 +549,7 @@ Content-Type: application/json
 **Scenario:** Full microservices architecture validation
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Host: localhost:8080
@@ -558,6 +580,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "valid": true,
@@ -596,6 +619,7 @@ Content-Type: application/json
 **Scenario:** Using /analyze/raw endpoint (returns markdown comments)
 
 **Request:**
+
 ```http
 POST /v1/analyze/raw HTTP/1.1
 Host: localhost:8080
@@ -613,6 +637,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):** (same as regular /analyze, with raw field added)
+
 ```json
 {
   "valid": true,
@@ -709,4 +734,3 @@ print(json.dumps(result, indent=2))
 ```
 
 ---
-

@@ -286,6 +286,7 @@ curl -i -X OPTIONS http://localhost:8080/v1/analyze \
 ```
 
 Interpretation:
+
 - `204 No Content` **with** `Access-Control-Allow-Origin: https://merm8-splash.vercel.app` ⇒ preflight is configured correctly.
 - Missing `Access-Control-Allow-Origin` ⇒ `ALLOWED_ORIGINS` mismatch or CORS config issue.
 
@@ -301,11 +302,13 @@ curl -i -X POST http://localhost:8080/v1/analyze \
 ```
 
 Check all of the following:
+
 - `Access-Control-Allow-Origin` header present or missing.
 - HTTP status code.
 - `error.code` in JSON body when non-200.
 
 Interpretation matrix:
+
 - Missing `Access-Control-Allow-Origin` (regardless of status) ⇒ CORS allowlist problem.
 - `503` with `error.code="server_busy"` and CORS header present ⇒ backend concurrency/capacity issue (not CORS).
 - `503` with `error.code="parser_timeout"` and CORS header present ⇒ parser timeout under load/complex input.
@@ -313,10 +316,12 @@ Interpretation matrix:
 #### Operational telemetry interpretation
 
 When diagnosing incidents, correlate API behavior with Prometheus metrics:
+
 - `cors_rejected_total` increasing ⇒ allowlist/CORS origin mismatch.
 - `analyze_requests_total{outcome="server_busy"}` increasing ⇒ analyze concurrency/capacity bottleneck.
 
 **Example origin mismatch:**
+
 ```javascript
 // ❌ Won't work if ALLOWED_ORIGINS contains "https://app.example.com"
 fetch('https://api.example.com/v1/analyze', {...})
@@ -330,6 +335,7 @@ fetch('https://api.example.com/v1/analyze', {...})
 ### Deployment Configuration
 
 #### Docker Compose (Local Development)
+
 ```yaml
 services:
   mermaid-lint:
@@ -338,12 +344,14 @@ services:
 ```
 
 #### Cloud Run (GCP)
+
 ```bash
 gcloud run deploy merm8-api \
   --set-env-vars ALLOWED_ORIGINS=https://your-vercel-domain.vercel.app
 ```
 
 #### Dockerfile
+
 ```dockerfile
 ENV ALLOWED_ORIGINS=https://merm8-splash-nazb4dydy-cyanautomations-projects.vercel.app
 ```
@@ -355,6 +363,7 @@ ENV ALLOWED_ORIGINS=https://merm8-splash-nazb4dydy-cyanautomations-projects.verc
 ### 1. Valid Diagram, No Issues
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Content-Type: application/json
@@ -372,6 +381,7 @@ Accept-Version: 1.0
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "valid": true,
@@ -396,6 +406,7 @@ Accept-Version: 1.0
 ### 2. Diagram with Parse Error
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Content-Type: application/json
@@ -407,6 +418,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "valid": false,
@@ -430,6 +442,7 @@ Content-Type: application/json
 ### 3. Diagram with Lint Issues
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Content-Type: application/json
@@ -446,6 +459,7 @@ Content-Type: application/json
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "valid": true,
@@ -479,6 +493,7 @@ Content-Type: application/json
 ### 4. Parser Timeout
 
 **Request:**
+
 ```http
 POST /v1/analyze HTTP/1.1
 Content-Type: application/json
@@ -490,6 +505,7 @@ Content-Type: application/json
 ```
 
 **Response (503 Service Unavailable):**
+
 ```json
 {
   "valid": false,
@@ -733,4 +749,3 @@ curl http://localhost:8080/v1/metrics
 6. **Cache identical requests** when possible
 7. **Set appropriate parser timeouts** for your diagram complexity
 8. **Use request-id header** for debugging and tracing
-
