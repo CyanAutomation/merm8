@@ -27,13 +27,15 @@ You should see a professional API documentation page with all available endpoint
 
 ### Operational environment variables
 
-For deployment sizing and overload behavior, the parser runtime exposes three key env vars:
+For deployment sizing and overload behavior, the parser runtime exposes key env vars:
 
 | Variable                   | Default | Behavior                                                                                                                                                                                                                                                                                                                          |
 | -------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PARSER_TIMEOUT_SECONDS`   | `5`     | Timeout for each parse operation in seconds. Valid range: 1–60. Increase for complex diagrams, decrease to prioritize responsiveness. Exposed via `GET /info` canonical response field `parser-timeout-seconds` (legacy alias `parser_timeout_seconds` is temporarily retained for compatibility and is deprecated).              |
 | `PARSER_CONCURRENCY_LIMIT` | `8`     | Caps in-flight parser subprocesses. When the limit is reached, the server does **not queue indefinitely**; additional `POST /v1/analyze` requests are rejected with `503` and `error.code=server_busy` (`parser concurrency limit reached; try again`) and include `Retry-After: 1` to signal the minimum retry delay in seconds. |
 | `PARSER_MAX_OLD_SPACE_MB`  | `512`   | Sets the Node.js parser subprocess V8 old-space heap cap (`--max-old-space-size=<MB>`), limiting parser memory growth per parse process.                                                                                                                                                                                          |
+| `PARSER_MODE`              | `subprocess` | Parser execution mode. `subprocess` preserves one-parse-per-process behavior; `pool` reuses long-lived Node workers and isolates stuck requests by recycling only the timed-out worker. |
+| `PARSER_WORKER_POOL_SIZE`  | `4`     | Maximum number of long-lived parser workers per memory profile when `PARSER_MODE=pool` (bounded to 1–64). |
 
 Use these together with your platform CPU/memory limits to tune throughput versus memory headroom in production.
 
