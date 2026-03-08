@@ -9,15 +9,20 @@ import (
 	"github.com/CyanAutomation/merm8/internal/engine"
 )
 
-func TestServeSpec_Returns200WithValidJSONWhenFallbackIsUsed(t *testing.T) {
+func withOpenAPIMutation(t *testing.T, replacement map[string]interface{}) {
+	t.Helper()
+
 	orig := openapi
+	openapi = replacement
 	t.Cleanup(func() {
 		openapi = orig
 	})
+}
 
-	openapi = map[string]interface{}{
+func TestServeSpec_Returns200WithValidJSONWhenFallbackIsUsed(t *testing.T) {
+	withOpenAPIMutation(t, map[string]interface{}{
 		"bad": make(chan int),
-	}
+	})
 
 	h := NewHandler(nil, engine.New())
 	mux := http.NewServeMux()
@@ -31,31 +36,31 @@ func TestServeSpec_Returns200WithValidJSONWhenFallbackIsUsed(t *testing.T) {
 		t.Fatalf("expected /v1/spec 200, got %d", w.Code)
 	}
 
-	var payload map[string]interface{}
+	var payload struct {
+		OpenAPI string `json:"openapi"`
+		Info    struct {
+			Title   string `json:"title"`
+			Version string `json:"version"`
+		} `json:"info"`
+		Paths   map[string]json.RawMessage `json:"paths"`
+		Servers []json.RawMessage          `json:"servers"`
+	}
 	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("expected valid JSON payload, got error: %v", err)
 	}
-	if payload["openapi"] != "3.0.0" {
-		t.Fatalf("expected fallback payload openapi version, got %#v", payload["openapi"])
+	if payload.OpenAPI != "3.0.0" {
+		t.Fatalf("expected fallback payload openapi version, got %#v", payload.OpenAPI)
 	}
 
-	info, ok := payload["info"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected fallback payload info object, got %T", payload["info"])
-	}
-	if info["title"] == "" || info["version"] == "" {
-		t.Fatalf("expected fallback payload info title/version, got %#v", info)
+	if payload.Info.Title == "" || payload.Info.Version == "" {
+		t.Fatalf("expected fallback payload info title/version, got %#v", payload.Info)
 	}
 
-	servers, ok := payload["servers"].([]interface{})
-	if !ok || len(servers) == 0 {
-		t.Fatalf("expected fallback payload servers list, got %T (%#v)", payload["servers"], payload["servers"])
+	if len(payload.Paths) == 0 {
+		t.Fatalf("expected fallback payload paths to be present")
 	}
-	firstServer, ok := servers[0].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected fallback payload first server object, got %T", servers[0])
-	}
-	if firstServer["url"] == "" {
-		t.Fatalf("expected fallback payload first server url, got %#v", firstServer)
+
+	if len(payload.Servers) == 0 {
+		t.Fatalf("expected fallback payload servers to be present")
 	}
 }
