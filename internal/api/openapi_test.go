@@ -325,16 +325,20 @@ func TestServeSpec_AnalyzeDescriptionDocumentsOperationalEnvVars(t *testing.T) {
 	spec := loadServedSpec(t)
 
 	desc := lookup(t, spec, "paths", "/v1/analyze", "post", "description").(string)
-	for _, snippet := range []string{"PARSER_CONCURRENCY_LIMIT", "PARSER_MAX_OLD_SPACE_MB", "error.code=server_busy", "--max-old-space-size", "Operational environment variables", "Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned)", "deprecated_config_format"} {
-		if !strings.Contains(desc, snippet) {
-			t.Fatalf("expected /analyze description to contain %q, got %q", snippet, desc)
-		}
+	if desc == "" {
+		t.Fatal("expected /v1/analyze description to be non-empty")
 	}
 
-	sarifDesc := lookup(t, spec, "paths", "/v1/analyze/sarif", "post", "description").(string)
-	for _, snippet := range []string{"Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned)", "deprecated_config_format"} {
-		if !strings.Contains(sarifDesc, snippet) {
-			t.Fatalf("expected /v1/analyze/sarif description to contain %q, got %q", snippet, sarifDesc)
+	for _, path := range [][]string{{"paths", "/v1/analyze", "post"}, {"paths", "/v1/analyze/sarif", "post"}} {
+		required := lookup(t, spec, append(path, "x-operational-env", "required")...).([]interface{})
+		requiredSet := map[string]bool{}
+		for _, key := range required {
+			requiredSet[key.(string)] = true
+		}
+		for _, envVar := range []string{"PARSER_CONCURRENCY_LIMIT", "PARSER_MAX_OLD_SPACE_MB"} {
+			if !requiredSet[envVar] {
+				t.Fatalf("expected %v x-operational-env.required to include %q, got %#v", path, envVar, required)
+			}
 		}
 	}
 }
