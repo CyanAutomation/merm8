@@ -18,6 +18,7 @@ The easiest way to explore and test the API is through the interactive Swagger U
    ```
 
 2. **Open in your browser**:
+
    ```
    http://localhost:8080/v1/docs
    ```
@@ -302,6 +303,7 @@ Add a `config` field to customize rule behavior:
 **Supported rule configurations:**
 
 - `max-fanout` — Set maximum outgoing edges per node
+
   ```json
   "max-fanout": { "enabled": true, "severity": "warning", "limit": 3 }
   ```
@@ -471,11 +473,13 @@ The endpoint auto-detects the input format:
 1. Navigate to **`POST /v1/analyze/raw`**
 2. Click **"Try it out"**
 3. In the request body, enter raw Mermaid code:
+
    ```
    graph TD
      A[Start] --> B[Process]
      B --> C[End]
    ```
+
 4. Click **"Execute"**
 
 ### Using curl
@@ -597,12 +601,14 @@ These aliases emit deprecation headers and are scheduled for removal in **v1.2.0
 3. Headers tab: Add `Content-Type: application/json`
 4. Body tab: Select "raw" → "JSON"
 5. Paste your request:
+
    ```json
    {
      "code": "graph TD\n  A --> B",
      "config": { "rules": { "max-fanout": { "limit": 3 } } }
    }
    ```
+
 6. Click "Send"
 
 #### Python `requests`
@@ -873,7 +879,7 @@ readinessProbe:
 Negation is supported by prefixing a selector with `!` (for example `!node:critical`).
 Matching negated selectors act as exclusions and override matching non-negated selectors.
 
-Whitespace is **not** allowed anywhere in a selector. For example, `node:A` is valid, while ` node:A`, `node: A`, and `! node:A` are invalid.
+Whitespace is **not** allowed anywhere in a selector. For example, `node:A` is valid, while `node:A`, `node: A`, and `! node:A` are invalid.
 
 Concrete examples:
 
@@ -908,6 +914,7 @@ The merm8 engine currently includes five built-in lint rules:
   - `severity` (string: `error|warning|info`, default: `error`)
   - `suppression-selectors` (array of selector strings, default: `[]`)
 - **Example response:**
+
   ```json
   {
     "rule-id": "no-duplicate-node-ids",
@@ -925,6 +932,7 @@ The merm8 engine currently includes five built-in lint rules:
   - `severity` (string: `error|warning|info`, default: `error`)
   - `suppression-selectors` (array of selector strings, default: `[]`)
 - **Example response:**
+
   ```json
   {
     "rule-id": "no-disconnected-nodes",
@@ -943,6 +951,7 @@ The merm8 engine currently includes five built-in lint rules:
   - `suppression-selectors` (array of selector strings, default: `[]`)
   - `limit` (integer >= 1, default: `5`)
 - **Example:**
+
   ```json
   {
     "config": {
@@ -953,7 +962,9 @@ The merm8 engine currently includes five built-in lint rules:
     }
   }
   ```
+
 - **Example response:**
+
   ```json
   {
     "rule-id": "max-fanout",
@@ -972,6 +983,7 @@ The merm8 engine currently includes five built-in lint rules:
   - `suppression-selectors` (array of selector strings, default: `[]`)
   - `limit` (integer >= 1, default: `8`)
 - **Example:**
+
   ```json
   {
     "config": {
@@ -982,7 +994,9 @@ The merm8 engine currently includes five built-in lint rules:
     }
   }
   ```
+
 - **Example response:**
+
   ```json
   {
     "rule-id": "max-depth",
@@ -1001,6 +1015,7 @@ The merm8 engine currently includes five built-in lint rules:
   - `suppression-selectors` (array of selector strings, default: `[]`)
   - `allow-self-loop` (boolean, default: `false`)
 - **Example:**
+
   ```json
   {
     "config": {
@@ -1011,7 +1026,9 @@ The merm8 engine currently includes five built-in lint rules:
     }
   }
   ```
+
 - **Example response:**
+
   ```json
   {
     "rule-id": "no-cycles",
@@ -1370,8 +1387,8 @@ done
 ## Additional Resources
 
 - **OpenAPI Specification:** Available at `http://localhost:8080/spec`
-- **GitHub Repository:** https://github.com/CyanAutomation/merm8
-- **Mermaid Documentation:** https://mermaid.js.org/
+- **GitHub Repository:** <https://github.com/CyanAutomation/merm8>
+- **Mermaid Documentation:** <https://mermaid.js.org/>
 
 ---
 
@@ -1395,22 +1412,29 @@ go build -o merm8-cli ./cmd/merm8-cli
 ### Inputs
 
 - File path(s):
+
   ```bash
   ./merm8-cli diagrams/a.mmd diagrams/b.mmd
   ```
+
 - stdin:
+
   ```bash
   cat diagrams/a.mmd | ./merm8-cli --stdin
   ```
+
 - If no files are provided, stdin is used automatically.
 
 ### Outputs
 
 - Human-readable text (default):
+
   ```bash
   ./merm8-cli --format text diagrams/a.mmd
   ```
+
 - JSON (API-like fields):
+
   ```bash
   ./merm8-cli --format json diagrams/a.mmd
   ```

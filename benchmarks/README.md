@@ -176,6 +176,7 @@ The benchmark runner generates two reports:
    ```
 
 4. **Compare against baseline** to detect regressions:
+
    ```bash
    go run ./benchmarks/main.go --compare-baseline benchmarks/baselines/v0.1.0.json
    ```
@@ -193,11 +194,13 @@ The benchmark runner generates two reports:
 1. Run benchmarks after each release
 2. Review results for >90% detection rate per rule
 3. If acceptable, establish new baseline:
+
    ```bash
    cp benchmarks/reports/latest-results.json benchmarks/baselines/v0.2.0.json
    git add benchmarks/baselines/v0.2.0.json
    git commit -m "benchmark: establish v0.2.0 baseline"
    ```
+
 4. Track trends over time using baselines
 
 ## Commands
