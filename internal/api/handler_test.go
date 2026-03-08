@@ -2323,6 +2323,110 @@ func readInternalAnalyzeMetrics(t *testing.T, mux *http.ServeMux) map[string]map
 	return got
 }
 
+func readHealthMetricsResponse(t *testing.T, mux *http.ServeMux) map[string]any {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/health/metrics", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected /v1/health/metrics 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("failed to decode /v1/health/metrics response: %v", err)
+	}
+	return got
+}
+
+func TestHealthMetrics_ConcurrentCounterUpdatesPreserveTotals(t *testing.T) {
+	t.Parallel()
+
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		switch code {
+		case "VALID":
+			return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+		case "SYNTAX":
+			return nil, &parser.SyntaxError{Message: "bad syntax", Line: 1, Column: 1}, nil
+		case "TIMEOUT":
+			return nil, nil, parser.ErrTimeout
+		case "SUBPROCESS":
+			return nil, nil, parser.ErrSubprocess
+		case "DECODE":
+			return nil, nil, parser.ErrDecode
+		case "CONTRACT":
+			return nil, nil, parser.ErrContract
+		default:
+			return nil, nil, errors.New("unexpected parser crash")
+		}
+	}}, engine.New())
+	h.RegisterRoutes(mux)
+
+	outcomes := []string{"VALID", "SYNTAX", "TIMEOUT", "SUBPROCESS", "DECODE", "CONTRACT", "INTERNAL"}
+	const goroutines = 12
+	const callsPerGoroutine = 120
+
+	errCh := make(chan error, goroutines*callsPerGoroutine)
+	var wg sync.WaitGroup
+	for i := 0; i < goroutines; i++ {
+		start := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < callsPerGoroutine; j++ {
+				code := outcomes[(start+j)%len(outcomes)]
+				body := []byte(fmt.Sprintf(`{"code":%q}`, code))
+				req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				w := httptest.NewRecorder()
+				mux.ServeHTTP(w, req)
+				if w.Code == http.StatusMethodNotAllowed {
+					errCh <- fmt.Errorf("analyze request unexpectedly returned 405")
+					return
+				}
+			}
+		}()
+	}
+
+	const metricReads = 800
+	for i := 0; i < metricReads; i++ {
+		resp := readHealthMetricsResponse(t, mux)
+
+		total := uint64(resp["total-requests"].(float64))
+		success := uint64(resp["successful-analyses"].(map[string]any)["total"].(float64))
+		failed := uint64(resp["failed-analyses"].(map[string]any)["total"].(float64))
+
+		if failed > total {
+			t.Fatalf("failed.total should never exceed total-requests, got failed=%d total=%d", failed, total)
+		}
+		if total != success+failed {
+			t.Fatalf("expected total-requests == successful-analyses.total + failed-analyses.total, got total=%d success=%d failed=%d", total, success, failed)
+		}
+	}
+
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	resp := readHealthMetricsResponse(t, mux)
+	total := uint64(resp["total-requests"].(float64))
+	success := uint64(resp["successful-analyses"].(map[string]any)["total"].(float64))
+	failed := uint64(resp["failed-analyses"].(map[string]any)["total"].(float64))
+
+	if failed > total {
+		t.Fatalf("final failed.total should never exceed total-requests, got failed=%d total=%d", failed, total)
+	}
+	if total != success+failed {
+		t.Fatalf("final total invariant violated: total=%d success=%d failed=%d", total, success, failed)
+	}
+}
+
 func TestInternalMetrics_AnalyzeOutcomeCounters(t *testing.T) {
 	parseErrByCode := map[string]error{
 		"TIMEOUT":    parser.ErrTimeout,
