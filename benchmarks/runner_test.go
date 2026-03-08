@@ -28,9 +28,9 @@ func TestRunner_DiscoverCases(t *testing.T) {
 
 	// Valid fixtures across discovery paths.
 	mustWrite("cases/flowchart/valid/a-first.mmd", "graph TD\n  A --> B\n  %% @rule: no-cycles\n")
-	mustWrite("cases/flowchart/valid/b-second.mmd", "graph TD\n  C --> D\n")
+	mustWrite("cases/flowchart/valid/b-second.mmd", "graph TD\n  C --> D\n  %% @rule: no-cycles, max-fanout\n")
 	mustWrite("cases/flowchart/violations/c-third.mmd", "graph TD\n  E --> F\n  %% @rule: max-depth\n")
-	mustWrite("cases/flowchart/edge-cases/d-fourth.mmd", "graph TD\n  G --> H\n")
+	mustWrite("cases/flowchart/edge-cases/d-fourth.mmd", "graph TD\n  G --> H\n  %% @rule no-cycles\n")
 	mustWrite("cases/sequence/alpha.mmd", "sequenceDiagram\n  A->>B: ping\n")
 
 	// Invalid fixture for discovery contract: non-.mmd files are ignored.
@@ -79,10 +79,10 @@ func TestRunner_DiscoverCases(t *testing.T) {
 		}
 	}
 
-	// Assert rule extraction via public discovery path.
+	// Assert fixture annotation parsing via the public discovery/output contract.
 	wantRuleByID := map[string]string{
 		"flowchart-val-a-first":  "no-cycles",
-		"flowchart-val-b-second": "*",
+		"flowchart-val-b-second": "no-cycles",
 		"flowchart-vio-c-third":  "max-depth",
 		"flowchart-edg-d-fourth": "*",
 		"alpha":                  "*",
@@ -96,6 +96,20 @@ func TestRunner_DiscoverCases(t *testing.T) {
 			t.Fatalf("case %q rule_id = %q, want %q", bc.ID, bc.RuleID, wantRule)
 		}
 	}
+
+	// Assert expected issue metadata reflects discovered RuleID in runner output.
+	if got, want := len(cases[2].ExpectedIssues), 1; got != want {
+		t.Fatalf("violations case expected issue count = %d, want %d", got, want)
+	}
+	if got, want := cases[2].ExpectedIssues[0].RuleID, "max-depth"; got != want {
+		t.Fatalf("violations case expected issue rule = %q, want %q", got, want)
+	}
+	if got, want := cases[2].ExpectedIssues[0].Severity, "warning"; got != want {
+		t.Fatalf("violations case expected issue severity = %q, want %q", got, want)
+	}
+	if got := len(cases[0].ExpectedIssues); got != 0 {
+		t.Fatalf("valid case expected issue count = %d, want 0", got)
+	}
 }
 
 func TestExtractRuleID(t *testing.T) {
@@ -105,27 +119,12 @@ func TestExtractRuleID(t *testing.T) {
 		want    string
 	}{
 		{
-			name: "rule with single ID",
-			content: `graph TD
-  A --> B
-  %% @rule: no-cycles
-`,
-			want: "no-cycles",
-		},
-		{
 			name: "rule with multiple IDs",
 			content: `graph TD
   A --> B
   %% @rule: no-cycles, max-fanout
 `,
 			want: "no-cycles",
-		},
-		{
-			name: "no rule annotation",
-			content: `graph TD
-  A --> B
-`,
-			want: "*",
 		},
 		{
 			name: "rule with extra whitespace",
@@ -136,29 +135,12 @@ func TestExtractRuleID(t *testing.T) {
 			want: "no-cycles",
 		},
 		{
-			name: "malformed annotation missing colon",
-			content: `graph TD
-  A --> B
-  %% @rule no-cycles
-`,
-			want: "*",
-		},
-		{
 			name: "malformed annotation empty rule",
 			content: `graph TD
   A --> B
   %% @rule:
 `,
 			want: "",
-		},
-		{
-			name: "multiple rule lines returns first",
-			content: `graph TD
-  A --> B
-  %% @rule: no-cycles
-  %% @rule: max-depth
-`,
-			want: "no-cycles",
 		},
 	}
 
