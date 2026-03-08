@@ -2362,6 +2362,21 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 		deduped = append(deduped, hint)
 	}
 
+	if syntaxErr != nil && len(deduped) == 0 {
+		deduped = append(deduped, responseHint{
+			Code:       "generic_syntax_error",
+			Message:    "Check for incomplete edge definitions, unclosed |label|, and unmatched brackets.",
+			Severity:   "warning",
+			Confidence: 0.70,
+			AppliesTo: &responseHintAppliesTo{
+				Line:       syntaxErr.Line,
+				Column:     syntaxErr.Column,
+				DiagramType: diagramType,
+			},
+			FixExample: "flowchart TD\n  A --> B",
+		})
+	}
+
 	return deduped
 }
 
