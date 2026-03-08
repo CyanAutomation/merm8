@@ -269,6 +269,118 @@ func TestAnalyzeRaw_SyntaxError_AlwaysIncludesHelpSuggestion(t *testing.T) {
 	}
 }
 
+func TestAnalyzeRaw_SyntaxError_DiagramTypeHeaderTypo(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		code                string
+		expectedWrongHeader string
+		expectedHeader      string
+	}{
+		{
+			name:                "sequence shorthand normalized",
+			code:                "sequence\n  Alice->>Bob: hello",
+			expectedWrongHeader: "sequence",
+			expectedHeader:      "sequenceDiagram",
+		},
+		{
+			name:                "class shorthand normalized",
+			code:                "class\n  class Animal",
+			expectedWrongHeader: "class",
+			expectedHeader:      "classDiagram",
+		},
+		{
+			name:                "state diagram v2 punctuation normalized",
+			code:                "stateDiagramv2\n  [*] --> Idle",
+			expectedWrongHeader: "stateDiagramv2",
+			expectedHeader:      "stateDiagram-v2",
+		},
+		{
+			name:                "casing mismatch normalized",
+			code:                "sequencediagram\n  Alice->>Bob: hello",
+			expectedWrongHeader: "sequencediagram",
+			expectedHeader:      "sequenceDiagram",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			syntaxErr := &parser.SyntaxError{Message: "No diagram type detected", Line: 1, Column: 1}
+			mux := newTestMux(func(string) (*model.Diagram, *parser.SyntaxError, error) {
+				return nil, syntaxErr, nil
+			})
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", bytes.NewReader([]byte(tt.code)))
+			req.Header.Set("Content-Type", "text/plain")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", w.Code)
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			assertHintCodePresent(t, resp, "diagram_type_header_typo")
+
+			hints, ok := resp["hints"].([]interface{})
+			if !ok {
+				t.Fatalf("expected hints array, got %#v", resp["hints"])
+			}
+
+			foundHint := false
+			for _, rawHint := range hints {
+				hint := rawHint.(map[string]interface{})
+				if code, _ := hint["code"].(string); code != "diagram_type_header_typo" {
+					continue
+				}
+				foundHint = true
+				message, _ := hint["message"].(string)
+				if !strings.Contains(message, tt.expectedWrongHeader) || !strings.Contains(message, tt.expectedHeader) {
+					t.Fatalf("expected hint message to include %q and %q, got %q", tt.expectedWrongHeader, tt.expectedHeader, message)
+				}
+				fixExample, _ := hint["fix-example"].(string)
+				expectedFixExample := tt.expectedHeader + "\n  A --> B"
+				if fixExample != expectedFixExample {
+					t.Fatalf("expected deterministic hint fix-example %q, got %q", expectedFixExample, fixExample)
+				}
+			}
+			if !foundHint {
+				t.Fatal("expected to find diagram_type_header_typo hint")
+			}
+
+			helpSugg, ok := resp["help-suggestion"].(map[string]interface{})
+			if !ok || helpSugg == nil {
+				t.Fatalf("expected help-suggestion object, got %#v", resp["help-suggestion"])
+			}
+
+			wrongExample, _ := helpSugg["wrong-example"].(string)
+			expectedWrongExample := tt.expectedWrongHeader + "\n  A --> B"
+			if wrongExample != expectedWrongExample {
+				t.Fatalf("expected wrong-example %q, got %q", expectedWrongExample, wrongExample)
+			}
+
+			correctExample, _ := helpSugg["correct-example"].(string)
+			expectedCorrectExample := tt.expectedHeader + "\n  A --> B"
+			if correctExample != expectedCorrectExample {
+				t.Fatalf("expected deterministic correct-example %q, got %q", expectedCorrectExample, correctExample)
+			}
+
+			fixAction, _ := helpSugg["fix-action"].(string)
+			if !strings.Contains(fixAction, "On line 1") || !strings.Contains(fixAction, tt.expectedHeader) {
+				t.Fatalf("expected line-specific fix-action mentioning %q, got %q", tt.expectedHeader, fixAction)
+			}
+		})
+	}
+}
+
 // TestAnalyze_SyntaxError_ArrowOperatorHelp tests help-suggestion for arrow syntax errors.
 func TestAnalyze_SyntaxError_ArrowOperatorHelp(t *testing.T) {
 	syntaxErr := &parser.SyntaxError{
