@@ -1362,7 +1362,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			metrics.ObserveParserDuration(outcome, parseDuration)
 		}
 		observeAnalyzeOutcome(outcome)
-		setAnalyzeLogFields(r.Context(), outcome, string(model.DiagramTypeUnknown))
+		setAnalyzeLogFields(r.Context(), "", outcome, string(model.DiagramTypeUnknown))
 		logger.Error("parser failure", "request_id", RequestIDFromContext(r.Context()), "route", r.URL.Path, "method", r.Method, "parser_outcome", outcome, "error", err.Error())
 		writeParserFailure(w, r.Context(), logger, err)
 		return
@@ -1377,7 +1377,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
-		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
+		setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeSyntaxError, string(diagramType))
 		hints := hintsForSyntaxError(syntaxErr, req.Code)
 		suggestions := suggestionsFromHints(hints)
 		helpSugg := helpForSyntaxError(syntaxErr, req.Code)
@@ -1413,7 +1413,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			metrics.ObserveParserDuration(telemetry.OutcomeInternalError, parseDuration)
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
-		setAnalyzeLogFields(r.Context(), telemetry.OutcomeInternalError, string(model.DiagramTypeUnknown))
+		setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeInternalError, string(model.DiagramTypeUnknown))
 		logger.Error("parser returned nil diagram", "request_id", RequestIDFromContext(r.Context()), "route", r.URL.Path, "method", r.Method)
 		writeError(w, http.StatusInternalServerError, "internal_error", "parser returned nil diagram")
 		return
@@ -1429,7 +1429,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 	family := diagram.Type.Family()
 	if !h.isLintSupported(family) {
 		observeAnalyzeOutcome("unsupported_diagram_type")
-		setAnalyzeLogFields(r.Context(), "unsupported_diagram_type", string(diagram.Type))
+		setAnalyzeLogFields(r.Context(), "", "unsupported_diagram_type", string(diagram.Type))
 		// Keep metrics in the response for parsed diagrams, even when linting is
 		// not currently supported for that Mermaid family.
 		unsupportedIssue := model.Issue{
@@ -1477,7 +1477,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		}
 	}
 	observeAnalyzeOutcome(telemetry.OutcomeLintSuccess)
-	setAnalyzeLogFields(r.Context(), telemetry.OutcomeLintSuccess, string(diagram.Type))
+	setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeLintSuccess, string(diagram.Type))
 
 	resp := analyzeResponse{
 		Valid:         true,
@@ -1621,7 +1621,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 			metrics.ObserveParserDuration(outcome, parseDuration)
 		}
 		observeAnalyzeOutcome(outcome)
-		setAnalyzeLogFields(r.Context(), outcome, string(model.DiagramTypeUnknown))
+		setAnalyzeLogFields(r.Context(), "", outcome, string(model.DiagramTypeUnknown))
 		logger.Error("parser failure", "request_id", RequestIDFromContext(r.Context()), "route", r.URL.Path, "method", r.Method, "parser_outcome", outcome, "error", err.Error())
 		writeParserFailure(w, r.Context(), logger, err)
 		return
@@ -1636,7 +1636,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
-		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
+		setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeSyntaxError, string(diagramType))
 		hints := append(requestHints, hintsForSyntaxError(syntaxErr, req.Code)...)
 		suggestions := suggestionsFromHints(hints)
 		helpSugg := helpForSyntaxError(syntaxErr, req.Code)
@@ -1679,7 +1679,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 			metrics.ObserveParserDuration(telemetry.OutcomeInternalError, parseDuration)
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
-		setAnalyzeLogFields(r.Context(), telemetry.OutcomeInternalError, string(model.DiagramTypeUnknown))
+		setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeInternalError, string(model.DiagramTypeUnknown))
 		logger.Error("parser returned nil diagram", "request_id", RequestIDFromContext(r.Context()), "route", r.URL.Path, "method", r.Method)
 		writeError(w, http.StatusInternalServerError, "internal_error", "parser returned nil diagram")
 		return
@@ -1695,7 +1695,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 	family := diagram.Type.Family()
 	if !h.isLintSupported(family) {
 		observeAnalyzeOutcome("unsupported_diagram_type")
-		setAnalyzeLogFields(r.Context(), "unsupported_diagram_type", string(diagram.Type))
+		setAnalyzeLogFields(r.Context(), "", "unsupported_diagram_type", string(diagram.Type))
 		unsupportedIssue := model.Issue{
 			RuleID:   "unsupported-diagram-type",
 			Severity: "info",
@@ -1734,7 +1734,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		)
 	}
 	observeAnalyzeOutcome(telemetry.OutcomeLintSuccess)
-	setAnalyzeLogFields(r.Context(), telemetry.OutcomeLintSuccess, string(diagram.Type))
+	setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeLintSuccess, string(diagram.Type))
 
 	resp := analyzeResponse{
 		Valid:         true,
@@ -1892,7 +1892,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 			metrics.ObserveParserDuration(outcome, parseDuration)
 		}
 		observeAnalyzeOutcome(outcome)
-		setAnalyzeLogFields(r.Context(), outcome, string(model.DiagramTypeUnknown))
+		setAnalyzeLogFields(r.Context(), "", outcome, string(model.DiagramTypeUnknown))
 		logger.Error("parser failure", "request_id", RequestIDFromContext(r.Context()), "route", r.URL.Path, "method", r.Method, "parser_outcome", outcome, "error", err.Error())
 		statusCode, errorCode, errorMsg := parserFailureDetails(err)
 		report := sarif.TransformError(sarif.ErrorInfo{
@@ -1912,7 +1912,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
-		setAnalyzeLogFields(r.Context(), telemetry.OutcomeSyntaxError, string(diagramType))
+		setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeSyntaxError, string(diagramType))
 
 		// For syntax errors, include the error in SARIF format
 		report := sarif.TransformError(sarif.ErrorInfo{
@@ -1931,7 +1931,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 			metrics.ObserveParserDuration(telemetry.OutcomeInternalError, parseDuration)
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
-		setAnalyzeLogFields(r.Context(), telemetry.OutcomeInternalError, string(model.DiagramTypeUnknown))
+		setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeInternalError, string(model.DiagramTypeUnknown))
 		logger.Error("parser returned nil diagram", "request_id", RequestIDFromContext(r.Context()), "route", r.URL.Path, "method", r.Method)
 		report := sarif.TransformError(sarif.ErrorInfo{
 			Code:    "internal_error",
@@ -1951,7 +1951,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 	family := diagram.Type.Family()
 	if !h.isLintSupported(family) {
 		observeAnalyzeOutcome("unsupported_diagram_type")
-		setAnalyzeLogFields(r.Context(), "unsupported_diagram_type", string(diagram.Type))
+		setAnalyzeLogFields(r.Context(), "", "unsupported_diagram_type", string(diagram.Type))
 		// For unsupported diagram types, return an error in SARIF format
 		report := sarif.TransformError(sarif.ErrorInfo{
 			Code:    "unsupported_diagram_type",
@@ -1974,7 +1974,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		)
 	}
 	observeAnalyzeOutcome(telemetry.OutcomeLintSuccess)
-	setAnalyzeLogFields(r.Context(), telemetry.OutcomeLintSuccess, string(diagram.Type))
+	setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeLintSuccess, string(diagram.Type))
 
 	// For successful analysis, return SARIF with lint results
 	requestURI = "/analyze/sarif"
