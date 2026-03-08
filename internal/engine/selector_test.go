@@ -2,28 +2,40 @@ package engine
 
 import "testing"
 
-func TestParseSelectorExamples(t *testing.T) {
+func TestParseSelector_ParsesFields(t *testing.T) {
 	tests := []struct {
-		name string
-		raw  string
-		ok   bool
+		name       string
+		raw        string
+		wantNegate bool
+		wantPrefix string
+		wantValue  string
 	}{
-		// Keep parser-only edge coverage compact; selector behavior is covered via API tests.
-		{name: "value with colon", raw: `node:team:alpha`, ok: true},
-		{name: "empty", raw: "", ok: false},
-		{name: "space after negation invalid", raw: "! node:A", ok: false},
+		{name: "node selector", raw: "node:A", wantPrefix: "node", wantValue: "A"},
+		{name: "negated rule selector", raw: "!rule:max-fanout", wantNegate: true, wantPrefix: "rule", wantValue: "max-fanout"},
+		{name: "subgraph selector", raw: "subgraph:cluster-1", wantPrefix: "subgraph", wantValue: "cluster-1"},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got, ok := parseSelector(tc.raw)
-			if ok != tc.ok {
-				t.Fatalf("parseSelector(%q) ok=%v, want %v", tc.raw, ok, tc.ok)
+			if !ok {
+				t.Fatalf("parseSelector(%q) ok=false, want true", tc.raw)
 			}
-			if !tc.ok {
-				return
+			if got.Negated != tc.wantNegate {
+				t.Fatalf("parseSelector(%q) Negated=%v, want %v", tc.raw, got.Negated, tc.wantNegate)
 			}
-			_ = got
+			if got.Prefix != tc.wantPrefix {
+				t.Fatalf("parseSelector(%q) Prefix=%q, want %q", tc.raw, got.Prefix, tc.wantPrefix)
+			}
+			if got.Value != tc.wantValue {
+				t.Fatalf("parseSelector(%q) Value=%q, want %q", tc.raw, got.Value, tc.wantValue)
+			}
 		})
+	}
+}
+
+func TestParseSelector_RejectsUnknownPrefix(t *testing.T) {
+	if _, ok := parseSelector("unknown:A"); ok {
+		t.Fatal("expected unknown prefix selector to be rejected")
 	}
 }
