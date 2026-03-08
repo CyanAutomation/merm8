@@ -189,10 +189,21 @@ func New(scriptPath string) (*Parser, error) {
 
 // NewWithConfig returns a Parser configured with explicit execution limits.
 func NewWithConfig(scriptPath string, cfg Config) (*Parser, error) {
-	root, err := findRepoRoot()
+	return NewWithConfigAndRepoRootResolver(scriptPath, cfg, findRepoRoot)
+}
+
+// NewWithConfigAndRepoRootResolver returns a Parser configured with explicit
+// execution limits and a caller-provided repository root resolver.
+func NewWithConfigAndRepoRootResolver(scriptPath string, cfg Config, resolveRepoRoot func() (string, error)) (*Parser, error) {
+	if resolveRepoRoot == nil {
+		return nil, fmt.Errorf("failed to initialize parser: repo root resolver is nil")
+	}
+
+	root, err := resolveRepoRoot()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize parser: %w", err)
 	}
+
 	effective := cfg.EffectiveConfig()
 
 	return &Parser{
