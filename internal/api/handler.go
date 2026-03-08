@@ -133,7 +133,6 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "config must be object"}
 	}
 
-	cfgRaw := raw
 	rulePathPrefix := "config"
 	deprecations := make([]string, 0, 2)
 	var nestedRulesCfg rules.Config
@@ -186,11 +185,6 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 				}
 			}
 		}
-		rawRules, err := json.Marshal(rulesMap)
-		if err != nil {
-			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
-		}
-		cfgRaw = rawRules
 		asMap = rulesMap
 		rulePathPrefix = "config.rules"
 	} else if hasTopLevelRules {
@@ -212,11 +206,6 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
 		}
 		rulePathPrefix = "config.rules"
-		ruleMapRaw, err := json.Marshal(rulesMap)
-		if err != nil {
-			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
-		}
-		cfgRaw = ruleMapRaw
 		asMap = rulesMap
 	} else if strict {
 		return rules.Config{}, nil, &validationError{Code: "deprecated_config_format", Path: "config", Message: "legacy unversioned config shape is deprecated; use config.schema-version and config.rules"}
@@ -226,12 +215,18 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 
 	registryByRuleID := rules.ConfigRegistryForRuleIDs(knownRuleIDs)
 
+	// Build a normalized map using canonical rule IDs so that core/<id> aliases
+	// (e.g. "core/max-fanout") are resolved to their bare IDs (e.g. "max-fanout")
+	// before the registry lookup and final deserialization.
+	normalizedRulesMap := make(map[string]any, len(asMap))
 	for ruleID, ruleConfig := range asMap {
 		ruleConfigMap, ok := ruleConfig.(map[string]any)
 		if !ok {
 			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: rulePathPrefix + "." + ruleID, Message: rulePathPrefix + "." + ruleID + " must be object"}
 		}
-		if _, known := knownRuleIDs[ruleID]; !known {
+
+		canonicalRuleID, ruleIDWarning, normErr := rules.NormalizeConfigRuleID(ruleID, knownRuleIDs)
+		if normErr != nil {
 			return rules.Config{}, nil, &validationError{
 				Code:      "unknown_rule",
 				Path:      rulePathPrefix + "." + ruleID,
@@ -239,8 +234,11 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 				Supported: sortedRuleIDs(knownRuleIDs),
 			}
 		}
+		if ruleIDWarning != "" {
+			deprecations = append(deprecations, ruleIDWarning)
+		}
 
-		registry, ok := registryByRuleID[ruleID]
+		registry, ok := registryByRuleID[canonicalRuleID]
 		if !ok {
 			return rules.Config{}, nil, &validationError{
 				Code:      "unknown_rule",
@@ -253,7 +251,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		for optionKey, optionValue := range ruleConfigMap {
 			canonicalOptionKey := rules.NormalizeOptionKey(optionKey)
 			if optionKey != canonicalOptionKey {
-				deprecations = append(deprecations, fmt.Sprintf(legacyOptionKeyWarningTemplate, ruleID, optionKey, ruleID, canonicalOptionKey, canonicalOptionKey))
+				deprecations = append(deprecations, fmt.Sprintf(legacyOptionKeyWarningTemplate, canonicalRuleID, optionKey, canonicalRuleID, canonicalOptionKey, canonicalOptionKey))
 			}
 			if !contains(registry.AllowedOptionKeys, canonicalOptionKey) {
 				return rules.Config{}, nil, &validationError{
@@ -263,7 +261,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 					Supported: registry.AllowedOptionKeys,
 				}
 			}
-			if err := rules.ValidateOption(ruleID, optionKey, optionValue); err != nil {
+			if err := rules.ValidateOption(canonicalRuleID, optionKey, optionValue); err != nil {
 				return rules.Config{}, nil, &validationError{
 					Code:    "invalid_option",
 					Path:    rulePathPrefix + "." + ruleID + "." + optionKey,
@@ -276,14 +274,18 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		if err != nil {
 			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 		}
-		asMap[ruleID] = json.RawMessage(ruleConfigRaw)
+		normalizedRulesMap[canonicalRuleID] = json.RawMessage(ruleConfigRaw)
 	}
 
 	var cfg rules.Config
 	if useNestedRulesCfg {
 		cfg = nestedRulesCfg
 	} else {
-		if err := json.Unmarshal(cfgRaw, &cfg); err != nil {
+		normalizedCfgRaw, err := json.Marshal(normalizedRulesMap)
+		if err != nil {
+			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
+		}
+		if err := json.Unmarshal(normalizedCfgRaw, &cfg); err != nil {
 			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 		}
 	}
@@ -925,19 +927,19 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 func getRuleExamples(ruleID string) []string {
 	// Return example diagrams that trigger violations for each rule.
 	examples := map[string][]string{
-		"core/no-duplicate-node-ids": {
+		"no-duplicate-node-ids": {
 			"graph TD\n  A[Node A]\n  B[Another Node]\n  A[Duplicate ID]\n  A --> B",
 		},
-		"core/no-disconnected-nodes": {
+		"no-disconnected-nodes": {
 			"graph TD\n  A[Connected] --> B[Also Connected]\n  C[Lonely Node]\n  D[Orphaned]",
 		},
-		"core/max-fanout": {
+		"max-fanout": {
 			"graph TD\n  Root[Hub]\n  Root --> A[Branch 1]\n  Root --> B[Branch 2]\n  Root --> C[Branch 3]\n  Root --> D[Branch 4]\n  Root --> E[Branch 5]",
 		},
-		"core/max-depth": {
+		"max-depth": {
 			"graph TD\n  A[Level 1] --> B[Level 2]\n  B --> C[Level 3]\n  C --> D[Level 4]\n  D --> E[Level 5]\n  E --> F[Level 6]",
 		},
-		"core/no-cycles": {
+		"no-cycles": {
 			"graph TD\n  A[Start] --> B[Middle]\n  B --> C[End]\n  C --> A",
 		},
 	}
@@ -2507,10 +2509,10 @@ func helpForConfigError(validErr *validationError) *helpSuggestion {
 	case "unknown_rule":
 		return &helpSuggestion{
 			Title:          "Unknown rule in config",
-			Explanation:    "The rule name you specified is not recognized. Each rule requires a valid rule ID.",
-			WrongExample:   `"rules": {"max-fanout": {}}`,
-			CorrectExample: `"rules": {"core/max-fanout": {"limit": 3}}`,
-			FixAction:      "Use GET /v1/rules to discover available rules and their namespaces",
+			Explanation:    "The rule name you specified is not recognized. Each rule requires a valid rule ID. Both bare IDs (e.g. max-fanout) and namespaced IDs (e.g. core/max-fanout) are accepted.",
+			WrongExample:   `"rules": {"maxFanout": {}}`,
+			CorrectExample: `"rules": {"max-fanout": {"limit": 3}}`,
+			FixAction:      "Use GET /v1/rules to discover available rule IDs",
 		}
 	case "invalid_option":
 		if strings.Contains(validErr.Message, "config must be object") {
@@ -2518,7 +2520,7 @@ func helpForConfigError(validErr *validationError) *helpSuggestion {
 				Title:          "Config must be an object",
 				Explanation:    "The config parameter should be a JSON object, not a string, array, or primitive value.",
 				WrongExample:   `"config": "invalid"`,
-				CorrectExample: `"config": {"schema-version": "v1", "rules": {"core/max-fanout": {"limit": 3}}}`,
+				CorrectExample: `"config": {"schema-version": "v1", "rules": {"max-fanout": {"limit": 3}}}`,
 				FixAction:      "Ensure config is a JSON object (wrapped in {}) and contains schema-version and rules properties",
 			}
 		}

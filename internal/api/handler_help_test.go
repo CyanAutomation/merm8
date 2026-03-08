@@ -60,17 +60,17 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name                     string
-		syntaxErr                *parser.SyntaxError
-		code                     string
-		expectedHintCode         string
-		expectedHintMessage      string
-		expectedHelpTitle        string
-		expectedHelpExplanation  string
+		name                    string
+		syntaxErr               *parser.SyntaxError
+		code                    string
+		expectedHintCode        string
+		expectedHintMessage     string
+		expectedHelpTitle       string
+		expectedHelpExplanation string
 	}{
 		{
-			name: "graphviz syntax maps to graphviz help",
-			syntaxErr: &parser.SyntaxError{Message: "No diagram type detected", Line: 1, Column: 1},
+			name:                    "graphviz syntax maps to graphviz help",
+			syntaxErr:               &parser.SyntaxError{Message: "No diagram type detected", Line: 1, Column: 1},
 			code:                    "digraph G {\n  A -> B\n}",
 			expectedHintCode:        "graphviz_syntax_detected",
 			expectedHintMessage:     "graphviz",
@@ -78,8 +78,8 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			expectedHelpExplanation: "Mermaid",
 		},
 		{
-			name: "tab indentation maps to spacing help",
-			syntaxErr: &parser.SyntaxError{Message: "Unexpected token", Line: 2, Column: 1},
+			name:                    "tab indentation maps to spacing help",
+			syntaxErr:               &parser.SyntaxError{Message: "Unexpected token", Line: 2, Column: 1},
 			code:                    "flowchart TD\n\tA --> B",
 			expectedHintCode:        "tab_indentation_detected",
 			expectedHintMessage:     "spaces",
@@ -87,8 +87,8 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			expectedHelpExplanation: "tabs",
 		},
 		{
-			name: "single arrow maps to flowchart arrow help",
-			syntaxErr: &parser.SyntaxError{Message: "Unexpected token '>'", Line: 2, Column: 17},
+			name:                    "single arrow maps to flowchart arrow help",
+			syntaxErr:               &parser.SyntaxError{Message: "Unexpected token '>'", Line: 2, Column: 17},
 			code:                    "flowchart TD\n  A -> B",
 			expectedHintCode:        "flowchart_arrow_operator_detected",
 			expectedHintMessage:     "-->",
@@ -96,8 +96,8 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			expectedHelpExplanation: "-->",
 		},
 		{
-			name: "missing diagram type maps to keyword help",
-			syntaxErr: &parser.SyntaxError{Message: "No diagram type detected", Line: 0, Column: 0},
+			name:                    "missing diagram type maps to keyword help",
+			syntaxErr:               &parser.SyntaxError{Message: "No diagram type detected", Line: 0, Column: 0},
 			code:                    "A --> B\nB --> C",
 			expectedHintCode:        "missing_diagram_type_keyword",
 			expectedHintMessage:     "type keyword",

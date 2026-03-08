@@ -18,9 +18,9 @@ import (
 
 // Engine holds a set of rules and runs them in order.
 type Engine struct {
-	rules []rules.Rule
+	rules  []rules.Rule
 	sinkMu sync.RWMutex
-	sink  InstrumentationSink
+	sink   InstrumentationSink
 }
 
 // New returns an Engine pre-loaded with the default rule set.
