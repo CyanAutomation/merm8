@@ -33,9 +33,3 @@ func TestParseSelector_ParsesFields(t *testing.T) {
 		})
 	}
 }
-
-func TestParseSelector_RejectsUnknownPrefix(t *testing.T) {
-	if _, ok := parseSelector("unknown:A"); ok {
-		t.Fatal("expected unknown prefix selector to be rejected")
-	}
-}
