@@ -59,48 +59,161 @@ func TestParserConfig_EffectiveConfig_Boundaries(t *testing.T) {
 func TestParserConfigFromEnvNormalization(t *testing.T) {
 	defaults := DefaultConfig()
 
-	testCases := []struct {
-		name           string
-		env            map[string]string
-		expectedConfig Config
-	}{
-		{
-			name: "environment values are parsed when valid",
-			env: map[string]string{
-				"PARSER_TIMEOUT_SECONDS":  "12",
-				"PARSER_MAX_OLD_SPACE_MB": "256",
+	t.Run("valid env parsing", func(t *testing.T) {
+		testCases := []struct {
+			name            string
+			env             map[string]string
+			expectedTimeout time.Duration
+			expectedMemory  int
+		}{
+			{
+				name: "PARSER_TIMEOUT_SECONDS within bounds is parsed while PARSER_MAX_OLD_SPACE_MB falls back to default when unset",
+				env: map[string]string{
+					"PARSER_TIMEOUT_SECONDS": "12",
+				},
+				expectedTimeout: 12 * time.Second,
+				expectedMemory:  defaults.NodeMaxOldSpaceMB,
 			},
-			expectedConfig: Config{Timeout: 12 * time.Second, NodeMaxOldSpaceMB: 256}.EffectiveConfig(),
-		},
-		{
-			name: "invalid non-numeric environment values fall back to defaults",
-			env: map[string]string{
-				"PARSER_TIMEOUT_SECONDS":  "not-a-number",
-				"PARSER_MAX_OLD_SPACE_MB": "not-a-number",
+			{
+				name: "PARSER_MAX_OLD_SPACE_MB within bounds is parsed while PARSER_TIMEOUT_SECONDS falls back to default when unset",
+				env: map[string]string{
+					"PARSER_MAX_OLD_SPACE_MB": "256",
+				},
+				expectedTimeout: defaults.Timeout,
+				expectedMemory:  256,
 			},
-			expectedConfig: defaults,
-		},
-		{
-			name: "out-of-range environment values fall back to defaults",
-			env: map[string]string{
-				"PARSER_TIMEOUT_SECONDS":  "999",
-				"PARSER_MAX_OLD_SPACE_MB": "999999",
+			{
+				name: "PARSER_TIMEOUT_SECONDS and PARSER_MAX_OLD_SPACE_MB are both parsed when valid",
+				env: map[string]string{
+					"PARSER_TIMEOUT_SECONDS":  "12",
+					"PARSER_MAX_OLD_SPACE_MB": "256",
+				},
+				expectedTimeout: 12 * time.Second,
+				expectedMemory:  256,
 			},
-			expectedConfig: defaults,
-		},
-	}
+		}
 
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			for key, value := range tc.env {
-				t.Setenv(key, value)
-			}
+		for _, tc := range testCases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				for key, value := range tc.env {
+					t.Setenv(key, value)
+				}
 
-			effective := ConfigFromEnv().EffectiveConfig()
-			if effective.Timeout != tc.expectedConfig.Timeout || effective.NodeMaxOldSpaceMB != tc.expectedConfig.NodeMaxOldSpaceMB {
-				t.Fatalf("expected config %#v, got %#v", tc.expectedConfig, effective)
-			}
-		})
-	}
+				effective := ConfigFromEnv().EffectiveConfig()
+				if effective.Timeout != tc.expectedTimeout {
+					t.Fatalf("expected timeout %s, got %s", tc.expectedTimeout, effective.Timeout)
+				}
+				if effective.NodeMaxOldSpaceMB != tc.expectedMemory {
+					t.Fatalf("expected NodeMaxOldSpaceMB %d, got %d", tc.expectedMemory, effective.NodeMaxOldSpaceMB)
+				}
+			})
+		}
+	})
+
+	t.Run("invalid format fallback", func(t *testing.T) {
+		// Fallback policy: malformed PARSER_TIMEOUT_SECONDS/PARSER_MAX_OLD_SPACE_MB values are rejected and defaulted.
+		testCases := []struct {
+			name            string
+			env             map[string]string
+			expectedTimeout time.Duration
+			expectedMemory  int
+		}{
+			{
+				name: "PARSER_TIMEOUT_SECONDS non-numeric value uses default timeout",
+				env: map[string]string{
+					"PARSER_TIMEOUT_SECONDS": "not-a-number",
+				},
+				expectedTimeout: defaults.Timeout,
+				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+			},
+			{
+				name: "PARSER_MAX_OLD_SPACE_MB non-numeric value uses default memory",
+				env: map[string]string{
+					"PARSER_MAX_OLD_SPACE_MB": "not-a-number",
+				},
+				expectedTimeout: defaults.Timeout,
+				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+			},
+			{
+				name: "PARSER_TIMEOUT_SECONDS and PARSER_MAX_OLD_SPACE_MB malformed values both use defaults",
+				env: map[string]string{
+					"PARSER_TIMEOUT_SECONDS":  "not-a-number",
+					"PARSER_MAX_OLD_SPACE_MB": "not-a-number",
+				},
+				expectedTimeout: defaults.Timeout,
+				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+			},
+		}
+
+		for _, tc := range testCases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				for key, value := range tc.env {
+					t.Setenv(key, value)
+				}
+
+				effective := ConfigFromEnv().EffectiveConfig()
+				if effective.Timeout != tc.expectedTimeout {
+					t.Fatalf("expected timeout %s, got %s", tc.expectedTimeout, effective.Timeout)
+				}
+				if effective.NodeMaxOldSpaceMB != tc.expectedMemory {
+					t.Fatalf("expected NodeMaxOldSpaceMB %d, got %d", tc.expectedMemory, effective.NodeMaxOldSpaceMB)
+				}
+			})
+		}
+	})
+
+	t.Run("out-of-range clamping/rejection semantics", func(t *testing.T) {
+		// Rejection policy: out-of-range PARSER_TIMEOUT_SECONDS/PARSER_MAX_OLD_SPACE_MB env values fall back to defaults (not clamped).
+		testCases := []struct {
+			name            string
+			env             map[string]string
+			expectedTimeout time.Duration
+			expectedMemory  int
+		}{
+			{
+				name: "PARSER_TIMEOUT_SECONDS above max is rejected and defaults timeout",
+				env: map[string]string{
+					"PARSER_TIMEOUT_SECONDS": "999",
+				},
+				expectedTimeout: defaults.Timeout,
+				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+			},
+			{
+				name: "PARSER_MAX_OLD_SPACE_MB above max is rejected and defaults memory",
+				env: map[string]string{
+					"PARSER_MAX_OLD_SPACE_MB": "999999",
+				},
+				expectedTimeout: defaults.Timeout,
+				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+			},
+			{
+				name: "PARSER_TIMEOUT_SECONDS and PARSER_MAX_OLD_SPACE_MB out-of-range values both default",
+				env: map[string]string{
+					"PARSER_TIMEOUT_SECONDS":  "999",
+					"PARSER_MAX_OLD_SPACE_MB": "999999",
+				},
+				expectedTimeout: defaults.Timeout,
+				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+			},
+		}
+
+		for _, tc := range testCases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				for key, value := range tc.env {
+					t.Setenv(key, value)
+				}
+
+				effective := ConfigFromEnv().EffectiveConfig()
+				if effective.Timeout != tc.expectedTimeout {
+					t.Fatalf("expected timeout %s, got %s", tc.expectedTimeout, effective.Timeout)
+				}
+				if effective.NodeMaxOldSpaceMB != tc.expectedMemory {
+					t.Fatalf("expected NodeMaxOldSpaceMB %d, got %d", tc.expectedMemory, effective.NodeMaxOldSpaceMB)
+				}
+			})
+		}
+	})
 }
