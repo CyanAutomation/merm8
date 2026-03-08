@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Syntax-error remediation now recognizes unsupported first-line Mermaid types (`gantt`, `pie`) before generic fallback, returning dedicated `hints` and matching `help-suggestion` guidance with line-1 targeting.
 - Documented extensibility contract for rule IDs, `/v1/rules` compatibility guarantees, and deterministic plugin/rule loading strategy in API and namespace docs.
 - Config normalization now accepts namespaced built-in rule IDs (`core/<id>`) as aliases, normalizes them to canonical built-in IDs, and deterministically merges mixed alias entries.
 

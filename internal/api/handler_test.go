@@ -898,6 +898,63 @@ func assertHintCodePresentForAnalyzeAndRaw(t *testing.T, syntaxErr *parser.Synta
 	}
 }
 
+func TestAnalyze_SyntaxError_UnsupportedDiagramTypeHintsAndHelp(t *testing.T) {
+	tests := []struct {
+		name         string
+		code         string
+		hintCode     string
+		helpContains string
+	}{
+		{name: "gantt", code: "gantt\n  title Delivery", hintCode: "unsupported_diagram_type_gantt", helpContains: "gantt"},
+		{name: "pie", code: "pie\n  title Revenue", hintCode: "unsupported_diagram_type_pie", helpContains: "pie"},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			syntaxErr := &parser.SyntaxError{Message: "No diagram type detected", Line: 1, Column: 1}
+			for _, endpoint := range []string{"/v1/analyze", "/v1/analyze/raw"} {
+				resp := syntaxErrorResponseForEndpoint(t, endpoint, tt.code, "text/plain", syntaxErr)
+				hintsRaw := resp["hints"].([]interface{})
+				var selected map[string]interface{}
+				for _, raw := range hintsRaw {
+					h := raw.(map[string]interface{})
+					if code, _ := h["code"].(string); code == tt.hintCode {
+						selected = h
+						break
+					}
+				}
+				if selected == nil {
+					t.Fatalf("expected hint %s for %s, got %#v", tt.hintCode, endpoint, hintsRaw)
+				}
+				if msg, _ := selected["message"].(string); !strings.Contains(strings.ToLower(msg), "currently unavailable") {
+					t.Fatalf("expected unavailable message for %s/%s, got %q", endpoint, tt.hintCode, msg)
+				}
+				appliesTo, ok := selected["applies-to"].(map[string]interface{})
+				if !ok {
+					t.Fatalf("expected applies-to for %s/%s", endpoint, tt.hintCode)
+				}
+				if line, ok := appliesTo["line"].(float64); !ok || line != 1 {
+					t.Fatalf("expected applies-to.line=1 for %s/%s, got %#v", endpoint, tt.hintCode, appliesTo["line"])
+				}
+
+				help, ok := resp["help-suggestion"].(map[string]interface{})
+				if !ok || help == nil {
+					t.Fatalf("expected help-suggestion for %s/%s", endpoint, tt.hintCode)
+				}
+				title, _ := help["title"].(string)
+				if !strings.Contains(strings.ToLower(title), tt.helpContains) {
+					t.Fatalf("expected help title to mention %q for %s, got %q", tt.helpContains, endpoint, title)
+				}
+				explanation, _ := help["explanation"].(string)
+				if !strings.Contains(strings.ToLower(explanation), "does not support") {
+					t.Fatalf("expected specific help explanation for %s, got %q", endpoint, explanation)
+				}
+			}
+		})
+	}
+}
+
 // TestAnalyze_SyntaxError_SuggestionsGraphvizDetection tests suggestions for Graphviz syntax.
 func TestAnalyze_SyntaxError_SuggestionsGraphvizDetection(t *testing.T) {
 	syntaxErr := &parser.SyntaxError{
