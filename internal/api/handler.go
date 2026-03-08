@@ -2191,6 +2191,7 @@ func defaultMetrics(diagramType model.DiagramType) *metricsResponse {
 type syntaxInputSignals struct {
 	trimmedCode               string
 	firstLine                 string
+	firstDiagramLine          int
 	firstLineTypoOriginal     string
 	firstLineTypoCanonical    string
 	diagramType               model.DiagramType
@@ -2208,6 +2209,59 @@ type syntaxInputSignals struct {
 	hasFlowchartLowercaseEnd  bool
 	hasMalformedBracketClose  bool
 	hasUnterminatedEdgeLabel  bool
+	hasNonMermaidPreamble     bool
+}
+
+func firstRecognizedDiagramLine(lines []string) int {
+	for i, line := range lines {
+		if isDiagramTypeKeyword(strings.TrimSpace(line)) {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+func looksLikeProsePreambleLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "- ") || strings.HasPrefix(lower, "* ") || strings.HasPrefix(lower, "+ ") {
+		return true
+	}
+	if len(lower) > 2 && lower[0] >= '0' && lower[0] <= '9' {
+		if dotIdx := strings.Index(lower, ". "); dotIdx > 0 {
+			return true
+		}
+	}
+
+	words := strings.Fields(trimmed)
+	if len(words) >= 3 {
+		if strings.ContainsAny(trimmed, ".:;!?") {
+			return true
+		}
+		for _, marker := range []string{"this diagram", "diagram shows", "overview", "summary", "notes:"} {
+			if strings.Contains(lower, marker) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func hasProseBeforeFirstDiagramHeader(lines []string, headerLine int) bool {
+	if headerLine <= 1 {
+		return false
+	}
+	for _, line := range lines[:headerLine-1] {
+		if looksLikeProsePreambleLine(line) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeDiagramTypeHeaderToken(header string) string {
@@ -2310,7 +2364,9 @@ func hasFlowchartUnterminatedEdgeLabel(code string) bool {
 
 func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInputSignals {
 	trimmed := strings.TrimSpace(code)
-	firstLine := strings.TrimSpace(strings.SplitN(code, "\n", 2)[0])
+	lines := strings.Split(code, "\n")
+	firstLine := strings.TrimSpace(lines[0])
+	firstDiagramLine := firstRecognizedDiagramLine(lines)
 	lowerCode := strings.ToLower(code)
 	lowerErr := ""
 	if syntaxErr != nil {
@@ -2330,6 +2386,7 @@ func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInput
 	return syntaxInputSignals{
 		trimmedCode:               trimmed,
 		firstLine:                 firstLine,
+		firstDiagramLine:          firstDiagramLine,
 		firstLineTypoOriginal:     typoOriginal,
 		firstLineTypoCanonical:    typoCanonical,
 		diagramType:               defaultDiagramTypeForSyntaxError(code),
@@ -2347,6 +2404,7 @@ func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInput
 		hasFlowchartLowercaseEnd:  (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && strings.Contains(code, "\nend\n"),
 		hasMalformedBracketClose:  openBrackets != closeBrackets || strings.Contains(code, "[[") && strings.Count(code, "]]") < strings.Count(code, "[["),
 		hasUnterminatedEdgeLabel:  hasFlowchartUnterminatedEdgeLabel(code),
+		hasNonMermaidPreamble:     hasProseBeforeFirstDiagramHeader(lines, firstDiagramLine),
 	}
 }
 
@@ -2410,6 +2468,17 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 			Message:    "Remove Markdown code fences (``` or ```mermaid); send raw Mermaid text only.",
 			Severity:   "warning",
 			Confidence: 0.99,
+			AppliesTo:  &responseHintAppliesTo{Line: 1, DiagramType: diagramType},
+			FixExample: "flowchart TD\n  A --> B",
+		})
+	}
+
+	if signals.hasNonMermaidPreamble {
+		hints = append(hints, responseHint{
+			Code:       "non_mermaid_preamble_detected",
+			Message:    "Remove descriptive prose/markdown before the diagram. Start line 1 with a Mermaid diagram type keyword.",
+			Severity:   "warning",
+			Confidence: 0.96,
 			AppliesTo:  &responseHintAppliesTo{Line: 1, DiagramType: diagramType},
 			FixExample: "flowchart TD\n  A --> B",
 		})
@@ -2601,6 +2670,17 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 			CorrectExample: "flowchart TD\n  A --> B",
 			DocLink:        "#common-mistakes",
 			FixAction:      "Remove Markdown fences before sending Mermaid to /v1/analyze or /v1/analyze/raw",
+		}
+	}
+
+	if signals.hasNonMermaidPreamble {
+		return &helpSuggestion{
+			Title:          "Non-Mermaid preamble detected",
+			Explanation:    "Remove prose or Markdown list text before the diagram. Mermaid input should start with a diagram type keyword on line 1.",
+			WrongExample:   "This diagram shows approval routing.\n- Start at Intake\nflowchart TD\n  A --> B",
+			CorrectExample: "flowchart TD\n  A --> B",
+			DocLink:        "#diagram-types",
+			FixAction:      "Delete descriptive preamble lines and put the Mermaid diagram type (`flowchart`, `sequenceDiagram`, etc.) on line 1",
 		}
 	}
 
