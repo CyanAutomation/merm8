@@ -2501,14 +2501,18 @@ func computeMetrics(d *model.Diagram, issues []model.Issue) *metricsResponse {
 		}
 	}
 
-	duplicateNodeCount := 0
+	duplicateNodeIDs := make(map[string]struct{}, len(d.Nodes)+len(d.DuplicateNodeIDs))
 	nodeOccurrences := make(map[string]int, len(d.Nodes))
 	for _, n := range d.Nodes {
 		nodeOccurrences[n.ID]++
 		if nodeOccurrences[n.ID] > 1 {
-			duplicateNodeCount++
+			duplicateNodeIDs[n.ID] = struct{}{}
 		}
 	}
+	for _, nodeID := range d.DuplicateNodeIDs {
+		duplicateNodeIDs[nodeID] = struct{}{}
+	}
+	duplicateNodeCount := len(duplicateNodeIDs)
 
 	connected := make(map[string]bool, len(d.Nodes))
 	for _, e := range d.Edges {
