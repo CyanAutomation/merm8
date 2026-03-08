@@ -545,13 +545,61 @@ func (l *parserConcurrencyLimiter) Release() {
 }
 
 type analyzeOutcomeCounters struct {
-	validSuccess        atomic.Uint64
-	syntaxError         atomic.Uint64
-	parserTimeout       atomic.Uint64
-	parserSubprocess    atomic.Uint64
-	parserDecode        atomic.Uint64
-	parserContract      atomic.Uint64
-	parserInternalError atomic.Uint64
+	mu                  sync.RWMutex
+	validSuccess        uint64
+	syntaxError         uint64
+	parserTimeout       uint64
+	parserSubprocess    uint64
+	parserDecode        uint64
+	parserContract      uint64
+	parserInternalError uint64
+}
+
+type analyzeOutcomeSnapshot struct {
+	validSuccess        uint64
+	syntaxError         uint64
+	parserTimeout       uint64
+	parserSubprocess    uint64
+	parserDecode        uint64
+	parserContract      uint64
+	parserInternalError uint64
+}
+
+func (c *analyzeOutcomeCounters) Snapshot() analyzeOutcomeSnapshot {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return analyzeOutcomeSnapshot{
+		validSuccess:        c.validSuccess,
+		syntaxError:         c.syntaxError,
+		parserTimeout:       c.parserTimeout,
+		parserSubprocess:    c.parserSubprocess,
+		parserDecode:        c.parserDecode,
+		parserContract:      c.parserContract,
+		parserInternalError: c.parserInternalError,
+	}
+}
+
+func (c *analyzeOutcomeCounters) Increment(outcome string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	switch outcome {
+	case telemetry.OutcomeLintSuccess:
+		c.validSuccess++
+	case telemetry.OutcomeSyntaxError:
+		c.syntaxError++
+	case telemetry.OutcomeParserTimeout:
+		c.parserTimeout++
+	case telemetry.OutcomeParserSubprocessErr:
+		c.parserSubprocess++
+	case telemetry.OutcomeParserDecodeErr:
+		c.parserDecode++
+	case telemetry.OutcomeParserContractErr:
+		c.parserContract++
+	case telemetry.OutcomeInternalError:
+		c.parserInternalError++
+	}
 }
 
 type analyzeOutcomeMetricsResponse struct {
@@ -788,38 +836,25 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 // InternalMetrics handles GET /internal/metrics and returns analyze outcome counters.
 func (h *Handler) InternalMetrics(w http.ResponseWriter, _ *http.Request) {
+	snapshot := h.analyzeCounters.Snapshot()
+
 	writeJSON(w, http.StatusOK, analyzeOutcomeMetricsResponse{
 		Analyze: map[string]uint64{
-			"valid_success": h.analyzeCounters.validSuccess.Load(),
-			"syntax_error":  h.analyzeCounters.syntaxError.Load(),
+			"valid_success": snapshot.validSuccess,
+			"syntax_error":  snapshot.syntaxError,
 		},
 		Parser: map[string]uint64{
-			"timeout":    h.analyzeCounters.parserTimeout.Load(),
-			"subprocess": h.analyzeCounters.parserSubprocess.Load(),
-			"decode":     h.analyzeCounters.parserDecode.Load(),
-			"contract":   h.analyzeCounters.parserContract.Load(),
-			"internal":   h.analyzeCounters.parserInternalError.Load(),
+			"timeout":    snapshot.parserTimeout,
+			"subprocess": snapshot.parserSubprocess,
+			"decode":     snapshot.parserDecode,
+			"contract":   snapshot.parserContract,
+			"internal":   snapshot.parserInternalError,
 		},
 	})
 }
 
 func (h *Handler) incrementAnalyzeOutcomeCounter(outcome string) {
-	switch outcome {
-	case telemetry.OutcomeLintSuccess:
-		h.analyzeCounters.validSuccess.Add(1)
-	case telemetry.OutcomeSyntaxError:
-		h.analyzeCounters.syntaxError.Add(1)
-	case telemetry.OutcomeParserTimeout:
-		h.analyzeCounters.parserTimeout.Add(1)
-	case telemetry.OutcomeParserSubprocessErr:
-		h.analyzeCounters.parserSubprocess.Add(1)
-	case telemetry.OutcomeParserDecodeErr:
-		h.analyzeCounters.parserDecode.Add(1)
-	case telemetry.OutcomeParserContractErr:
-		h.analyzeCounters.parserContract.Add(1)
-	case telemetry.OutcomeInternalError:
-		h.analyzeCounters.parserInternalError.Add(1)
-	}
+	h.analyzeCounters.Increment(outcome)
 }
 
 // Metrics handles GET /metrics and serves exporter output when configured.
@@ -1005,13 +1040,14 @@ func (h *Handler) HealthMetrics(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	// Aggregate analyze outcome counters
-	validSuccess := h.analyzeCounters.validSuccess.Load()
-	syntaxError := h.analyzeCounters.syntaxError.Load()
-	parserTimeout := h.analyzeCounters.parserTimeout.Load()
-	parserSubprocess := h.analyzeCounters.parserSubprocess.Load()
-	parserDecode := h.analyzeCounters.parserDecode.Load()
-	parserContract := h.analyzeCounters.parserContract.Load()
-	parserInternalError := h.analyzeCounters.parserInternalError.Load()
+	snapshot := h.analyzeCounters.Snapshot()
+	validSuccess := snapshot.validSuccess
+	syntaxError := snapshot.syntaxError
+	parserTimeout := snapshot.parserTimeout
+	parserSubprocess := snapshot.parserSubprocess
+	parserDecode := snapshot.parserDecode
+	parserContract := snapshot.parserContract
+	parserInternalError := snapshot.parserInternalError
 
 	totalRequests := validSuccess +
 		syntaxError +
