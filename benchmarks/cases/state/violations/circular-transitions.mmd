@@ -1,0 +1,8 @@
+stateDiagram-v2
+    [*] --> State1
+    State1 --> State2: event
+    State2 --> State1: event
+    State1 --> State1: self
+    
+    %% @rule: *
+    %% Circular transitions between states

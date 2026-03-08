@@ -1,0 +1,9 @@
+sequenceDiagram
+    participant Sender
+    participant UndefinedActor
+    
+    Sender->>Receiver: Message
+    Receiver-->>Sender: Response
+    
+    %% @rule: *
+    %% References actor "Receiver" without defining it

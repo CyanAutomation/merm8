@@ -1,0 +1,10 @@
+erDiagram
+    ENTITY-A ||--o{ ENTITY-B : relates
+    ENTITY-B ||--o{ ENTITY-C : relates
+    ENTITY-C ||--o{ ENTITY-D : relates
+    ENTITY-D ||--o{ ENTITY-E : relates
+    ENTITY-E ||--o{ ENTITY-F : relates
+    ENTITY-F ||--o{ ENTITY-A : "back to start"
+    
+    %% @rule: *
+    %% Long circular chain of entity relationships

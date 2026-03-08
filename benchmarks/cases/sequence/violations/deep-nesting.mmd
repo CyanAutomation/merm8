@@ -1,0 +1,18 @@
+sequenceDiagram
+    participant A
+    participant B
+    
+    A->>B: Deep nesting example
+    rect
+        rect
+            rect
+                rect
+                    A->>B: Message level 4
+                    B-->>A: Response level 4
+                end
+            end
+        end
+    end
+    
+    %% @rule: *
+    %% Deeply nested diagram with many rect blocks

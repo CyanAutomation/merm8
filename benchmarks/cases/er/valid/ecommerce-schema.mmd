@@ -1,0 +1,20 @@
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE-ITEM : contains
+    CUSTOMER ||--o{ INVOICE : receives
+    LINE-ITEM ||--o{ PRODUCT : "ordered in"
+    PRODUCT ||--o{ SUPPLIER : "supplied by"
+    
+    CUSTOMER {
+        int customer_id
+        string name
+        string email
+    }
+    
+    PRODUCT {
+        int product_id
+        string title
+        float price
+    }
+    
+    %% @rule: *

@@ -1,0 +1,19 @@
+classDiagram
+    class ClassA {
+        +name: string
+    }
+    
+    class ClassB {
+        +value: int
+    }
+    
+    class ClassC {
+        +data: string
+    }
+    
+    ClassA <|-- ClassB
+    ClassB <|-- ClassC
+    ClassC <|-- ClassA
+    
+    %% @rule: *
+    %% Circular inheritance: A -> B -> C -> A

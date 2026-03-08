@@ -1,0 +1,8 @@
+erDiagram
+    STUDENT ||--o{ ENROLLMENT : enrolls
+    COURSE ||--o{ ENROLLMENT : has
+    PROFESSOR ||--o{ COURSE : teaches
+    DEPARTMENT ||--o{ PROFESSOR : "employs"
+    DEPARTMENT ||--o{ COURSE : offers
+    
+    %% @rule: *

@@ -1,0 +1,13 @@
+sequenceDiagram
+    participant P1 as Publisher
+    participant B as Message Bus
+    participant S1 as Subscriber 1
+    participant S2 as Subscriber 2
+    
+    P1->>B: Publish event
+    B->>S1: Notify event
+    B->>S2: Notify event
+    S1-->>B: Processed
+    S2-->>B: Processed
+    
+    %% @rule: *

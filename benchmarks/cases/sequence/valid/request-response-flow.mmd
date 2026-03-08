@@ -1,0 +1,11 @@
+sequenceDiagram
+    participant Client
+    participant Server
+    participant Database
+    
+    Client->>Server: HTTP GET /api/data
+    Server->>Database: SELECT * FROM users
+    Database-->>Server: [user data]
+    Server-->>Client: JSON response
+    
+    %% @rule: *

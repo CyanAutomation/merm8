@@ -1,0 +1,20 @@
+classDiagram
+    class Interface1 {
+        <<interface>>
+        +method1()
+    }
+    
+    class Interface2 {
+        <<interface>>
+        +method2()
+    }
+    
+    class Implementation {
+        +method1()
+        +method2()
+    }
+    
+    Interface1 <|.. Implementation
+    Interface2 <|.. Implementation
+    
+    %% @rule: *

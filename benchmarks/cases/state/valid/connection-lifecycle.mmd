@@ -1,0 +1,19 @@
+stateDiagram-v2
+    [*] --> Disconnected
+    
+    Disconnected --> Connecting: connect
+    Connecting --> Connected: success
+    Connecting --> Disconnected: failed
+    
+    Connected --> Authenticated: login
+    Authenticated --> Idle: ready
+    
+    Idle --> Active: action
+    Active --> Idle: done
+    
+    Idle --> Disconnected: logout
+    Active --> Disconnected: disconnect
+    
+    Disconnected --> [*]
+    
+    %% @rule: *

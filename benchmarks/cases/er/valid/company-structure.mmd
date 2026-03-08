@@ -1,0 +1,21 @@
+erDiagram
+    EMPLOYEE ||--|| DEPARTMENT : "works in"
+    EMPLOYEE ||--o{ PROJECT : "assigned to"
+    DEPARTMENT ||--o{ PROJECT : "owns"
+    
+    EMPLOYEE {
+        int emp_id
+        string name
+    }
+    
+    DEPARTMENT {
+        int dept_id
+        string name
+    }
+    
+    PROJECT {
+        int proj_id
+        string title
+    }
+    
+    %% @rule: *

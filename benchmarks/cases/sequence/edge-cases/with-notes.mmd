@@ -1,0 +1,13 @@
+sequenceDiagram
+    participant A
+    participant B
+    participant C
+    
+    note over A: Actor A note
+    A->>B: Message
+    note over B: Actor B note
+    B->>C: Forward
+    note over A,C: All actors note
+    C-->>A: Response
+    
+    %% @rule: *

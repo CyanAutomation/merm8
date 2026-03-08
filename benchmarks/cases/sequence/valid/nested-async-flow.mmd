@@ -1,0 +1,14 @@
+sequenceDiagram
+    participant A
+    participant B
+    participant C
+    participant D
+    
+    A->>B: Init
+    B->>C: Process
+    C->>D: Store
+    D-->>C: Ack
+    C-->>B: Result
+    B-->>A: Complete
+    
+    %% @rule: *

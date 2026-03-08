@@ -1,0 +1,18 @@
+sequenceDiagram
+    participant Mobile as Mobile App
+    participant API as API Server
+    participant Auth as Auth Service
+    
+    loop Every request
+        Mobile->>API: Include token
+        API->>Auth: Validate token
+        alt Token valid
+            Auth-->>API: OK
+            API-->>Mobile: Data
+        else Token invalid
+            Auth-->>API: Reject
+            API-->>Mobile: Unauthorized
+        end
+    end
+    
+    %% @rule: *

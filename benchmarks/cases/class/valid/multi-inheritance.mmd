@@ -1,0 +1,19 @@
+classDiagram
+    class Shape {
+        -area: float
+        +getArea(): float
+    }
+    
+    class Circle {
+        -radius: float
+    }
+    
+    class Rectangle {
+        -width: float
+        -height: float
+    }
+    
+    Shape <|-- Circle
+    Shape <|-- Rectangle
+    
+    %% @rule: *

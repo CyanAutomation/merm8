@@ -1,0 +1,29 @@
+erDiagram
+    AUTHOR ||--o{ BOOK : writes
+    BOOK ||--o{ REVIEW : "reviewed in"
+    READER ||--o{ REVIEW : submits
+    PUBLISHER ||--|{ BOOK : publishes
+    
+    AUTHOR {
+        int author_id
+        string name
+    }
+    
+    BOOK {
+        int book_id
+        string title
+        int year
+    }
+    
+    READER {
+        int reader_id
+        string username
+    }
+    
+    REVIEW {
+        int review_id
+        int rating
+        text content
+    }
+    
+    %% @rule: *
