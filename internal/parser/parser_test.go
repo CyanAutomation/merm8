@@ -943,34 +943,53 @@ process.exit(0);
 
 func TestParser_RepoRootCachedAcrossWorkingDirectoryChange(t *testing.T) {
 	script := getParserScript(t)
-	p := mustNewParser(t, script)
+	resolveCalls := 0
 
-	origWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get current directory: %v", err)
-	}
+	p, err := parser.NewWithConfigAndRepoRootResolver(script, parser.ConfigFromEnv(), func() (string, error) {
+		resolveCalls++
 
-	outside := t.TempDir()
-	if err := os.Chdir(outside); err != nil {
-		t.Fatalf("failed to chdir to outside temp dir: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(origWD)
+		wd, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		for {
+			if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
+				return wd, nil
+			}
+			parent := filepath.Dir(wd)
+			if parent == wd {
+				break
+			}
+			wd = parent
+		}
+
+		return "", fmt.Errorf("failed to locate repository root")
 	})
+	if err != nil {
+		t.Fatalf("failed to construct parser with resolver: %v", err)
+	}
+
+	if resolveCalls != 1 {
+		t.Fatalf("expected repo root resolver called once during construction, got %d", resolveCalls)
+	}
 
 	if err := p.Ready(); err != nil {
-		t.Fatalf("expected Ready to use cached repo root after chdir, got %v", err)
+		t.Fatalf("expected Ready to use cached repo root, got %v", err)
 	}
 
 	diagram, syntaxErr, err := p.Parse("graph TD\nA-->B")
 	if err != nil {
-		t.Fatalf("expected Parse to use cached repo root after chdir, got %v", err)
+		t.Fatalf("expected Parse to use cached repo root, got %v", err)
 	}
 	if syntaxErr != nil {
 		t.Fatalf("unexpected syntax error: %+v", syntaxErr)
 	}
 	if diagram == nil {
 		t.Fatal("expected diagram, got nil")
+	}
+
+	if resolveCalls != 1 {
+		t.Fatalf("expected repo root resolver to remain cached after parser operations, got %d calls", resolveCalls)
 	}
 }
 
