@@ -2721,12 +2721,14 @@ func syntaxErrorLineContext(code string, syntaxErr *parser.SyntaxError) syntaxEr
 	runes := []rune(line)
 
 	col := syntaxErr.Column
+	col := syntaxErr.Column
 	if col <= 0 {
 		col = 1
 	}
-	if col > len(runes)+1 {
-		col = len(runes) + 1
+	if col > len(runes) {
+		col = len(runes)
 	}
+	ctx.column = col
 	ctx.column = col
 
 	if len(runes) <= 80 {
