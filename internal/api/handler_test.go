@@ -383,6 +383,37 @@ func TestAnalyze_InvalidJSON(t *testing.T) {
 	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_json", "invalid JSON body")
 }
 
+func TestAnalyze_AcceptsSingleJSONObject(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(`{"code":"graph TD;A-->B"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAnalyze_RejectsTrailingContentAfterJSONObject(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(`{"code":"graph TD;A-->B"} {"extra":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "invalid_json", "invalid JSON body")
+}
+
 func TestAnalyze_RequestBodyTooLarge(t *testing.T) {
 	parserCalled := false
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
@@ -3417,6 +3448,47 @@ func TestAnalyzeSARIF_ParserConcurrencyLimitReached_Returns503WithRetryAfter(t *
 
 	close(release)
 	<-done
+}
+
+func TestAnalyzeSARIF_AcceptsSingleJSONObject(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/sarif", strings.NewReader(`{"code":"graph TD;A-->B"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAnalyzeSARIF_RejectsTrailingContentAfterJSONObject(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/sarif", strings.NewReader(`{"code":"graph TD;A-->B"} trailing`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+
+	var report sarif.Report
+	if err := json.Unmarshal(w.Body.Bytes(), &report); err != nil {
+		t.Fatalf("failed to decode SARIF response: %v", err)
+	}
+	if len(report.Runs) == 0 || len(report.Runs[0].Invocations) == 0 {
+		t.Fatalf("expected SARIF invocations with error details, got %#v", report)
+	}
+	if got := report.Runs[0].Invocations[0].Properties["error-code"]; got != "invalid_json" {
+		t.Fatalf("expected SARIF error-code=invalid_json, got %q", got)
+	}
 }
 
 func TestAnalyze_ParserConcurrencyLimit_HighConcurrencyContention(t *testing.T) {

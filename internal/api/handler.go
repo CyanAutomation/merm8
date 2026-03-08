@@ -1249,13 +1249,20 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 	r.Body = http.MaxBytesReader(w, r.Body, maxAnalyzeBodyBytes)
 
 	var req analyzeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&req); err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
 			observeAnalyzeOutcome("request_too_large")
 			writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "request body exceeds 1 MiB limit")
 			return
 		}
+		observeAnalyzeOutcome("invalid_json")
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON body")
+		return
+	}
+	var trailingPayload struct{}
+	if err := decoder.Decode(&trailingPayload); err != io.EOF {
 		observeAnalyzeOutcome("invalid_json")
 		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON body")
 		return
@@ -1734,7 +1741,8 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxAnalyzeBodyBytes)
 
 	var req analyzeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&req); err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
 			observeAnalyzeOutcome("request_too_large")
@@ -1745,6 +1753,16 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 			writeSARIF(w, http.StatusRequestEntityTooLarge, report)
 			return
 		}
+		observeAnalyzeOutcome("invalid_json")
+		report := sarif.TransformError(sarif.ErrorInfo{
+			Code:    "invalid_json",
+			Message: "invalid JSON body",
+		}, meta)
+		writeSARIF(w, http.StatusBadRequest, report)
+		return
+	}
+	var trailingPayload struct{}
+	if err := decoder.Decode(&trailingPayload); err != io.EOF {
 		observeAnalyzeOutcome("invalid_json")
 		report := sarif.TransformError(sarif.ErrorInfo{
 			Code:    "invalid_json",
