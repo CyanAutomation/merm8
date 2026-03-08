@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -23,6 +24,11 @@ type blockingParser struct {
 	once    sync.Once
 }
 
+const (
+	busyResponseStartTimeout   = 2 * time.Second
+	busyResponseRequestTimeout = 2 * time.Second
+)
+
 func (p *blockingParser) Parse(string) (*model.Diagram, *parser.SyntaxError, error) {
 	p.once.Do(func() {
 		close(p.start)
@@ -31,12 +37,14 @@ func (p *blockingParser) Parse(string) (*model.Diagram, *parser.SyntaxError, err
 	return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 }
 
-func TestServerStack_ParserConcurrencyBusyResponses_IncludeRetryAfter(t *testing.T) {
+func runBusyResponseScenario(t *testing.T, path string) []byte {
+	t.Helper()
+
 	t.Setenv("PARSER_CONCURRENCY_LIMIT", "1")
 
 	start := make(chan struct{})
-	release := make(chan struct{})
-	mockP := &blockingParser{start: start, release: release}
+	releaseGate := make(chan struct{})
+	mockP := &blockingParser{start: start, release: releaseGate}
 
 	h := api.NewHandler(mockP, engine.New())
 	h.SetParserConcurrencyLimit(envInt("PARSER_CONCURRENCY_LIMIT", defaultParserConcurrencyLimit))
@@ -48,7 +56,7 @@ func TestServerStack_ParserConcurrencyBusyResponses_IncludeRetryAfter(t *testing
 
 	body, _ := json.Marshal(map[string]string{"code": "graph TD\nA-->B"})
 
-	firstReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/analyze", bytes.NewReader(body))
+	firstReq, err := http.NewRequest(http.MethodPost, server.URL+path, bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("failed to create first request: %v", err)
 	}
@@ -63,9 +71,28 @@ func TestServerStack_ParserConcurrencyBusyResponses_IncludeRetryAfter(t *testing
 		}
 	}()
 
-	<-start
+	select {
+	case <-start:
+	case <-time.After(busyResponseStartTimeout):
+		t.Fatal("timed out waiting for saturation request to start")
+	}
 
-	secondReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/analyze", bytes.NewReader(body))
+	var releaseOnce sync.Once
+	release := func() {
+		releaseOnce.Do(func() {
+			close(releaseGate)
+		})
+	}
+	t.Cleanup(func() {
+		release()
+		select {
+		case <-firstDone:
+		case <-time.After(busyResponseRequestTimeout):
+			t.Fatal("timed out waiting for saturation request cleanup")
+		}
+	})
+
+	secondReq, err := http.NewRequest(http.MethodPost, server.URL+path, bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("failed to create second request: %v", err)
 	}
@@ -87,91 +114,54 @@ func TestServerStack_ParserConcurrencyBusyResponses_IncludeRetryAfter(t *testing
 		t.Fatalf("expected Retry-After to be a positive integer, got %q (err=%v)", retryAfter, err)
 	}
 
-	var apiResp struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	if err := json.NewDecoder(secondRes.Body).Decode(&apiResp); err != nil {
-		t.Fatalf("failed to decode JSON response: %v", err)
-	}
-	if apiResp.Error.Code != "server_busy" {
-		t.Fatalf("expected error.code=server_busy, got %q", apiResp.Error.Code)
-	}
-
-	close(release)
-	<-firstDone
-}
-
-func TestServerStack_ParserConcurrencyBusySARIF_IncludeRetryAfter(t *testing.T) {
-	t.Setenv("PARSER_CONCURRENCY_LIMIT", "1")
-
-	start := make(chan struct{})
-	release := make(chan struct{})
-	mockP := &blockingParser{start: start, release: release}
-
-	h := api.NewHandler(mockP, engine.New())
-	h.SetParserConcurrencyLimit(envInt("PARSER_CONCURRENCY_LIMIT", defaultParserConcurrencyLimit))
-
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	body, _ := json.Marshal(map[string]string{"code": "graph TD\nA-->B"})
-
-	firstReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/analyze/sarif", bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("failed to create first SARIF request: %v", err)
-	}
-	firstReq.Header.Set("Content-Type", "application/json")
-
-	firstDone := make(chan struct{})
-	go func() {
-		defer close(firstDone)
-		res, err := server.Client().Do(firstReq)
-		if err == nil {
-			_ = res.Body.Close()
-		}
-	}()
-
-	<-start
-
-	secondReq, err := http.NewRequest(http.MethodPost, server.URL+"/v1/analyze/sarif", bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("failed to create second SARIF request: %v", err)
-	}
-	secondReq.Header.Set("Content-Type", "application/json")
-	secondRes, err := server.Client().Do(secondReq)
-	if err != nil {
-		t.Fatalf("second SARIF request failed: %v", err)
-	}
 	defer secondRes.Body.Close()
 
-	if secondRes.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503 on second SARIF request, got %d", secondRes.StatusCode)
-	}
-	retryAfter := secondRes.Header.Get("Retry-After")
-	if retryAfter == "" {
-		t.Fatalf("expected Retry-After header to be set")
-	}
-	if seconds, err := strconv.Atoi(retryAfter); err != nil || seconds <= 0 {
-		t.Fatalf("expected Retry-After to be a positive integer, got %q (err=%v)", retryAfter, err)
+	responseBody, err := io.ReadAll(secondRes.Body)
+	if err != nil {
+		t.Fatalf("failed to read busy response body: %v", err)
 	}
 
-	var report sarif.Report
-	if err := json.NewDecoder(secondRes.Body).Decode(&report); err != nil {
-		t.Fatalf("failed to decode SARIF response: %v", err)
-	}
-	if len(report.Runs) == 0 || len(report.Runs[0].Invocations) == 0 {
-		t.Fatalf("expected SARIF invocation with error details, got %#v", report)
-	}
-	if got := report.Runs[0].Invocations[0].Properties["error-code"]; got != "server_busy" {
-		t.Fatalf("expected SARIF error-code=server_busy, got %q", got)
+	release()
+	select {
+	case <-firstDone:
+	case <-time.After(busyResponseRequestTimeout):
+		t.Fatal("timed out waiting for saturation request to complete")
 	}
 
-	close(release)
-	<-firstDone
+	return responseBody
+}
+
+func TestServerStack_ParserConcurrencyBusyResponses_IncludeRetryAfter(t *testing.T) {
+	t.Run("json", func(t *testing.T) {
+		body := runBusyResponseScenario(t, "/v1/analyze")
+
+		var apiResp struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(body, &apiResp); err != nil {
+			t.Fatalf("failed to decode JSON response: %v", err)
+		}
+		if apiResp.Error.Code != "server_busy" {
+			t.Fatalf("expected error.code=server_busy, got %q", apiResp.Error.Code)
+		}
+	})
+
+	t.Run("sarif", func(t *testing.T) {
+		body := runBusyResponseScenario(t, "/v1/analyze/sarif")
+
+		var report sarif.Report
+		if err := json.Unmarshal(body, &report); err != nil {
+			t.Fatalf("failed to decode SARIF response: %v", err)
+		}
+		if len(report.Runs) == 0 || len(report.Runs[0].Invocations) == 0 {
+			t.Fatalf("expected SARIF invocation with error details, got %#v", report)
+		}
+		if got := report.Runs[0].Invocations[0].Properties["error-code"]; got != "server_busy" {
+			t.Fatalf("expected SARIF error-code=server_busy, got %q", got)
+		}
+	})
 }
 
 // TestServerStack_CORSHeaders_AllowedOrigin verifies CORS headers are set for allowed origins.
