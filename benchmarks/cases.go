@@ -29,8 +29,8 @@ type BenchmarkCase struct {
 
 // ExpectedIssue describes an issue expected to be raised by a rule.
 type ExpectedIssue struct {
-	RuleID   string `json:"rule_id"`  // Rule ID (e.g., "max-fanout")
-	Severity string `json:"severity"` // "error" | "warning" | "info"
+	RuleID   string `json:"rule_id"`         // Rule ID (e.g., "max-fanout")
+	Severity string `json:"severity"`        // "error" | "warning" | "info"
 	Count    int    `json:"count,omitempty"` // Expected count for this rule (0 = any)
 }
 
@@ -108,14 +108,14 @@ type CoverageMetrics struct {
 
 // TrendMetric tracks a single metric value at a point in time.
 type TrendMetric struct {
-	Timestamp        time.Time `json:"timestamp"`
-	RuleID           string    `json:"rule_id"`
-	DetectionRate    float64   `json:"detection_rate"`
+	Timestamp         time.Time `json:"timestamp"`
+	RuleID            string    `json:"rule_id"`
+	DetectionRate     float64   `json:"detection_rate"`
 	FalsePositiveRate float64   `json:"false_positive_rate"`
-	AvgParseTimeMs   int64     `json:"avg_parse_time_ms"`
-	AvgLintTimeMs    int64     `json:"avg_lint_time_ms"`
-	TotalCases       int       `json:"total_cases"`
-	PassedCases      int       `json:"passed_cases"`
+	AvgParseTimeMs    int64     `json:"avg_parse_time_ms"`
+	AvgLintTimeMs     int64     `json:"avg_lint_time_ms"`
+	TotalCases        int       `json:"total_cases"`
+	PassedCases       int       `json:"passed_cases"`
 }
 
 // TrendHistory maintains historical trend data for comparison and analysis.
