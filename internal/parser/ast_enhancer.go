@@ -1,17 +1,10 @@
 package parser
 
 import (
-	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/CyanAutomation/merm8/internal/model"
-)
-
-var (
-	nodeDefinitionPattern = regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)\s*(?:\[|\(|{)`)
-	nodeIDPattern         = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*`)
-	edgeOperatorPattern   = regexp.MustCompile(`(?:[ox<]?(?:-{2,}|={2,}|\.{2,})[ox>]?)|(?:[ox<]?(?:-|=|\.)+[ox>]*>+)`)
 )
 
 var mermaidKeywords = map[string]bool{
@@ -47,7 +40,7 @@ func EnhanceASTWithSourceAnalysis(diagram *model.Diagram, sourceCode string) {
 	}
 
 	// Extract all node IDs defined in the source code
-	allNodeIDs := extractAllNodeIDsFromSource(sourceCode)
+	allNodeIDs, duplicates := analyzeSourceNodes(sourceCode)
 
 	// Identify disconnected nodes (defined but not referenced in edges)
 	// Note: parser normalizes node IDs to lowercase, so we must normalize
@@ -70,9 +63,6 @@ func EnhanceASTWithSourceAnalysis(diagram *model.Diagram, sourceCode string) {
 		}
 	}
 
-	// Identify duplicate node IDs
-	duplicates := findDuplicateNodeIDs(sourceCode)
-
 	// Store enhancements on diagram
 	diagram.SourceNodeIDs = allNodeIDs
 	diagram.DisconnectedNodeIDs = disconnected
@@ -83,29 +73,8 @@ func EnhanceASTWithSourceAnalysis(diagram *model.Diagram, sourceCode string) {
 // Matches explicit node definitions (A[...], B(...), etc.) and node references in edges.
 // Returns unique node IDs in order of appearance.
 func extractAllNodeIDsFromSource(source string) []string {
-	seen := make(map[string]bool)
-	var result []string
-
-	cleanedSource := stripMermaidComments(source)
-
-	// Extract from explicit node definitions
-	for _, match := range nodeDefinitionPattern.FindAllStringSubmatch(cleanedSource, -1) {
-		nodeID := match[1]
-		if !seen[nodeID] && !isKeyword(nodeID) {
-			result = append(result, nodeID)
-			seen[nodeID] = true
-		}
-	}
-
-	// Also capture node IDs used in edge endpoints for implicit node definitions
-	for _, edgeNodeID := range extractEdgeNodeIDs(cleanedSource) {
-		if !seen[edgeNodeID] && !isKeyword(edgeNodeID) {
-			result = append(result, edgeNodeID)
-			seen[edgeNodeID] = true
-		}
-	}
-
-	return result
+	nodeIDs, _ := analyzeSourceNodes(source)
+	return nodeIDs
 }
 
 // isKeyword checks if a string is a Mermaid keyword to filter out false matches
@@ -117,15 +86,40 @@ func isKeyword(s string) bool {
 // Counts explicit node definitions (A[...], A(...), etc.).
 // Returns sorted list of node IDs that are defined more than once.
 func findDuplicateNodeIDs(source string) []string {
+	_, duplicates := analyzeSourceNodes(source)
+	return duplicates
+}
+
+func analyzeSourceNodes(source string) ([]string, []string) {
+	seen := make(map[string]bool)
 	counts := make(map[string]int)
+	var nodeIDs []string
+	var edgeNodeIDs []string
 
-	cleanedSource := stripMermaidComments(source)
+	for _, rawLine := range strings.Split(source, "\n") {
+		line := rawLine
+		if idx := strings.Index(line, "%%"); idx >= 0 {
+			line = line[:idx]
+		}
 
-	// Count occurrences, filtering out keywords
-	for _, match := range nodeDefinitionPattern.FindAllStringSubmatch(cleanedSource, -1) {
-		nodeID := match[1]
-		if !isKeyword(nodeID) {
+		explicitDefs := extractExplicitNodeDefinitions(line)
+		for _, nodeID := range explicitDefs {
 			counts[nodeID]++
+			if !seen[nodeID] {
+				nodeIDs = append(nodeIDs, nodeID)
+				seen[nodeID] = true
+			}
+		}
+
+		for _, edgeNodeID := range extractEdgeNodeIDs(line) {
+			edgeNodeIDs = append(edgeNodeIDs, edgeNodeID)
+		}
+	}
+
+	for _, edgeNodeID := range edgeNodeIDs {
+		if !seen[edgeNodeID] {
+			nodeIDs = append(nodeIDs, edgeNodeID)
+			seen[edgeNodeID] = true
 		}
 	}
 
@@ -138,55 +132,186 @@ func findDuplicateNodeIDs(source string) []string {
 
 	// Sort for consistent output
 	sort.Strings(duplicates)
-	return duplicates
+	return nodeIDs, duplicates
 }
 
-func stripMermaidComments(source string) string {
-	lines := strings.Split(source, "\n")
-	for i, line := range lines {
-		if idx := strings.Index(line, "%%"); idx >= 0 {
-			lines[i] = line[:idx]
-		}
-	}
-	return strings.Join(lines, "\n")
+type tokenSpan struct {
+	start int
+	end   int
 }
 
 func extractEdgeNodeIDs(source string) []string {
 	var nodeIDs []string
-	for _, line := range strings.Split(source, "\n") {
-		idMatches := nodeIDPattern.FindAllStringIndex(line, -1)
-		if len(idMatches) < 2 {
+	idMatches := extractNodeIDSpans(source)
+	if len(idMatches) < 2 {
+		return nodeIDs
+	}
+
+	for _, op := range extractEdgeOperators(source) {
+		left := nearestNodeBefore(idMatches, op.start)
+		right := nearestNodeAfter(idMatches, op.end)
+		if left == nil || right == nil {
 			continue
 		}
 
-		for _, op := range edgeOperatorPattern.FindAllStringIndex(line, -1) {
-			left := nearestNodeBefore(idMatches, op[0])
-			right := nearestNodeAfter(idMatches, op[1])
-			if left == nil || right == nil {
-				continue
-			}
-
-			nodeIDs = append(nodeIDs, line[left[0]:left[1]], line[right[0]:right[1]])
-		}
+		nodeIDs = append(nodeIDs, source[left.start:left.end], source[right.start:right.end])
 	}
 
 	return nodeIDs
 }
 
-func nearestNodeBefore(indices [][]int, pos int) []int {
+func nearestNodeBefore(indices []tokenSpan, pos int) *tokenSpan {
 	for i := len(indices) - 1; i >= 0; i-- {
-		if indices[i][1] <= pos {
-			return indices[i]
+		if indices[i].end <= pos {
+			return &indices[i]
 		}
 	}
 	return nil
 }
 
-func nearestNodeAfter(indices [][]int, pos int) []int {
-	for _, index := range indices {
-		if index[0] >= pos {
-			return index
+func nearestNodeAfter(indices []tokenSpan, pos int) *tokenSpan {
+	for i := range indices {
+		if indices[i].start >= pos {
+			return &indices[i]
 		}
 	}
 	return nil
+}
+
+func extractNodeIDSpans(line string) []tokenSpan {
+	spans := make([]tokenSpan, 0, 8)
+	for i := 0; i < len(line); {
+		if !isIdentifierStart(line[i]) {
+			i++
+			continue
+		}
+		start := i
+		i = scanNodeIDEnd(line, i)
+		token := line[start:i]
+		if isKeyword(token) || !isValidNodeIDToken(token) {
+			continue
+		}
+		spans = append(spans, tokenSpan{start: start, end: i})
+	}
+	return spans
+}
+
+func extractExplicitNodeDefinitions(line string) []string {
+	definitions := make([]string, 0, 4)
+	for i := 0; i < len(line); i++ {
+		if line[i] != '[' && line[i] != '(' && line[i] != '{' {
+			continue
+		}
+
+		j := i - 1
+		for j >= 0 && (line[j] == ' ' || line[j] == '\t') {
+			j--
+		}
+		if j < 0 {
+			continue
+		}
+
+		end := j + 1
+		for j >= 0 && (isIdentifierStart(line[j]) || isASCIIDigit(line[j]) || line[j] == '-') {
+			j--
+		}
+		start := j + 1
+		if start >= end {
+			continue
+		}
+
+		token := line[start:end]
+		if isKeyword(token) || !isValidNodeIDToken(token) {
+			continue
+		}
+		definitions = append(definitions, token)
+	}
+	return definitions
+}
+
+func extractEdgeOperators(line string) []tokenSpan {
+	ops := make([]tokenSpan, 0, 8)
+	for i := 0; i < len(line); {
+		if !isEdgeOperatorChar(line[i]) {
+			i++
+			continue
+		}
+		start := i
+		i++
+		for i < len(line) && isEdgeOperatorChar(line[i]) {
+			i++
+		}
+		if isEdgeOperatorToken(line[start:i]) {
+			ops = append(ops, tokenSpan{start: start, end: i})
+		}
+	}
+	return ops
+}
+
+func isIdentifierStart(c byte) bool {
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_'
+}
+
+func isASCIIDigit(c byte) bool {
+	return c >= '0' && c <= '9'
+}
+
+func isIdentifierCore(c byte) bool {
+	return isIdentifierStart(c) || isASCIIDigit(c)
+}
+
+func isValidNodeIDToken(token string) bool {
+	if token == "" || !isIdentifierStart(token[0]) || strings.HasSuffix(token, "-") {
+		return false
+	}
+	for i := 1; i < len(token); i++ {
+		if token[i] == '-' && (token[i-1] == '-' || i+1 == len(token) || !isIdentifierCore(token[i+1])) {
+			return false
+		}
+	}
+	return true
+}
+
+func scanNodeIDEnd(line string, start int) int {
+	i := start + 1
+	for i < len(line) {
+		if isIdentifierCore(line[i]) {
+			i++
+			continue
+		}
+		if line[i] == '-' && i+1 < len(line) && isIdentifierCore(line[i-1]) && isIdentifierCore(line[i+1]) {
+			i++
+			continue
+		}
+		break
+	}
+	return i
+}
+
+func isEdgeOperatorChar(c byte) bool {
+	switch c {
+	case '-', '=', '.', 'o', 'x', '<', '>':
+		return true
+	default:
+		return false
+	}
+}
+
+func isEdgeOperatorToken(token string) bool {
+	hasConnector := false
+	connectorCount := 0
+	hasRight := false
+	for i := 0; i < len(token); i++ {
+		switch token[i] {
+		case '-', '=', '.':
+			hasConnector = true
+			connectorCount++
+		case '>':
+			hasRight = true
+		}
+	}
+	if !hasConnector {
+		return false
+	}
+	return hasRight || connectorCount >= 2
 }

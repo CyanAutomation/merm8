@@ -36,6 +36,7 @@ For deployment sizing and overload behavior, the parser runtime exposes key env 
 | `PARSER_MAX_OLD_SPACE_MB`  | `512`   | Sets the Node.js parser subprocess V8 old-space heap cap (`--max-old-space-size=<MB>`), limiting parser memory growth per parse process.                                                                                                                                                                                          |
 | `PARSER_MODE`              | `subprocess` | Parser execution mode. `subprocess` preserves one-parse-per-process behavior; `pool` reuses long-lived Node workers and isolates stuck requests by recycling only the timed-out worker. |
 | `PARSER_WORKER_POOL_SIZE`  | `4`     | Maximum number of long-lived parser workers per memory profile when `PARSER_MODE=pool` (bounded to 1–64). |
+| `PARSER_SOURCE_ENHANCEMENT` | `true` | Enables source-level AST enhancement used by flowchart-family rules (`no-disconnected-nodes`, `no-duplicate-node-ids`) to preserve disconnected and duplicate node IDs that Mermaid normalizes away. Set to `false` for rollout control or to disable the extra source scan. |
 
 Use these together with your platform CPU/memory limits to tune throughput versus memory headroom in production.
 

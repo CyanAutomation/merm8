@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Parser source enhancement is now gated to flowchart-family diagrams and can be toggled with `PARSER_SOURCE_ENHANCEMENT` (`true` by default) for controlled rollout.
+- Source-level node analysis was optimized to avoid repeated full-source passes and reduce regex-heavy scanning overhead on large diagrams.
+
 - Parser bridge now caches successful parse results and syntax-error results using a short-lived LRU keyed by request code, parser limits, and parser version, with cache hit/miss/eviction telemetry exposed in Prometheus metrics.
 - Parser bridge now supports a long-lived Node worker pool mode (`PARSER_MODE=pool`) with newline-delimited JSON request/response envelopes and per-request timeout recovery that recycles only the stuck worker process.
 - Syntax-error remediation now recognizes unsupported first-line Mermaid types (`gantt`, `pie`) before generic fallback, returning dedicated `hints` and matching `help-suggestion` guidance with line-1 targeting.
