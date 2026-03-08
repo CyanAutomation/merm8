@@ -273,7 +273,12 @@ func (rl *RateLimiter) Check(clientID string) (allowed bool, remaining int, rese
 
 // Remaining returns the number of requests remaining for the client in current window.
 func (rl *RateLimiter) Remaining(clientID string) int {
-	if rl == nil || rl.limit <= 0 || rl.window <= 0 {
+	// A nil limiter is treated as an explicitly safe default with no remaining quota.
+	if rl == nil {
+		return 0
+	}
+
+	if rl.limit <= 0 || rl.window <= 0 {
 		return rl.limit
 	}
 
