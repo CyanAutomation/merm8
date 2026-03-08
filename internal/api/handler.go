@@ -225,7 +225,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: rulePathPrefix + "." + ruleID, Message: rulePathPrefix + "." + ruleID + " must be object"}
 		}
 
-		canonicalRuleID, ruleIDWarning, normErr := rules.NormalizeConfigRuleID(ruleID, knownRuleIDs)
+		canonicalRuleID, _, normErr := rules.NormalizeConfigRuleID(ruleID, knownRuleIDs)
 		if normErr != nil {
 			return rules.Config{}, nil, &validationError{
 				Code:      "unknown_rule",
@@ -233,9 +233,6 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 				Message:   "unknown rule: " + ruleID,
 				Supported: sortedRuleIDs(knownRuleIDs),
 			}
-		}
-		if ruleIDWarning != "" {
-			deprecations = append(deprecations, ruleIDWarning)
 		}
 
 		registry, ok := registryByRuleID[canonicalRuleID]
@@ -355,11 +352,11 @@ func readBody(body io.ReadCloser) ([]byte, error) {
 // and any JSON decode error encountered.
 func parseRawMermaidInput(body []byte) (analyzeRequest, bool, bool, error) {
 	var req analyzeRequest
-	if err := json.Unmarshal(body, &req); err == nil {
-		return req, true, req.Code == "", nil
+	if err := json.Unmarshal(body, &req); err != nil {
+		// Not JSON - treat entire body as raw mermaid code, preserving decode error for hint generation
+		return analyzeRequest{Code: string(body)}, false, false, err
 	}
-	// Not JSON - treat entire body as raw mermaid code
-	return analyzeRequest{Code: string(body)}, false, false, nil
+	return req, true, req.Code == "", nil
 }
 
 // likelyJSONIntendedBody reports whether the trimmed request body appears to
@@ -2509,9 +2506,9 @@ func helpForConfigError(validErr *validationError) *helpSuggestion {
 	case "unknown_rule":
 		return &helpSuggestion{
 			Title:          "Unknown rule in config",
-			Explanation:    "The rule name you specified is not recognized. Each rule requires a valid rule ID. Both bare IDs (e.g. max-fanout) and namespaced IDs (e.g. core/max-fanout) are accepted.",
-			WrongExample:   `"rules": {"maxFanout": {}}`,
-			CorrectExample: `"rules": {"max-fanout": {"limit": 3}}`,
+			Explanation:    "The rule name you specified is not recognized. Each rule requires a valid rule ID. Built-in rules can be referenced as bare IDs (e.g. max-fanout) or with the core/ namespace (e.g. core/max-fanout).",
+			WrongExample:   `"rules": {"max-fanout": {}}`,
+			CorrectExample: `"rules": {"core/max-fanout": {"limit": 3}}`,
 			FixAction:      "Use GET /v1/rules to discover available rule IDs",
 		}
 	case "invalid_option":
