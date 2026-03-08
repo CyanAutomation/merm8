@@ -830,7 +830,7 @@ func TestParseConfig_NestedRulesDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, _, validationErr := parseConfig(tt.raw, knownRuleIDs, false)
+			cfg, _, validationErr := parseConfig(tt.raw, knownRuleIDs, false, false)
 			if tt.wantErr {
 				if validationErr == nil {
 					t.Fatal("expected validation error, got nil")

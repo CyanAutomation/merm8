@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **API now gracefully handles unknown rule IDs** — Unknown or cross-diagram-type rules are silently skipped during analysis instead of returning `400 invalid_config`. Clients can now send universal rule configurations without diagram-type-specific filtering. Deprecation warnings are included in the response to help clients identify and update outdated configs.
 - Parser source enhancement is now gated to flowchart-family diagrams and can be toggled with `PARSER_SOURCE_ENHANCEMENT` (`true` by default) for controlled rollout.
 - Source-level node analysis was optimized to avoid repeated full-source passes and reduce regex-heavy scanning overhead on large diagrams.
 

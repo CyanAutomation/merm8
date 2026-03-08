@@ -123,7 +123,9 @@ type validationError struct {
 // parseConfig validates config payloads.
 // In strict mode, only canonical versioned payloads are accepted:
 // {"schema-version":"v1","rules":{...}}.
-func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict bool) (rules.Config, []string, *validationError) {
+// In lenient mode, unknown rule IDs are silently skipped with deprecation warnings
+// instead of being rejected; this enables clients to send cross-diagram-type rules.
+func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict bool, lenient bool) (rules.Config, []string, *validationError) {
 	if len(raw) == 0 {
 		return rules.Config{}, nil, nil
 	}
@@ -232,6 +234,10 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 
 		canonicalRuleID, _, normErr := rules.NormalizeConfigRuleID(ruleID, knownRuleIDs)
 		if normErr != nil {
+			if lenient {
+				deprecations = append(deprecations, fmt.Sprintf("rule '%s' is not recognized and will be ignored; ensure it is a valid rule ID or applies to the diagram type being analyzed", ruleID))
+				continue
+			}
 			return rules.Config{}, nil, &validationError{
 				Code:      "unknown_rule",
 				Path:      rulePathPrefix + "." + ruleID,
@@ -242,6 +248,10 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 
 		registry, ok := registryByRuleID[canonicalRuleID]
 		if !ok {
+			if lenient {
+				deprecations = append(deprecations, fmt.Sprintf("rule '%s' is not recognized and will be ignored; ensure it is a valid rule ID or applies to the diagram type being analyzed", ruleID))
+				continue
+			}
 			return rules.Config{}, nil, &validationError{
 				Code:      "unknown_rule",
 				Path:      rulePathPrefix + "." + ruleID,
@@ -1389,7 +1399,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		return
 	}
 
-	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled())
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled(), true)
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
 		writeConfigValidationError(w, configValidationErr)
@@ -1652,7 +1662,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled())
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled(), true)
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
 		writeConfigValidationError(w, configValidationErr)
@@ -1909,7 +1919,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		return
 	}
 
-	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled())
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled(), true)
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
 		statusCode := http.StatusBadRequest

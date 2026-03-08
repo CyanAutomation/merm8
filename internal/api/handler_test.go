@@ -3459,7 +3459,7 @@ func TestAnalyze_InvalidUnknownRuleConfigNested_Returns400(t *testing.T) {
 	parserCalled := false
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		parserCalled = true
-		return &model.Diagram{}, nil, nil
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
 
 	body, _ := json.Marshal(map[string]interface{}{
@@ -3477,20 +3477,30 @@ func TestAnalyze_InvalidUnknownRuleConfigNested_Returns400(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
+	// With graceful degradation, unknown rules return 200 with warnings
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for graceful degradation of unknown rule, got %d", w.Code)
 	}
-	if parserCalled {
-		t.Fatal("expected parser not to be called when config validation fails")
+	if !parserCalled {
+		t.Fatal("expected parser to be called even with unknown rules (graceful degradation)")
 	}
-	assertValidationErrorResponse(t, w.Body.Bytes(), "unknown_rule", "unknown rule: no-cycles-v2", "config.rules.no-cycles-v2", []string{"max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"})
+
+	// Verify warnings about unknown rule are present
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	warnings, ok := resp["warnings"].([]interface{})
+	if !ok || len(warnings) == 0 {
+		t.Errorf("expected warnings array for unknown rule no-cycles-v2, got: %#v", resp)
+	}
 }
 
 func TestAnalyze_InvalidUnknownRuleConfigWithoutSchemaVersion_Returns400(t *testing.T) {
 	parserCalled := false
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		parserCalled = true
-		return &model.Diagram{}, nil, nil
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
 
 	body, _ := json.Marshal(map[string]interface{}{
@@ -3505,13 +3515,23 @@ func TestAnalyze_InvalidUnknownRuleConfigWithoutSchemaVersion_Returns400(t *test
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
+	// With graceful degradation, unknown rules return 200 with warnings
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for graceful degradation of unknown rule, got %d", w.Code)
 	}
-	if parserCalled {
-		t.Fatal("expected parser not to be called when config validation fails")
+	if !parserCalled {
+		t.Fatal("expected parser to be called even with unknown rules (graceful degradation)")
 	}
-	assertValidationErrorResponse(t, w.Body.Bytes(), "unknown_rule", "unknown rule: no-cycles-v2", "config.no-cycles-v2", []string{"max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"})
+
+	// Verify warnings about unknown rule are present
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	warnings, ok := resp["warnings"].([]interface{})
+	if !ok || len(warnings) == 0 {
+		t.Errorf("expected warnings array for unknown rule no-cycles-v2, got: %#v", resp)
+	}
 }
 
 func TestAnalyze_InvalidUnknownOptionConfig_Returns400(t *testing.T) {
@@ -5617,10 +5637,20 @@ func TestRuleAdvertisement_OnlyImplementedRulesExposedAndConfigurable(t *testing
 	analyzeReq.Header.Set("Content-Type", "application/json")
 	analyzeW := httptest.NewRecorder()
 	mux.ServeHTTP(analyzeW, analyzeReq)
-	if analyzeW.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for unimplemented rule config, got %d body=%s", analyzeW.Code, analyzeW.Body.String())
+	// With graceful degradation, unimplemented rules return 200 with warnings
+	if analyzeW.Code != http.StatusOK {
+		t.Fatalf("expected 200 for graceful degradation of unimplemented rule, got %d body=%s", analyzeW.Code, analyzeW.Body.String())
 	}
-	assertValidationErrorResponse(t, analyzeW.Body.Bytes(), "unknown_rule", "unknown rule: no-cycles", "config.rules.no-cycles", []string{"max-fanout", "no-duplicate-node-ids"})
+	
+	// Verify warnings about unknown rule are present
+	var resp map[string]any
+	if err := json.Unmarshal(analyzeW.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	warnings, ok := resp["warnings"].([]interface{})
+	if !ok || len(warnings) == 0 {
+		t.Errorf("expected warnings array for unimplemented rule no-cycles, got: %#v", resp)
+	}
 }
 
 func TestAnalyze_IntegrationParserTimeoutErrorDetails(t *testing.T) {
@@ -6765,6 +6795,7 @@ func TestAnalyze_UnknownRuleAndOptionValidation(t *testing.T) {
 		name            string
 		config          map[string]interface{}
 		expectedCode    string
+		expectedStatus  int
 		expectedPath    string
 		expectedMessage string
 		description     string
@@ -6778,9 +6809,10 @@ func TestAnalyze_UnknownRuleAndOptionValidation(t *testing.T) {
 				},
 			},
 			expectedCode:    "unknown_rule",
+			expectedStatus:  http.StatusOK, // Graceful degradation - unknown rules return 200
 			expectedPath:    "config.rules.fake-rule",
 			expectedMessage: "unknown rule: fake-rule",
-			description:     "Config with unknown rule should return error code unknown_rule",
+			description:     "Config with unknown rule should gracefully skip with warnings",
 		},
 		{
 			name: "unknown option in versioned config",
@@ -6793,6 +6825,7 @@ func TestAnalyze_UnknownRuleAndOptionValidation(t *testing.T) {
 				},
 			},
 			expectedCode:    "unknown_option",
+			expectedStatus:  http.StatusBadRequest, // Invalid options still return 400
 			expectedPath:    "config.rules.max-fanout.threshold",
 			expectedMessage: "unknown option: threshold",
 			description:     "Config with unknown option should return error code unknown_option",
@@ -6803,9 +6836,10 @@ func TestAnalyze_UnknownRuleAndOptionValidation(t *testing.T) {
 				"unknown-rule": map[string]interface{}{},
 			},
 			expectedCode:    "unknown_rule",
+			expectedStatus:  http.StatusOK, // Graceful degradation - unknown rules return 200
 			expectedPath:    "config.unknown-rule",
 			expectedMessage: "unknown rule: unknown-rule",
-			description:     "Legacy config with unknown rule should also be caught",
+			description:     "Legacy config with unknown rule should gracefully skip with warnings",
 		},
 		{
 			name: "unknown option in legacy config",
@@ -6815,6 +6849,7 @@ func TestAnalyze_UnknownRuleAndOptionValidation(t *testing.T) {
 				},
 			},
 			expectedCode:    "unknown_option",
+			expectedStatus:  http.StatusBadRequest, // Invalid options still return 400
 			expectedPath:    "config.max-fanout.max_value",
 			expectedMessage: "unknown option: max_value",
 			description:     "Legacy config with unknown option should also be caught",
@@ -6840,50 +6875,52 @@ func TestAnalyze_UnknownRuleAndOptionValidation(t *testing.T) {
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
 
-			if w.Code != http.StatusBadRequest {
-				t.Fatalf("expected 400 for invalid config, got %d: %s", w.Code, w.Body.String())
+			if w.Code != tt.expectedStatus {
+				t.Fatalf("expected %d for invalid config, got %d: %s", tt.expectedStatus, w.Code, w.Body.String())
 			}
 
-			var resp struct {
-				Valid bool `json:"valid"`
-				Error struct {
-					Code    string `json:"code"`
-					Message string `json:"message"`
-					Details struct {
-						Path      string   `json:"path"`
-						Supported []string `json:"supported"`
-					} `json:"details"`
-				} `json:"error"`
-			}
+			var resp map[string]interface{}
 			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 				t.Fatalf("failed to unmarshal response: %v", err)
 			}
 
-			// Verify valid=false
-			if resp.Valid {
-				t.Fatalf("expected valid=false, got %v", resp.Valid)
+			// For graceful degradation (200) with unknown rules, check warnings
+			if tt.expectedStatus == http.StatusOK {
+				warnings, ok := resp["warnings"].([]interface{})
+				if !ok || len(warnings) == 0 {
+					t.Fatalf("expected warnings for unknown rule, got: %#v", resp)
+				}
+				return
 			}
 
-			// Verify error code
-			if resp.Error.Code != tt.expectedCode {
-				t.Errorf("expected error.code=%q, got %q", tt.expectedCode, resp.Error.Code)
+			// For strict validation (400), check error fields
+			validField := resp["valid"].(bool)
+			if validField {
+				t.Fatalf("expected valid=false for error response, got %v", validField)
+			}
+
+			errObj := resp["error"].(map[string]interface{})
+			if errObj["code"] != tt.expectedCode {
+				t.Errorf("expected error.code=%q, got %q", tt.expectedCode, errObj["code"])
 			}
 
 			// Verify message
-			if resp.Error.Message != tt.expectedMessage {
-				t.Errorf("expected error.message=%q, got %q", tt.expectedMessage, resp.Error.Message)
+			if errObj["message"] != tt.expectedMessage {
+				t.Errorf("expected error.message=%q, got %q", tt.expectedMessage, errObj["message"])
 			}
 
 			// Verify details path
-			if resp.Error.Details.Path != tt.expectedPath {
-				t.Errorf("expected error.details.path=%q, got %q", tt.expectedPath, resp.Error.Details.Path)
+			details := errObj["details"].(map[string]interface{})
+			if details["path"] != tt.expectedPath {
+				t.Errorf("expected error.details.path=%q, got %q", tt.expectedPath, details["path"])
 			}
 
 			// Verify supported list exists (should contain list of known rules/options)
-			if len(resp.Error.Details.Supported) == 0 {
+			supported := details["supported"].([]interface{})
+			if len(supported) == 0 {
 				t.Errorf("expected Supported list to be populated, got empty")
 			} else {
-				t.Logf("Supported options/rules: %v", resp.Error.Details.Supported)
+				t.Logf("Supported options/rules: %v", supported)
 			}
 		})
 	}

@@ -543,7 +543,7 @@ func TestAnalyzeRaw_SyntaxError_GraphvizDetectionHelp(t *testing.T) {
 	}
 }
 
-// TestAnalyze_ConfigError_UnknownRuleHelp tests help-suggestion for unknown rule errors.
+// TestAnalyze_ConfigError_UnknownRuleHelp tests that unknown rules are gracefully skipped with warnings.
 func TestAnalyze_ConfigError_UnknownRuleHelp(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
@@ -566,8 +566,9 @@ func TestAnalyze_ConfigError_UnknownRuleHelp(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for unknown rule, got %d", w.Code)
+	// With graceful degradation, unknown rules return 200 with warnings
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for graceful degradation of unknown rule, got %d", w.Code)
 	}
 
 	var resp map[string]interface{}
@@ -575,26 +576,22 @@ func TestAnalyze_ConfigError_UnknownRuleHelp(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	// Verify help-suggestion for config error
-	helpSugg, ok := resp["help-suggestion"].(map[string]interface{})
-	if !ok || helpSugg == nil {
-		t.Fatalf("expected help-suggestion for unknown rule, got %#v", resp["help-suggestion"])
+	// Verify warnings about unknown rule are present
+	warnings, ok := resp["warnings"].([]interface{})
+	if !ok || len(warnings) == 0 {
+		t.Fatalf("expected warnings array for unknown rule, got %#v", resp)
 	}
 
-	if title, ok := helpSugg["title"].(string); !ok || !strings.Contains(title, "Unknown rule") {
-		t.Errorf("expected title about unknown rule, got %q", title)
+	// Check that at least one warning mentions the unknown rule
+	found := false
+	for _, w := range warnings {
+		if wStr, ok := w.(string); ok && strings.Contains(wStr, "unknown-rule") {
+			found = true
+			break
+		}
 	}
-
-	if wrongExample, ok := helpSugg["wrong-example"].(string); !ok || !strings.Contains(wrongExample, "max-fanout") {
-		t.Errorf("expected wrong example with max-fanout (no prefix), got %q", wrongExample)
-	}
-
-	if correctExample, ok := helpSugg["correct-example"].(string); !ok || !strings.Contains(correctExample, "core/max-fanout") {
-		t.Errorf("expected correct example with core/max-fanout, got %q", correctExample)
-	}
-
-	if fixAction, ok := helpSugg["fix-action"].(string); !ok || !strings.Contains(fixAction, "/v1/rules") {
-		t.Errorf("expected fix-action mentioning /v1/rules endpoint, got %q", fixAction)
+	if !found {
+		t.Errorf("expected warning about unknown-rule, got warnings: %v", warnings)
 	}
 }
 

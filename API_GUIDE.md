@@ -313,6 +313,48 @@ Add a `config` field to customize rule behavior:
 
 Unknown rule IDs in config are rejected with `400 invalid_config`.
 
+#### Graceful Rule Handling
+
+The API gracefully handles rule configuration requests that include rules not applicable to the specific diagram type. This allows clients to use universal rule configurations without requiring diagram-type-specific filtering.
+
+**Behavior:**
+
+- **Unknown rule IDs** — When a config includes a rule that is not recognized (either misspelled or not applicable to the diagram type), the API:
+  - Returns HTTP `200` (success) instead of `400` (error)
+  - Skips the unknown rule during analysis
+  - Includes deprecation warnings in the response (`warnings` array)
+  - Proceeds with analysis using only the applicable rules
+
+**Example:** Sending a config with both flowchart-specific rules (`max-fanout`) and cross-diagram rules (`sequence-max-participants`) to a flowchart analyzer:
+
+```json
+{
+  "code": "graph TD\n  A --> B",
+  "config": {
+    "schema-version": "v1",
+    "rules": {
+      "max-fanout": { "limit": 2 },
+      "sequence-max-participants": { "limit": 10 }
+    }
+  }
+}
+```
+
+**Response** (HTTP 200):
+
+```json
+{
+  "valid": true,
+  "syntax-error": null,
+  "issues": [...],
+  "warnings": [
+    "rule 'sequence-max-participants' is not recognized and will be ignored; ensure it is a valid rule ID or applies to the diagram type being analyzed"
+  ]
+}
+```
+
+This feature is particularly useful for frontend clients that maintain a universal rule configuration across multiple diagram types.
+
 #### Step 4: Execute and View Results
 
 1. Click the blue **"Execute"** button
