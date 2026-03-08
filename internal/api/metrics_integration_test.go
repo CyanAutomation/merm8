@@ -110,3 +110,65 @@ func TestAnalyzeErrorMetrics_OutcomesRecorded(t *testing.T) {
 		t.Fatalf("expected parser duration histogram count for internal_error, got %q", body)
 	}
 }
+
+type blockingMetricsParser struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (p *blockingMetricsParser) Parse(_ string) (*model.Diagram, *parser.SyntaxError, error) {
+	close(p.started)
+	<-p.release
+	return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+}
+
+func TestAnalyzeErrorMetrics_NonCanonicalOutcomesCoerced(t *testing.T) {
+	mux := http.NewServeMux()
+	tm := telemetry.NewMetrics()
+	bp := &blockingMetricsParser{started: make(chan struct{}), release: make(chan struct{})}
+	h := api.NewHandler(bp, engine.New())
+	h.SetParserConcurrencyLimit(1)
+	h.SetTelemetryMetrics(tm)
+	h.SetMetricsHandler(tm.Handler())
+	h.RegisterRoutes(mux)
+
+	routes := map[string]string{
+		"GET /metrics":  "/metrics",
+		"POST /analyze": "/analyze",
+	}
+	root := api.MetricsMiddleware(mux, routes, tm)
+
+	go func() {
+		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewBufferString(`{"code":"graph TD\nA-->B"}`))
+		w := httptest.NewRecorder()
+		root.ServeHTTP(w, req)
+	}()
+	<-bp.started
+
+	busyReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewBufferString(`{"code":"graph TD\nA-->B"}`))
+	busyW := httptest.NewRecorder()
+	root.ServeHTTP(busyW, busyReq)
+	if busyW.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for concurrent request, got %d", busyW.Code)
+	}
+
+	close(bp.release)
+
+	for _, body := range []string{"{invalid}", `{"options":{}}`} {
+		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewBufferString(body))
+		w := httptest.NewRecorder()
+		root.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for %q, got %d", body, w.Code)
+		}
+	}
+
+	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsW := httptest.NewRecorder()
+	root.ServeHTTP(metricsW, metricsReq)
+
+	body := metricsW.Body.String()
+	if !strings.Contains(body, `analyze_requests_total{outcome="other"} 3`) {
+		t.Fatalf("expected fallback analyze outcome count for non-canonical outcomes, got %q", body)
+	}
+}

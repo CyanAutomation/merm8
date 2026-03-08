@@ -1,7 +1,6 @@
 package telemetry
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -19,6 +18,7 @@ const (
 	OutcomeParserDecodeErr     = "parser_decode_error"
 	OutcomeParserContractErr   = "parser_contract_violation"
 	OutcomeInternalError       = "internal_error"
+	OutcomeOther               = "other"
 )
 
 type Metrics struct {
@@ -134,22 +134,14 @@ func (m *Metrics) ObserveAnalyzeOutcome(outcome string) {
 	if m == nil {
 		return
 	}
-	// Validate outcome is a known value to prevent label cardinality explosion
-	if !ValidOutcome(outcome) {
-		panic(fmt.Sprintf("invalid analyze outcome: %q (should be one of: syntax_error, lint_success, parser_timeout, parser_subprocess_error, parser_decode_error, parser_contract_violation, internal_error)", outcome))
-	}
-	m.analyzeRequests.WithLabelValues(outcome).Inc()
+	m.analyzeRequests.WithLabelValues(CanonicalOutcome(outcome)).Inc()
 }
 
 func (m *Metrics) ObserveParserDuration(outcome string, duration time.Duration) {
 	if m == nil {
 		return
 	}
-	// Validate outcome is a known value
-	if !ValidOutcome(outcome) {
-		panic(fmt.Sprintf("invalid parser outcome: %q (should be one of: syntax_error, lint_success, parser_timeout, parser_subprocess_error, parser_decode_error, parser_contract_violation, internal_error)", outcome))
-	}
-	m.parserDuration.WithLabelValues(outcome).Observe(duration.Seconds())
+	m.parserDuration.WithLabelValues(CanonicalOutcome(outcome)).Observe(duration.Seconds())
 }
 
 func (m *Metrics) ObserveRuleExecutionDuration(ruleID string, duration time.Duration) {
