@@ -90,6 +90,12 @@ type ParserWithConfig interface {
 	ParseWithConfig(string, parser.Config) (*model.Diagram, *parser.SyntaxError, error)
 }
 
+// ParserConfigProvider can be implemented by parser dependencies that expose
+// their current effective execution settings.
+type ParserConfigProvider interface {
+	ParserConfig() parser.Config
+}
+
 // analyzeRequest is the JSON body accepted by POST /analyze.
 type analyzeRequest struct {
 	Code   string                 `json:"code"`
@@ -2675,7 +2681,6 @@ func writeErrorWithDetailsAndContext(w http.ResponseWriter, r *http.Request, sta
 }
 
 func (h *Handler) parseWithRequestSettings(req analyzeRequest) (*model.Diagram, *parser.SyntaxError, error) {
-	cfg := parser.ConfigFromEnv().EffectiveConfig()
 	if req.Parser == nil {
 		return h.parser.Parse(req.Code)
 	}
@@ -2683,6 +2688,11 @@ func (h *Handler) parseWithRequestSettings(req analyzeRequest) (*model.Diagram, 
 	parserWithConfig, supportsConfig := h.parser.(ParserWithConfig)
 	if hasOverride && !supportsConfig {
 		return nil, nil, fmt.Errorf("%w: per-request parser settings are unsupported by the configured parser", errInvalidRequest)
+	}
+	if configProvider, ok := h.parser.(ParserConfigProvider); ok {
+		cfg = configProvider.ParserConfig().EffectiveConfig()
+	} else {
+		cfg = parser.DefaultConfig().EffectiveConfig()
 	}
 	minTimeout, maxTimeout, minMem, maxMem := parser.LimitBounds()
 	if req.Parser.TimeoutSeconds != nil {

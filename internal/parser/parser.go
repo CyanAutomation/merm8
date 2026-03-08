@@ -208,6 +208,11 @@ func (p *Parser) Timeout() time.Duration {
 	return p.timeout
 }
 
+// ParserConfig returns the parser's effective execution settings.
+func (p *Parser) ParserConfig() Config {
+	return Config{Timeout: p.timeout, NodeMaxOldSpaceMB: p.nodeMaxOldSpaceMB}
+}
+
 // Ready performs lightweight dependency checks used by readiness probes.
 func (p *Parser) Ready() error {
 	root, err := p.getRepoRoot()
