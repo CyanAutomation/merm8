@@ -734,6 +734,130 @@ setTimeout(() => {}, 10000);
 	}
 }
 
+func TestParser_WorkerPoolReusesWorkerAcrossRequests(t *testing.T) {
+	t.Setenv("PARSER_MODE", "pool")
+	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
+
+	tempDir := repoTempDir(t)
+	script := filepath.Join(tempDir, "parse.mjs")
+	scriptBody := `#!/usr/bin/env node
+if (!process.argv.includes("--worker")) {
+  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:"oneshot"}],edges:[],subgraphs:[],suppressions:[]}})+"\n");
+  process.exit(0);
+}
+
+import readline from "readline";
+const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
+for await (const line of rl) {
+  const req = JSON.parse(line);
+  process.stdout.write(JSON.stringify({
+    id: req.id,
+    result: {
+      valid: true,
+      diagram_type: "flowchart",
+      ast: {
+        type: "flowchart",
+        direction: "TD",
+        nodes: [{ id: "n", label: String(process.pid) }],
+        edges: [],
+        subgraphs: [],
+        suppressions: []
+      }
+    }
+  }) + "\n");
+}
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write test parser script: %v", err)
+	}
+
+	p := mustNewParser(t, script)
+	first, syntaxErr, err := p.Parse("graph TD; A-->B")
+	if err != nil || syntaxErr != nil || first == nil || len(first.Nodes) == 0 {
+		t.Fatalf("first parse failed: diagram=%v syntaxErr=%v err=%v", first, syntaxErr, err)
+	}
+	second, syntaxErr, err := p.Parse("graph TD; B-->C")
+	if err != nil || syntaxErr != nil || second == nil || len(second.Nodes) == 0 {
+		t.Fatalf("second parse failed: diagram=%v syntaxErr=%v err=%v", second, syntaxErr, err)
+	}
+	if first.Nodes[0].Label != second.Nodes[0].Label {
+		t.Fatalf("expected worker reuse with same pid label, got %q and %q", first.Nodes[0].Label, second.Nodes[0].Label)
+	}
+}
+
+func TestParser_WorkerPoolTimeoutReplacesWorker(t *testing.T) {
+	t.Setenv("PARSER_MODE", "pool")
+	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
+
+	tempDir := repoTempDir(t)
+	script := filepath.Join(tempDir, "parse.mjs")
+	counterFile := filepath.Join(tempDir, "counter.txt")
+	scriptBody := fmt.Sprintf(`#!/usr/bin/env node
+import fs from "fs";
+import readline from "readline";
+const counterFile = %q;
+let startCount = 0;
+try {
+  startCount = parseInt(fs.readFileSync(counterFile, "utf8"), 10) || 0;
+} catch (_) {}
+startCount += 1;
+fs.writeFileSync(counterFile, String(startCount));
+
+if (!process.argv.includes("--worker")) {
+  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:String(startCount)}],edges:[],subgraphs:[],suppressions:[]}})+"\n");
+  process.exit(0);
+}
+
+const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
+for await (const line of rl) {
+  const req = JSON.parse(line);
+  if (String(req.code || "").includes("SLOW")) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+  process.stdout.write(JSON.stringify({
+    id: req.id,
+    result: {
+      valid: true,
+      diagram_type: "flowchart",
+      ast: {
+        type: "flowchart",
+        direction: "TD",
+        nodes: [{ id: "n", label: String(startCount) }],
+        edges: [],
+        subgraphs: [],
+        suppressions: []
+      }
+    }
+  }) + "\n");
+}
+`, counterFile)
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write test parser script: %v", err)
+	}
+
+	p, err := parser.NewWithConfig(script, parser.Config{Timeout: time.Second, NodeMaxOldSpaceMB: 256})
+	if err != nil {
+		t.Fatalf("failed to construct parser: %v", err)
+	}
+	if _, _, err := p.Parse("graph TD\nSLOW"); err == nil || !errors.Is(err, parser.ErrTimeout) {
+		t.Fatalf("expected timeout from slow request, got %v", err)
+	}
+
+	diagram, syntaxErr, err := p.Parse("graph TD\nFAST")
+	if err != nil {
+		t.Fatalf("expected second parse success, got %v", err)
+	}
+	if syntaxErr != nil {
+		t.Fatalf("unexpected syntax error on second parse: %+v", syntaxErr)
+	}
+	if diagram == nil || len(diagram.Nodes) == 0 {
+		t.Fatalf("expected diagram with node metadata, got %#v", diagram)
+	}
+	if diagram.Nodes[0].Label != "2" {
+		t.Fatalf("expected replacement worker start count 2, got %q", diagram.Nodes[0].Label)
+	}
+}
+
 // Helper to check if string contains substring (Go 1.24 doesn't have strings.Contains in all contexts)
 func contains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {

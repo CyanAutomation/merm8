@@ -2,11 +2,12 @@
 /**
  * parse.mjs - Mermaid parser subprocess for mermaid-lint
  *
- * Reads Mermaid diagram source from stdin, validates it using the official
- * Mermaid library, and writes a structured JSON result to stdout.
+ * Reads Mermaid diagram source from stdin and writes structured JSON result(s)
+ * to stdout. Supports one-shot mode and long-lived worker mode.
  */
 
 import { readFileSync } from "fs";
+import readline from "readline";
 import parserPkg from "./package.json" with { type: "json" };
 
 // Set up a minimal DOM environment so that mermaid's DOMPurify dependency
@@ -23,10 +24,21 @@ global.NodeFilter = _win.NodeFilter;
 global.Node = _win.Node;
 
 const versionInfoMode = process.argv.includes("--version-info");
+const workerMode = process.argv.includes("--worker");
+
+let mermaidRuntime = null;
+
+async function loadMermaid() {
+  if (!mermaidRuntime) {
+    mermaidRuntime = (await import("mermaid/dist/mermaid.core.mjs")).default;
+    mermaidRuntime.initialize({ startOnLoad: false });
+  }
+  return mermaidRuntime;
+}
 
 if (versionInfoMode) {
   try {
-    const mermaid = (await import("mermaid/dist/mermaid.core.mjs")).default;
+    const mermaid = await loadMermaid();
     const mermaidRuntimeVersion = String(mermaid?.version || "").trim();
     const mermaidDependencyVersion = String(
       parserPkg?.dependencies?.mermaid || "",
@@ -49,108 +61,160 @@ if (versionInfoMode) {
   }
 }
 
-// Read all stdin synchronously (Go sends the full payload before reading output)
-const input = readFileSync("/dev/stdin", "utf8");
-const trimmedInput = input.trim();
-
-if (!trimmedInput) {
-  writeResult({
-    valid: false,
-    error: { message: "empty input", line: 0, column: 0 },
-  });
+if (workerMode) {
+  await runWorkerMode();
   process.exit(0);
 }
 
-try {
-  const mermaid = (await import("mermaid/dist/mermaid.core.mjs")).default;
-  mermaid.initialize({ startOnLoad: false });
+const input = readFileSync("/dev/stdin", "utf8");
+const singleResult = await parseSource(input);
+writeResult(singleResult);
+if (
+  String(singleResult?.error?.message || "").startsWith("internal parser error:") ||
+  String(singleResult?.error?.message || "").startsWith("parser_memory_limit:")
+) {
+  process.exit(1);
+}
 
-  const { parse, detectType, mermaidAPI } = mermaid;
+async function runWorkerMode() {
+  await loadMermaid();
 
-  // detectType throws for completely unrecognised diagram types
-  let diagramType;
-  try {
-    diagramType = detectType(input, { suppressErrors: false });
-  } catch (typeErr) {
-    const base = String(typeErr?.message || typeErr);
-    const mistakes = detectCommonMistakes(input);
-    const hint = buildErrorHint(base, mistakes);
-    writeResult({
-      valid: false,
-      error: { message: `${base}. ${hint}`, line: 0, column: 0 },
-    });
-    process.exit(0);
-  }
-
-  // parse() resolves on success and rejects with a ParseError on failure
-  try {
-    await parse(input);
-  } catch (parseErr) {
-    const msg = parseErr?.message || String(parseErr);
-    const line = parseErr?.hash?.loc?.first_line ?? 0;
-    const col = parseErr?.hash?.loc?.first_column ?? 0;
-    const mistakes = detectCommonMistakes(input);
-    const enhancedMsg = buildParseErrorMessage(msg, mistakes);
-    writeResult({
-      valid: false,
-      error: { message: enhancedMsg, line, column: col },
-    });
-    process.exit(0);
-  }
-
-  // Extract the structural AST after successful parse
-  let ast;
-  try {
-    const normalizedType = normalizeDiagramType(diagramType);
-    ast = await extractAST(mermaidAPI, input, normalizedType);
-  } catch (err) {
-    writeResult({
-      valid: false,
-      error: {
-        message:
-          "AST extraction failed in parser runtime: " +
-          String(err?.message || err),
-        line: 0,
-        column: 0,
-      },
-    });
-    process.exit(0);
-  }
-  writeResult({
-    valid: true,
-    diagram_type: normalizeDiagramType(diagramType),
-    ast,
+  const rl = readline.createInterface({
+    input: process.stdin,
+    crlfDelay: Infinity,
+    terminal: false,
   });
-} catch (err) {
-  // Detect memory exhaustion errors (JavaScript heap out of memory, etc.)
-  const errorMsg = String(err?.message || err).toLowerCase();
-  const isMemoryError =
-    errorMsg.includes("heap") ||
-    errorMsg.includes("memory") ||
-    errorMsg.includes("out of memory") ||
-    errorMsg.includes("javascript heap out of memory");
 
-  if (isMemoryError) {
-    writeResult({
+  for await (const line of rl) {
+    const trimmed = String(line || "").trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    let envelope;
+    try {
+      envelope = JSON.parse(trimmed);
+    } catch (err) {
+      writeResult({
+        id: "",
+        error: "invalid worker request: " + String(err?.message || err),
+      });
+      continue;
+    }
+
+    const id = String(envelope?.id || "").trim();
+    if (!id) {
+      writeResult({
+        id: "",
+        error: "invalid worker request: missing id",
+      });
+      continue;
+    }
+
+    try {
+      const result = await parseSource(String(envelope?.code || ""));
+      writeResult({ id, result });
+    } catch (err) {
+      writeResult({
+        id,
+        error: "internal parser error: " + String(err?.message || err),
+      });
+    }
+  }
+}
+
+async function parseSource(input) {
+  const trimmedInput = String(input || "").trim();
+
+  if (!trimmedInput) {
+    return {
       valid: false,
-      error: {
-        message:
-          "parser_memory_limit: Parser memory exhausted; diagram too large for configured limit",
-        line: 0,
-        column: 0,
-      },
-    });
-  } else {
-    writeResult({
+      error: { message: "empty input", line: 0, column: 0 },
+    };
+  }
+
+  try {
+    const mermaid = await loadMermaid();
+    const { parse, detectType, mermaidAPI } = mermaid;
+
+    let diagramType;
+    try {
+      diagramType = detectType(input, { suppressErrors: false });
+    } catch (typeErr) {
+      const base = String(typeErr?.message || typeErr);
+      const mistakes = detectCommonMistakes(input);
+      const hint = buildErrorHint(base, mistakes);
+      return {
+        valid: false,
+        error: { message: `${base}. ${hint}`, line: 0, column: 0 },
+      };
+    }
+
+    try {
+      await parse(input);
+    } catch (parseErr) {
+      const msg = parseErr?.message || String(parseErr);
+      const line = parseErr?.hash?.loc?.first_line ?? 0;
+      const col = parseErr?.hash?.loc?.first_column ?? 0;
+      const mistakes = detectCommonMistakes(input);
+      const enhancedMsg = buildParseErrorMessage(msg, mistakes);
+      return {
+        valid: false,
+        error: { message: enhancedMsg, line, column: col },
+      };
+    }
+
+    let ast;
+    try {
+      const normalizedType = normalizeDiagramType(diagramType);
+      ast = await extractAST(mermaidAPI, input, normalizedType);
+    } catch (err) {
+      return {
+        valid: false,
+        error: {
+          message:
+            "AST extraction failed in parser runtime: " +
+            String(err?.message || err),
+          line: 0,
+          column: 0,
+        },
+      };
+    }
+
+    return {
+      valid: true,
+      diagram_type: normalizeDiagramType(diagramType),
+      ast,
+    };
+  } catch (err) {
+    const errorMsg = String(err?.message || err).toLowerCase();
+    const isMemoryError =
+      errorMsg.includes("heap") ||
+      errorMsg.includes("memory") ||
+      errorMsg.includes("out of memory") ||
+      errorMsg.includes("javascript heap out of memory");
+
+    if (isMemoryError) {
+      return {
+        valid: false,
+        error: {
+          message:
+            "parser_memory_limit: Parser memory exhausted; diagram too large for configured limit",
+          line: 0,
+          column: 0,
+        },
+      };
+    }
+
+    return {
       valid: false,
       error: {
         message: "internal parser error: " + String(err?.message || err),
         line: 0,
         column: 0,
       },
-    });
+    };
   }
-  process.exit(1);
 }
 
 // ---------------------------------------------------------------------------

@@ -9,11 +9,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -25,6 +27,12 @@ const maxTimeout = 60 * time.Second
 const defaultNodeMaxOldSpaceSizeMB = 512
 const minNodeMaxOldSpaceSizeMB = 128
 const maxNodeMaxOldSpaceSizeMB = 4096
+const defaultParserMode = "subprocess"
+const parserModePool = "pool"
+const parserModeSubprocess = "subprocess"
+const defaultWorkerPoolSize = 4
+const minWorkerPoolSize = 1
+const maxWorkerPoolSize = 64
 
 var (
 	// ErrTimeout indicates the parser subprocess exceeded the configured timeout.
@@ -180,6 +188,10 @@ type Parser struct {
 	timeout           time.Duration
 	repoRoot          string
 	nodeMaxOldSpaceMB int
+	mode              string
+	workerPoolSize    int
+	poolMu            sync.Mutex
+	workerPools       map[int]*workerPool
 }
 
 // New returns a Parser that will invoke the given Node.js script path.
@@ -211,6 +223,9 @@ func NewWithConfigAndRepoRootResolver(scriptPath string, cfg Config, resolveRepo
 		timeout:           effective.Timeout,
 		repoRoot:          root,
 		nodeMaxOldSpaceMB: effective.NodeMaxOldSpaceMB,
+		mode:              readParserMode(),
+		workerPoolSize:    readWorkerPoolSize(),
+		workerPools:       make(map[int]*workerPool),
 	}, nil
 }
 
@@ -374,6 +389,13 @@ func (p *Parser) ParseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 }
 
 func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
+	if p.mode == parserModePool {
+		return p.parseWithWorkerPool(mermaidCode, cfg)
+	}
+	return p.parseWithSubprocess(mermaidCode, cfg)
+}
+
+func (p *Parser) parseWithSubprocess(mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
 	root, err := p.getRepoRoot()
 	if err != nil {
 		return nil, nil, err
@@ -440,6 +462,105 @@ func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 	return diagram, nil, nil
 }
 
+func (p *Parser) parseWithWorkerPool(mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
+	root, err := p.getRepoRoot()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	scriptPath, err := validateScriptPath(p.scriptPath, root)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pool := p.poolForMemory(scriptPath, cfg.NodeMaxOldSpaceMB)
+	worker, err := pool.borrow()
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", ErrSubprocess, err)
+	}
+
+	timedOut := make(chan struct{})
+	respCh := make(chan *workerResponseEnvelope, 1)
+	errCh := make(chan error, 1)
+	req := workerRequestEnvelope{
+		ID:      fmt.Sprintf("req-%d-%d", time.Now().UnixNano(), rand.Int63()),
+		Code:    mermaidCode,
+		Timeout: cfg.Timeout.Milliseconds(),
+		Limits:  &workerLimits{NodeMaxOldSpaceMB: cfg.NodeMaxOldSpaceMB},
+	}
+
+	go func() {
+		resp, reqErr := worker.do(req)
+		select {
+		case <-timedOut:
+			return
+		default:
+		}
+		if reqErr != nil {
+			errCh <- reqErr
+			return
+		}
+		respCh <- resp
+	}()
+
+	timer := time.NewTimer(cfg.Timeout)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		close(timedOut)
+		pool.release(worker, false)
+		return nil, nil, &parserExecutionError{err: fmt.Errorf("%w: after %s", ErrTimeout, cfg.Timeout), metadata: ErrorMetadata{Suggestion: "reduce diagram size or increase PARSER_TIMEOUT_SECONDS", Limit: cfg.Timeout.String()}}
+	case reqErr := <-errCh:
+		pool.release(worker, false)
+		if errors.Is(reqErr, ErrDecode) || errors.Is(reqErr, ErrContract) {
+			return nil, nil, reqErr
+		}
+		if isLikelyNodeMemoryLimit(reqErr.Error()) {
+			return nil, nil, &parserExecutionError{err: fmt.Errorf("%w: %w", ErrMemoryLimit, reqErr), metadata: ErrorMetadata{Suggestion: "reduce diagram size, batch requests, or increase PARSER_MAX_OLD_SPACE_MB", Limit: fmt.Sprintf("%d MiB", cfg.NodeMaxOldSpaceMB), ObservedSizeByte: len(mermaidCode)}}
+		}
+		return nil, nil, fmt.Errorf("%w: %w", ErrSubprocess, reqErr)
+	case resp := <-respCh:
+		pool.release(worker, true)
+		if strings.TrimSpace(resp.Error) != "" {
+			if isLikelyNodeMemoryLimit(resp.Error) {
+				return nil, nil, &parserExecutionError{err: fmt.Errorf("%w: %s", ErrMemoryLimit, resp.Error), metadata: ErrorMetadata{Suggestion: "reduce diagram size, batch requests, or increase PARSER_MAX_OLD_SPACE_MB", Limit: fmt.Sprintf("%d MiB", cfg.NodeMaxOldSpaceMB), ObservedSizeByte: len(mermaidCode)}}
+			}
+			return nil, nil, fmt.Errorf("%w: %s", ErrSubprocess, resp.Error)
+		}
+		return p.mapParseResult(resp.Result, mermaidCode, cfg)
+	}
+}
+
+func (p *Parser) mapParseResult(result ParseResult, mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
+	if !result.Valid {
+		if result.Error != nil && strings.HasPrefix(result.Error.Message, "parser_memory_limit:") {
+			return nil, nil, &parserExecutionError{err: fmt.Errorf("%w: reported by parser-node", ErrMemoryLimit), metadata: ErrorMetadata{Suggestion: "reduce diagram size, batch requests, or increase PARSER_MAX_OLD_SPACE_MB", Limit: fmt.Sprintf("%d MiB", cfg.NodeMaxOldSpaceMB), ObservedSizeByte: len(mermaidCode)}}
+		}
+		return nil, result.Error, nil
+	}
+
+	if result.AST == nil {
+		return nil, nil, fmt.Errorf("%w: valid result missing AST", ErrContract)
+	}
+
+	diagram := toDiagram(result)
+	EnhanceASTWithSourceAnalysis(diagram, mermaidCode)
+	return diagram, nil, nil
+}
+
+func (p *Parser) poolForMemory(scriptPath string, memoryMB int) *workerPool {
+	p.poolMu.Lock()
+	defer p.poolMu.Unlock()
+	if pool, ok := p.workerPools[memoryMB]; ok {
+		return pool
+	}
+	p.workerPools[memoryMB] = newWorkerPool(p.workerPoolSize, func() (*parserWorker, error) {
+		return startParserWorker(scriptPath, []string{fmt.Sprintf("--max-old-space-size=%d", memoryMB)})
+	})
+	return p.workerPools[memoryMB]
+}
+
 func (p *Parser) nodeArgs() []string {
 	return []string{fmt.Sprintf("--max-old-space-size=%d", p.nodeMaxOldSpaceMB)}
 }
@@ -478,6 +599,36 @@ func readMaxOldSpaceMB() int {
 		return defaultNodeMaxOldSpaceSizeMB
 	}
 
+	return value
+}
+
+func readParserMode() string {
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv("PARSER_MODE")))
+	switch mode {
+	case parserModePool:
+		return parserModePool
+	case parserModeSubprocess, "":
+		return defaultParserMode
+	default:
+		return defaultParserMode
+	}
+}
+
+func readWorkerPoolSize() int {
+	raw := strings.TrimSpace(os.Getenv("PARSER_WORKER_POOL_SIZE"))
+	if raw == "" {
+		return defaultWorkerPoolSize
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return defaultWorkerPoolSize
+	}
+	if value < minWorkerPoolSize {
+		return minWorkerPoolSize
+	}
+	if value > maxWorkerPoolSize {
+		return maxWorkerPoolSize
+	}
 	return value
 }
 
