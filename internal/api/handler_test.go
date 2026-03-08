@@ -440,6 +440,22 @@ func TestAnalyze_ParserTimeout_Returns504(t *testing.T) {
 	assertExactErrorResponse(t, w.Body.Bytes(), "parser_timeout", "parser timed out while validating Mermaid code")
 }
 
+func TestAnalyzeV1_ParserTimeout_Returns504AndErrorCode(t *testing.T) {
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, nil, fmt.Errorf("%w: after 1s", parser.ErrTimeout)
+	})
+	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusGatewayTimeout {
+		t.Fatalf("expected 504 when parser times out, got %d", w.Code)
+	}
+	assertExactErrorResponse(t, w.Body.Bytes(), "parser_timeout", "parser timed out while validating Mermaid code")
+}
+
 func TestAnalyze_ParserSubprocessError_Returns500(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, fmt.Errorf("%w: exit status 1", parser.ErrSubprocess)
