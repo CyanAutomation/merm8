@@ -2571,11 +2571,66 @@ func TestInternalMetrics_AnalyzeOutcomeCounters(t *testing.T) {
 
 	assertDelta("analyze", "valid_success", 1)
 	assertDelta("analyze", "syntax_error", 1)
+	assertDelta("analyze", "other", 0)
 	assertDelta("parser", "timeout", 1)
 	assertDelta("parser", "subprocess", 1)
 	assertDelta("parser", "decode", 1)
 	assertDelta("parser", "contract", 1)
 	assertDelta("parser", "internal", 1)
+	assertDelta("parser", "other", 0)
+}
+
+func TestAnalyzeOutcomeOther_IncludedInInternalAndHealthMetrics(t *testing.T) {
+	mux := http.NewServeMux()
+	h := api.NewHandler(&mockParser{parseFunc: func(_ string) (*model.Diagram, *parser.SyntaxError, error) {
+		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+	}}, engine.New())
+	h.RegisterRoutes(mux)
+
+	beforeInternal := readInternalAnalyzeMetrics(t, mux)
+	beforeHealth := readHealthMetricsResponse(t, mux)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader("{"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid JSON request to return 400, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	afterInternal := readInternalAnalyzeMetrics(t, mux)
+	if got := afterInternal["analyze"]["other"] - beforeInternal["analyze"]["other"]; got != 1 {
+		t.Fatalf("expected analyze.other delta=1, got %v", got)
+	}
+	if got := afterInternal["parser"]["other"] - beforeInternal["parser"]["other"]; got != 1 {
+		t.Fatalf("expected parser.other delta=1, got %v", got)
+	}
+
+	afterHealth := readHealthMetricsResponse(t, mux)
+	failedBefore := beforeHealth["failed-analyses"].(map[string]any)
+	failedAfter := afterHealth["failed-analyses"].(map[string]any)
+	metricValue := func(values map[string]any, key string) float64 {
+		t.Helper()
+		value, ok := values[key]
+		if !ok {
+			return 0
+		}
+		asFloat, ok := value.(float64)
+		if !ok {
+			t.Fatalf("expected %s to be float64, got %T", key, value)
+		}
+		return asFloat
+	}
+
+	if got := metricValue(failedAfter, "other") - metricValue(failedBefore, "other"); got != 1 {
+		t.Fatalf("expected failed-analyses.other delta=1, got %v", got)
+	}
+	if got := afterHealth["total-requests"].(float64) - beforeHealth["total-requests"].(float64); got != 1 {
+		t.Fatalf("expected total-requests delta=1, got %v", got)
+	}
+	if got := failedAfter["total"].(float64) - failedBefore["total"].(float64); got != 1 {
+		t.Fatalf("expected failed-analyses.total delta=1, got %v", got)
+	}
 }
 
 func TestDiagramTypes_ReturnsParserAndLintSupport(t *testing.T) {
