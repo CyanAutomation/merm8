@@ -1,3 +1,4 @@
+//go:build ignore
 // +build ignore
 
 // This file is used to run benchmarks from the command line.
@@ -16,12 +17,12 @@ import (
 
 func main() {
 	var (
-		ruleFilter             = flag.String("rule", "", "Run only cases for specific rule (e.g., 'no-cycles')")
-		categoryFilter         = flag.String("category", "", "Filter by category: 'valid', 'violation', 'edge-case'")
-		compareBaseline        = flag.String("compare-baseline", "", "Path to baseline JSON file to compare against")
-		regressionThreshold    = flag.Float64("regression-threshold", 5.0, "Regression detection threshold percentage (default: 5.0)")
-		verbose                = flag.Bool("verbose", false, "Verbose output")
-		help                   = flag.Bool("help", false, "Show help message")
+		ruleFilter          = flag.String("rule", "", "Run only cases for specific rule (e.g., 'no-cycles')")
+		categoryFilter      = flag.String("category", "", "Filter by category: 'valid', 'violation', 'edge-case'")
+		compareBaseline     = flag.String("compare-baseline", "", "Path to baseline JSON file to compare against")
+		regressionThreshold = flag.Float64("regression-threshold", 5.0, "Regression detection threshold percentage (default: 5.0)")
+		verbose             = flag.Bool("verbose", false, "Verbose output")
+		help                = flag.Bool("help", false, "Show help message")
 	)
 
 	flag.Parse()
@@ -84,10 +85,10 @@ Examples:
 
 	// Run benchmarks
 	opts := benchmarks.RunOptions{
-		RuleFilter:        *ruleFilter,
-		CategoryFilter:    *categoryFilter,
-		Verbose:           *verbose,
-		CompareTo:         *compareBaseline,
+		RuleFilter:          *ruleFilter,
+		CategoryFilter:      *categoryFilter,
+		Verbose:             *verbose,
+		CompareTo:           *compareBaseline,
 		RegressionThreshold: *regressionThreshold,
 	}
 

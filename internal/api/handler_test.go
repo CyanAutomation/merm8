@@ -4062,6 +4062,7 @@ func TestAnalyzeRateLimitMiddleware_ConcurrentHeadersRemainNonNegativeAndMonoton
 	}
 
 	results := make([]headerResult, total)
+	errs := make([]error, total)
 	var wg sync.WaitGroup
 	for i := 0; i < total; i++ {
 		wg.Add(1)
@@ -4075,21 +4076,30 @@ func TestAnalyzeRateLimitMiddleware_ConcurrentHeadersRemainNonNegativeAndMonoton
 
 			remaining, err := strconv.Atoi(w.Header().Get("X-RateLimit-Remaining"))
 			if err != nil {
-				t.Fatalf("failed to parse X-RateLimit-Remaining: %v", err)
+				errs[i] = fmt.Errorf("failed to parse X-RateLimit-Remaining: %v", err)
+				return
 			}
 			resetUnix, err := strconv.ParseInt(w.Header().Get("X-RateLimit-Reset"), 10, 64)
 			if err != nil {
-				t.Fatalf("failed to parse X-RateLimit-Reset: %v", err)
+				errs[i] = fmt.Errorf("failed to parse X-RateLimit-Reset: %v", err)
+				return
 			}
 			reportedLimit, err := strconv.Atoi(w.Header().Get("X-RateLimit-Limit"))
 			if err != nil {
-				t.Fatalf("failed to parse X-RateLimit-Limit: %v", err)
+				errs[i] = fmt.Errorf("failed to parse X-RateLimit-Limit: %v", err)
+				return
 			}
 
 			results[i] = headerResult{status: w.Code, remaining: remaining, resetUnix: resetUnix, limit: reportedLimit}
 		}(i)
 	}
 	wg.Wait()
+
+	for _, err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	allowedCount := 0
 	seenRemaining := make(map[int]int, limit)
