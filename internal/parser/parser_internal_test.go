@@ -6,6 +6,27 @@ import (
 	"time"
 )
 
+func TestParserCacheKey_UsesNullByteSeparator(t *testing.T) {
+	p := &Parser{parserVersion: "test-version", versionResolved: true}
+
+	baseCfg := Config{Timeout: 5 * time.Second, NodeMaxOldSpaceMB: 256}
+	literalCfg := Config{Timeout: 5 * time.Second, NodeMaxOldSpaceMB: 256}
+
+	keyWithNull, ok := p.cacheKey("flow\\x00chart", baseCfg)
+	if !ok {
+		t.Fatal("expected cache key generation to succeed for null-byte input")
+	}
+
+	keyWithLiteral, ok := p.cacheKey("flow\\\\x00chart", literalCfg)
+	if !ok {
+		t.Fatal("expected cache key generation to succeed for literal \\\\x00 input")
+	}
+
+	if keyWithNull == keyWithLiteral {
+		t.Fatal("expected distinct cache keys for null-byte input and literal \\\\x00 input")
+	}
+}
+
 func TestParserConfig_EffectiveConfig_Boundaries(t *testing.T) {
 	defaults := DefaultConfig()
 	minTimeout, maxTimeout, minMemory, maxMemory := LimitBounds()
