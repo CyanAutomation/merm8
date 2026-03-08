@@ -1,10 +1,14 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/CyanAutomation/merm8/internal/telemetry"
 )
 
 // testLogger is a minimal logger implementation for testing.
@@ -13,6 +17,31 @@ type testLogger struct{}
 func (t *testLogger) Info(msg string, fields ...any)  {}
 func (t *testLogger) Warn(msg string, fields ...any)  {}
 func (t *testLogger) Error(msg string, fields ...any) {}
+
+func TestAnalyzeRateLimitMiddleware_NilLimiterPassesThrough(t *testing.T) {
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	handler := AnalyzeRateLimitMiddleware(nil, next)
+	req := httptest.NewRequest(http.MethodPost, "/analyze", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if !called {
+		t.Fatal("expected downstream handler to be called when limiter is nil")
+	}
+	if got := rec.Code; got != http.StatusAccepted {
+		t.Fatalf("expected downstream status to pass through, got %d", got)
+	}
+	if got := rec.Header().Get("X-RateLimit-Limit"); got != "" {
+		t.Fatalf("expected no rate-limit headers when limiter is nil, got limit=%q", got)
+	}
+}
 
 func TestRequestIDMiddleware_PropagatesOrGeneratesRequestID(t *testing.T) {
 	tests := []struct {
@@ -296,5 +325,121 @@ func TestCORSMiddleware_AllowsErrorResponsesWithCORS(t *testing.T) {
 	}
 	if got := rec.Code; got != http.StatusServiceUnavailable {
 		t.Fatalf("expected status 503, got %d", got)
+	}
+}
+
+func TestCORSMiddleware_RejectedOriginIncrementsMetric(t *testing.T) {
+	allowedOrigins := "https://example.com"
+	metrics := telemetry.NewMetrics()
+	middleware := CORSMiddleware(allowedOrigins, nil, metrics)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", nil)
+	req.Header.Set("Origin", "https://other.com")
+	rec := httptest.NewRecorder()
+
+	middleware(next).ServeHTTP(rec, req)
+
+	metricsRec := httptest.NewRecorder()
+	metrics.Handler().ServeHTTP(metricsRec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if got := metricsRec.Body.String(); !strings.Contains(got, "cors_rejected_total 1") {
+		t.Fatalf("expected cors_rejected_total to be incremented, got metrics: %s", got)
+	}
+}
+
+func TestCORSMiddleware_RejectedOriginLoggingRateLimited(t *testing.T) {
+	allowedOrigins := "https://example.com"
+	buf := &bytes.Buffer{}
+	logger := newJSONLogger(buf, "test")
+	middleware := CORSMiddleware(allowedOrigins, logger, nil)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/v1/analyze", nil)
+		req.Header.Set("Origin", "https://other.com")
+		rec := httptest.NewRecorder()
+		middleware(next).ServeHTTP(rec, req)
+	}
+
+	logs := strings.TrimSpace(buf.String())
+	if logs == "" {
+		t.Fatal("expected at least one rejected CORS log line")
+	}
+	lines := strings.Split(logs, "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected exactly one log line due to rate limiting, got %d lines: %q", len(lines), logs)
+	}
+	line := lines[0]
+	if !strings.Contains(line, "cors origin rejected") {
+		t.Fatalf("expected rejected CORS log message, got %q", line)
+	}
+	if !strings.Contains(line, "\"origin\":\"https://other.com\"") {
+		t.Fatalf("expected origin in log, got %q", line)
+	}
+	if !strings.Contains(line, "\"path\":\"/v1/analyze\"") {
+		t.Fatalf("expected path in log, got %q", line)
+	}
+	if !strings.Contains(line, "\"allowlist_size\":1") {
+		t.Fatalf("expected allowlist size in log, got %q", line)
+	}
+}
+
+func TestAnalyzeLoggingMiddleware_LogsRequestIDRegardlessOfMiddlewareOrder(t *testing.T) {
+	tests := []struct {
+		name  string
+		chain func(base http.Handler, logger Logger) http.Handler
+	}{
+		{
+			name: "analyze logging outer, request id inner",
+			chain: func(base http.Handler, logger Logger) http.Handler {
+				return AnalyzeLoggingMiddleware(RequestIDMiddleware(base), logger)
+			},
+		},
+		{
+			name: "request id outer, analyze logging inner",
+			chain: func(base http.Handler, logger Logger) http.Handler {
+				return RequestIDMiddleware(AnalyzeLoggingMiddleware(base, logger))
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := &bytes.Buffer{}
+			logger := newJSONLogger(buf, "test")
+			base := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeLintSuccess, "flowchart")
+				w.WriteHeader(http.StatusOK)
+			})
+			handler := tc.chain(base, logger)
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", nil)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status 200, got %d", rec.Code)
+			}
+
+			line := strings.TrimSpace(buf.String())
+			if line == "" {
+				t.Fatal("expected analyze completion log")
+			}
+			var entry map[string]any
+			if err := json.Unmarshal([]byte(line), &entry); err != nil {
+				t.Fatalf("expected JSON log line, got error: %v; line=%q", err, line)
+			}
+
+			requestID, _ := entry["request_id"].(string)
+			if strings.TrimSpace(requestID) == "" {
+				t.Fatalf("expected request_id in analyze completion log, got %q", requestID)
+			}
+		})
 	}
 }
