@@ -1190,8 +1190,8 @@ func TestAnalyze_SyntaxError_GenericFallbackContextAndBounds(t *testing.T) {
 			name:             "column out of range is clamped and excerpt included",
 			syntaxErr:        &parser.SyntaxError{Message: "Unexpected token", Line: 2, Column: 999},
 			payload:          "flowchart TD\n  A? B",
-			wantHintContains: []string{"Check near column 7 on line 2", "`  A? B`"},
-			wantFixContains:  []string{"Check near column 7 on line 2", "`  A? B`"},
+			wantHintContains: []string{"Check near column 6 on line 2", "`  A? B`"},
+			wantFixContains:  []string{"Check near column 6 on line 2", "`  A? B`"},
 		},
 		{
 			name:                "line out of range stays stable",

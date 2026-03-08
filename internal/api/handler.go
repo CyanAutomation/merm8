@@ -2721,14 +2721,19 @@ func syntaxErrorLineContext(code string, syntaxErr *parser.SyntaxError) syntaxEr
 	runes := []rune(line)
 
 	col := syntaxErr.Column
-	col := syntaxErr.Column
 	if col <= 0 {
 		col = 1
 	}
+if len(runes) == 0 {
+	if col > 0 {
+		col = 0
+	}
+	ctx.column = col
+	return ctx
+}
 	if col > len(runes) {
 		col = len(runes)
 	}
-	ctx.column = col
 	ctx.column = col
 
 	if len(runes) <= 80 {
@@ -2740,8 +2745,8 @@ func syntaxErrorLineContext(code string, syntaxErr *parser.SyntaxError) syntaxEr
 	if pointerIndex < 0 {
 		pointerIndex = 0
 	}
-	if pointerIndex > len(runes) {
-		pointerIndex = len(runes)
+	if pointerIndex >= len(runes) {
+		pointerIndex = len(runes) - 1
 	}
 
 	start := pointerIndex - 30
