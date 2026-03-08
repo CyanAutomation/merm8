@@ -33,3 +33,21 @@ func TestObserveOutcomeUnknownLabelsUseOther(t *testing.T) {
 		t.Fatalf("expected parser_duration_seconds fallback label, got %q", body)
 	}
 }
+
+func TestObserveParserCacheEvent_NormalizesLabels(t *testing.T) {
+	m := NewMetrics()
+	m.ObserveParserCacheEvent("hit", "success")
+	m.ObserveParserCacheEvent("invalid", "invalid")
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w := httptest.NewRecorder()
+	m.Handler().ServeHTTP(w, req)
+
+	body := w.Body.String()
+	if !strings.Contains(body, `parser_cache_events_total{result="hit",entry_type="success"} 1`) {
+		t.Fatalf("expected parser cache hit metric, got %q", body)
+	}
+	if !strings.Contains(body, `parser_cache_events_total{result="miss",entry_type="any"} 1`) {
+		t.Fatalf("expected parser cache fallback metric, got %q", body)
+	}
+}

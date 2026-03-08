@@ -96,6 +96,11 @@ type ParserConfigProvider interface {
 	ParserConfig() parser.Config
 }
 
+// ParserCacheMetricsSetter can be implemented by parsers that expose cache telemetry hooks.
+type ParserCacheMetricsSetter interface {
+	SetCacheMetrics(parser.CacheMetricsObserver)
+}
+
 // analyzeRequest is the JSON body accepted by POST /analyze.
 type analyzeRequest struct {
 	Code   string                 `json:"code"`
@@ -785,6 +790,9 @@ func (h *Handler) SetTelemetryMetrics(metrics *telemetry.Metrics) {
 	defer h.mu.Unlock()
 
 	h.telemetryMetrics = metrics
+	if setter, ok := h.parser.(ParserCacheMetricsSetter); ok {
+		setter.SetCacheMetrics(metrics)
+	}
 }
 
 // SetServiceVersion configures a service/app version for informational endpoints.
@@ -2725,11 +2733,11 @@ func syntaxErrorLineContext(code string, syntaxErr *parser.SyntaxError) syntaxEr
 		col = 1
 	}
 	if len(runes) == 0 {
-	if len(runes) == 0 {
-		col = 0
-		return ctx
-	}
-	ctx.column = col
+		if len(runes) == 0 {
+			col = 0
+			return ctx
+		}
+		ctx.column = col
 	}
 	if col > len(runes) {
 		col = len(runes)
