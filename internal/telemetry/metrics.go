@@ -35,6 +35,7 @@ type Metrics struct {
 	analysisLatency       *prometheus.HistogramVec // analysis end-to-end latency
 	diagramTypeAnalyzed   *prometheus.CounterVec   // analyses by diagram type
 	lintSupportCheckCount *prometheus.CounterVec   // count of lint-support checks by result
+	corsRejectedTotal     *prometheus.CounterVec   // total rejected CORS origins
 }
 
 func NewMetrics() *Metrics {
@@ -90,6 +91,10 @@ func NewMetrics() *Metrics {
 			Name: "lint_support_check_total",
 			Help: "Total lint-support checks by result (supported or unsupported).",
 		}, []string{"diagram_type", "result"}),
+		corsRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "cors_rejected_total",
+			Help: "Total CORS requests rejected because origin is not in the allowlist.",
+		}, []string{}),
 	}
 
 	registry.MustRegister(
@@ -104,6 +109,7 @@ func NewMetrics() *Metrics {
 		m.analysisLatency,
 		m.diagramTypeAnalyzed,
 		m.lintSupportCheckCount,
+		m.corsRejectedTotal,
 	)
 	return m
 }
@@ -219,4 +225,12 @@ func (m *Metrics) ObserveLintSupportCheck(diagramType string, supported bool) {
 		result = "supported"
 	}
 	m.lintSupportCheckCount.WithLabelValues(diagramType, result).Inc()
+}
+
+// ObserveCORSRejectedOrigin records a rejected CORS request due to disallowed origin.
+func (m *Metrics) ObserveCORSRejectedOrigin() {
+	if m == nil {
+		return
+	}
+	m.corsRejectedTotal.WithLabelValues().Inc()
 }

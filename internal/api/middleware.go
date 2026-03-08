@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/CyanAutomation/merm8/internal/telemetry"
 )
 
 const trustedProxyCIDRsEnv = "ANALYZE_TRUSTED_PROXY_CIDRS"
@@ -37,6 +39,37 @@ const (
 type analyzeLogFields struct {
 	parserOutcome string
 	diagramType   string
+}
+
+type corsRejectLogger struct {
+	logger   Logger
+	interval time.Duration
+	mu       sync.Mutex
+	lastLog  time.Time
+}
+
+func newCORSRejectLogger(logger Logger) *corsRejectLogger {
+	return &corsRejectLogger{logger: normalizeLogger(logger), interval: time.Minute}
+}
+
+func (l *corsRejectLogger) Log(origin, path string, allowlistSize int) {
+	if l == nil {
+		return
+	}
+	now := time.Now()
+	l.mu.Lock()
+	if !l.lastLog.IsZero() && now.Sub(l.lastLog) < l.interval {
+		l.mu.Unlock()
+		return
+	}
+	l.lastLog = now
+	l.mu.Unlock()
+
+	l.logger.Warn("cors origin rejected",
+		"origin", origin,
+		"path", path,
+		"allowlist_size", allowlistSize,
+	)
 }
 
 // RequestIDMiddleware propagates or generates request IDs for correlation.
@@ -345,7 +378,7 @@ func AnalyzeBearerAuthMiddleware(token string, next http.Handler) http.Handler {
 // If an origin matches one in the allowed list, Access-Control-Allow-Origin is set to that origin.
 // Otherwise, no CORS headers are sent (treating the request as disallowed by CORS).
 // Preflight OPTIONS requests are handled with an empty response (204 No Content).
-func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
+func CORSMiddleware(allowedOrigins string, logger Logger, metrics *telemetry.Metrics) func(http.Handler) http.Handler {
 	// Parse allowed origins into a set for O(1) lookup
 	allowedSet := make(map[string]bool)
 	if strings.TrimSpace(allowedOrigins) != "" {
@@ -356,6 +389,9 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 			}
 		}
 	}
+
+	rejectLogger := newCORSRejectLogger(logger)
+	allowlistSize := len(allowedSet)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -374,6 +410,11 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 				if r.Method == http.MethodOptions {
 					w.WriteHeader(http.StatusNoContent)
 					return
+				}
+			} else if origin != "" {
+				rejectLogger.Log(origin, r.URL.Path, allowlistSize)
+				if metrics != nil {
+					metrics.ObserveCORSRejectedOrigin()
 				}
 			}
 

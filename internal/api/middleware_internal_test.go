@@ -1,10 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/CyanAutomation/merm8/internal/telemetry"
 )
 
 func TestRequestIDMiddleware_PropagatesOrGeneratesRequestID(t *testing.T) {
@@ -111,7 +114,7 @@ func TestClientIdentifier_IgnoresXFFForUntrustedProxy(t *testing.T) {
 
 func TestCORSMiddleware_AllowsMatchingOrigin(t *testing.T) {
 	allowedOrigins := "https://example.com"
-	middleware := CORSMiddleware(allowedOrigins)
+	middleware := CORSMiddleware(allowedOrigins, nil, nil)
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -140,7 +143,7 @@ func TestCORSMiddleware_AllowsMatchingOrigin(t *testing.T) {
 
 func TestCORSMiddleware_RejectsNonMatchingOrigin(t *testing.T) {
 	allowedOrigins := "https://example.com"
-	middleware := CORSMiddleware(allowedOrigins)
+	middleware := CORSMiddleware(allowedOrigins, nil, nil)
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -160,7 +163,7 @@ func TestCORSMiddleware_RejectsNonMatchingOrigin(t *testing.T) {
 
 func TestCORSMiddleware_SupportsMultipleAllowedOrigins(t *testing.T) {
 	allowedOrigins := "https://example.com, https://app.example.com, https://test.example.com"
-	middleware := CORSMiddleware(allowedOrigins)
+	middleware := CORSMiddleware(allowedOrigins, nil, nil)
 
 	testCases := []struct {
 		origin      string
@@ -197,7 +200,7 @@ func TestCORSMiddleware_SupportsMultipleAllowedOrigins(t *testing.T) {
 
 func TestCORSMiddleware_HandlesPreflight(t *testing.T) {
 	allowedOrigins := "https://example.com"
-	middleware := CORSMiddleware(allowedOrigins)
+	middleware := CORSMiddleware(allowedOrigins, nil, nil)
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -224,7 +227,7 @@ func TestCORSMiddleware_HandlesPreflight(t *testing.T) {
 
 func TestCORSMiddleware_ExposesHeaders(t *testing.T) {
 	allowedOrigins := "https://example.com"
-	middleware := CORSMiddleware(allowedOrigins)
+	middleware := CORSMiddleware(allowedOrigins, nil, nil)
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -251,7 +254,7 @@ func TestCORSMiddleware_ExposesHeaders(t *testing.T) {
 
 func TestCORSMiddleware_EmptyAllowedOrigins(t *testing.T) {
 	allowedOrigins := ""
-	middleware := CORSMiddleware(allowedOrigins)
+	middleware := CORSMiddleware(allowedOrigins, nil, nil)
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -270,7 +273,7 @@ func TestCORSMiddleware_EmptyAllowedOrigins(t *testing.T) {
 
 func TestCORSMiddleware_AllowsErrorResponsesWithCORS(t *testing.T) {
 	allowedOrigins := "https://example.com"
-	middleware := CORSMiddleware(allowedOrigins)
+	middleware := CORSMiddleware(allowedOrigins, nil, nil)
 
 	// Test that CORS headers are set even for error responses (e.g., 503)
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -289,5 +292,67 @@ func TestCORSMiddleware_AllowsErrorResponsesWithCORS(t *testing.T) {
 	}
 	if got := rec.Code; got != http.StatusServiceUnavailable {
 		t.Fatalf("expected status 503, got %d", got)
+	}
+}
+
+func TestCORSMiddleware_RejectedOriginIncrementsMetric(t *testing.T) {
+	allowedOrigins := "https://example.com"
+	metrics := telemetry.NewMetrics()
+	middleware := CORSMiddleware(allowedOrigins, nil, metrics)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", nil)
+	req.Header.Set("Origin", "https://other.com")
+	rec := httptest.NewRecorder()
+
+	middleware(next).ServeHTTP(rec, req)
+
+	metricsRec := httptest.NewRecorder()
+	metrics.Handler().ServeHTTP(metricsRec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if got := metricsRec.Body.String(); !strings.Contains(got, "cors_rejected_total 1") {
+		t.Fatalf("expected cors_rejected_total to be incremented, got metrics: %s", got)
+	}
+}
+
+func TestCORSMiddleware_RejectedOriginLoggingRateLimited(t *testing.T) {
+	allowedOrigins := "https://example.com"
+	buf := &bytes.Buffer{}
+	logger := newJSONLogger(buf, "test")
+	middleware := CORSMiddleware(allowedOrigins, logger, nil)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/v1/analyze", nil)
+		req.Header.Set("Origin", "https://other.com")
+		rec := httptest.NewRecorder()
+		middleware(next).ServeHTTP(rec, req)
+	}
+
+	logs := strings.TrimSpace(buf.String())
+	if logs == "" {
+		t.Fatal("expected at least one rejected CORS log line")
+	}
+	lines := strings.Split(logs, "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected exactly one log line due to rate limiting, got %d lines: %q", len(lines), logs)
+	}
+	line := lines[0]
+	if !strings.Contains(line, "cors origin rejected") {
+		t.Fatalf("expected rejected CORS log message, got %q", line)
+	}
+	if !strings.Contains(line, "\"origin\":\"https://other.com\"") {
+		t.Fatalf("expected origin in log, got %q", line)
+	}
+	if !strings.Contains(line, "\"path\":\"/v1/analyze\"") {
+		t.Fatalf("expected path in log, got %q", line)
+	}
+	if !strings.Contains(line, "\"allowlist_size\":1") {
+		t.Fatalf("expected allowlist size in log, got %q", line)
 	}
 }
