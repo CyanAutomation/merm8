@@ -802,92 +802,118 @@ func TestParser_ConcurrentParsing(t *testing.T) {
 	t.Logf("all %d goroutines completed successfully", numGoroutines)
 }
 
-func TestParser_ReadyRejectsTraversalPath(t *testing.T) {
-	p := mustNewParser(t, "parser-node/../secrets/parse.mjs")
-
-	err := p.Ready()
-	if err == nil {
-		t.Fatal("expected error for traversal path, got nil")
+func TestParser_PathRejectionMatrix(t *testing.T) {
+	type operation struct {
+		name       string
+		invoke     func(*parser.Parser) (*model.Diagram, *parser.SyntaxError, error)
+		requireNil bool
 	}
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expected missing-file sentinel error, got %v", err)
-	}
-	if errors.Is(err, parser.ErrTimeout) ||
-		errors.Is(err, parser.ErrSubprocess) ||
-		errors.Is(err, parser.ErrDecode) ||
-		errors.Is(err, parser.ErrContract) ||
-		errors.Is(err, parser.ErrMemoryLimit) {
-		t.Fatalf("expected path-validation error category, got parser runtime category: %v", err)
-	}
-	if !contains(err.Error(), "resolve symlinks") {
-		t.Fatalf("expected concise user-facing symlink phrasing, got %v", err)
-	}
-}
-
-func TestParser_ReadyRejectsSymlinkPathOutsideWorkingDirectory(t *testing.T) {
-	tempDir := t.TempDir()
-	target := filepath.Join(tempDir, "parse.mjs")
-	if err := os.WriteFile(target, []byte("#!/usr/bin/env node\n"), 0o700); err != nil {
-		t.Fatalf("failed to write parser script: %v", err)
+	type pathType struct {
+		name              string
+		buildScriptPath   func(*testing.T) string
+		expectedErr       error
+		expectedSubstring string
 	}
 
-	linkDir, err := os.MkdirTemp(".", "parser-link-test-")
-	if err != nil {
-		t.Fatalf("failed to create local symlink dir: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.RemoveAll(linkDir)
-	})
-
-	linkPath := filepath.Join(linkDir, "parse.mjs")
-	if err := os.Symlink(target, linkPath); err != nil {
-		t.Fatalf("failed to create symlink: %v", err)
-	}
-
-	p := mustNewParser(t, linkPath)
-	err = p.Ready()
-	if err == nil {
-		t.Fatal("expected error for symlink resolving outside working directory, got nil")
-	}
-	if !contains(err.Error(), "outside allowed repository root") {
-		t.Fatalf("expected outside repository root error, got %v", err)
-	}
-}
-
-func TestParser_ParseRejectsPathOutsideWorkingDirectory(t *testing.T) {
-	tempDir := t.TempDir()
-	script := filepath.Join(tempDir, "parse.mjs")
-	if err := os.WriteFile(script, []byte("#!/usr/bin/env node\n"), 0o700); err != nil {
-		t.Fatalf("failed to write parser script: %v", err)
+	operations := []operation{
+		{
+			name: "Ready",
+			invoke: func(p *parser.Parser) (*model.Diagram, *parser.SyntaxError, error) {
+				return nil, nil, p.Ready()
+			},
+		},
+		{
+			name: "Parse",
+			invoke: func(p *parser.Parser) (*model.Diagram, *parser.SyntaxError, error) {
+				return p.Parse("graph TD; A-->B")
+			},
+			requireNil: true,
+		},
 	}
 
-	p := mustNewParser(t, script)
-	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
-	if err == nil {
-		t.Fatal("expected validation error for script path outside working directory, got nil")
-	}
-	if !contains(err.Error(), "outside allowed repository root") {
-		t.Fatalf("expected outside repository root error, got %v", err)
-	}
-	if diagram != nil || syntaxErr != nil {
-		t.Fatalf("expected nil diagram and syntaxErr, got diagram=%v syntaxErr=%v", diagram, syntaxErr)
-	}
-}
+	pathTypes := []pathType{
+		{
+			name: "outside path",
+			buildScriptPath: func(t *testing.T) string {
+				t.Helper()
 
-func TestParser_ReadyRejectsPathOutsideWorkingDirectory(t *testing.T) {
-	tempDir := t.TempDir()
-	script := filepath.Join(tempDir, "parse.mjs")
-	if err := os.WriteFile(script, []byte("#!/usr/bin/env node\n"), 0o700); err != nil {
-		t.Fatalf("failed to write parser script: %v", err)
+				tempDir := t.TempDir()
+				script := filepath.Join(tempDir, "parse.mjs")
+				if err := os.WriteFile(script, []byte("#!/usr/bin/env node\n"), 0o700); err != nil {
+					t.Fatalf("failed to write parser script: %v", err)
+				}
+
+				return script
+			},
+			expectedSubstring: "outside allowed repository root",
+		},
+		{
+			name: "symlink outside",
+			buildScriptPath: func(t *testing.T) string {
+				t.Helper()
+
+				tempDir := t.TempDir()
+				target := filepath.Join(tempDir, "parse.mjs")
+				if err := os.WriteFile(target, []byte("#!/usr/bin/env node\n"), 0o700); err != nil {
+					t.Fatalf("failed to write parser script: %v", err)
+				}
+
+				linkDir, err := os.MkdirTemp(".", "parser-link-test-")
+				if err != nil {
+					t.Fatalf("failed to create local symlink dir: %v", err)
+				}
+				t.Cleanup(func() {
+					_ = os.RemoveAll(linkDir)
+				})
+
+				linkPath := filepath.Join(linkDir, "parse.mjs")
+				if err := os.Symlink(target, linkPath); err != nil {
+					t.Fatalf("failed to create symlink: %v", err)
+				}
+
+				return linkPath
+			},
+			expectedSubstring: "outside allowed repository root",
+		},
+		{
+			name: "traversal",
+			buildScriptPath: func(_ *testing.T) string {
+				return "parser-node/../secrets/parse.mjs"
+			},
+			expectedErr:       os.ErrNotExist,
+			expectedSubstring: "resolve symlinks",
+		},
 	}
 
-	p := mustNewParser(t, script)
-	err := p.Ready()
-	if err == nil {
-		t.Fatal("expected error for script path outside working directory, got nil")
-	}
-	if !contains(err.Error(), "outside allowed repository root") {
-		t.Fatalf("expected outside repository root error, got %v", err)
+	for _, op := range operations {
+		for _, path := range pathTypes {
+			t.Run(op.name+"/"+path.name, func(t *testing.T) {
+				scriptPath := path.buildScriptPath(t)
+				p := mustNewParser(t, scriptPath)
+
+				diagram, syntaxErr, err := op.invoke(p)
+				if err == nil {
+					t.Fatalf("expected validation error for %s with %s, got nil", op.name, path.name)
+				}
+				if path.expectedErr != nil && !errors.Is(err, path.expectedErr) {
+					t.Fatalf("expected %v category error, got %v", path.expectedErr, err)
+				}
+				if errors.Is(err, parser.ErrTimeout) ||
+					errors.Is(err, parser.ErrSubprocess) ||
+					errors.Is(err, parser.ErrDecode) ||
+					errors.Is(err, parser.ErrContract) ||
+					errors.Is(err, parser.ErrMemoryLimit) {
+					t.Fatalf("expected path-validation error category, got parser runtime category: %v", err)
+				}
+				if !contains(err.Error(), path.expectedSubstring) {
+					t.Fatalf("expected error containing %q, got %v", path.expectedSubstring, err)
+				}
+
+				if op.requireNil && (diagram != nil || syntaxErr != nil) {
+					t.Fatalf("expected nil diagram and syntaxErr, got diagram=%v syntaxErr=%v", diagram, syntaxErr)
+				}
+			})
+		}
 	}
 }
 
