@@ -73,6 +73,11 @@ func main() {
 	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
 
 	authToken := strings.TrimSpace(os.Getenv("ANALYZE_AUTH_TOKEN"))
+	if err := validateStartupAuthToken(deploymentMode, authToken); err != nil {
+		logger.Error("invalid startup authentication configuration", "mode", deploymentMode, "error", err.Error())
+		panic(err.Error())
+	}
+
 	rateLimitPerMinute := envInt("ANALYZE_RATE_LIMIT_PER_MINUTE", 0)
 	if deploymentMode == "production" && rateLimitPerMinute <= 0 {
 		rateLimitPerMinute = defaultRateLimitPerMinute
@@ -143,4 +148,12 @@ func resolveAllowedOrigins(deploymentMode, rawAllowedOrigins string) (string, bo
 	}
 
 	return configured, warnOnMisconfiguration
+}
+
+func validateStartupAuthToken(deploymentMode, authToken string) error {
+	if strings.EqualFold(strings.TrimSpace(deploymentMode), "production") && strings.TrimSpace(authToken) == "" {
+		return fmt.Errorf("ANALYZE_AUTH_TOKEN is required when DEPLOYMENT_MODE=production")
+	}
+
+	return nil
 }
