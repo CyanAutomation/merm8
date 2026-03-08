@@ -258,6 +258,54 @@ func TestCORSMiddleware_HandlesPreflight(t *testing.T) {
 	}
 }
 
+func TestCORSMiddleware_AllowsConfiguredWildcardPattern(t *testing.T) {
+	allowedOrigins := "https://merm8-splash-*.vercel.app"
+	middleware := CORSMiddleware(allowedOrigins, &testLogger{}, nil)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Header.Set("Origin", "https://merm8-splash-preview-123.vercel.app")
+	rec := httptest.NewRecorder()
+
+	middleware(next).ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://merm8-splash-preview-123.vercel.app" {
+		t.Fatalf("expected CORS header with wildcard-matched origin, got %q", got)
+	}
+}
+
+func TestCORSMiddleware_RejectsWildcardNearMissDomains(t *testing.T) {
+	allowedOrigins := "https://merm8-splash-*.vercel.app"
+	middleware := CORSMiddleware(allowedOrigins, &testLogger{}, nil)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	testCases := []string{
+		"https://merm8-splash-preview-123.vercel.app.evil.com",
+		"https://merm8-splash-.vercel.app",
+		"https://other-merm8-splash-preview.vercel.app",
+	}
+
+	for _, origin := range testCases {
+		t.Run(origin, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+			req.Header.Set("Origin", origin)
+			rec := httptest.NewRecorder()
+
+			middleware(next).ServeHTTP(rec, req)
+
+			if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+				t.Fatalf("expected no CORS header for near-miss domain, got %q", got)
+			}
+		})
+	}
+}
+
 func TestCORSMiddleware_ExposesHeaders(t *testing.T) {
 	allowedOrigins := "https://example.com"
 	middleware := CORSMiddleware(allowedOrigins, &testLogger{}, nil)

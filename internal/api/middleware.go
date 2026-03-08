@@ -392,26 +392,17 @@ func AnalyzeBearerAuthMiddleware(token string, next http.Handler) http.Handler {
 // Otherwise, no CORS headers are sent (treating the request as disallowed by CORS).
 // Preflight OPTIONS requests are handled with an empty response (204 No Content).
 func CORSMiddleware(allowedOrigins string, logger Logger, metrics *telemetry.Metrics) func(http.Handler) http.Handler {
-	// Parse allowed origins into a set for O(1) lookup
-	allowedSet := make(map[string]bool)
-	if strings.TrimSpace(allowedOrigins) != "" {
-		for _, origin := range strings.Split(allowedOrigins, ",") {
-			origin = strings.TrimSpace(origin)
-			if origin != "" {
-				allowedSet[origin] = true
-			}
-		}
-	}
+	matcher := newCORSOriginMatcher(allowedOrigins)
 
 	rejectLogger := newCORSRejectLogger(logger)
-	allowlistSize := len(allowedSet)
+	allowlistSize := matcher.allowlistSize()
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
 
 			// Check if origin is allowed
-			if origin != "" && allowedSet[origin] {
+			if origin != "" && matcher.isAllowed(origin) {
 				// Set CORS headers for allowed origins
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -435,6 +426,76 @@ func CORSMiddleware(allowedOrigins string, logger Logger, metrics *telemetry.Met
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+type corsOriginMatcher struct {
+	exact     map[string]bool
+	wildcards []wildcardOriginPattern
+}
+
+type wildcardOriginPattern struct {
+	prefix string
+	suffix string
+}
+
+func newCORSOriginMatcher(allowedOrigins string) corsOriginMatcher {
+	matcher := corsOriginMatcher{exact: make(map[string]bool)}
+
+	if strings.TrimSpace(allowedOrigins) == "" {
+		return matcher
+	}
+
+	for _, origin := range strings.Split(allowedOrigins, ",") {
+		origin = strings.TrimSpace(origin)
+		if origin == "" {
+			continue
+		}
+
+		if pattern, ok := parseWildcardOrigin(origin); ok {
+			matcher.wildcards = append(matcher.wildcards, pattern)
+			continue
+		}
+
+		matcher.exact[origin] = true
+	}
+
+	return matcher
+}
+
+func parseWildcardOrigin(origin string) (wildcardOriginPattern, bool) {
+	if strings.Count(origin, "*") != 1 {
+		return wildcardOriginPattern{}, false
+	}
+
+	parts := strings.Split(origin, "*")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return wildcardOriginPattern{}, false
+	}
+
+	return wildcardOriginPattern{prefix: parts[0], suffix: parts[1]}, true
+}
+
+func (m corsOriginMatcher) isAllowed(origin string) bool {
+	if m.exact[origin] {
+		return true
+	}
+
+	for _, pattern := range m.wildcards {
+		if !strings.HasPrefix(origin, pattern.prefix) || !strings.HasSuffix(origin, pattern.suffix) {
+			continue
+		}
+
+		middle := origin[len(pattern.prefix) : len(origin)-len(pattern.suffix)]
+		if middle != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (m corsOriginMatcher) allowlistSize() int {
+	return len(m.exact) + len(m.wildcards)
 }
 
 func isAnalyzePath(path string) bool {

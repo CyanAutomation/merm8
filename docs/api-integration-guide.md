@@ -217,6 +217,9 @@ ALLOWED_ORIGINS=https://example.com,https://app.example.com,https://vercel-app.c
 
 # For local development (multiple ports)
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+
+# Optional: controlled wildcard for preview deployments
+ALLOWED_ORIGINS=https://merm8-splash-*.vercel.app
 ```
 
 **Default value:** `https://merm8-splash-nazb4dydy-cyanautomations-projects.vercel.app` (Vercel frontend)
@@ -234,6 +237,34 @@ Access-Control-Max-Age: 300
 ```
 
 Requests from disallowed origins **will not receive CORS headers**, and the browser will block the response.
+
+### Secure wildcard guidance
+
+By default, configure explicit origins for strict exact matching. Wildcards are optional and should only be used for trusted preview domains where hostnames are machine-generated.
+
+Supported wildcard format is intentionally constrained:
+
+- exactly one `*` token in the origin entry
+- prefix and suffix must both be present
+- matching uses prefix+suffix checks (not arbitrary regex)
+
+Examples:
+
+```bash
+# ✅ Exact origin (recommended default)
+ALLOWED_ORIGINS=https://app.example.com
+
+# ✅ Safe preview wildcard (single host label segment)
+ALLOWED_ORIGINS=https://merm8-splash-*.vercel.app
+
+# ✅ Mix exact + wildcard
+ALLOWED_ORIGINS=https://app.example.com,https://merm8-splash-*.vercel.app
+
+# ❌ Not supported as wildcard entry (missing suffix)
+ALLOWED_ORIGINS=https://*.vercel.app*
+```
+
+With `https://merm8-splash-*.vercel.app`, requests such as `https://merm8-splash-preview-123.vercel.app` are allowed, while near-miss origins like `https://merm8-splash-preview-123.vercel.app.evil.com` are rejected.
 
 ### Preflight Requests
 
