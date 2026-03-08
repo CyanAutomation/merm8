@@ -115,7 +115,7 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			code:                    "flowchart TD\n  Decision -->|No Retry",
 			expectedHintCode:        "unterminated_edge_label",
 			expectedHintMessage:     "both pipes",
-			expectHelpSuggestion:    false,
+			expectHelpSuggestion:    true,
 			expectedHelpTitle:       "syntax",
 			expectedHelpExplanation: "diagram",
 		},
@@ -125,7 +125,7 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			code:                    "flowchart TD\n  A -->|No| B -->|Maybe C",
 			expectedHintCode:        "unterminated_edge_label",
 			expectedHintMessage:     "both pipes",
-			expectHelpSuggestion:    false,
+			expectHelpSuggestion:    true,
 			expectedHelpTitle:       "syntax",
 			expectedHelpExplanation: "diagram",
 		},
@@ -135,7 +135,7 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			code:                    "flowchart TD\n  A --> B\n  note right of A",
 			expectedHintCode:        "generic_syntax_error",
 			expectedHintMessage:     "unmatched brackets",
-			expectHelpSuggestion:    false,
+			expectHelpSuggestion:    true,
 			expectedHelpTitle:       "syntax",
 			expectedHelpExplanation: "diagram",
 		},
@@ -191,6 +191,47 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 				t.Fatalf("expected no help-suggestion object, got %#v", helpSugg)
 			}
 		})
+	}
+}
+
+func TestAnalyzeRaw_SyntaxError_AlwaysIncludesHelpSuggestion(t *testing.T) {
+	t.Parallel()
+
+	syntaxErr := &parser.SyntaxError{
+		Message: "Unexpected token",
+		Line:    2,
+		Column:  3,
+	}
+
+	mux := newTestMux(func(string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", bytes.NewReader([]byte("flowchart TD\n  A -- B")))
+	req.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if _, ok := resp["syntax-error"].(map[string]interface{}); !ok {
+		t.Fatalf("expected syntax-error object, got %#v", resp["syntax-error"])
+	}
+
+	helpSugg, ok := resp["help-suggestion"].(map[string]interface{})
+	if !ok || helpSugg == nil {
+		t.Fatalf("expected help-suggestion object when syntax-error is present, got %#v", resp["help-suggestion"])
+	}
+
+	if docLink, _ := helpSugg["doc-link"].(string); docLink != "#common-mistakes" {
+		t.Fatalf("expected fallback doc-link #common-mistakes, got %q", docLink)
 	}
 }
 
