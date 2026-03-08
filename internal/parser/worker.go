@@ -133,6 +133,5 @@ func (sw stderrWriter) Write(p []byte) (int, error) {
 		copy(sw.worker.stderr, sw.worker.stderr[len(sw.worker.stderr)-maxWorkerStderrBytes:])
 		sw.worker.stderr = sw.worker.stderr[:maxWorkerStderrBytes]
 	}
-	}
 	return len(p), nil
 }

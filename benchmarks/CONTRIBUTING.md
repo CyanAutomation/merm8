@@ -425,6 +425,7 @@ After adding new fixtures, verify:
    ```
 
 3. **Metrics improve (if fixing a gap):**
+
    ```bash
    go run ./benchmarks/main.go --rule no-cycles
    ```
