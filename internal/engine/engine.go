@@ -9,6 +9,7 @@ import (
 	"log"
 	"regexp"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/CyanAutomation/merm8/internal/model"
@@ -18,6 +19,7 @@ import (
 // Engine holds a set of rules and runs them in order.
 type Engine struct {
 	rules []rules.Rule
+	sinkMu sync.RWMutex
 	sink  InstrumentationSink
 }
 
@@ -60,6 +62,9 @@ func NewWithRules(registeredRules ...rules.Rule) *Engine {
 // SetInstrumentationSink configures an optional metrics sink used for rule
 // execution instrumentation.
 func (e *Engine) SetInstrumentationSink(sink InstrumentationSink) {
+	e.sinkMu.Lock()
+	defer e.sinkMu.Unlock()
+
 	if sink == nil {
 		e.sink = NoopInstrumentationSink{}
 		return
@@ -69,7 +74,11 @@ func (e *Engine) SetInstrumentationSink(sink InstrumentationSink) {
 
 // Run executes every rule against d and returns all issues found.
 func (e *Engine) Run(d *model.Diagram, cfg rules.Config) []model.Issue {
-	return e.RunWithInstrumentation(d, cfg, e.sink)
+	e.sinkMu.RLock()
+	sink := e.sink
+	e.sinkMu.RUnlock()
+
+	return e.RunWithInstrumentation(d, cfg, sink)
 }
 
 // RunWithInstrumentation executes rules and emits per-rule metrics into sink.

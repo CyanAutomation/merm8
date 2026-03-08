@@ -3,6 +3,8 @@ package engine_test
 import (
 	"reflect"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
@@ -16,6 +18,14 @@ type capturingSink struct {
 
 func (s *capturingSink) RecordRuleMetrics(metrics engine.RuleMetrics) {
 	s.metrics = append(s.metrics, metrics)
+}
+
+type countingSink struct {
+	count atomic.Int64
+}
+
+func (s *countingSink) RecordRuleMetrics(_ engine.RuleMetrics) {
+	s.count.Add(1)
 }
 
 type supportedRule struct{}
@@ -485,6 +495,38 @@ func TestEngine_RunWithInstrumentation_SkipsDisabledRules(t *testing.T) {
 	}
 	if len(sink.metrics) != 0 {
 		t.Fatalf("expected no recorded metrics for disabled rule, got %#v", sink.metrics)
+	}
+}
+
+func TestEngine_Run_ConcurrentSinkUpdates(t *testing.T) {
+	e := engine.NewWithRules(supportedRule{})
+	d := &model.Diagram{Type: model.DiagramTypeFlowchart}
+
+	const workers = 6
+	const iterations = 200
+
+	errCh := make(chan []model.Issue, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				e.SetInstrumentationSink(&countingSink{})
+				issues := e.Run(d, rules.Config{})
+				if len(issues) != 1 || issues[0].RuleID != "supported-rule" {
+					errCh <- issues
+					return
+				}
+				e.SetInstrumentationSink(nil)
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errCh)
+	for issues := range errCh {
+		t.Fatalf("expected supported-rule issue, got %#v", issues)
 	}
 }
 
