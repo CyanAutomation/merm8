@@ -220,20 +220,60 @@ func runWithStdin(t *testing.T, args []string, stdinContent string) int {
 	return run(args, &bytes.Buffer{}, &bytes.Buffer{})
 }
 
-func TestParseConfigFileVersionedShape(t *testing.T) {
-	raw := json.RawMessage(`{"schema-version":"v1","rules":{"max-fanout":{"limit":2}}}`)
-	cfg, err := parseConfigFile(raw)
-	if err != nil {
-		t.Fatalf("parseConfigFile error: %v", err)
+func TestParseConfigFileConfigShapes(t *testing.T) {
+	// Keep shape assertions in sync with API-side schema tests in
+	// internal/rules/schema_test.go: flat and versioned forms are accepted,
+	// unsupported schema-version is rejected with actionable messaging.
+	tests := []struct {
+		name              string
+		raw               json.RawMessage
+		wantRule          string
+		wantErrContains   []string
+		wantNoError       bool
+	}{
+		{
+			name:        "accepts flat config",
+			raw:         json.RawMessage(`{"max-fanout":{"limit":1}}`),
+			wantRule:    "max-fanout",
+			wantNoError: true,
+		},
+		{
+			name:        "accepts versioned config",
+			raw:         json.RawMessage(`{"schema-version":"v1","rules":{"max-fanout":{"limit":2}}}`),
+			wantRule:    "max-fanout",
+			wantNoError: true,
+		},
+		{
+			name:            "rejects unsupported schema version",
+			raw:             json.RawMessage(`{"schema-version":"v2","rules":{}}`),
+			wantErrContains: []string{"schema-version", "v2"},
+		},
 	}
-	if _, ok := cfg["max-fanout"]; !ok {
-		t.Fatalf("expected max-fanout rule in parsed config")
-	}
-}
 
-func TestParseConfigFileRejectsUnsupportedSchemaVersion(t *testing.T) {
-	raw := json.RawMessage(`{"schema-version":"v2","rules":{}}`)
-	if _, err := parseConfigFile(raw); err == nil {
-		t.Fatalf("expected schema-version error")
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := parseConfigFile(tt.raw)
+
+			if tt.wantNoError {
+				if err != nil {
+					t.Fatalf("parseConfigFile error: %v", err)
+				}
+				if _, ok := cfg[tt.wantRule]; !ok {
+					t.Fatalf("expected %s rule in parsed config", tt.wantRule)
+				}
+				return
+			}
+
+			if err == nil {
+				t.Fatalf("expected parseConfigFile error")
+			}
+			errText := err.Error()
+			for _, want := range tt.wantErrContains {
+				if !strings.Contains(errText, want) {
+					t.Fatalf("expected error %q to contain %q", errText, want)
+				}
+			}
+		})
 	}
 }
