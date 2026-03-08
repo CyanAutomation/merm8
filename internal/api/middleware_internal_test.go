@@ -10,6 +10,14 @@ import (
 	"github.com/CyanAutomation/merm8/internal/telemetry"
 )
 
+func TestRateLimiterRemaining_NilReceiverDoesNotPanic(t *testing.T) {
+	var rl *RateLimiter
+
+	if got := rl.Remaining("x"); got != 0 {
+		t.Fatalf("expected nil limiter remaining to default to 0, got %d", got)
+	}
+}
+
 func TestRequestIDMiddleware_PropagatesOrGeneratesRequestID(t *testing.T) {
 	tests := []struct {
 		name       string
