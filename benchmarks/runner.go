@@ -1153,21 +1153,24 @@ const htmlReportTemplate = `<!DOCTYPE html>
         {{end}}
 
         <h2>Rule Metrics</h2>
-        <table>
+        <div style="margin-bottom: 15px;">
+            <input type="text" id="ruleFilter" placeholder="Filter by rule name..." style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; width: 100%; max-width: 300px; font-size: 14px;">
+        </div>
+        <table id="metricsTable">
             <thead>
                 <tr>
-                    <th>Rule</th>
-                    <th>Passed</th>
-                    <th>Total</th>
-                    <th>Detection Rate</th>
-                    <th>False Positives</th>
-                    <th>Avg Parse Time</th>
-                    <th>Avg Lint Time</th>
+                    <th style="cursor: pointer;" data-sort="rule">Rule <span id="sortRule"> ↕</span></th>
+                    <th style="cursor: pointer;" data-sort="passed">Passed <span id="sortPassed">↕</span></th>
+                    <th style="cursor: pointer;" data-sort="total">Total <span id="sortTotal">↕</span></th>
+                    <th style="cursor: pointer;" data-sort="detection">Detection Rate <span id="sortDetection">↕</span></th>
+                    <th style="cursor: pointer;" data-sort="fp">False Positives <span id="sortFp">↕</span></th>
+                    <th style="cursor: pointer;" data-sort="parse">Avg Parse Time <span id="sortParse">↕</span></th>
+                    <th style="cursor: pointer;" data-sort="lint">Avg Lint Time <span id="sortLint">↕</span></th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="metricsBody">
                 {{range .Rules}}
-                <tr>
+                <tr data-rule="{{.RuleID}}" data-passed="{{.Passed}}" data-total="{{.TotalCases}}" data-detection="{{.DetectionRate}}" data-fp="{{.FalsePositiveRate}}" data-parse="{{.AvgParseTimeMs}}" data-lint="{{.AvgLintTimeMs}}">
                     <td><strong>{{.RuleID}}</strong>{{if lowConfidence .TotalCases}} <span style="color: #ed8936; font-weight: 600;">⚠️</span>{{end}}</td>
                     <td>{{.Passed}}</td>
                     <td>{{.TotalCases}}</td>
@@ -1208,6 +1211,68 @@ const htmlReportTemplate = `<!DOCTYPE html>
             <p>For more information, see <a href="../../BENCHMARK.md">BENCHMARK.md</a></p>
         </footer>
     </div>
+    <script>
+        // Filter functionality for rule metrics table
+        document.getElementById('ruleFilter').addEventListener('input', function(e) {
+            const filter = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('#metricsBody tr');
+            rows.forEach(row => {
+                const ruleCell = row.getAttribute('data-rule');
+                if (ruleCell.toLowerCase().includes(filter)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+
+        // Sortable table functionality
+        const sortableHeaders = document.querySelectorAll('th[data-sort]');
+        let currentSort = { column: null, direction: 'asc' };
+        
+        sortableHeaders.forEach(header => {
+            header.addEventListener('click', function() {
+                const column = this.getAttribute('data-sort');
+                const body = document.getElementById('metricsBody');
+                const rows = Array.from(body.querySelectorAll('tr'));
+                
+                // Toggle sort direction
+                const direction = currentSort.column === column && currentSort.direction === 'asc' ? 'desc' : 'asc';
+                currentSort = { column, direction };
+                
+                // Sort rows
+                rows.sort((a, b) => {
+                    let aVal = a.getAttribute('data-' + column);
+                    let bVal = b.getAttribute('data-' + column);
+                    
+                    // Try to parse as number
+                    const aNum = parseFloat(aVal);
+                    const bNum = parseFloat(bVal);
+                    
+                    if (!isNaN(aNum) && !isNaN(bNum)) {
+                        return direction === 'asc' ? aNum - bNum : bNum - aNum;
+                    }
+                    
+                    // String comparison
+                    return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                });
+                
+                // Re-render table
+                rows.forEach(row => body.appendChild(row));
+                
+                // Update sort indicators
+                sortableHeaders.forEach(h => {
+                    const col = h.getAttribute('data-sort');
+                    const indicator = h.querySelector('span');
+                    if (col === column) {
+                        indicator.textContent = direction === 'asc' ? ' ↑' : ' ↓';
+                    } else {
+                        indicator.textContent = ' ↕';
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>
 `

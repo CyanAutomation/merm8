@@ -47,7 +47,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Updated Contributing Guide**: Extended `CONTRIBUTING.md` with diagram-type-specific examples, fixture templates, and best practices for sequence, class, ER, and state diagrams. Helps future contributors author test cases for new diagram types as rules are implemented.
 
 Fixtures are discoverable and ready for rule implementation. As new rules are added for each diagram type, the existing fixtures will automatically be evaluated by the benchmark suite.
+### Benchmark Suite Enhancements (Phase 5)
 
+- **Enhanced Metadata Syntax**: Test fixtures now support optional expected issue counts in rule annotations:
+  - `%% @rule: no-cycles:1` specifies expected count (currently for documentation)
+  - Multiple rules with counts: `%% @rule: max-fanout:3, max-depth:1`
+  - Enables future strict validation where exact counts must match
+- **Trend Tracking Infrastructure**: Added data structures (`TrendMetric`, `TrendHistory`) for tracking benchmark metrics over time:
+  - Timestamp-based metric recording per rule and benchmark run
+  - Tracks detection rate, false positive rate, parse/lint times
+  - Foundation for longitudinal analysis and regression detection across multiple benchmark runs
+  - Current implementation stores structures (JSON serializable); collection for future runs not yet implemented
+- **Interactive HTML Report** (Phase 5 Enhancement):
+  - **Simple filtering**: Search box to filter rules by name (real-time highlighting)
+  - **Click-to-sort table headers**: Sort by any column (rule name, pass count, detection rate, timing)
+  - **Clean indicators**: ↑/↓/↕ symbols show current sort state (no animations, simple visual feedback)
+  - Vanilla JavaScript with zero dependencies—works offline
+  - Follows "normal UI" aesthetic: functional, no decorative elements, minimal transitions
 ### Added
 
 - Configurable parser timeout via `PARSER_TIMEOUT_SECONDS` environment variable (1–60 seconds, default 5s). Exposed in `GET /info` response as `parser_timeout_seconds` field.
