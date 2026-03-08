@@ -1,7 +1,6 @@
 package benchmarks_test
 
 import (
-	"errors"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -273,9 +272,8 @@ func TestBenchmarkCase_JSONMarshaling_InvalidRawConfig(t *testing.T) {
 		t.Fatal("expected invalid benchmark config to be rejected during marshaling")
 	}
 
-	var marshalerErr *json.MarshalerError
-	if !errors.As(err, &marshalerErr) {
-		t.Fatalf("expected json marshaler error classification, got %T: %v", err, err)
+	if !strings.Contains(err.Error(), "benchmarks: invalid config payload") {
+		t.Fatalf("expected stable invalid-config prefix, got %q", err.Error())
 	}
 
 	if !strings.Contains(err.Error(), "unexpected end of JSON input") {
