@@ -655,6 +655,30 @@ func TestMaxDepth_UnderDefaultLimit(t *testing.T) {
 	}
 }
 
+func TestMaxDepth_SharedSubgraphDAGDeterministicOutput(t *testing.T) {
+	d := &model.Diagram{
+		Edges: []model.Edge{
+			{From: "A", To: "B"},
+			{From: "X", To: "B"},
+			{From: "B", To: "C"},
+			{From: "C", To: "D"},
+			{From: "D", To: "E"},
+		},
+	}
+
+	issues := rules.MaxDepth{}.Run(d, rules.Config{"max-depth": {"limit": 2}})
+	if len(issues) != 2 {
+		t.Fatalf("expected 2 max-depth issues for two roots, got %d", len(issues))
+	}
+
+	if issues[0].Message != "path depth 4 exceeds configured limit 2: A -> B -> C -> D -> E" {
+		t.Fatalf("unexpected first issue message: %q", issues[0].Message)
+	}
+	if issues[1].Message != "path depth 4 exceeds configured limit 2: X -> B -> C -> D -> E" {
+		t.Fatalf("unexpected second issue message: %q", issues[1].Message)
+	}
+}
+
 func TestValidateOption_NewRules(t *testing.T) {
 	if err := rules.ValidateOption("max-depth", "limit", 3); err != nil {
 		t.Fatalf("expected max-depth limit to be valid, got %v", err)
