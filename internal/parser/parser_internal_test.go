@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -260,4 +261,16 @@ func TestReadWorkerPoolSize(t *testing.T) {
 			t.Fatalf("expected max pool size 64, got %d", got)
 		}
 	})
+}
+
+func TestNewWorkerRequestID(t *testing.T) {
+	first := newWorkerRequestID()
+	second := newWorkerRequestID()
+
+	if !strings.HasPrefix(first, "req-") {
+		t.Fatalf("expected request id to include req- prefix, got %q", first)
+	}
+	if first == second {
+		t.Fatalf("expected unique request ids across invocations")
+	}
 }

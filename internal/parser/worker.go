@@ -10,6 +10,8 @@ import (
 	"sync"
 )
 
+const maxWorkerStderrBytes = 64 * 1024
+
 type workerRequestEnvelope struct {
 	ID      string        `json:"id"`
 	Code    string        `json:"code"`
@@ -32,7 +34,7 @@ type parserWorker struct {
 	stdin    io.WriteCloser
 	stdout   *bufio.Reader
 	errMu    sync.Mutex
-	stderr   bytes.Buffer
+	stderr   []byte
 	opMu     sync.Mutex
 	closeMu  sync.Mutex
 	isClosed bool
@@ -56,16 +58,17 @@ func startParserWorker(scriptPath string, nodeArgs []string) (*parserWorker, err
 		return nil, err
 	}
 
+	if err := cmd.Start(); err != nil {
+		_ = stdin.Close()
+		_ = stdoutPipe.Close()
+		_ = stderrPipe.Close()
+		return nil, err
+	}
+
 	w := &parserWorker{stdin: stdin, stdout: bufio.NewReader(stdoutPipe), cmd: cmd}
 	go func() {
 		_, _ = io.Copy(stderrWriter{worker: w}, stderrPipe)
 	}()
-
-	if err := cmd.Start(); err != nil {
-		_ = stdin.Close()
-		_ = stderrPipe.Close()
-		return nil, err
-	}
 
 	return w, nil
 }
@@ -115,7 +118,7 @@ func (w *parserWorker) close() {
 func (w *parserWorker) stderrString() string {
 	w.errMu.Lock()
 	defer w.errMu.Unlock()
-	return w.stderr.String()
+	return string(w.stderr)
 }
 
 type stderrWriter struct {
@@ -125,5 +128,9 @@ type stderrWriter struct {
 func (sw stderrWriter) Write(p []byte) (int, error) {
 	sw.worker.errMu.Lock()
 	defer sw.worker.errMu.Unlock()
-	return sw.worker.stderr.Write(p)
+	sw.worker.stderr = append(sw.worker.stderr, p...)
+	if len(sw.worker.stderr) > maxWorkerStderrBytes {
+		sw.worker.stderr = append([]byte(nil), sw.worker.stderr[len(sw.worker.stderr)-maxWorkerStderrBytes:]...)
+	}
+	return len(p), nil
 }
