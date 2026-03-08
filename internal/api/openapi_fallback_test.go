@@ -9,42 +9,6 @@ import (
 	"github.com/CyanAutomation/merm8/internal/engine"
 )
 
-func TestCloneOpenAPISpec_ReturnsErrorForUnmarshalableValue(t *testing.T) {
-	_, err := cloneOpenAPISpec(map[string]interface{}{
-		"bad": make(chan int),
-	})
-	if err == nil {
-		t.Fatal("expected cloneOpenAPISpec to fail for non-JSON-serializable values")
-	}
-}
-
-func TestOpenAPISpec_FallsBackWhenCloneFails(t *testing.T) {
-	orig := openapi
-	t.Cleanup(func() {
-		openapi = orig
-	})
-
-	openapi = map[string]interface{}{
-		"bad": make(chan int),
-	}
-
-	spec := OpenAPISpec()
-
-	if spec["openapi"] != "3.0.0" {
-		t.Fatalf("expected fallback openapi version, got %#v", spec["openapi"])
-	}
-	info, ok := spec["info"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected fallback info object, got %T", spec["info"])
-	}
-	if info["title"] == "" || info["version"] == "" {
-		t.Fatalf("expected fallback info title/version, got %#v", info)
-	}
-	if _, ok := spec["servers"].([]map[string]interface{}); !ok {
-		t.Fatalf("expected fallback servers list, got %T", spec["servers"])
-	}
-}
-
 func TestServeSpec_Returns200WithValidJSONWhenFallbackIsUsed(t *testing.T) {
 	orig := openapi
 	t.Cleanup(func() {
@@ -73,5 +37,25 @@ func TestServeSpec_Returns200WithValidJSONWhenFallbackIsUsed(t *testing.T) {
 	}
 	if payload["openapi"] != "3.0.0" {
 		t.Fatalf("expected fallback payload openapi version, got %#v", payload["openapi"])
+	}
+
+	info, ok := payload["info"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected fallback payload info object, got %T", payload["info"])
+	}
+	if info["title"] == "" || info["version"] == "" {
+		t.Fatalf("expected fallback payload info title/version, got %#v", info)
+	}
+
+	servers, ok := payload["servers"].([]interface{})
+	if !ok || len(servers) == 0 {
+		t.Fatalf("expected fallback payload servers list, got %T (%#v)", payload["servers"], payload["servers"])
+	}
+	firstServer, ok := servers[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected fallback payload first server object, got %T", servers[0])
+	}
+	if firstServer["url"] == "" {
+		t.Fatalf("expected fallback payload first server url, got %#v", firstServer)
 	}
 }
