@@ -546,7 +546,7 @@ func TestEngine_ConfigSuppressionSelectors_MalformedRejectsConfig(t *testing.T) 
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
 	}
 
-	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"node", "node:", "unknown:A"}}})
+	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"", "node", "node:", "unknown:A"}}})
 	if len(issues) != 0 {
 		t.Fatalf("expected malformed selectors to fail config validation and produce no issues, got %#v", issues)
 	}
