@@ -418,7 +418,6 @@ func TestOpenAPIDrift_SelectedFieldsStayInSync(t *testing.T) {
 	}
 }
 
-
 func TestServeSpec_AnalyzeResponseIncludesHelpSuggestionAndHintsSchemas(t *testing.T) {
 	spec := loadServedSpec(t)
 
@@ -664,5 +663,16 @@ func TestServeSpec_InternalMetricsEndpointsDocumented(t *testing.T) {
 	}
 	if deprecated, ok := lookup(t, spec, "paths", "/internal/metrics", "get", "deprecated").(bool); !ok || !deprecated {
 		t.Fatalf("expected /internal/metrics legacy alias to be deprecated")
+	}
+}
+
+func TestOpenAPISpec_ReturnsIndependentCopy(t *testing.T) {
+	specA := api.OpenAPISpec()
+	specB := api.OpenAPISpec()
+
+	specA["openapi"] = "mutated"
+
+	if specB["openapi"] != "3.0.0" {
+		t.Fatalf("expected second spec copy to remain unchanged, got %#v", specB["openapi"])
 	}
 }
