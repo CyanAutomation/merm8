@@ -110,6 +110,26 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			expectedHelpExplanation: "first line",
 		},
 		{
+			name:                    "unsupported gantt type maps to dedicated hint and help",
+			syntaxErr:               &parser.SyntaxError{Message: "No diagram type detected", Line: 1, Column: 1},
+			code:                    "gantt\n  title Release Plan",
+			expectedHintCode:        "unsupported_diagram_type_gantt",
+			expectedHintMessage:     "currently unavailable",
+			expectHelpSuggestion:    true,
+			expectedHelpTitle:       "gantt",
+			expectedHelpExplanation: "currently does not support",
+		},
+		{
+			name:                    "unsupported pie type maps to dedicated hint and help",
+			syntaxErr:               &parser.SyntaxError{Message: "No diagram type detected", Line: 1, Column: 1},
+			code:                    "pie\n  title Revenue",
+			expectedHintCode:        "unsupported_diagram_type_pie",
+			expectedHintMessage:     "currently unavailable",
+			expectHelpSuggestion:    true,
+			expectedHelpTitle:       "pie",
+			expectedHelpExplanation: "currently does not support",
+		},
+		{
 			name:                    "unterminated edge label maps to dedicated hint",
 			syntaxErr:               &parser.SyntaxError{Message: "Parse error on line 2", Line: 2, Column: 20},
 			code:                    "flowchart TD\n  Decision -->|No Retry",
@@ -171,6 +191,20 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 
 			assertHintCodePresent(t, resp, tt.expectedHintCode)
 			assertHintMessageContains(t, resp, tt.expectedHintCode, tt.expectedHintMessage)
+			if strings.HasPrefix(tt.expectedHintCode, "unsupported_diagram_type_") {
+				for _, rawHint := range hints {
+					hint := rawHint.(map[string]interface{})
+					if code, _ := hint["code"].(string); code == tt.expectedHintCode {
+						appliesTo, ok := hint["applies-to"].(map[string]interface{})
+						if !ok {
+							t.Fatalf("expected applies-to on %s hint, got %#v", tt.expectedHintCode, hint["applies-to"])
+						}
+						if line, ok := appliesTo["line"].(float64); !ok || line != 1 {
+							t.Fatalf("expected applies-to.line=1 on %s hint, got %#v", tt.expectedHintCode, appliesTo["line"])
+						}
+					}
+				}
+			}
 
 			helpSugg, ok := resp["help-suggestion"].(map[string]interface{})
 			if tt.expectHelpSuggestion {
