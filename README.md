@@ -176,12 +176,12 @@ All API JSON field names use **kebab-case** as the canonical contract for reques
 
 Canonical config format is `{"schema-version":"v1","rules":{...}}` and canonical key style is kebab-case.
 
-| Legacy input | Accepted since | Warn since | Remove in |
-|---|---|---|---|
-| `config.schema_version` | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
-| Unversioned nested config (`config.rules` without `schema-version`) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
-| Flat config (`config.{rule-id}`) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
-| Snake_case rule option keys (for example `suppression_selectors`) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
+| Legacy input                                                        | Accepted since | Warn since | Remove in                |
+| ------------------------------------------------------------------- | -------------- | ---------- | ------------------------ |
+| `config.schema_version`                                             | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
+| Unversioned nested config (`config.rules` without `schema-version`) | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
+| Flat config (`config.{rule-id}`)                                    | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
+| Snake_case rule option keys (for example `suppression_selectors`)   | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
 
 Phase-1 runtime signals include `Deprecation` + `Warning` headers, response `warnings`, and structured `meta.warnings` metadata.
 
@@ -200,7 +200,7 @@ Liveness-only endpoints for process-up checks. `GET /healthz` is the canonical p
 **Response**
 
 ```json
-{"status":"ok"}
+{ "status": "ok" }
 ```
 
 ### `GET /v1/ready` (canonical) and legacy alias `GET /ready`
@@ -210,13 +210,13 @@ Dependency/readiness-only endpoint (including parser runtime/script availability
 **Response (ready)**
 
 ```json
-{"status":"ready"}
+{ "status": "ready" }
 ```
 
 **Response (not ready)**
 
 ```json
-{"status":"not_ready","error":"..."}
+{ "status": "not_ready", "error": "..." }
 ```
 
 ### `GET /v1/version` (canonical) and legacy alias `GET /version`
@@ -226,7 +226,13 @@ Informational-only endpoint for app/build metadata (for example deploy version, 
 **Response (example)**
 
 ```json
-{"version":"1.2.3","build_commit":"abc1234","build_time":"2026-03-04T00:00:00Z","parser_version":"1.0.0","mermaid_version":"11.12.3"}
+{
+  "version": "1.2.3",
+  "build_commit": "abc1234",
+  "build_time": "2026-03-04T00:00:00Z",
+  "parser_version": "1.0.0",
+  "mermaid_version": "11.12.3"
+}
 ```
 
 ### `GET /v1/info` (canonical) and legacy alias `GET /info`
@@ -243,14 +249,26 @@ Service capability metadata endpoint. Uses kebab-case field names as canonical J
   "parser-timeout-seconds": 5,
   "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
   "lint-supported": ["flowchart"],
-  "supported-rules": ["max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"],
+  "supported-rules": [
+    "max-depth",
+    "max-fanout",
+    "no-cycles",
+    "no-disconnected-nodes",
+    "no-duplicate-node-ids"
+  ],
   "service_version": "1.2.3",
   "parser_version": "1.0.0",
   "mermaid_version": "11.12.3",
   "parser_timeout_seconds": 5,
   "parser_recognized": ["flowchart", "sequence", "class", "er", "state"],
   "lint_supported": ["flowchart"],
-  "supported_rules": ["max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"]
+  "supported_rules": [
+    "max-depth",
+    "max-fanout",
+    "no-cycles",
+    "no-disconnected-nodes",
+    "no-duplicate-node-ids"
+  ]
 }
 ```
 
@@ -357,12 +375,12 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 
 > Spelling note: `analyze` is canonical. The British-English aliases `/v1/analyse` and `/v1/analyse/raw` are temporary compatibility routes and emit deprecation `Warning` headers; migrate to `/v1/analyze*`.
 
-| HTTP status | `valid` | `syntax-error` | `issues` | `error` | when it occurs |
-|---|---:|---|---|---|---|
-| `200` | `true` | `null` | `[]` | `null` | Diagram parsed and linted successfully with no lint findings. |
-| `200` | `true` | `null` | Non-empty array | `null` | Diagram parsed and linted successfully, and one or more lint findings were produced. |
-| `200` | `false` | Populated object | `[]` | `null` | Mermaid parser reports a syntax failure. |
-| Non-`200` (`400`/`413`/`429`/`500`/`503`/`504`) | `false` | `null` | `[]` | Populated object | API-level failure (invalid request, limits, parser infrastructure, timeout, etc.). |
+| HTTP status                                     | `valid` | `syntax-error`   | `issues`        | `error`          | when it occurs                                                                       |
+| ----------------------------------------------- | ------: | ---------------- | --------------- | ---------------- | ------------------------------------------------------------------------------------ |
+| `200`                                           |  `true` | `null`           | `[]`            | `null`           | Diagram parsed and linted successfully with no lint findings.                        |
+| `200`                                           |  `true` | `null`           | Non-empty array | `null`           | Diagram parsed and linted successfully, and one or more lint findings were produced. |
+| `200`                                           | `false` | Populated object | `[]`            | `null`           | Mermaid parser reports a syntax failure.                                             |
+| Non-`200` (`400`/`413`/`429`/`500`/`503`/`504`) | `false` | `null`           | `[]`            | Populated object | API-level failure (invalid request, limits, parser infrastructure, timeout, etc.).   |
 
 `issues` is always present as an array (possibly empty). `syntax-error` and `error` are mutually exclusive.
 
@@ -563,13 +581,13 @@ readinessProbe:
 
 ### Security-related environment variables
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `PARSER_MAX_OLD_SPACE_MB` | `512` | Caps Node.js V8 old-space heap for parser subprocesses. |
-| `PARSER_CONCURRENCY_LIMIT` | `8` | Maximum concurrent parser invocations in the API process. |
-| `DEPLOYMENT_MODE` | `development` | Enables production-oriented defaults when set to `production`. |
-| `ANALYZE_RATE_LIMIT_PER_MINUTE` | `0` in development, `120` in production | Per-client fixed-window limit for `POST /analyze`. |
-| `ANALYZE_AUTH_TOKEN` | _unset_ | Required in production; bearer token required by auth middleware for `POST /analyze`. |
+| Variable                        | Default                                 | Purpose                                                                               |
+| ------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------- |
+| `PARSER_MAX_OLD_SPACE_MB`       | `512`                                   | Caps Node.js V8 old-space heap for parser subprocesses.                               |
+| `PARSER_CONCURRENCY_LIMIT`      | `8`                                     | Maximum concurrent parser invocations in the API process.                             |
+| `DEPLOYMENT_MODE`               | `development`                           | Enables production-oriented defaults when set to `production`.                        |
+| `ANALYZE_RATE_LIMIT_PER_MINUTE` | `0` in development, `120` in production | Per-client fixed-window limit for `POST /analyze`.                                    |
+| `ANALYZE_AUTH_TOKEN`            | _unset_                                 | Required in production; bearer token required by auth middleware for `POST /analyze`. |
 
 ## Rule System
 
@@ -600,11 +618,11 @@ Compatibility migration for existing plugins:
 
 ### Built-in Rules
 
-| Rule ID                  | Severity | Description                                          |
-|--------------------------|----------|------------------------------------------------------|
-| `no-duplicate-node-ids`  | error    | Each node ID must be unique within the diagram.      |
-| `no-disconnected-nodes`  | error    | Every node must participate in at least one edge.    |
-| `max-fanout`             | warning     | No node may have more outgoing edges than the limit. |
+| Rule ID                 | Severity | Description                                          |
+| ----------------------- | -------- | ---------------------------------------------------- |
+| `no-duplicate-node-ids` | error    | Each node ID must be unique within the diagram.      |
+| `no-disconnected-nodes` | error    | Every node must participate in at least one edge.    |
+| `max-fanout`            | warning  | No node may have more outgoing edges than the limit. |
 
 Severity values are canonicalized to `error`, `warning`, and `info`. The legacy `warn` value is still accepted in config and normalized to `warning`.
 
@@ -661,14 +679,14 @@ Evaluation for a single issue uses include/exclude matching:
 
 Truth-table style examples (`M+` = any include matched, `M-` = any exclude matched):
 
-| Selectors | M+ | M- | Suppressed? | Example |
-|---|---:|---:|---:|---|
-| `[]` | false | false | No | nothing configured |
-| `["rule:max-fanout"]` | true | false | Yes | hide `max-fanout` issues |
-| `["!rule:max-fanout"]` | false | true | No | negation-only never suppresses |
-| `["rule:max-fanout", "!node:A"]` | true | true | No | exclude overrides include |
-| `["node:team\:alpha"]` | true | false | Yes | escaped colon node ID |
-| `["rule:unknown-rule"]` | false | false | No | unknown rule ID value simply does not match |
+| Selectors                        |    M+ |    M- | Suppressed? | Example                                     |
+| -------------------------------- | ----: | ----: | ----------: | ------------------------------------------- |
+| `[]`                             | false | false |          No | nothing configured                          |
+| `["rule:max-fanout"]`            |  true | false |         Yes | hide `max-fanout` issues                    |
+| `["!rule:max-fanout"]`           | false |  true |          No | negation-only never suppresses              |
+| `["rule:max-fanout", "!node:A"]` |  true |  true |          No | exclude overrides include                   |
+| `["node:team\:alpha"]`           |  true | false |         Yes | escaped colon node ID                       |
+| `["rule:unknown-rule"]`          | false | false |          No | unknown rule ID value simply does not match |
 
 Common and edge-case examples:
 
@@ -822,14 +840,14 @@ The test suite uses two complementary approaches:
 - Timeout handling is validated by `TestParser_TimeoutCategory`, which uses a controlled hanging parser script.
 - Results still depend on the Mermaid parser version and Node.js runtime available in the test environment.
 
-| Component | Tests | Status |
-|-----------|-------|--------|
-| Rules (no-duplicate-node-ids) | ✅ | Complete |
-| Rules (no-disconnected-nodes) | ✅ | Complete |
-| Rules (max-fanout) | ✅ | Complete |
-| Engine | ✅ | Complete |
-| Handler (API) | ✅ | Enhanced |
-| Parser (subprocess) | ✅ | Comprehensive |
+| Component                     | Tests | Status        |
+| ----------------------------- | ----- | ------------- |
+| Rules (no-duplicate-node-ids) | ✅    | Complete      |
+| Rules (no-disconnected-nodes) | ✅    | Complete      |
+| Rules (max-fanout)            | ✅    | Complete      |
+| Engine                        | ✅    | Complete      |
+| Handler (API)                 | ✅    | Enhanced      |
+| Parser (subprocess)           | ✅    | Comprehensive |
 
 ---
 
@@ -870,16 +888,16 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Environment Variables
 
-| Variable        | Default                          | Description                         |
-|-----------------|----------------------------------|-------------------------------------|
-| `PORT`          | `8080`                           | TCP port the HTTP server listens on |
-| `PARSER_SCRIPT` | `/app/parser-node/parse.mjs`     | Path to the Node.js parser script   |
-| `PARSER_TIMEOUT_SECONDS` | `5`                              | Parser timeout in seconds (1–60); configurable for complex diagrams |
-| `PARSER_CONCURRENCY_LIMIT` | `8`                              | Max in-flight parser subprocesses; excess requests get 503 |
-| `PARSER_MAX_OLD_SPACE_MB` | `512`                            | Node.js V8 old-space heap size in MB |
-| `ANALYZE_RATE_LIMIT_PER_MINUTE` | `120`                           | Rate limit for `/analyze` endpoint (0 = unlimited) |
-| `DEPLOYMENT_MODE` | `development`                    | `production` or `development`; controls rate limiting and auth |
-| `ANALYZE_AUTH_ENABLED` | `false`                          | Enable bearer token authentication on `/analyze` |
+| Variable                        | Default                      | Description                                                         |
+| ------------------------------- | ---------------------------- | ------------------------------------------------------------------- |
+| `PORT`                          | `8080`                       | TCP port the HTTP server listens on                                 |
+| `PARSER_SCRIPT`                 | `/app/parser-node/parse.mjs` | Path to the Node.js parser script                                   |
+| `PARSER_TIMEOUT_SECONDS`        | `5`                          | Parser timeout in seconds (1–60); configurable for complex diagrams |
+| `PARSER_CONCURRENCY_LIMIT`      | `8`                          | Max in-flight parser subprocesses; excess requests get 503          |
+| `PARSER_MAX_OLD_SPACE_MB`       | `512`                        | Node.js V8 old-space heap size in MB                                |
+| `ANALYZE_RATE_LIMIT_PER_MINUTE` | `120`                        | Rate limit for `/analyze` endpoint (0 = unlimited)                  |
+| `DEPLOYMENT_MODE`               | `development`                | `production` or `development`; controls rate limiting and auth      |
+| `ANALYZE_AUTH_ENABLED`          | `false`                      | Enable bearer token authentication on `/analyze`                    |
 
 ---
 

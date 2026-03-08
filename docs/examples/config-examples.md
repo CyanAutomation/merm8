@@ -24,12 +24,14 @@ This guide demonstrates the three config formats supported by merm8: flat (legac
 ```
 
 **Field Breakdown:**
+
 - `schema-version`: Set to `"v1"` — required for canonical format
 - `rules`: Object mapping rule IDs to their configurations
   - Rule ID format: `core/<rule-name>` for built-in rules
   - Each rule config is an object with rule-specific options
 
 **Advantages:**
+
 - ✅ Clear versioning path for future stability
 - ✅ Strict validation (no extraneous fields allowed)
 - ✅ Only format accepted when strict mode is enabled
@@ -55,6 +57,7 @@ This guide demonstrates the three config formats supported by merm8: flat (legac
 ```
 
 **Difference from Canonical:**
+
 - Identical structure — nested format is just a variant of canonical.
 - Will emit deprecation warning if `config.rules` is present but `config.schema-version` is absent.
 
@@ -80,10 +83,12 @@ Content-Type: application/json
 ```
 
 **Structure:**
+
 - Rule configs are direct properties under `config` (not nested under `config.rules`)
 - No `schema-version` field
 
 **Deprecation Timeline:**
+
 - v1.0.0 (current): Supported with warnings
 - v1.1.0 (Q1 2026): Still supported with warnings
 - v1.2.0 (Q2 2026): **Removed**
@@ -95,24 +100,26 @@ Content-Type: application/json
 ### From Flat to Canonical
 
 **Before:**
+
 ```json
 {
   "code": "graph TD\n  A-->B",
   "config": {
-    "max-fanout": {"limit": 3},
+    "max-fanout": { "limit": 3 },
     "no-cycles": {}
   }
 }
 ```
 
 **After:**
+
 ```json
 {
   "code": "graph TD\n  A-->B",
   "config": {
     "schema-version": "v1",
     "rules": {
-      "core/max-fanout": {"limit": 3},
+      "core/max-fanout": { "limit": 3 },
       "core/no-cycles": {}
     }
   }
@@ -120,6 +127,7 @@ Content-Type: application/json
 ```
 
 **Changes:**
+
 1. Add `schema-version: "v1"`
 2. Wrap rules under `rules` object
 3. Prefix rule IDs with `core/`
@@ -127,6 +135,7 @@ Content-Type: application/json
 ### From snake_case to kebab-case
 
 **Before (v1.0.0 – v1.1.0):**
+
 ```json
 {
   "config": {
@@ -141,6 +150,7 @@ Content-Type: application/json
 ```
 
 **After (v1.0.0+):**
+
 ```json
 {
   "config": {
@@ -155,6 +165,7 @@ Content-Type: application/json
 ```
 
 **Timeline:**
+
 - v1.0.0 (current): Both accepted (snake_case generates warnings)
 - v1.1.0 (Q1 2026): snake_case removed
 - v1.2.0 (Q2 2026): Only kebab-case accepted
@@ -164,6 +175,7 @@ Content-Type: application/json
 ## Rule Configuration Reference
 
 ### no-duplicate-node-ids
+
 No configuration options — rule has no limits or settings.
 
 ```json
@@ -171,6 +183,7 @@ No configuration options — rule has no limits or settings.
 ```
 
 ### no-disconnected-nodes
+
 No built-in options, supports suppression selectors.
 
 ```json
@@ -180,6 +193,7 @@ No built-in options, supports suppression selectors.
 ```
 
 ### max-fanout
+
 Configurable outgoing edge limit per node.
 
 ```json
@@ -192,6 +206,7 @@ Configurable outgoing edge limit per node.
 **Default:** `limit: 10`
 
 ### max-depth
+
 Configurable graph nesting depth limit.
 
 ```json
@@ -204,6 +219,7 @@ Configurable graph nesting depth limit.
 **Default:** `limit: 10`
 
 ### no-cycles
+
 No configuration options — rule detects all circular dependencies.
 
 ```json
@@ -245,6 +261,7 @@ No configuration options — rule detects all circular dependencies.
 ## Error Handling
 
 ### Invalid schema-version
+
 ```json
 {
   "config": {
@@ -255,6 +272,7 @@ No configuration options — rule detects all circular dependencies.
 ```
 
 **Response (HTTP 400):**
+
 ```json
 {
   "valid": false,
@@ -269,6 +287,7 @@ No configuration options — rule detects all circular dependencies.
 ```
 
 ### Unknown rule
+
 ```json
 {
   "config": {
@@ -281,6 +300,7 @@ No configuration options — rule detects all circular dependencies.
 ```
 
 **Response (HTTP 400):**
+
 ```json
 {
   "valid": false,
@@ -288,13 +308,20 @@ No configuration options — rule detects all circular dependencies.
     "code": "unknown_rule",
     "message": "unknown rule: core/unknown-rule",
     "details": {
-      "supported": ["core/max-depth", "core/max-fanout", "core/no-cycles", "core/no-disconnected-nodes", "core/no-duplicate-node-ids"]
+      "supported": [
+        "core/max-depth",
+        "core/max-fanout",
+        "core/no-cycles",
+        "core/no-disconnected-nodes",
+        "core/no-duplicate-node-ids"
+      ]
     }
   }
 }
 ```
 
 ### Missing required field
+
 ```json
 {
   "config": {
@@ -304,6 +331,7 @@ No configuration options — rule detects all circular dependencies.
 ```
 
 **Response (HTTP 400):**
+
 ```json
 {
   "valid": false,

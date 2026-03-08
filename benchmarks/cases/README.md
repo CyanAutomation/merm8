@@ -23,6 +23,7 @@ cases/
 Diagrams that **should pass linting** with no rule violations.
 
 **Examples:**
+
 - `simple-linear.mmd` — Three-node linear flow
 - `complex-flow.mmd` — Decision tree with branches
 - `parallel-paths.mmd` — Multiple paths converging
@@ -35,6 +36,7 @@ Diagrams that **should pass linting** with no rule violations.
 Diagrams with **intentional rule violations**. Each fixture triggers one or more specific violations.
 
 **Examples:**
+
 - `simple-cycle.mmd` — Two-node circular dependency (no-cycles violation)
 - `disconnected-node.mmd` — Isolated node not connected to main flow (no-disconnected-nodes violation)
 - `duplicate-nodes.mmd` — Repeated node ID (no-duplicate-node-ids violation)
@@ -47,6 +49,7 @@ Diagrams with **intentional rule violations**. Each fixture triggers one or more
 **Boundary conditions** and **corner cases**. May be valid or violations, but test important limits.
 
 **Examples:**
+
 - `single-node.mmd` — Single node with no edges (special case)
 - `max-depth-at-limit.mmd` — Tree reaching exactly the depth limit
 - `fanout-at-limit.mmd` — Hub with exactly the fanout limit
@@ -81,12 +84,13 @@ graph TD
     A["Node A"]
     B["Node B"]
     A --> B
-    
+
     %% @rule: no-cycles
     %% This fixture tests the no-cycles rule
 ```
 
 **Supported annotations:**
+
 - `%% @rule: rule-id` — Specifies which rule this case tests
 - `%% @rule: *` — Tests all rules
 
@@ -94,14 +98,14 @@ graph TD
 
 ### Current Coverage (v0.1.0)
 
-| Rule | Valid | Violations | Edge Cases | Total |
-|------|-------|-----------|-----------|-------|
-| no-duplicate-node-ids | 2 | 2 | 1 | 5 |
-| no-disconnected-nodes | 2 | 2 | 1 | 5 |
-| max-fanout | 2 | 2 | 1 | 5 |
-| no-cycles | 2 | 2 | 1 | 5 |
-| max-depth | 2 | 2 | 1 | 5 |
-| **Total** | **10** | **10** | **5** | **25** |
+| Rule                  | Valid  | Violations | Edge Cases | Total  |
+| --------------------- | ------ | ---------- | ---------- | ------ |
+| no-duplicate-node-ids | 2      | 2          | 1          | 5      |
+| no-disconnected-nodes | 2      | 2          | 1          | 5      |
+| max-fanout            | 2      | 2          | 1          | 5      |
+| no-cycles             | 2      | 2          | 1          | 5      |
+| max-depth             | 2      | 2          | 1          | 5      |
+| **Total**             | **10** | **10**     | **5**      | **25** |
 
 ### Target Coverage (v0.2.0+)
 
@@ -115,6 +119,7 @@ graph TD
 For detailed instructions on authoring and adding test cases, see [../CONTRIBUTING.md](../CONTRIBUTING.md).
 
 **Quick steps:**
+
 1. Create `.mmd` file in appropriate directory: `cases/{type}/{category}/{name}.mmd`
 2. Add `%% @rule: rule-id` annotation
 3. Run benchmarks: `make benchmark`
@@ -133,6 +138,7 @@ For detailed instructions on authoring and adding test cases, see [../CONTRIBUTI
 ### Anti-Patterns
 
 ❌ **Large, complex diagrams testing multiple rules simultaneously**
+
 ```mermaid
 graph TD
     A --> B --> C --> D --> E --> ...
@@ -140,6 +146,7 @@ graph TD
 ```
 
 ✅ **Small, focused diagrams testing one rule**
+
 ```mermaid
 graph TD
     A["Task A"]
@@ -161,6 +168,7 @@ Currently, rules are only implemented for **flowchart** diagrams. Placeholder di
 ## Mermaid Syntax Resources
 
 For reference on valid Mermaid syntax:
+
 - [Mermaid.js Documentation](https://mermaid.js.org/)
 - [Flowchart Syntax](https://mermaid.js.org/syntax/flowchart.html)
 - [Official Examples](https://mermaid.live/)

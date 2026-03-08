@@ -3,11 +3,11 @@ name: Semantic Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., v1.0.1)'
+        description: "Version to release (e.g., v1.0.1)"
         required: true
         type: string
 
@@ -141,7 +141,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Update Version References
     needs: create-release
-    if: ${{ !contains(github.event.inputs.version || github.ref, '-') }}  # Skip for pre-releases
+    if: ${{ !contains(github.event.inputs.version || github.ref, '-') }} # Skip for pre-releases
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

@@ -7,21 +7,25 @@ Complete guide to merm8 documentation, organized by use case.
 ## Quick Navigation
 
 ### For New Users
+
 1. Start here: [API Integration Guide](api-integration-guide.md) - Complete integration walkthrough
 2. Try examples: [Complete Request/Response Examples](complete-request-response-examples.md) - Real payloads and responses
 3. Get help: [Troubleshooting & FAQ](troubleshooting-faq.md) - Common issues and solutions
 
 ### For Existing Users (Upgrading)
+
 1. Read: [Migration Guide](migration-guide.md) - Upgrade your config format
 2. Check: [API Integration Guide](api-integration-guide.md#api-version-negotiation) - Version negotiation
 3. Update: [Configuration Examples](examples/config-examples.md) - Updated config patterns
 
 ### For Operators (Running merm8)
+
 1. Setup: [Parser Tuning Guide](parser-tuning.md) - Performance optimization
 2. Monitor: [Metrics & Observability](metrics-observability.md) - Health checks and metrics
 3. Integrate: [API Integration Guide](api-integration-guide.md#monitoring--observability) - Monitoring setup
 
 ### For CI/CD Integration
+
 1. Use: [SARIF Output Examples](examples/sarif-output.md) - Security tool integration
 2. Deploy: [API Integration Guide](api-integration-guide.md#sarif-output-format) - GitHub Actions setup
 3. Configure: [Parser Tuning Guide](parser-tuning.md) - Optimize for pipelines
@@ -33,7 +37,9 @@ Complete guide to merm8 documentation, organized by use case.
 ### Core Guides
 
 #### [API Integration Guide](api-integration-guide.md) ⭐ **Start Here**
+
 Complete integration guide covering:
+
 - Quick start with curl examples
 - API version negotiation and headers
 - Request/response patterns
@@ -50,7 +56,9 @@ Complete integration guide covering:
 ---
 
 #### [Complete Request/Response Examples](complete-request-response-examples.md)
+
 11 real-world scenarios with actual JSON:
+
 1. Minimal valid request
 2. Single rule validation
 3. Multiple rules with config
@@ -71,7 +79,9 @@ Each example includes relevant request and response headers.
 ---
 
 #### [Migration Guide](migration-guide.md)
+
 Step-by-step guide to migrate from legacy configs:
+
 - Deprecation timeline (sunset dates)
 - 5 legacy formats still accepted
 - 3 before/after conversion examples
@@ -86,7 +96,9 @@ Step-by-step guide to migrate from legacy configs:
 ---
 
 #### [Troubleshooting & FAQ](troubleshooting-faq.md)
+
 Solutions for common issues:
+
 - HTTP status code reference
 - 6 common issues with solutions
 - 10 frequently asked questions
@@ -101,7 +113,9 @@ Solutions for common issues:
 ### Configuration & Rules
 
 #### [Configuration Examples](examples/config-examples.md)
+
 Configuration format guide:
+
 - Canonical v1 format (recommended)
 - Nested format (deprecated)
 - Flat format (deprecated)
@@ -113,7 +127,9 @@ Configuration format guide:
 ---
 
 #### [Rule Fix Examples](examples/rule-fixes.md)
+
 Before/after examples for each rule:
+
 - `max-fanout` - Node outgoing edge limits
 - `max-depth` - Graph depth constraints
 - `no-cycles` - Cycle detection
@@ -122,6 +138,7 @@ Before/after examples for each rule:
 - `rule-id-namespaces` - Namespacing patterns
 
 Each rule shows:
+
 - Violation example
 - Issue detection
 - Multiple fix strategies
@@ -132,7 +149,9 @@ Each rule shows:
 ---
 
 #### [Rule Suppression Examples](examples/rule-suppressions.md)
+
 Suppression strategies:
+
 - Node-level suppression
 - Subgraph-level suppression (experimental)
 - Global rule suppression (comment-based)
@@ -147,7 +166,9 @@ Suppression strategies:
 ### Operations & Performance
 
 #### [Parser Tuning Guide](parser-tuning.md)
+
 Performance optimization guide:
+
 - Quick reference table by diagram size
 - Key parameters explained
 - Environment variable configuration
@@ -161,7 +182,9 @@ Performance optimization guide:
 ---
 
 #### [Metrics & Observability](metrics-observability.md)
+
 Monitoring and observability:
+
 - Prometheus metrics reference
 - Health check endpoints
 - Metrics collection patterns
@@ -176,7 +199,9 @@ Monitoring and observability:
 ### Diagram Design
 
 #### [Diagram Templates](examples/diagram-templates.md)
+
 Ready-to-use diagram templates:
+
 - Basic linear flows
 - Parallel processes
 - Hierarchical systems
@@ -189,7 +214,9 @@ Ready-to-use diagram templates:
 ---
 
 #### [Diagram Type Support](diagram-type-support.md)
+
 Supported diagram types and features:
+
 - List of supported types
 - Linting capability per type
 - Feature availability matrix
@@ -202,7 +229,9 @@ Supported diagram types and features:
 ### Advanced Topics
 
 #### [SARIF Output Examples](examples/sarif-output.md)
+
 Security Analysis Results Format (SARIF 2.1.0):
+
 - Overview of SARIF format
 - 3 detailed SARIF response examples
 - GitHub security integration
@@ -215,7 +244,9 @@ Security Analysis Results Format (SARIF 2.1.0):
 ---
 
 #### [Rule ID Namespaces](rule-id-namespaces.md)
+
 Rule ID organization and namespacing:
+
 - Namespace structure (`core/`, `custom/`, etc.)
 - Built-in rule IDs by namespace
 - Future extensibility patterns
@@ -227,7 +258,9 @@ Rule ID organization and namespacing:
 ---
 
 #### [Subgraph Namespaces](subgraph-namespaces.md) (Experimental)
+
 Subgraph identification patterns:
+
 - How subgraphs are identified
 - Scope and limitations
 - Future compatibility notes
@@ -240,6 +273,7 @@ Subgraph identification patterns:
 ## Use Case Guides
 
 ### Getting Started (Day 1)
+
 1. Read: [API Integration Guide](api-integration-guide.md) - Quick start section
 2. Try: [Complete Request/Response Examples](complete-request-response-examples.md) - Example 1
 3. Build: Make your first request
@@ -250,6 +284,7 @@ Subgraph identification patterns:
 ---
 
 ### Building Your First Integration (Day 1-2)
+
 1. Read: [API Integration Guide](api-integration-guide.md) - Full guide
 2. Study: [Complete Request/Response Examples](complete-request-response-examples.md) - All examples
 3. Configure: [Configuration Examples](examples/config-examples.md)
@@ -261,6 +296,7 @@ Subgraph identification patterns:
 ---
 
 ### Migrating Existing Integration (Day 1)
+
 1. Check: [Migration Guide](migration-guide.md) - Identify your legacy format
 2. Convert: Use the provided migration script
 3. Validate: [Complete Request/Response Examples](complete-request-response-examples.md) - Example 9 (deprecation)
@@ -272,6 +308,7 @@ Subgraph identification patterns:
 ---
 
 ### Setting Up Monitoring (Day 1)
+
 1. Configure: [Metrics & Observability](metrics-observability.md)
 2. Verify health: [API Integration Guide](api-integration-guide.md#health-checks) - Health check endpoints
 3. Setup dashboards: [Metrics & Observability](metrics-observability.md) - Dashboard examples
@@ -282,6 +319,7 @@ Subgraph identification patterns:
 ---
 
 ### CI/CD Integration (Day 1-2)
+
 1. Read: [SARIF Output Examples](examples/sarif-output.md)
 2. Setup: [API Integration Guide](api-integration-guide.md#sarif-output-format) - GitHub Actions example
 3. Configure: [Parser Tuning Guide](parser-tuning.md) - Performance for pipelines
@@ -293,6 +331,7 @@ Subgraph identification patterns:
 ---
 
 ### Optimizing Performance (Day 2+)
+
 1. Baseline: [Metrics & Observability](metrics-observability.md) - Collect metrics
 2. Tune: [Parser Tuning Guide](parser-tuning.md) - All parameters
 3. Test: [Parser Tuning Guide](parser-tuning.md) - Benchmarking
@@ -306,6 +345,7 @@ Subgraph identification patterns:
 ## Documentation Format Guide
 
 All documentation uses:
+
 - **Headers** (H1-H3) for structure
 - **Code blocks** with language tags for syntax highlighting
 - **Tables** for quick reference
@@ -313,12 +353,14 @@ All documentation uses:
 - **Links** between related docs
 
 ### Code Examples
+
 - Language specified: `json`, `bash`, `python`, `go`, `javascript`
 - Marked as correct (✅) or incorrect (❌)
 - Real-world patterns prioritized
 - Comments explain non-obvious parts
 
 ### Response Examples
+
 - Actual HTTP headers shown
 - Real JSON responses
 - Common status codes covered
@@ -341,24 +383,25 @@ Having issues with the docs? Here's how to help:
 
 Last updated: **March 2026**
 
-| Document | Last Updated | Status |
-|----------|--------------|--------|
-| [API Integration Guide](api-integration-guide.md) | 2026-03 | ✅ Current |
-| [Complete Request/Response Examples](complete-request-response-examples.md) | 2026-03 | ✅ Current |
-| [Migration Guide](migration-guide.md) | 2026-03 | ✅ Current |
-| [Troubleshooting & FAQ](troubleshooting-faq.md) | 2026-03 | ✅ Current |
-| [Parser Tuning Guide](parser-tuning.md) | 2026-03 | ✅ Current |
-| [Metrics & Observability](metrics-observability.md) | 2026-03 | ✅ Current |
-| [Configuration Examples](examples/config-examples.md) | 2026-03 | ✅ Current |
-| [SARIF Output Examples](examples/sarif-output.md) | 2026-03 | ✅ Current |
-| [Rule Suppression Examples](examples/rule-suppressions.md) | 2026-03 | ✅ Current |
-| [Diagram Templates](examples/diagram-templates.md) | 2026-03 | ✅ Current |
+| Document                                                                    | Last Updated | Status     |
+| --------------------------------------------------------------------------- | ------------ | ---------- |
+| [API Integration Guide](api-integration-guide.md)                           | 2026-03      | ✅ Current |
+| [Complete Request/Response Examples](complete-request-response-examples.md) | 2026-03      | ✅ Current |
+| [Migration Guide](migration-guide.md)                                       | 2026-03      | ✅ Current |
+| [Troubleshooting & FAQ](troubleshooting-faq.md)                             | 2026-03      | ✅ Current |
+| [Parser Tuning Guide](parser-tuning.md)                                     | 2026-03      | ✅ Current |
+| [Metrics & Observability](metrics-observability.md)                         | 2026-03      | ✅ Current |
+| [Configuration Examples](examples/config-examples.md)                       | 2026-03      | ✅ Current |
+| [SARIF Output Examples](examples/sarif-output.md)                           | 2026-03      | ✅ Current |
+| [Rule Suppression Examples](examples/rule-suppressions.md)                  | 2026-03      | ✅ Current |
+| [Diagram Templates](examples/diagram-templates.md)                          | 2026-03      | ✅ Current |
 
 ---
 
 ## Search Tips
 
 ### By Topic
+
 - **API**: [API Integration Guide](api-integration-guide.md), [Complete Request/Response Examples](complete-request-response-examples.md)
 - **Config**: [Configuration Examples](examples/config-examples.md), [Migration Guide](migration-guide.md)
 - **Rules**: [Rule Fix Examples](examples/rule-fixes.md), [Rule Suppression Examples](examples/rule-suppressions.md)
@@ -366,6 +409,7 @@ Last updated: **March 2026**
 - **Errors**: [Troubleshooting & FAQ](troubleshooting-faq.md), [Complete Request/Response Examples](complete-request-response-examples.md)
 
 ### By Audience
+
 - **Developers**: [API Integration Guide](api-integration-guide.md), [Complete Request/Response Examples](complete-request-response-examples.md)
 - **Operators**: [Parser Tuning Guide](parser-tuning.md), [Metrics & Observability](metrics-observability.md)
 - **DevOps**: [Parser Tuning Guide](parser-tuning.md), [SARIF Output Examples](examples/sarif-output.md)
@@ -381,4 +425,3 @@ Last updated: **March 2026**
 - **GitHub**: https://github.com/CyanAutomation/merm8 - Source code and issues
 
 ---
-

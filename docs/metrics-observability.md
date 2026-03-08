@@ -12,10 +12,10 @@ Versioned aliases are also available:
 
 ## Endpoint audience and access model
 
-| Endpoint | Format | Intended audience | Access control in app | Recommended exposure |
-|---|---|---|---|---|
-| `/metrics` | Prometheus text exposition | SRE / platform monitoring systems (Prometheus, Grafana Agent, etc.) | No endpoint-specific auth in app; only `POST /analyze` auth/rate-limit middleware is enforced by default | May be scraped from shared monitoring networks; prefer network policy + ingress allow-list |
-| `/internal/metrics` | JSON | Operators and developers troubleshooting analyze/parser outcomes | No endpoint-specific auth in app; same global behavior as other non-analyze GET endpoints | Treat as internal-only endpoint; restrict at ingress/load balancer/service mesh |
+| Endpoint            | Format                     | Intended audience                                                   | Access control in app                                                                                    | Recommended exposure                                                                       |
+| ------------------- | -------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `/metrics`          | Prometheus text exposition | SRE / platform monitoring systems (Prometheus, Grafana Agent, etc.) | No endpoint-specific auth in app; only `POST /analyze` auth/rate-limit middleware is enforced by default | May be scraped from shared monitoring networks; prefer network policy + ingress allow-list |
+| `/internal/metrics` | JSON                       | Operators and developers troubleshooting analyze/parser outcomes    | No endpoint-specific auth in app; same global behavior as other non-analyze GET endpoints                | Treat as internal-only endpoint; restrict at ingress/load balancer/service mesh            |
 
 > Note: when `DEPLOYMENT_MODE=production`, built-in bearer auth applies to `POST /analyze` paths, not to metrics endpoints.
 
@@ -23,12 +23,12 @@ Versioned aliases are also available:
 
 ### `/metrics` (Prometheus)
 
-| Metric family | Type | Labels | Unit | Cardinality notes |
-|---|---|---|---|---|
-| `request_total` | Counter | `route`, `method`, `status` | requests | `route` is bounded to known route patterns + `unknown`; `method` is small fixed set; `status` depends on handlers/middleware and should stay low tens |
-| `request_duration_seconds` | Histogram | `route`, `method` | seconds | Same bounded `route` and `method` dimensions; bucket count uses Prometheus default buckets |
-| `analyze_requests_total` | Counter | `outcome` | requests | `outcome` is bounded enum: `syntax_error`, `lint_success`, `parser_timeout`, `parser_subprocess_error`, `parser_decode_error`, `parser_contract_violation`, `internal_error` |
-| `parser_duration_seconds` | Histogram | `outcome` | seconds | Same bounded `outcome` enum as above; default buckets |
+| Metric family              | Type      | Labels                      | Unit     | Cardinality notes                                                                                                                                                            |
+| -------------------------- | --------- | --------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `request_total`            | Counter   | `route`, `method`, `status` | requests | `route` is bounded to known route patterns + `unknown`; `method` is small fixed set; `status` depends on handlers/middleware and should stay low tens                        |
+| `request_duration_seconds` | Histogram | `route`, `method`           | seconds  | Same bounded `route` and `method` dimensions; bucket count uses Prometheus default buckets                                                                                   |
+| `analyze_requests_total`   | Counter   | `outcome`                   | requests | `outcome` is bounded enum: `syntax_error`, `lint_success`, `parser_timeout`, `parser_subprocess_error`, `parser_decode_error`, `parser_contract_violation`, `internal_error` |
+| `parser_duration_seconds`  | Histogram | `outcome`                   | seconds  | Same bounded `outcome` enum as above; default buckets                                                                                                                        |
 
 ### `/internal/metrics` (JSON payload)
 
@@ -100,7 +100,7 @@ scrape_configs:
       - source_labels: [__address__]
         regex: '([^:]+)(?::\\d+)?'
         target_label: instance
-        replacement: '$1'
+        replacement: "$1"
 
       # Copy service/env from target labels into canonical labels.
       - source_labels: [service]
@@ -151,7 +151,7 @@ Import `prometheus-alerts.yaml` into your Prometheus config:
 
 ```yaml
 rule_files:
-  - 'prometheus-alerts.yaml'  # Path relative to your prometheus.yml
+  - "prometheus-alerts.yaml" # Path relative to your prometheus.yml
 ```
 
 Then configure Alertmanager to route alerts appropriately (e.g., to Slack, PagerDuty, etc.).
@@ -166,7 +166,6 @@ Default thresholds are conservative for production stability:
 - **Service degradation:** 5% — adjust to match your error budget
 
 For isolated dev/staging deployments, disable alerting or increase all thresholds by 5–10x.
-
 
 ## Benchmark artifact quality signal
 

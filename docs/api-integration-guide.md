@@ -35,9 +35,9 @@ EOF
 
 ### Supported Versions
 
-| API Version | Released | Status | Support Until |
-|---|---|---|---|
-| 1.0 | 2026-03-06 | Current | 2026-12-31 (planned) |
+| API Version | Released   | Status  | Support Until        |
+| ----------- | ---------- | ------- | -------------------- |
+| 1.0         | 2026-03-06 | Current | 2026-12-31 (planned) |
 
 ### Version Negotiation Headers
 
@@ -55,16 +55,16 @@ curl -H "Accept-Version: 1.0" http://localhost:8080/v1/analyze
 
 ```javascript
 // JavaScript fetch
-const response = await fetch('http://localhost:8080/v1/analyze', {
-  method: 'POST',
+const response = await fetch("http://localhost:8080/v1/analyze", {
+  method: "POST",
   headers: {
-    'Content-Type': 'application/json',
-    'Accept-Version': '1.0'
+    "Content-Type": "application/json",
+    "Accept-Version": "1.0",
   },
-  body: JSON.stringify(analyzePayload)
+  body: JSON.stringify(analyzePayload),
 });
 
-const apiVersion = response.headers.get('Content-Version');
+const apiVersion = response.headers.get("Content-Version");
 console.log(`Using API version: ${apiVersion}`);
 ```
 
@@ -172,10 +172,10 @@ X-RateLimit-Reset: 1678123456
 ```javascript
 async function analyzeWithRateLimit(diagram, retries = 3) {
   for (let i = 0; i < retries; i++) {
-    const response = await fetch('/v1/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(diagram)
+    const response = await fetch("/v1/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(diagram),
     });
 
     if (response.status === 200) {
@@ -183,11 +183,11 @@ async function analyzeWithRateLimit(diagram, retries = 3) {
     }
 
     if (response.status === 429) {
-      const resetTime = parseInt(response.headers.get('X-RateLimit-Reset'));
-      const waitMs = (resetTime * 1000) - Date.now();
-      
+      const resetTime = parseInt(response.headers.get("X-RateLimit-Reset"));
+      const waitMs = resetTime * 1000 - Date.now();
+
       console.log(`Rate limited. Waiting ${waitMs}ms...`);
-      await new Promise(r => setTimeout(r, waitMs + 100));
+      await new Promise((r) => setTimeout(r, waitMs + 100));
       continue;
     }
 
@@ -254,16 +254,16 @@ curl -X OPTIONS http://localhost:8080/v1/analyze \
 
 ```javascript
 // JavaScript fetch from https://example.com calling API at https://api.example.com
-const response = await fetch('https://api.example.com/v1/analyze', {
-  method: 'POST',
+const response = await fetch("https://api.example.com/v1/analyze", {
+  method: "POST",
   headers: {
-    'Content-Type': 'application/json',
-    'Accept-Version': '1.0'
+    "Content-Type": "application/json",
+    "Accept-Version": "1.0",
   },
   body: JSON.stringify({
-    code: 'graph TD; A-->B',
-    config: { 'schema-version': 'v1', rules: {} }
-  })
+    code: "graph TD; A-->B",
+    config: { "schema-version": "v1", rules: {} },
+  }),
 });
 
 const result = await response.json();
@@ -555,13 +555,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Analyze diagrams
         run: |
           docker run -v ${{ github.workspace }}:/workspace \
             merm8:latest \
             /workspace/diagrams/*.mmd > sarif-output.json
-      
+
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v2
         with:
@@ -585,35 +585,35 @@ import (
 
 func analyzeWithRetry(diagram []byte, maxRetries int) ([]byte, error) {
   var lastErr error
-  
+
   for attempt := 0; attempt < maxRetries; attempt++ {
     resp, err := http.Post(
       "http://localhost:8080/v1/analyze",
       "application/json",
       bytes.NewReader(diagram),
     )
-    
+
     if err == nil && resp.StatusCode == 200 {
       return io.ReadAll(resp.Body)
     }
-    
+
     if err == nil && resp.StatusCode == 503 {
       // Server busy - use Retry-After if available
       retryAfter := resp.Header.Get("Retry-After")
       defaultWait := math.Pow(2, float64(attempt)) * 1000
-      
+
       waitMs := int64(defaultWait)
       if retryAfter != "" {
         waitMs = parseInt(retryAfter) * 1000
       }
-      
+
       time.Sleep(time.Duration(waitMs) * time.Millisecond)
       continue
     }
-    
+
     lastErr = err
   }
-  
+
   return nil, lastErr
 }
 ```
@@ -637,29 +637,29 @@ class Merm8Client {
         this.circuitOpen = false;
         this.failures = 0;
       } else {
-        throw new Error('Circuit breaker open');
+        throw new Error("Circuit breaker open");
       }
     }
 
     try {
       const response = await fetch(`${this.baseUrl}/v1/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(diagram)
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(diagram),
       });
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      
+
       this.failures = 0;
       return await response.json();
     } catch (error) {
       this.failures++;
       this.lastFailureTime = Date.now();
-      
+
       if (this.failures >= this.failureThreshold) {
         this.circuitOpen = true;
       }
-      
+
       throw error;
     }
   }
@@ -678,16 +678,16 @@ const resultCache = new Map();
 
 async function analyzeWithCache(diagram) {
   const cacheKey = JSON.stringify(diagram);
-  
+
   if (resultCache.has(cacheKey)) {
     return resultCache.get(cacheKey);
   }
-  
-  const result = await fetch('/v1/analyze', {
-    method: 'POST',
-    body: JSON.stringify(diagram)
-  }).then(r => r.json());
-  
+
+  const result = await fetch("/v1/analyze", {
+    method: "POST",
+    body: JSON.stringify(diagram),
+  }).then((r) => r.json());
+
   resultCache.set(cacheKey, result);
   return result;
 }

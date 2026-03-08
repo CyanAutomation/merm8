@@ -105,9 +105,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "total"
-        ],
+        "required": ["total"],
         "type": "object"
       },
       "AnalyzeRequest": {
@@ -126,9 +124,7 @@
                   "enabled": true,
                   "limit": 3,
                   "severity": "error",
-                  "suppression-selectors": [
-                    "node:A"
-                  ]
+                  "suppression-selectors": ["node:A"]
                 },
                 "no-disconnected-nodes": {
                   "enabled": false,
@@ -159,9 +155,7 @@
             "type": "object"
           }
         },
-        "required": [
-          "code"
-        ],
+        "required": ["code"],
         "type": "object"
       },
       "AnalyzeResponse": {
@@ -298,9 +292,7 @@
                   "type": "string"
                 },
                 "status": {
-                  "enum": [
-                    "deprecated"
-                  ],
+                  "enum": ["deprecated"],
                   "example": "deprecated",
                   "type": "string"
                 },
@@ -329,56 +321,34 @@
           },
           "supported": {
             "description": "List of supported config schema versions",
-            "example": [
-              "v1"
-            ],
+            "example": ["v1"],
             "items": {
               "type": "string"
             },
             "type": "array"
           }
         },
-        "required": [
-          "current",
-          "supported",
-          "deprecations",
-          "compatibility"
-        ],
+        "required": ["current", "supported", "deprecations", "compatibility"],
         "type": "object"
       },
       "DiagramTypesResponse": {
         "properties": {
           "lint-supported": {
             "items": {
-              "enum": [
-                "flowchart",
-                "sequence",
-                "class",
-                "er",
-                "state"
-              ],
+              "enum": ["flowchart", "sequence", "class", "er", "state"],
               "type": "string"
             },
             "type": "array"
           },
           "parser-recognized": {
             "items": {
-              "enum": [
-                "flowchart",
-                "sequence",
-                "class",
-                "er",
-                "state"
-              ],
+              "enum": ["flowchart", "sequence", "class", "er", "state"],
               "type": "string"
             },
             "type": "array"
           }
         },
-        "required": [
-          "parser-recognized",
-          "lint-supported"
-        ],
+        "required": ["parser-recognized", "lint-supported"],
         "type": "object"
       },
       "Error": {
@@ -399,10 +369,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "code",
-          "message"
-        ],
+        "required": ["code", "message"],
         "type": "object"
       },
       "HealthMetricsResponse": {
@@ -417,17 +384,9 @@
             "$ref": "#/components/schemas/AnalyzeOutcomeMetrics"
           },
           "lint-supported": {
-            "example": [
-              "flowchart"
-            ],
+            "example": ["flowchart"],
             "items": {
-              "enum": [
-                "flowchart",
-                "sequence",
-                "class",
-                "er",
-                "state"
-              ],
+              "enum": ["flowchart", "sequence", "class", "er", "state"],
               "type": "string"
             },
             "type": "array"
@@ -448,10 +407,7 @@
             "type": "string"
           },
           "status": {
-            "enum": [
-              "ok",
-              "degraded"
-            ],
+            "enum": ["ok", "degraded"],
             "example": "ok",
             "type": "string"
           },
@@ -546,19 +502,11 @@
             "type": "string"
           },
           "severity": {
-            "enum": [
-              "info",
-              "warning"
-            ],
+            "enum": ["info", "warning"],
             "type": "string"
           }
         },
-        "required": [
-          "code",
-          "message",
-          "severity",
-          "confidence"
-        ],
+        "required": ["code", "message", "severity", "confidence"],
         "type": "object"
       },
       "HintAppliesTo": {
@@ -587,9 +535,7 @@
       },
       "InfoResponse": {
         "example": {
-          "lint-supported": [
-            "flowchart"
-          ],
+          "lint-supported": ["flowchart"],
           "mermaid-version": "11.12.3",
           "parser-recognized": [
             "flowchart",
@@ -604,21 +550,12 @@
             "flowchart/no-cycles",
             "flowchart/no-disconnected-nodes"
           ],
-          "supported-rules": [
-            "no-cycles",
-            "no-disconnected-nodes"
-          ]
+          "supported-rules": ["no-cycles", "no-disconnected-nodes"]
         },
         "properties": {
           "lint-supported": {
             "items": {
-              "enum": [
-                "flowchart",
-                "sequence",
-                "class",
-                "er",
-                "state"
-              ],
+              "enum": ["flowchart", "sequence", "class", "er", "state"],
               "type": "string"
             },
             "type": "array"
@@ -628,13 +565,7 @@
           },
           "parser-recognized": {
             "items": {
-              "enum": [
-                "flowchart",
-                "sequence",
-                "class",
-                "er",
-                "state"
-              ],
+              "enum": ["flowchart", "sequence", "class", "er", "state"],
               "type": "string"
             },
             "type": "array"
@@ -683,10 +614,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "valid_success",
-              "syntax_error"
-            ],
+            "required": ["valid_success", "syntax_error"],
             "type": "object"
           },
           "parser": {
@@ -722,10 +650,7 @@
             "type": "object"
           }
         },
-        "required": [
-          "analyze",
-          "parser"
-        ],
+        "required": ["analyze", "parser"],
         "type": "object"
       },
       "Issue": {
@@ -764,20 +689,11 @@
           },
           "severity": {
             "description": "Severity level of the issue",
-            "enum": [
-              "error",
-              "warning",
-              "info"
-            ],
+            "enum": ["error", "warning", "info"],
             "type": "string"
           }
         },
-        "required": [
-          "rule-id",
-          "severity",
-          "message",
-          "fingerprint"
-        ],
+        "required": ["rule-id", "severity", "message", "fingerprint"],
         "type": "object"
       },
       "IssueContext": {
@@ -810,10 +726,7 @@
             "type": "object"
           }
         },
-        "required": [
-          "by-severity",
-          "by-rule"
-        ],
+        "required": ["by-severity", "by-rule"],
         "type": "object"
       },
       "Metrics": {
@@ -892,10 +805,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "status",
-          "error"
-        ],
+        "required": ["status", "error"],
         "type": "object"
       },
       "ReadyResponse": {
@@ -911,9 +821,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "status"
-        ],
+        "required": ["status"],
         "type": "object"
       },
       "ResponseHint": {
@@ -940,19 +848,11 @@
             "type": "string"
           },
           "severity": {
-            "enum": [
-              "info",
-              "warning"
-            ],
+            "enum": ["info", "warning"],
             "type": "string"
           }
         },
-        "required": [
-          "code",
-          "message",
-          "severity",
-          "confidence"
-        ],
+        "required": ["code", "message", "severity", "confidence"],
         "type": "object"
       },
       "RuleConfigSchema": {
@@ -975,11 +875,7 @@
                   },
                   "severity": {
                     "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
-                    "enum": [
-                      "error",
-                      "warning",
-                      "info"
-                    ],
+                    "enum": ["error", "warning", "info"],
                     "type": "string"
                   },
                   "suppression-selectors": {
@@ -1007,11 +903,7 @@
                   },
                   "severity": {
                     "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
-                    "enum": [
-                      "error",
-                      "warning",
-                      "info"
-                    ],
+                    "enum": ["error", "warning", "info"],
                     "type": "string"
                   },
                   "suppression-selectors": {
@@ -1038,11 +930,7 @@
                   },
                   "severity": {
                     "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
-                    "enum": [
-                      "error",
-                      "warning",
-                      "info"
-                    ],
+                    "enum": ["error", "warning", "info"],
                     "type": "string"
                   },
                   "suppression-selectors": {
@@ -1065,11 +953,7 @@
                   },
                   "severity": {
                     "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
-                    "enum": [
-                      "error",
-                      "warning",
-                      "info"
-                    ],
+                    "enum": ["error", "warning", "info"],
                     "type": "string"
                   },
                   "suppression-selectors": {
@@ -1092,11 +976,7 @@
                   },
                   "severity": {
                     "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
-                    "enum": [
-                      "error",
-                      "warning",
-                      "info"
-                    ],
+                    "enum": ["error", "warning", "info"],
                     "type": "string"
                   },
                   "suppression-selectors": {
@@ -1134,11 +1014,7 @@
                       },
                       "severity": {
                         "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
-                        "enum": [
-                          "error",
-                          "warning",
-                          "info"
-                        ],
+                        "enum": ["error", "warning", "info"],
                         "type": "string"
                       },
                       "suppression-selectors": {
@@ -1166,11 +1042,7 @@
                       },
                       "severity": {
                         "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
-                        "enum": [
-                          "error",
-                          "warning",
-                          "info"
-                        ],
+                        "enum": ["error", "warning", "info"],
                         "type": "string"
                       },
                       "suppression-selectors": {
@@ -1197,11 +1069,7 @@
                       },
                       "severity": {
                         "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
-                        "enum": [
-                          "error",
-                          "warning",
-                          "info"
-                        ],
+                        "enum": ["error", "warning", "info"],
                         "type": "string"
                       },
                       "suppression-selectors": {
@@ -1224,11 +1092,7 @@
                       },
                       "severity": {
                         "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
-                        "enum": [
-                          "error",
-                          "warning",
-                          "info"
-                        ],
+                        "enum": ["error", "warning", "info"],
                         "type": "string"
                       },
                       "suppression-selectors": {
@@ -1251,11 +1115,7 @@
                       },
                       "severity": {
                         "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).",
-                        "enum": [
-                          "error",
-                          "warning",
-                          "info"
-                        ],
+                        "enum": ["error", "warning", "info"],
                         "type": "string"
                       },
                       "suppression-selectors": {
@@ -1273,16 +1133,11 @@
                 "type": "object"
               },
               "schema-version": {
-                "enum": [
-                  "v1"
-                ],
+                "enum": ["v1"],
                 "type": "string"
               }
             },
-            "required": [
-              "schema-version",
-              "rules"
-            ],
+            "required": ["schema-version", "rules"],
             "title": "merm8 Rule Configuration v1",
             "type": "object"
           }
@@ -1320,18 +1175,11 @@
             "type": "string"
           },
           "severity": {
-            "enum": [
-              "error",
-              "warning",
-              "info"
-            ],
+            "enum": ["error", "warning", "info"],
             "type": "string"
           },
           "state": {
-            "enum": [
-              "implemented",
-              "planned"
-            ],
+            "enum": ["implemented", "planned"],
             "example": "implemented",
             "type": "string"
           }
@@ -1361,11 +1209,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "name",
-          "type",
-          "description"
-        ],
+        "required": ["name", "type", "description"],
         "type": "object"
       },
       "RulesResponse": {
@@ -1377,9 +1221,7 @@
             "type": "array"
           }
         },
-        "required": [
-          "rules"
-        ],
+        "required": ["rules"],
         "type": "object"
       },
       "SARIFReport": {
@@ -1396,16 +1238,11 @@
             "type": "array"
           },
           "version": {
-            "enum": [
-              "2.1.0"
-            ],
+            "enum": ["2.1.0"],
             "type": "string"
           }
         },
-        "required": [
-          "version",
-          "runs"
-        ],
+        "required": ["version", "runs"],
         "type": "object"
       },
       "SyntaxError": {
@@ -1426,11 +1263,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "message",
-          "line",
-          "column"
-        ],
+        "required": ["message", "line", "column"],
         "type": "object"
       }
     }
@@ -1473,9 +1306,7 @@
           }
         },
         "summary": "Liveness probe root alias",
-        "tags": [
-          "Probes"
-        ]
+        "tags": ["Probes"]
       }
     },
     "/analyze": {
@@ -1546,9 +1377,7 @@
           }
         },
         "summary": "Analyze and lint a Mermaid diagram (legacy alias)",
-        "tags": [
-          "Linting"
-        ]
+        "tags": ["Linting"]
       }
     },
     "/analyze/raw": {
@@ -1567,9 +1396,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "code"
-                ],
+                "required": ["code"],
                 "type": "object"
               }
             },
@@ -1635,9 +1462,7 @@
           }
         },
         "summary": "Analyze and lint a Mermaid diagram (raw text, legacy alias)",
-        "tags": [
-          "Linting"
-        ]
+        "tags": ["Linting"]
       }
     },
     "/config-versions": {
@@ -1657,9 +1482,7 @@
           }
         },
         "summary": "Config schema version compatibility information alias",
-        "tags": [
-          "Documentation"
-        ]
+        "tags": ["Documentation"]
       }
     },
     "/diagram-types": {
@@ -1679,9 +1502,7 @@
           }
         },
         "summary": "List parser-recognized and lint-supported diagram types",
-        "tags": [
-          "Linting"
-        ]
+        "tags": ["Linting"]
       }
     },
     "/docs": {
@@ -1695,9 +1516,7 @@
           }
         },
         "summary": "Interactive API documentation (legacy alias)",
-        "tags": [
-          "Documentation"
-        ]
+        "tags": ["Documentation"]
       }
     },
     "/health": {
@@ -1724,9 +1543,7 @@
           }
         },
         "summary": "Liveness probe alias",
-        "tags": [
-          "Probes"
-        ]
+        "tags": ["Probes"]
       }
     },
     "/info": {
@@ -1746,9 +1563,7 @@
           }
         },
         "summary": "Service and parser runtime metadata",
-        "tags": [
-          "Probes"
-        ]
+        "tags": ["Probes"]
       }
     },
     "/internal/metrics": {
@@ -1769,9 +1584,7 @@
           }
         },
         "summary": "Internal analyze outcome counters (legacy alias)",
-        "tags": [
-          "Probes"
-        ]
+        "tags": ["Probes"]
       }
     },
     "/metrics": {
@@ -1801,9 +1614,7 @@
           }
         },
         "summary": "Prometheus metrics",
-        "tags": [
-          "Probes"
-        ]
+        "tags": ["Probes"]
       }
     },
     "/rules": {
@@ -1824,9 +1635,7 @@
           }
         },
         "summary": "List built-in lint rules (legacy alias)",
-        "tags": [
-          "Linting"
-        ]
+        "tags": ["Linting"]
       }
     },
     "/rules/schema": {
@@ -1840,9 +1649,7 @@
           }
         },
         "summary": "Get JSON Schema for lint rule configuration (legacy alias)",
-        "tags": [
-          "Linting"
-        ]
+        "tags": ["Linting"]
       }
     },
     "/spec": {
@@ -1856,9 +1663,7 @@
           }
         },
         "summary": "Get OpenAPI specification (legacy alias)",
-        "tags": [
-          "Documentation"
-        ]
+        "tags": ["Documentation"]
       }
     },
     "/v1/analyse": {
@@ -1929,9 +1734,7 @@
           }
         },
         "summary": "Analyze and lint a Mermaid diagram (deprecated spelling alias)",
-        "tags": [
-          "Linting"
-        ]
+        "tags": ["Linting"]
       }
     },
     "/v1/analyse/raw": {
@@ -1950,9 +1753,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "code"
-                ],
+                "required": ["code"],
                 "type": "object"
               }
             },
@@ -2018,9 +1819,7 @@
           }
         },
         "summary": "Analyze and lint a Mermaid diagram (raw text, deprecated spelling alias)",
-        "tags": [
-          "Linting"
-        ]
+        "tags": ["Linting"]
       }
     },
     "/v1/analyze": {
@@ -2052,9 +1851,7 @@
                         "enabled": true,
                         "limit": 2,
                         "severity": "error",
-                        "suppression-selectors": [
-                          "node:A"
-                        ]
+                        "suppression-selectors": ["node:A"]
                       }
                     }
                   }
@@ -2069,9 +1866,7 @@
                           "enabled": true,
                           "limit": 2,
                           "severity": "error",
-                          "suppression-selectors": [
-                            "node:A"
-                          ]
+                          "suppression-selectors": ["node:A"]
                         }
                       }
                     }
@@ -2087,9 +1882,7 @@
                           "enabled": true,
                           "limit": 2,
                           "severity": "error",
-                          "suppression-selectors": [
-                            "node:A"
-                          ]
+                          "suppression-selectors": ["node:A"]
                         }
                       },
                       "schema-version": "v1"
@@ -2814,9 +2607,7 @@
           }
         },
         "summary": "Analyze and lint a Mermaid diagram",
-        "tags": [
-          "Linting"
-        ]
+        "tags": ["Linting"]
       }
     },
     "/v1/analyze/help": {
@@ -2836,9 +2627,7 @@
           }
         },
         "summary": "Get diagram templates and error guidance",
-        "tags": [
-          "Documentation"
-        ]
+        "tags": ["Documentation"]
       }
     },
     "/v1/analyze/raw": {
@@ -2856,9 +2645,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "code"
-                ],
+                "required": ["code"],
                 "type": "object"
               }
             },
@@ -2925,9 +2712,7 @@
           }
         },
         "summary": "Analyze and lint a Mermaid diagram (raw text)",
-        "tags": [
-          "Linting"
-        ]
+        "tags": ["Linting"]
       }
     },
     "/v1/analyze/sarif": {
@@ -3167,9 +2952,7 @@
           }
         },
         "summary": "Analyze and lint a Mermaid diagram (SARIF output)",
-        "tags": [
-          "Linting"
-        ]
+        "tags": ["Linting"]
       }
     },
     "/v1/config-versions": {
@@ -3189,9 +2972,7 @@
           }
         },
         "summary": "Config schema version compatibility information",
-        "tags": [
-          "Documentation"
-        ]
+        "tags": ["Documentation"]
       }
     },
     "/v1/docs": {
@@ -3211,9 +2992,7 @@
           }
         },
         "summary": "Interactive API documentation",
-        "tags": [
-          "Documentation"
-        ]
+        "tags": ["Documentation"]
       }
     },
     "/v1/health/metrics": {
@@ -3234,10 +3013,7 @@
                     "syntax-errors": 25,
                     "total": 50
                   },
-                  "lint-supported": [
-                    "flowchart",
-                    "graph"
-                  ],
+                  "lint-supported": ["flowchart", "graph"],
                   "median-parser-latency-ms": 42.5,
                   "p95-parser-latency-ms": 150,
                   "parser-ready": true,
@@ -3260,9 +3036,7 @@
           }
         },
         "summary": "Extended health and metrics snapshot (v1)",
-        "tags": [
-          "Probes"
-        ]
+        "tags": ["Probes"]
       }
     },
     "/v1/healthz": {
@@ -3288,9 +3062,7 @@
           }
         },
         "summary": "Liveness probe (canonical v1)",
-        "tags": [
-          "Probes"
-        ]
+        "tags": ["Probes"]
       }
     },
     "/v1/internal/metrics": {
@@ -3310,9 +3082,7 @@
           }
         },
         "summary": "Internal analyze outcome counters",
-        "tags": [
-          "Probes"
-        ]
+        "tags": ["Probes"]
       }
     },
     "/v1/ready": {
@@ -3349,9 +3119,7 @@
           }
         },
         "summary": "Readiness probe",
-        "tags": [
-          "Probes"
-        ]
+        "tags": ["Probes"]
       }
     },
     "/v1/rules": {
@@ -3588,9 +3356,7 @@
           }
         },
         "summary": "List built-in lint rules",
-        "tags": [
-          "Linting"
-        ]
+        "tags": ["Linting"]
       }
     },
     "/v1/rules/schema": {
@@ -3607,9 +3373,7 @@
                       "$ref": "#/components/schemas/RuleConfigSchema"
                     }
                   },
-                  "required": [
-                    "schema"
-                  ],
+                  "required": ["schema"],
                   "type": "object"
                 }
               }
@@ -3618,9 +3382,7 @@
           }
         },
         "summary": "Get JSON Schema for lint rule configuration",
-        "tags": [
-          "Linting"
-        ]
+        "tags": ["Linting"]
       }
     },
     "/v1/spec": {
@@ -3640,9 +3402,7 @@
           }
         },
         "summary": "Get OpenAPI specification",
-        "tags": [
-          "Documentation"
-        ]
+        "tags": ["Documentation"]
       }
     },
     "/v1/version": {
@@ -3665,9 +3425,7 @@
           }
         },
         "summary": "Version and build metadata",
-        "tags": [
-          "Probes"
-        ]
+        "tags": ["Probes"]
       }
     },
     "/version": {
@@ -3691,9 +3449,7 @@
           }
         },
         "summary": "Version and build metadata alias",
-        "tags": [
-          "Probes"
-        ]
+        "tags": ["Probes"]
       }
     }
   },

@@ -3,17 +3,17 @@ name: integration-contract-tests
 on:
   pull_request:
     paths:
-      - 'cmd/server/**'
-      - 'internal/**'
-      - 'parser-node/**'
-      - '.github/workflows/integration-contract-tests.yml'
+      - "cmd/server/**"
+      - "internal/**"
+      - "parser-node/**"
+      - ".github/workflows/integration-contract-tests.yml"
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'cmd/server/**'
-      - 'internal/**'
-      - 'parser-node/**'
-      - '.github/workflows/integration-contract-tests.yml'
+      - "cmd/server/**"
+      - "internal/**"
+      - "parser-node/**"
+      - ".github/workflows/integration-contract-tests.yml"
 
 jobs:
   contract-integration:
@@ -28,10 +28,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Contract integration suite (stable timing budget)
         env:
-          PARSER_CONCURRENCY_LIMIT: '1'
+          PARSER_CONCURRENCY_LIMIT: "1"
         run: |
           go test ./cmd/server -run '^TestServerContractIntegration_' -count=1 -timeout=90s

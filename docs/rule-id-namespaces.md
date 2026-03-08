@@ -43,7 +43,6 @@ Examples:
 - `legacy-check` and `custom/legacy/legacy-check` collide.
 - `custom/acme/check` and `custom/acme/check` collide.
 
-
 ## `/v1/rules` compatibility contract
 
 - `/v1/rules` is the canonical discovery endpoint for rule IDs and metadata.

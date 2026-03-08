@@ -39,7 +39,7 @@ graph TD
     OrderSvc[Order Service]
     DB[(Database)]
     Cache[(Cache)]
-    
+
     API --> AuthSvc
     API --> UserSvc
     API --> OrderSvc
@@ -60,7 +60,7 @@ graph TD
     Retry[Retry Logic]
     Success[Return Success]
     Error[Return Error]
-    
+
     Request --> Validate
     Validate -->|No| Error
     Validate -->|Yes| Process
@@ -78,20 +78,20 @@ graph TD
         Web[Web App]
         Mobile[Mobile App]
     end
-    
+
     subgraph Backend[Backend Services]
         API[API Server]
         Auth[Auth Service]
         User[User Service]
         Product[Product Service]
     end
-    
+
     subgraph Data[Data Layer]
         UserDB[User DB]
         ProductDB[Product DB]
         Cache[Redis Cache]
     end
-    
+
     Web --> API
     Mobile --> API
     API --> Auth
@@ -114,7 +114,7 @@ graph TD
     Processing[Processing State]
     Error[Error State]
     Done[(Done)]
-    
+
     Start --> Idle
     Idle -->|Trigger| Active
     Active -->|Process| Processing
@@ -134,7 +134,7 @@ sequenceDiagram
     actor Client
     participant Server
     participant Database
-    
+
     Client->>Server: Request Data
     Server->>Database: Query
     Database-->>Server: Result
@@ -149,7 +149,7 @@ sequenceDiagram
     participant A as Service A
     participant B as Service B
     participant C as Service C
-    
+
     A->>B: Message 1
     B->>C: Message 2
     C-->>B: Response 2
@@ -169,15 +169,15 @@ classDiagram
         + eat()
         + sleep()
     }
-    
+
     class Dog {
         + bark()
     }
-    
+
     class Cat {
         + meow()
     }
-    
+
     Animal <|-- Dog
     Animal <|-- Cat
 ```
@@ -192,17 +192,17 @@ classDiagram
         + start()
         + stop()
     }
-    
+
     class Engine {
         - horsepower: int
         + ignite()
     }
-    
+
     class Wheel {
         - diameter: int
         + rotate()
     }
-    
+
     Car *-- Engine
     Car *-- Wheel
 ```
@@ -244,7 +244,7 @@ stateDiagram-v2
     Confirmed --> Shipped: ship()
     Shipped --> Delivered: deliver()
     Delivered --> [*]
-    
+
     Pending --> Cancelled: cancel()
     Confirmed --> Cancelled: cancel()
     Cancelled --> [*]
@@ -253,15 +253,17 @@ stateDiagram-v2
 ## Best Practices for linting
 
 1. **Use descriptive labels:** Clear node names make diagrams easier to understand and lint.
-   
+
    ✅ Good:
+
    ```mermaid
    graph TD
        A[User Signup] --> B[Email Verification]
        B --> C[Account Created]
    ```
-   
+
    ❌ Avoid:
+
    ```mermaid
    graph TD
        A[A] --> B[B]
@@ -269,16 +271,18 @@ stateDiagram-v2
    ```
 
 2. **Keep fanout reasonable:** Limit outgoing edges per node (default max is 10).
-   
+
    ✅ Recommended:
+
    ```mermaid
    graph TD
        API[API] --> Auth[Auth Service]
        API --> User[User Service]
        API --> Order[Order Service]
    ```
-   
+
    ❌ Excessive:
+
    ```mermaid
    graph TD
        API[API] --> A[Service 1]
@@ -289,15 +293,17 @@ stateDiagram-v2
    ```
 
 3. **Avoid disconnected nodes:** Every node should have at least one connection.
-   
+
    ✅ Good:
+
    ```mermaid
    graph TD
        A[Start] --> B[Process]
        B --> C[End]
    ```
-   
+
    ❌ Avoid:
+
    ```mermaid
    graph TD
        A[Start] --> B[Process]
@@ -305,16 +311,18 @@ stateDiagram-v2
    ```
 
 4. **No cycles for acyclic systems:** Unless explicitly intended, avoid circular dependencies.
-   
+
    ✅ Good DAG:
+
    ```mermaid
    graph TD
        Client --> API
        API --> Cache
        Cache --> DB
    ```
-   
+
    ❌ Cyclic (unless needed):
+
    ```mermaid
        Service A --> Service B
        Service B --> Service C
@@ -322,8 +330,9 @@ stateDiagram-v2
    ```
 
 5. **Reasonable depth:** Web-rendered diagrams with excessive nesting may be hard to read (default max is 10 levels).
-   
+
    ✅ Manageable:
+
    ```mermaid
    graph TD
        A --> B
@@ -331,8 +340,9 @@ stateDiagram-v2
        C --> D
        D --> E
    ```
-   
+
    ❌ Deep nesting:
+
    ```mermaid
    graph TD
        L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7 --> L8 --> L9 --> L10 --> L11
@@ -345,6 +355,7 @@ stateDiagram-v2
 **Cause:** You're using a diagram type that merm8 doesn't lint yet (sequence, class, state, ER).
 
 **Fix:** Either:
+
 - Rewrite as a flowchart (Mermaid directive `graph` or `flowchart`)
 - Wait for future releases with broader linting support
 
@@ -353,6 +364,7 @@ stateDiagram-v2
 **Error:** `core/no-duplicate-node-ids`
 
 **Example:**
+
 ```mermaid
 graph TD
     A[Node] --> B[Node]
@@ -366,6 +378,7 @@ graph TD
 **Error:** `core/no-disconnected-nodes`
 
 **Example:**
+
 ```mermaid
 graph TD
     A --> B
@@ -379,6 +392,7 @@ graph TD
 **Error:** `core/max-fanout` (default limit: 10)
 
 **Example:**
+
 ```mermaid
 graph TD
     Hub[Central Hub]
@@ -395,6 +409,7 @@ graph TD
 **Error:** `core/max-depth` (default limit: 10)
 
 **Example:**
+
 ```mermaid
 graph TD
     Start --> L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7 --> L8 --> L9 --> L10 --> L11
@@ -407,6 +422,7 @@ graph TD
 **Error:** `core/no-cycles`
 
 **Example:**
+
 ```mermaid
 graph TD
     A --> B

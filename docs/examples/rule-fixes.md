@@ -26,6 +26,7 @@ graph TD
 **Issue**: Node `Hub` has 6 outgoing edges, exceeding the default limit of 5.
 
 **Config to trigger**:
+
 ```json
 {
   "rules": {
@@ -48,7 +49,7 @@ graph TD
     Hub2[Hub2] --> D[Node D]
     Hub2 --> E[Node E]
     Hub2 --> F[Node F]
-    
+
     A --> G[Final]
     B --> G
     C --> G
@@ -60,6 +61,7 @@ graph TD
 **Solution**: Split the hub node into two intermediate hubs, each with ≤ 5 outgoing edges, then merge at the final node.
 
 **Config to allow**:
+
 ```json
 {
   "rules": {
@@ -71,6 +73,7 @@ graph TD
 ```
 
 **Alternative (suppress specific node)**:
+
 ```json
 {
   "rules": {
@@ -108,6 +111,7 @@ graph TD
 **Issue**: Maximum depth is 10 (from `A` to `K`), exceeding the default limit of 8.
 
 **Config to trigger**:
+
 ```json
 {
   "rules": {
@@ -129,7 +133,7 @@ graph TD
     C --> D[Level 3]
     D --> E[Level 4]
     E --> F[End]
-    
+
     A --> B2[Parallel Level 1]
     B2 --> C2[Level 2]
     C2 --> D2[Level 3]
@@ -140,6 +144,7 @@ graph TD
 **Solution**: Refactor deep linear chain into parallel paths, keeping max depth ≤ 8.
 
 **Config to allow**:
+
 ```json
 {
   "rules": {
@@ -151,6 +156,7 @@ graph TD
 ```
 
 **Increase limit if necessary** (use sparingly):
+
 ```json
 {
   "rules": {
@@ -183,6 +189,7 @@ graph TD
 **Issue**: Cycle detected: `B → C → E → B`. The `Retry` node points back to `Process`, creating a loop.
 
 **Config to trigger**:
+
 ```json
 {
   "rules": {
@@ -211,6 +218,7 @@ graph TD
 **Solution**: Add an explicit counter/guard to bound the retry logic.
 
 **Config**:
+
 ```json
 {
   "rules": {
@@ -234,6 +242,7 @@ graph TD
 ```
 
 **Config to allow self-loops**:
+
 ```json
 {
   "rules": {
@@ -258,7 +267,7 @@ graph TD
 graph TD
     A[Start] --> B[Process 1]
     B --> C[End]
-    
+
     D[Orphan Node]
     E[Another Orphan] --> F[Unreachable]
 ```
@@ -266,6 +275,7 @@ graph TD
 **Issue**: Nodes `D`, `E`, and `F` are not reachable from the start node `A`.
 
 **Config to trigger**:
+
 ```json
 {
   "rules": {
@@ -292,6 +302,7 @@ graph TD
 **Solution**: Connect orphaned nodes to the main flow by adding edges or decisions.
 
 **Config**:
+
 ```json
 {
   "rules": {
@@ -303,6 +314,7 @@ graph TD
 ```
 
 **Or suppress if intentional** (e.g., documentation diagram):
+
 ```json
 {
   "rules": {
@@ -340,6 +352,7 @@ graph TD
 ```
 
 **Config to trigger**:
+
 ```json
 {
   "rules": {
@@ -357,7 +370,7 @@ graph TD
 graph TD
     A[Service A - Primary]
     A2[Service A - Secondary]
-    
+
     A --> B[Broker]
     A2 --> B
 ```
@@ -365,6 +378,7 @@ graph TD
 **Solution**: Rename duplicate IDs to be unique. Use suffixes or numbered variants.
 
 **Config**:
+
 ```json
 {
   "rules": {
@@ -376,6 +390,7 @@ graph TD
 ```
 
 **Suppression not recommended** (this is usually a real error):
+
 ```json
 {
   "rules": {
@@ -412,6 +427,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 Expected success response:
+
 ```json
 {
   "valid": true,

@@ -302,9 +302,7 @@ flowchart TD
     "doc-link": "#arrow-syntax",
     "fix-action": "Replace '->' with '-->' on line 2"
   },
-  "suggestions": [
-    "Use '-->' for flowchart connections, not '->'."
-  ],
+  "suggestions": ["Use '-->' for flowchart connections, not '->'."],
   "issues": [],
   "error": null,
   "metrics": {
@@ -674,12 +672,12 @@ import json
 
 def analyze_with_retry(base_url, payload, max_retries=3):
     """Analyze diagram with automatic retry on 503."""
-    
+
     headers = {
         'Content-Type': 'application/json',
         'Accept-Version': '1.0'
     }
-    
+
     for attempt in range(max_retries):
         try:
             response = requests.post(
@@ -688,11 +686,11 @@ def analyze_with_retry(base_url, payload, max_retries=3):
                 headers=headers,
                 timeout=10
             )
-            
+
             # Success
             if response.status_code == 200:
                 return response.json()
-            
+
             # Rate limited
             if response.status_code == 429:
                 reset = int(response.headers.get('X-RateLimit-Reset', 0))
@@ -700,16 +698,16 @@ def analyze_with_retry(base_url, payload, max_retries=3):
                 print(f"Rate limited. Waiting {wait:.1f}s...")
                 time.sleep(wait + 0.1)
                 continue
-            
+
             # Server busy
             if response.status_code == 503:
                 wait = 2 ** attempt  # Exponential backoff
                 print(f"Server busy. Waiting {wait}s...")
                 time.sleep(wait)
                 continue
-            
+
             raise Exception(f"HTTP {response.status_code}: {response.text}")
-        
+
         except requests.Timeout:
             if attempt < max_retries - 1:
                 wait = 2 ** attempt
@@ -717,7 +715,7 @@ def analyze_with_retry(base_url, payload, max_retries=3):
                 time.sleep(wait)
             else:
                 raise
-    
+
     raise Exception("Max retries exceeded")
 
 # Usage

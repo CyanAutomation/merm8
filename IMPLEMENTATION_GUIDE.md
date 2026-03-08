@@ -1,14 +1,16 @@
 # Enhanced Error Hints Implementation - Testing & Verification Guide
 
 ## Summary
+
 This document describes the comprehensive error hints implementation that provides users with structured remediation guidance including before/after code examples for syntax and config errors.
 
 ## Files Modified
+
 1. **internal/api/handler.go** - Core implementation
    - Added `helpSuggestion` struct (type definition for structured help)
    - Updated `analyzeResponse` struct (added `HelpSuggestion` field)
    - Implemented `helpForSyntaxError()` function
-   - Implemented `helpForConfigError()` function  
+   - Implemented `helpForConfigError()` function
    - Implemented `isDiagramTypeKeyword()` helper function
    - Updated syntax error response paths to call `helpForSyntaxError()`
    - Updated config error response path to call `helpForConfigError()`
@@ -23,6 +25,7 @@ This document describes the comprehensive error hints implementation that provid
    - Demonstrated various error scenarios with remediation guidance
 
 ## Files Created
+
 1. **internal/api/handler_help_test.go** - Comprehensive test suite
    - 6 test cases covering all help scenarios:
      - Arrow operator syntax errors
@@ -47,6 +50,7 @@ This document describes the comprehensive error hints implementation that provid
 ## Changes Breakdown
 
 ### Response Structure
+
 ```go
 // New type added to handler.go
 type helpSuggestion struct {
@@ -65,22 +69,23 @@ HelpSuggestion *helpSuggestion `json:"help-suggestion,omitempty"`
 ### Error Detection Logic
 
 #### Syntax Errors (helpForSyntaxError)
+
 1. **Graphviz Syntax** - Detects `digraph` or `rankdir` keywords
    - Suggests: Use Mermaid `flowchart TD` instead
-   
 2. **YAML Frontmatter** - Detects leading `---`
    - Suggests: Remove frontmatter, start with diagram type
 
 3. **Tab Indentation** - Detects tab characters
    - Suggests: Use 4 spaces instead
 
-4. **Arrow Operator** - Detects `->`  on problematic line
+4. **Arrow Operator** - Detects `->` on problematic line
    - Line-specific fix: Replace with `-->`
 
 5. **Missing Diagram Type** - Detects absent diagram keyword
    - Suggests: Add `flowchart TD`, `sequenceDiagram`, etc.
 
 #### Config Errors (helpForConfigError)
+
 1. **Unknown Rule ID**
    - Suggests: Check `/v1/rules` endpoint
    - Example: Change `max-fanout` to `core/max-fanout`
@@ -103,6 +108,7 @@ HelpSuggestion *helpSuggestion `json:"help-suggestion,omitempty"`
 ## Testing
 
 ### Quick Validation
+
 ```bash
 # Validate all changes are present (non-destructive)
 bash validate_implementation.sh
@@ -111,11 +117,13 @@ bash validate_implementation.sh
 ### Running Tests
 
 #### Compile Test Only
+
 ```bash
 go test ./internal/api -count=1 -run Compile -v
 ```
 
 #### Run Specific Test Suite
+
 ```bash
 # Arrow operator help test
 go test ./internal/api -count=1 -run TestAnalyze_SyntaxError_ArrowOperatorHelp -v
@@ -128,16 +136,19 @@ go test ./internal/api -count=1 -run "SyntaxError.*Help|ConfigError.*Help" -v
 ```
 
 #### Run All Handler Tests
+
 ```bash
 go test ./internal/api -count=1 -timeout 120s -v
 ```
 
 #### Run Specific Test File
+
 ```bash
 go test ./internal/api -count=1 -run handler_help_test.go -v
 ```
 
 ### Example Test Commands
+
 ```bash
 # Verify help suggestions are generated for arrow syntax
 go test ./internal/api -count=1 -run TestAnalyze_SyntaxError_ArrowOperatorHelp -v
@@ -155,11 +166,13 @@ go test ./internal/api -count=1 -run TestAnalyze_ConfigError -v
 ## Manual Testing with Live Server
 
 ### Start Server
+
 ```bash
 PARSER_SCRIPT=./parser-node/parse.mjs go run ./cmd/server
 ```
 
 ### Test Arrow Syntax Error
+
 ```bash
 curl -X POST http://localhost:8080/v1/analyze/raw \
   -H "Content-Type: text/plain" \
@@ -169,12 +182,14 @@ curl -X POST http://localhost:8080/v1/analyze/raw \
 ```
 
 **Expected Response**: Contains `help-suggestion` with:
+
 - `title`: "Arrow operator syntax"
 - `wrong-example`: Contains `->`
 - `correct-example`: Contains `-->`
 - `fix-action`: References line number
 
 ### Test Missing Diagram Type
+
 ```bash
 curl -X POST http://localhost:8080/v1/analyze/raw \
   -H "Content-Type: text/plain" \
@@ -183,10 +198,12 @@ B --> C'
 ```
 
 **Expected Response**: Contains `help-suggestion` with:
+
 - `title`: "Missing diagram type keyword"
 - `correct-example`: Includes `flowchart TD`
 
 ### Test Graphviz Syntax
+
 ```bash
 curl -X POST http://localhost:8080/v1/analyze/raw \
   -H "Content-Type: text/plain" \
@@ -196,11 +213,13 @@ curl -X POST http://localhost:8080/v1/analyze/raw \
 ```
 
 **Expected Response**: Contains `help-suggestion` with:
+
 - `title`: "Graphviz syntax detected"
 - `wrong-example`: Contains `digraph`
 - `correct-example`: Contains `flowchart`
 
 ### Test Config Error
+
 ```bash
 curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
@@ -216,6 +235,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 **Expected Response**: HTTP 400 with `help-suggestion` showing:
+
 - Missing `core/` prefix
 - Correct rule ID format
 - Link to `/v1/rules` endpoint
@@ -223,6 +243,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ## Backward Compatibility
 
 ✅ **Fully backward compatible**:
+
 - New `HelpSuggestion` field is optional (marked `omitempty`)
 - Existing `Suggestions` array unchanged
 - HTTP status codes unchanged
@@ -231,6 +252,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ## Response Examples
 
 ### Syntax Error Response
+
 ```json
 {
   "valid": false,
@@ -255,6 +277,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 ### Config Error Response
+
 ```json
 {
   "valid": false,
@@ -277,6 +300,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ## Key Features
 
 ✨ **User Benefits**:
+
 - 🎯 Faster error resolution
 - 📚 In-response help (no external docs needed)
 - 💡 Before/after code examples
@@ -285,6 +309,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 - 🔄 Works offline
 
 ✨ **Developer Benefits**:
+
 - 🏗️ Structured data format
 - ♻️ Reusable help generation functions
 - 📏 Easy to extend with more error types
@@ -294,6 +319,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ## Future Enhancements
 
 Planned for Phase 2:
+
 - [ ] Lint rule violation help (e.g., "Node has high fanout")
 - [ ] Localization support (i18n)
 - [ ] Analytics tracking for help suggestions
@@ -310,17 +336,17 @@ Planned for Phase 2:
 
 ## Error Coverage
 
-| Error Type | Detection | Example |
-|-----------|-----------|---------|
-| Arrow operators | ✅ | `->` vs `-->` |
-| Missing diagram type | ✅ | Missing `flowchart` keyword |
-| Graphviz syntax | ✅ | `digraph` detected |
-| Tab indentation | ✅ | Tab characters in code |
-| YAML frontmatter | ✅ | Leading `---` |
-| Unknown rule ID | ✅ | Missing `core/` prefix |
-| Config structure | ✅ | String instead of object |
-| Schema-version | ✅ | Invalid or missing field |
-| Suppression selector | ✅ | Invalid selector syntax |
+| Error Type           | Detection | Example                     |
+| -------------------- | --------- | --------------------------- |
+| Arrow operators      | ✅        | `->` vs `-->`               |
+| Missing diagram type | ✅        | Missing `flowchart` keyword |
+| Graphviz syntax      | ✅        | `digraph` detected          |
+| Tab indentation      | ✅        | Tab characters in code      |
+| YAML frontmatter     | ✅        | Leading `---`               |
+| Unknown rule ID      | ✅        | Missing `core/` prefix      |
+| Config structure     | ✅        | String instead of object    |
+| Schema-version       | ✅        | Invalid or missing field    |
+| Suppression selector | ✅        | Invalid selector syntax     |
 
 ## Validation Checklist
 

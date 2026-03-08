@@ -32,12 +32,12 @@ graph TD
         A[System A]
         B[Dependency B]
     end
-    
+
     subgraph cluster2 ["Subsystem B"]
         C[System C]
         D[Dependency D]
     end
-    
+
     A --> C
     B --> D
 ```
@@ -45,6 +45,7 @@ graph TD
 **Result**: All node IDs (`A`, `B`, `C`, `D`) are unique globally. ✅ Passes `no-duplicate-node-ids`.
 
 **Metrics**:
+
 ```json
 {
   "diagram-type": "flowchart",
@@ -63,12 +64,12 @@ graph TD
         A[Service A]
         B[Broker]
     end
-    
+
     subgraph cluster2 ["Subsystem B"]
         A[Service A]  ← DUPLICATE!
         C[Sink]
     end
-    
+
     A --> B
     B --> C
 ```
@@ -76,6 +77,7 @@ graph TD
 **Result**: Node ID `A` is defined twice (once in each cluster). ❌ Fails `no-duplicate-node-ids`.
 
 **Error Response** (HTTP 200 OK, but with issues):
+
 ```json
 {
   "valid": true,
@@ -106,12 +108,12 @@ graph TD
         A[Task A]
         B[Task B]
     end
-    
+
     subgraph sg2 ["Phase 2"]
         C[Task C]
         D[Task D]
     end
-    
+
     A --> C
     B --> D
 ```
@@ -127,6 +129,7 @@ graph TD
 Mermaid's AST (Abstract Syntax Tree) represents all nodes in a flat map with ID as the key. Subgraphs are **grouping constructs** in the visual layout, not scoping constructs in the data model.
 
 **Parser perspective**:
+
 ```javascript
 // Internal representation (simplified)
 {
@@ -156,7 +159,7 @@ If you absolutely must have (or test) duplicate IDs, you can suppress the rule:
     "schema-version": "v1",
     "rules": {
       "no-duplicate-node-ids": {
-        "suppression-selectors": ["node:A"]  // Don't report duplicates of node A
+        "suppression-selectors": ["node:A"] // Don't report duplicates of node A
       }
     }
   }
@@ -178,7 +181,7 @@ graph TD
     subgraph A ["System A"]
         B[Process]
     end
-    
+
     subgraph A2 ["System A Copy"]  // Subgraph IDs can differ
         B[Process]  // Node ID B cannot be repeated anywhere
     end
@@ -207,7 +210,7 @@ graph TD
     subgraph A ["Subsystem"]
         B[Task]
     end
-    
+
     A[Node]  // ERROR: A is already a subgraph ID
 ```
 
@@ -260,17 +263,17 @@ graph TD
         UI[Web UI]
         Mobile[Mobile App]
     end
-    
+
     subgraph business ["Business Logic Layer"]
         Handler[Request Handler]
         Validator[Validator]
     end
-    
+
     subgraph data ["Data Layer"]
         Cache[Redis Cache]
         DB[Postgres DB]
     end
-    
+
     UI --> Handler
     Mobile --> Handler
     Handler --> Validator
@@ -279,6 +282,7 @@ graph TD
 ```
 
 **Key**: All IDs are unique globally:
+
 - Subgraph IDs: `presentation`, `business`, `data`
 - Node IDs: `UI`, `Mobile`, `Handler`, `Validator`, `Cache`, `DB`
 
@@ -294,17 +298,17 @@ graph TD
         API1[API Gateway]
         DB1[User DB]
     end
-    
+
     subgraph svc2 ["Service 2: Orders"]
         API2[API Gateway]
         DB2[Order DB]
     end
-    
+
     subgraph mesh ["Service Mesh"]
         LoadBalancer[Load Balancer]
         Tracing[Tracing]
     end
-    
+
     LoadBalancer --> API1
     LoadBalancer --> API2
     API1 --> DB1
@@ -321,14 +325,14 @@ graph TD
 
 **Q: Can I have two subgraphs with the same display label?**
 
-A: You *can* visually have the same label (e.g., both say "Phase"), but the **subgraph IDs must be unique**:
+A: You _can_ visually have the same label (e.g., both say "Phase"), but the **subgraph IDs must be unique**:
 
 ```mermaid
 graph TD
     subgraph phase1 ["Phase 1"]
         A[Setup]
     end
-    
+
     subgraph phase2 ["Phase 1"]  // Same visual label
         B[Execute]
     end
@@ -356,7 +360,7 @@ graph TD
             B[Node in inner]
         end
     end
-    
+
     subgraph outer2  // ERROR: outer already used
         C[Node]
     end

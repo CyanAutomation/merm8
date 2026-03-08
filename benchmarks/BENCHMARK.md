@@ -5,6 +5,7 @@ The merm8 benchmark suite provides a comprehensive framework for evaluating the 
 ## Overview
 
 The benchmark system:
+
 - **Discovers test cases** by scanning `benchmarks/cases/` for `.mmd` fixture files
 - **Automatically generates case metadata** from fixture annotations and directory structure
 - **Executes all cases** using the merm8 parser and rule engine
@@ -22,6 +23,7 @@ go run ./benchmarks/main.go
 ```
 
 This will:
+
 1. Discover all `.mmd` test cases
 2. Execute the benchmark suite
 3. Generate `benchmark.html` (HTML report) and `benchmarks/reports/latest-results.json` (JSON results)
@@ -108,7 +110,7 @@ graph TD
     A["Node A"]
     B["Node B"]
     A --> B
-    
+
     %% @rule: no-duplicate-node-ids
 ```
 
@@ -120,6 +122,7 @@ graph TD
 ### Case Categories
 
 Cases are organized by category:
+
 - **`valid/`** — Diagrams that should NOT trigger rule violations
 - **`violations/`** — Diagrams with known violations; runner expects issues
 - **`edge-cases/`** — Boundary conditions and corner cases
@@ -127,6 +130,7 @@ Cases are organized by category:
 ### Discovery and Metadata Generation
 
 The runner **auto-discovers** cases by:
+
 1. Walking `benchmarks/cases/{diagramType}/{category}/`
 2. Finding all `.mmd` files
 3. Extracting `@rule` annotations from comments
@@ -145,15 +149,15 @@ The runner **auto-discovers** cases by:
 
 For each rule, the benchmark system tracks:
 
-| Metric | Description |
-|--------|-------------|
-| **Total Cases** | Number of test cases for the rule |
-| **Passed** | Number of cases with correct results |
-| **Detection Rate** | `Passed / Total Cases` (0–1) |
-| **False Positives** | Issues reported that weren't expected |
-| **False Positive Rate** | `FalsePositives / TotalActualIssues` |
-| **Avg Parse Time** | Average milliseconds to parse case |
-| **Avg Lint Time** | Average milliseconds to execute rule |
+| Metric                  | Description                           |
+| ----------------------- | ------------------------------------- |
+| **Total Cases**         | Number of test cases for the rule     |
+| **Passed**              | Number of cases with correct results  |
+| **Detection Rate**      | `Passed / Total Cases` (0–1)          |
+| **False Positives**     | Issues reported that weren't expected |
+| **False Positive Rate** | `FalsePositives / TotalActualIssues`  |
+| **Avg Parse Time**      | Average milliseconds to parse case    |
+| **Avg Lint Time**       | Average milliseconds to execute rule  |
 
 ### Regression Detection
 
@@ -172,6 +176,7 @@ Default threshold: 5% (configurable via `--regression-threshold`).
 ### HTML Report
 
 The HTML report (`benchmark.html`) displays:
+
 - Overall pass rate and summary metrics
 - Per-rule detection rates (color-coded: green >90%, yellow 70–90%, red <70%)
 - Timing statistics
@@ -181,6 +186,7 @@ The HTML report (`benchmark.html`) displays:
 ### JSON Report
 
 The JSON report (`benchmarks/reports/latest-results.json`) contains the full `BenchmarkResults` object, suitable for:
+
 - CI/CD pipeline integration
 - Programmatic comparison
 - Long-term trend tracking
@@ -199,6 +205,7 @@ go run ./benchmarks/main.go --output benchmarks/baselines/v0.1.0.json
 ### Analyzing Baseline Results
 
 Expected (healthy) baseline:
+
 - Detection rate **>90%** per rule
 - False positive rate **<10%**
 - No major timing regressions
@@ -247,6 +254,7 @@ jobs:
 Error: `parser script not found`
 
 **Solution**: Set `MERM8_PARSER_SCRIPT` environment variable:
+
 ```bash
 export MERM8_PARSER_SCRIPT=/path/to/parser-node
 go run ./benchmarks/main.go
@@ -261,6 +269,7 @@ Error: `parse error` or `syntax error`
 ### Low Detection Rate
 
 If a rule has <80% detection rate:
+
 1. Add `--verbose` to see which cases failed
 2. Review failed case details in HTML report
 3. Investigate rule implementation for bugs or edge cases

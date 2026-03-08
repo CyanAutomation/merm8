@@ -15,7 +15,7 @@ groups:
           description: |
             Parser timeouts have exceeded 1% of requests over the last 5 minutes.
             Current timeout rate: {{ $value | humanizePercentage }}
-            
+
             Actions:
             1. Check parser logs for timeout patterns
             2. Reduce diagram complexity or batch large requests
@@ -34,7 +34,7 @@ groups:
           summary: "merm8 parser hitting memory limits"
           description: |
             Parser subprocess memory limit exceeded in the last 5 minutes.
-            
+
             Actions:
             1. Check parser logs for OOM messages
             2. Reduce diagram size or split into smaller diagrams
@@ -54,7 +54,7 @@ groups:
           description: |
             Parser subprocess crashed or failed in the last 5 minutes.
             This indicates a parser implementation bug or resource exhaustion.
-            
+
             Actions:
             1. Check parser and system logs
             2. Verify system resource availability (disk, memory, CPU)
@@ -74,7 +74,7 @@ groups:
           description: |
             Server error rate exceeded 10% for route {{ $labels.route }}.
             Current error rate: {{ $value | humanizePercentage }}
-            
+
             Actions:
             1. Check server logs for error messages
             2. Verify service dependencies (parser, database)
@@ -94,7 +94,7 @@ groups:
           description: |
             Parser failures (combined: timeout, memory, subprocess errors, decode errors) exceeded 5% in the last 5 minutes.
             Failure rate: {{ $value | humanizePercentage }}
-            
+
             Actions:
             1. Trigger incident response
             2. Check parser subprocess logs and system metrics
@@ -114,7 +114,7 @@ groups:
           description: |
             95th percentile request latency exceeded 5 seconds.
             P95 latency: {{ $value }}s
-            
+
             Actions:
             1. Check for slow diagrams (parser bottleneck)
             2. Review application logs for slow rule execution

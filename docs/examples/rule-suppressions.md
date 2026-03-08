@@ -49,6 +49,7 @@ Suppress rule violations for nodes within a subgraph (experimental, flowchart on
 Suppress rule violations globally without config - add a suppression comment above the diagram:
 
 **Diagram Code:**
+
 ```mermaid
 %! suppress rule:core/no-cycles
 
