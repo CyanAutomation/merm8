@@ -2689,9 +2689,10 @@ func (h *Handler) parseWithRequestSettings(req analyzeRequest) (*model.Diagram, 
 	if hasOverride && !supportsConfig {
 		return nil, nil, fmt.Errorf("%w: per-request parser settings are unsupported by the configured parser", errInvalidRequest)
 	}
-	cfg := parser.DefaultConfig().EffectiveConfig()
 	if configProvider, ok := h.parser.(ParserConfigProvider); ok {
 		cfg = configProvider.ParserConfig().EffectiveConfig()
+	} else {
+		cfg = parser.DefaultConfig().EffectiveConfig()
 	}
 	minTimeout, maxTimeout, minMem, maxMem := parser.LimitBounds()
 	if req.Parser.TimeoutSeconds != nil {
