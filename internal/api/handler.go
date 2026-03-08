@@ -349,7 +349,7 @@ func parseRawMermaidInput(body []byte) (analyzeRequest, bool, bool, error) {
 	var req analyzeRequest
 	if err := json.Unmarshal(body, &req); err == nil {
 		return req, true, req.Code == "", nil
-	} else if err != nil {
+	} else {
 		return analyzeRequest{Code: string(body)}, false, false, err
 	}
 	// Not JSON - treat entire body as raw mermaid code
