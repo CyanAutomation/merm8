@@ -36,6 +36,7 @@ type mockParser struct {
 	versionInfo     *parser.VersionInfo
 	versionErr      error
 	parseWithConfig func(string, parser.Config) (*model.Diagram, *parser.SyntaxError, error)
+	parserConfig    *parser.Config
 }
 
 type mockParserWithoutConfig struct {
@@ -61,6 +62,13 @@ func (m *mockParser) ParseWithConfig(code string, cfg parser.Config) (*model.Dia
 		return m.parseWithConfig(code, cfg)
 	}
 	return m.Parse(code)
+}
+
+func (m *mockParser) ParserConfig() parser.Config {
+	if m.parserConfig != nil {
+		return *m.parserConfig
+	}
+	return parser.DefaultConfig()
 }
 
 func (m *mockParser) Ready() error {
@@ -5579,6 +5587,70 @@ func TestAnalyze_ParserOverridesAcceptedAndPropagated(t *testing.T) {
 	}
 	if captured.NodeMaxOldSpaceMB != 768 {
 		t.Fatalf("captured memory=%d want=768", captured.NodeMaxOldSpaceMB)
+	}
+}
+
+func TestAnalyze_ParserOverridePreservesParserInstanceMemoryWhenOnlyTimeoutProvided(t *testing.T) {
+	baseCfg := parser.Config{Timeout: 11 * time.Second, NodeMaxOldSpaceMB: 768}
+	var captured parser.Config
+	mockP := &mockParser{
+		parserConfig: &baseCfg,
+		parseWithConfig: func(_ string, cfg parser.Config) (*model.Diagram, *parser.SyntaxError, error) {
+			captured = cfg
+			return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+		},
+	}
+	mux := http.NewServeMux()
+	h := api.NewHandler(mockP, engine.New())
+	h.RegisterRoutes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":8}}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusOK)
+	}
+	if captured.Timeout != 8*time.Second {
+		t.Fatalf("captured timeout=%s want=8s", captured.Timeout)
+	}
+	if captured.NodeMaxOldSpaceMB != 768 {
+		t.Fatalf("captured memory=%d want=768", captured.NodeMaxOldSpaceMB)
+	}
+}
+
+func TestAnalyze_ParserOverridePreservesParserInstanceTimeoutWhenOnlyMemoryProvided(t *testing.T) {
+	baseCfg := parser.Config{Timeout: 9 * time.Second, NodeMaxOldSpaceMB: 768}
+	var captured parser.Config
+	mockP := &mockParser{
+		parserConfig: &baseCfg,
+		parseWithConfig: func(_ string, cfg parser.Config) (*model.Diagram, *parser.SyntaxError, error) {
+			captured = cfg
+			return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+		},
+	}
+	mux := http.NewServeMux()
+	h := api.NewHandler(mockP, engine.New())
+	h.RegisterRoutes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"max_old_space_mb":1024}}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusOK)
+	}
+	if captured.Timeout != 9*time.Second {
+		t.Fatalf("captured timeout=%s want=9s", captured.Timeout)
+	}
+	if captured.NodeMaxOldSpaceMB != 1024 {
+		t.Fatalf("captured memory=%d want=1024", captured.NodeMaxOldSpaceMB)
 	}
 }
 
