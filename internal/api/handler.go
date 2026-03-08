@@ -2173,6 +2173,8 @@ func defaultMetrics(diagramType model.DiagramType) *metricsResponse {
 type syntaxInputSignals struct {
 	trimmedCode               string
 	firstLine                 string
+	firstLineTypoOriginal     string
+	firstLineTypoCanonical    string
 	diagramType               model.DiagramType
 	unsupportedDiagramKeyword string
 	hasGraphviz               bool
@@ -2188,6 +2190,54 @@ type syntaxInputSignals struct {
 	hasFlowchartLowercaseEnd  bool
 	hasMalformedBracketClose  bool
 	hasUnterminatedEdgeLabel  bool
+}
+
+func normalizeDiagramTypeHeaderToken(header string) string {
+	var b strings.Builder
+	b.Grow(len(header))
+	for _, r := range strings.ToLower(strings.TrimSpace(header)) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func detectDiagramTypeHeaderTypo(firstLine string) (string, string, bool) {
+	firstToken := strings.TrimSpace(firstLine)
+	if firstToken == "" {
+		return "", "", false
+	}
+	if splitAt := strings.IndexAny(firstToken, " \t\r"); splitAt >= 0 {
+		firstToken = firstToken[:splitAt]
+	}
+
+	normalizedToken := normalizeDiagramTypeHeaderToken(firstToken)
+	if normalizedToken == "" {
+		return "", "", false
+	}
+
+	canonicalByNormalized := map[string]string{
+		"flowchart":       "flowchart",
+		"graph":           "graph",
+		"sequence":        "sequenceDiagram",
+		"sequencediagram": "sequenceDiagram",
+		"class":           "classDiagram",
+		"classdiagram":    "classDiagram",
+		"erdiagram":       "erDiagram",
+		"statediagram":    "stateDiagram",
+		"statediagramv2":  "stateDiagram-v2",
+	}
+
+	canonical, ok := canonicalByNormalized[normalizedToken]
+	if !ok {
+		return "", "", false
+	}
+	if firstToken == canonical {
+		return "", "", false
+	}
+
+	return firstToken, canonical, true
 }
 
 func unsupportedDiagramKeywordFromFirstLine(firstLine string) string {
@@ -2254,13 +2304,16 @@ func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInput
 
 	missingDiagramTypeLikely := false
 	unsupportedDiagramKeyword := unsupportedDiagramKeywordFromFirstLine(firstLine)
+	typoOriginal, typoCanonical, hasDiagramTypeHeaderTypo := detectDiagramTypeHeaderTypo(firstLine)
 	if syntaxErr != nil && (strings.Contains(syntaxErr.Message, "No diagram type") || strings.Contains(syntaxErr.Message, "Unexpected")) {
-		missingDiagramTypeLikely = !isDiagramTypeKeyword(firstLine) && unsupportedDiagramKeyword == ""
+		missingDiagramTypeLikely = !isDiagramTypeKeyword(firstLine) && unsupportedDiagramKeyword == "" && !hasDiagramTypeHeaderTypo
 	}
 
 	return syntaxInputSignals{
 		trimmedCode:               trimmed,
 		firstLine:                 firstLine,
+		firstLineTypoOriginal:     typoOriginal,
+		firstLineTypoCanonical:    typoCanonical,
 		diagramType:               defaultDiagramTypeForSyntaxError(code),
 		unsupportedDiagramKeyword: unsupportedDiagramKeyword,
 		hasGraphviz:               strings.Contains(code, "digraph") || strings.Contains(code, "rankdir"),
@@ -2421,6 +2474,17 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 		})
 	}
 
+	if signals.firstLineTypoCanonical != "" {
+		hints = append(hints, responseHint{
+			Code:       "diagram_type_header_typo",
+			Message:    fmt.Sprintf("Line 1 diagram type header looks malformed: `%s` -> `%s`.", signals.firstLineTypoOriginal, signals.firstLineTypoCanonical),
+			Severity:   "warning",
+			Confidence: 0.99,
+			AppliesTo:  &responseHintAppliesTo{Line: 1},
+			FixExample: signals.firstLineTypoCanonical + "\n  A --> B",
+		})
+	}
+
 	// Detect missing diagram type keyword.
 	if signals.missingDiagramTypeLikely {
 		hints = append(hints, responseHint{
@@ -2539,6 +2603,17 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 			CorrectExample: "stateDiagram-v2\n  [*] --> Idle",
 			DocLink:        "#diagram-types",
 			FixAction:      "Switch to `stateDiagram-v2` style syntax for state diagrams",
+		}
+	}
+
+	if signals.firstLineTypoCanonical != "" {
+		return &helpSuggestion{
+			Title:          "Diagram type header typo on line 1",
+			Explanation:    fmt.Sprintf("The first-line Mermaid diagram type is malformed. Use the canonical keyword `%s`.", signals.firstLineTypoCanonical),
+			WrongExample:   signals.firstLineTypoOriginal + "\n  A --> B",
+			CorrectExample: signals.firstLineTypoCanonical + "\n  A --> B",
+			DocLink:        "#diagram-types",
+			FixAction:      fmt.Sprintf("On line 1, replace `%s` with `%s`.", signals.firstLineTypoOriginal, signals.firstLineTypoCanonical),
 		}
 	}
 
