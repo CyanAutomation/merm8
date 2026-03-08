@@ -3,6 +3,7 @@ package benchmarks
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -89,6 +90,22 @@ type RegressionAlert struct {
 }
 
 // MarshalBenchmarkCase marshals a BenchmarkCase to JSON.
+//
+// If BenchmarkCase.Config is provided, it must contain valid JSON. When the
+// config payload is invalid, this function returns an error with the stable
+// prefix "benchmarks: invalid config payload".
 func MarshalBenchmarkCase(bc BenchmarkCase) ([]byte, error) {
-	return json.Marshal(bc)
+	if bc.Config != nil {
+		var cfg any
+		if err := json.Unmarshal(bc.Config, &cfg); err != nil {
+			return nil, fmt.Errorf("benchmarks: invalid config payload: %w", err)
+		}
+	}
+
+	data, err := json.Marshal(bc)
+	if err != nil {
+		return nil, fmt.Errorf("benchmarks: marshal benchmark case: %w", err)
+	}
+
+	return data, nil
 }
