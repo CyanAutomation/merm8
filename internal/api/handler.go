@@ -2522,6 +2522,9 @@ func computeMetrics(d *model.Diagram, issues []model.Issue) *metricsResponse {
 		}
 	}
 	for _, nodeID := range d.DisconnectedNodeIDs {
+		if connected[nodeID] {
+			continue
+		}
 		disconnectedNodeIDs[nodeID] = struct{}{}
 	}
 	disconnectedNodeCount := len(disconnectedNodeIDs)
