@@ -1005,25 +1005,34 @@ func (h *Handler) HealthMetrics(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	// Aggregate analyze outcome counters
-	totalRequests := h.analyzeCounters.validSuccess.Load() +
-		h.analyzeCounters.syntaxError.Load() +
-		h.analyzeCounters.parserTimeout.Load() +
-		h.analyzeCounters.parserSubprocess.Load() +
-		h.analyzeCounters.parserDecode.Load() +
-		h.analyzeCounters.parserContract.Load() +
-		h.analyzeCounters.parserInternalError.Load()
+	validSuccess := h.analyzeCounters.validSuccess.Load()
+	syntaxError := h.analyzeCounters.syntaxError.Load()
+	parserTimeout := h.analyzeCounters.parserTimeout.Load()
+	parserSubprocess := h.analyzeCounters.parserSubprocess.Load()
+	parserDecode := h.analyzeCounters.parserDecode.Load()
+	parserContract := h.analyzeCounters.parserContract.Load()
+	parserInternalError := h.analyzeCounters.parserInternalError.Load()
+
+	totalRequests := validSuccess +
+		syntaxError +
+		parserTimeout +
+		parserSubprocess +
+		parserDecode +
+		parserContract +
+		parserInternalError
 
 	successfulAnalyses := healthMetricsOutcome{
-		Total:       h.analyzeCounters.validSuccess.Load(),
-		LintSuccess: h.analyzeCounters.validSuccess.Load(),
+		Total:       validSuccess,
+		LintSuccess: validSuccess,
 	}
+	failedTotal := syntaxError + parserTimeout + parserSubprocess + parserDecode + parserContract + parserInternalError
 
 	failedAnalyses := healthMetricsOutcome{
-		Total:          totalRequests - successfulAnalyses.Total,
-		SyntaxErrors:   h.analyzeCounters.syntaxError.Load(),
-		ParserTimeout:  h.analyzeCounters.parserTimeout.Load(),
-		ParserErrors:   h.analyzeCounters.parserSubprocess.Load() + h.analyzeCounters.parserDecode.Load() + h.analyzeCounters.parserContract.Load(),
-		InternalErrors: h.analyzeCounters.parserInternalError.Load(),
+		Total:          failedTotal,
+		SyntaxErrors:   syntaxError,
+		ParserTimeout:  parserTimeout,
+		ParserErrors:   parserSubprocess + parserDecode + parserContract,
+		InternalErrors: parserInternalError,
 	}
 
 	// TODO: Add real P50/P95 latency data when histogram metrics are collected
