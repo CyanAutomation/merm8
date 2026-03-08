@@ -114,6 +114,8 @@ func runBusyResponseScenario(t *testing.T, path string) []byte {
 		t.Fatalf("expected Retry-After to be a positive integer, got %q (err=%v)", retryAfter, err)
 	}
 
+	defer secondRes.Body.Close()
+
 	responseBody, err := io.ReadAll(secondRes.Body)
 	if err != nil {
 		t.Fatalf("failed to read busy response body: %v", err)
