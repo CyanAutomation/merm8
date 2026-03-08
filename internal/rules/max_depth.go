@@ -103,11 +103,16 @@ type pathResult struct {
 }
 
 func longestPathFrom(nodeID string, adj map[string][]string, visited map[string]bool, memo map[string]pathResult) (int, []string) {
+	depth, path, _ := longestPathFromWithCycleInfo(nodeID, adj, visited, memo)
+	return depth, path
+}
+
+func longestPathFromWithCycleInfo(nodeID string, adj map[string][]string, visited map[string]bool, memo map[string]pathResult) (int, []string, bool) {
 	if visited[nodeID] {
-		return 0, []string{nodeID}
+		return 0, []string{nodeID}, true
 	}
 	if cached, ok := memo[nodeID]; ok {
-		return cached.depth, append([]string(nil), cached.path...)
+		return cached.depth, append([]string(nil), cached.path...), false
 	}
 
 	visited[nodeID] = true
@@ -115,18 +120,24 @@ func longestPathFrom(nodeID string, adj map[string][]string, visited map[string]
 
 	nextNodes := adj[nodeID]
 	if len(nextNodes) == 0 {
-		return 0, []string{nodeID}
+		return 0, []string{nodeID}, false
 	}
 
 	bestDepth := 0
 	bestPath := []string{nodeID}
 	cacheable := true
+	hasCycle := false
 	for _, next := range nextNodes {
 		if visited[next] {
 			cacheable = false
+			hasCycle = true
 		}
 
-		depth, path := longestPathFrom(next, adj, visited, memo)
+		depth, path, childHasCycle := longestPathFromWithCycleInfo(next, adj, visited, memo)
+		if childHasCycle {
+			cacheable = false
+			hasCycle = true
+		}
 		candidateDepth := depth + 1
 		if candidateDepth > bestDepth {
 			bestDepth = candidateDepth
@@ -137,7 +148,7 @@ func longestPathFrom(nodeID string, adj map[string][]string, visited map[string]
 		memo[nodeID] = pathResult{depth: bestDepth, path: append([]string(nil), bestPath...)}
 	}
 
-	return bestDepth, bestPath
+	return bestDepth, bestPath, hasCycle
 }
 
 func sccRepresentatives(adj map[string][]string, indegree map[string]int) []string {
