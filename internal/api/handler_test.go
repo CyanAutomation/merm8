@@ -1871,6 +1871,48 @@ func TestAnalyze_MetricsExtendedFields(t *testing.T) {
 }
 
 // TestAnalyze_LargeDiagram tests handling of large diagrams (500+ nodes) with timing and detailed metrics.
+
+func TestAnalyze_MetricsDisconnectedNodeUnionIncludesSourceAnalysisOnlyNodes(t *testing.T) {
+	diagram := &model.Diagram{
+		Type:                model.DiagramTypeFlowchart,
+		Direction:           "TD",
+		Nodes:               []model.Node{{ID: "A"}, {ID: "B"}},
+		Edges:               []model.Edge{{From: "A", To: "B", Type: "arrow"}},
+		DisconnectedNodeIDs: []string{"orphan", "orphan", "B"},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]string{"code": `graph TD
+  A-->B
+  orphan`})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	metrics, ok := resp["metrics"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected metrics object, got %T", resp["metrics"])
+	}
+
+	if got := metrics["disconnected-node-count"]; got != float64(1) {
+		t.Fatalf("expected disconnected-node-count=1 (only 'orphan', B is connected), got %v", got)
+		t.Fatalf("expected disconnected-node-count=2 from unioned IDs, got %v", got)
+	}
+}
+
 func TestAnalyze_LargeDiagram(t *testing.T) {
 	// Create a large diagram with 500 nodes in a chain
 	nodes := make([]model.Node, 500)
