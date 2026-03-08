@@ -2565,6 +2565,18 @@ func openAPIFallbackSpec(servers []map[string]interface{}) map[string]interface{
 			"version": "1.0.0",
 		},
 		"servers": servers,
+		"paths": map[string]interface{}{
+			"/v1/spec": map[string]interface{}{
+				"get": map[string]interface{}{
+					"summary": "Get OpenAPI specification",
+					"responses": map[string]interface{}{
+						"200": map[string]interface{}{
+							"description": "OpenAPI specification",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

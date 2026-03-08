@@ -1495,8 +1495,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 	if !h.isLintSupported(family) {
 		observeAnalyzeOutcome("unsupported_diagram_type")
 		setAnalyzeLogFields(r.Context(), "", "unsupported_diagram_type", string(diagram.Type))
-		// Keep metrics in the response for parsed diagrams, even when linting is
-		// not currently supported for that Mermaid family.
+		// Linting is not supported for this diagram type, return zero metrics.
 		unsupportedIssue := model.Issue{
 			RuleID:   "unsupported-diagram-type",
 			Severity: "info",
@@ -1516,7 +1515,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 				Code:    "unsupported_diagram_type",
 				Message: "diagram type is parsed but linting is not supported",
 			},
-			Metrics: computeMetrics(diagram, []model.Issue{unsupportedIssue}),
+			Metrics: zeroMetrics(diagram.Type),
 		}
 		writeJSON(w, http.StatusOK, resp)
 		return
@@ -1785,7 +1784,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 				Code:    "unsupported_diagram_type",
 				Message: "diagram type is parsed but linting is not supported",
 			},
-			Metrics: computeMetrics(diagram, []model.Issue{unsupportedIssue}),
+			Metrics: zeroMetrics(diagram.Type),
 		}
 		writeJSON(w, http.StatusOK, resp)
 		return
@@ -2628,6 +2627,21 @@ func computeMetrics(d *model.Diagram, issues []model.Issue) *metricsResponse {
 		DiagramType:           d.Type,
 		Direction:             d.Direction,
 		IssueCounts:           issueCounts,
+	}
+}
+
+// zeroMetrics returns metrics with all counts set to zero, used for unsupported diagram types.
+func zeroMetrics(diagramType model.DiagramType) *metricsResponse {
+	return &metricsResponse{
+		NodeCount:             0,
+		EdgeCount:             0,
+		DisconnectedNodeCount: 0,
+		DuplicateNodeCount:    0,
+		MaxFanin:              0,
+		MaxFanout:             0,
+		DiagramType:           diagramType,
+		Direction:             "",
+		IssueCounts:           &issueCountsResponse{BySeverity: map[string]int{}, ByRule: map[string]int{}},
 	}
 }
 
