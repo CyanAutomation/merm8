@@ -2725,9 +2725,11 @@ func syntaxErrorLineContext(code string, syntaxErr *parser.SyntaxError) syntaxEr
 		col = 1
 	}
 	if len(runes) == 0 {
+	if len(runes) == 0 {
 		col = 0
-		ctx.column = col
 		return ctx
+	}
+	ctx.column = col
 	}
 	if col > len(runes) {
 		col = len(runes)
