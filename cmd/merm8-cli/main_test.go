@@ -6,9 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/CyanAutomation/merm8/internal/rules"
 )
 
 func TestParseArgsDefaultsToStdin(t *testing.T) {
@@ -220,58 +223,102 @@ func runWithStdin(t *testing.T, args []string, stdinContent string) int {
 	return run(args, &bytes.Buffer{}, &bytes.Buffer{})
 }
 
-func TestParseConfigFileConfigShapes(t *testing.T) {
-	// Keep shape assertions in sync with API-side schema tests in
-	// internal/rules/schema_test.go: flat and versioned forms are accepted,
-	// unsupported schema-version is rejected with actionable messaging.
+func TestParseConfigFileVersionedShape(t *testing.T) {
 	tests := []struct {
-		name              string
-		raw               json.RawMessage
-		wantRule          string
-		wantErrContains   []string
-		wantNoError       bool
+		name            string
+		flat            json.RawMessage
+		versioned       json.RawMessage
+		wantRuleKey     string
+		wantLimit       float64
+		wantErrContains []string
 	}{
 		{
-			name:        "accepts flat config",
-			raw:         json.RawMessage(`{"max-fanout":{"limit":1}}`),
-			wantRule:    "max-fanout",
-			wantNoError: true,
+			name:        "flat and versioned parse to equivalent config",
+			flat:        json.RawMessage(`{"max-fanout":{"limit":2}}`),
+			versioned:   json.RawMessage(`{"schema-version":"v1","rules":{"max-fanout":{"limit":2}}}`),
+			wantRuleKey: "max-fanout",
+			wantLimit:   2,
 		},
 		{
-			name:        "accepts versioned config",
-			raw:         json.RawMessage(`{"schema-version":"v1","rules":{"max-fanout":{"limit":2}}}`),
-			wantRule:    "max-fanout",
-			wantNoError: true,
+			name:        "canonicalizes built-in namespaced rule key",
+			flat:        json.RawMessage(`{"core/max-fanout":{"limit":2}}`),
+			versioned:   json.RawMessage(`{"schema-version":"v1","rules":{"core/max-fanout":{"limit":2}}}`),
+			wantRuleKey: "max-fanout",
+			wantLimit:   2,
+		},
+		{
+			name:            "rejects unknown nested structure with stable error",
+			flat:            json.RawMessage(`{"max-fanout":{"limit":{"value":2}}}`),
+			versioned:       json.RawMessage(`{"schema-version":"v1","rules":{"max-fanout":{"limit":{"value":2}}}}`),
+			wantErrContains: []string{"config rule \"max-fanout\" option \"limit\" must not contain nested objects"},
 		},
 		{
 			name:            "rejects unsupported schema version",
-			raw:             json.RawMessage(`{"schema-version":"v2","rules":{}}`),
+			versioned:       json.RawMessage(`{"schema-version":"v2","rules":{}}`),
 			wantErrContains: []string{"schema-version", "v2"},
 		},
+	}
+
+	assertParsed := func(t *testing.T, cfg rules.Config, wantRuleKey string, wantLimit float64) {
+		t.Helper()
+		ruleCfg, ok := cfg[wantRuleKey]
+		if !ok {
+			t.Fatalf("expected %q rule in parsed config; got keys: %#v", wantRuleKey, cfg)
+		}
+		if _, hasLegacyCoreKey := cfg["core/max-fanout"]; hasLegacyCoreKey {
+			t.Fatalf("expected canonical built-in key normalization, found unexpected legacy key: %#v", cfg)
+		}
+		gotLimit, ok := ruleCfg["limit"].(float64)
+		if !ok {
+			t.Fatalf("expected %q.limit to decode as float64, got %#v", wantRuleKey, ruleCfg["limit"])
+		}
+		if gotLimit != wantLimit {
+			t.Fatalf("expected %q.limit=%v, got %v", wantRuleKey, wantLimit, gotLimit)
+		}
 	}
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := parseConfigFile(tt.raw)
+			inputs := []struct {
+				name string
+				raw  json.RawMessage
+			}{
+				{name: "flat", raw: tt.flat},
+				{name: "versioned", raw: tt.versioned},
+			}
 
-			if tt.wantNoError {
+			var baseline rules.Config
+			for _, input := range inputs {
+				if len(input.raw) == 0 {
+					continue
+				}
+				cfg, err := parseConfigFile(input.raw)
+
+				if len(tt.wantErrContains) > 0 {
+					if err == nil {
+						t.Fatalf("expected parseConfigFile error for %s input", input.name)
+					}
+					errText := err.Error()
+					for _, want := range tt.wantErrContains {
+						if !strings.Contains(errText, want) {
+							t.Fatalf("expected %s error %q to contain %q", input.name, errText, want)
+						}
+					}
+					continue
+				}
+
 				if err != nil {
-					t.Fatalf("parseConfigFile error: %v", err)
+					t.Fatalf("parseConfigFile(%s) error: %v", input.name, err)
 				}
-				if _, ok := cfg[tt.wantRule]; !ok {
-					t.Fatalf("expected %s rule in parsed config", tt.wantRule)
-				}
-				return
-			}
+				assertParsed(t, cfg, tt.wantRuleKey, tt.wantLimit)
 
-			if err == nil {
-				t.Fatalf("expected parseConfigFile error")
-			}
-			errText := err.Error()
-			for _, want := range tt.wantErrContains {
-				if !strings.Contains(errText, want) {
-					t.Fatalf("expected error %q to contain %q", errText, want)
+				if baseline == nil {
+					baseline = cfg
+					continue
+				}
+				if !reflect.DeepEqual(baseline, cfg) {
+					t.Fatalf("expected equivalent parsed output, baseline=%#v, got=%#v", baseline, cfg)
 				}
 			}
 		})

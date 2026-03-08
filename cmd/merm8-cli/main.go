@@ -332,38 +332,98 @@ func parseConfigFile(raw json.RawMessage) (rules.Config, error) {
 		if !ok {
 			return nil, errors.New("config.rules is required when schema-version is set")
 		}
-		rulesMap, ok := rulesValue.(map[string]any)
-		if !ok {
-			return nil, errors.New("config.rules must be an object")
-		}
-		rawRules, err := json.Marshal(rulesMap)
-		if err != nil {
-			return nil, err
-		}
-		var cfg rules.Config
-		if err := json.Unmarshal(rawRules, &cfg); err != nil {
-			return nil, err
-		}
-		return cfg, nil
+		return decodeRulesObject(rulesValue)
 	}
 	if rulesValue, ok := payload["rules"]; ok {
-		rulesMap, ok := rulesValue.(map[string]any)
-		if !ok {
-			return nil, errors.New("config.rules must be an object")
-		}
-		rawRules, err := json.Marshal(rulesMap)
-		if err != nil {
-			return nil, err
-		}
-		var cfg rules.Config
-		if err := json.Unmarshal(rawRules, &cfg); err != nil {
-			return nil, err
-		}
-		return cfg, nil
+		return decodeRulesObject(rulesValue)
 	}
+
+	if err := rejectNestedConfigStructure(payload); err != nil {
+		return nil, err
+	}
+
 	var cfg rules.Config
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return nil, err
 	}
-	return cfg, nil
+
+	return canonicalizeConfigRuleKeys(cfg), nil
+}
+
+func decodeRulesObject(rulesValue any) (rules.Config, error) {
+	rulesMap, ok := rulesValue.(map[string]any)
+	if !ok {
+		return nil, errors.New("config.rules must be an object")
+	}
+
+	if err := rejectNestedConfigStructure(rulesMap); err != nil {
+		return nil, err
+	}
+
+	rawRules, err := json.Marshal(rulesMap)
+	if err != nil {
+		return nil, err
+	}
+	var cfg rules.Config
+	if err := json.Unmarshal(rawRules, &cfg); err != nil {
+		return nil, err
+	}
+
+	return canonicalizeConfigRuleKeys(cfg), nil
+}
+
+func rejectNestedConfigStructure(data map[string]any) error {
+	for ruleID, rawRuleConfig := range data {
+		ruleConfig, ok := rawRuleConfig.(map[string]any)
+		if !ok {
+			continue
+		}
+		for optionKey, optionValue := range ruleConfig {
+			if hasNestedStructure(optionValue) {
+				return fmt.Errorf("config rule %q option %q must not contain nested objects", ruleID, optionKey)
+			}
+		}
+	}
+	return nil
+}
+
+func hasNestedStructure(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		return true
+	case []any:
+		for _, item := range typed {
+			if hasNestedStructure(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func canonicalizeConfigRuleKeys(cfg rules.Config) rules.Config {
+	if cfg == nil {
+		return nil
+	}
+
+	canonical := make(rules.Config, len(cfg))
+	for ruleID, ruleCfg := range cfg {
+		canonicalRuleID := ruleID
+		if strings.HasPrefix(ruleID, "core/") {
+			canonicalRuleID = strings.TrimPrefix(ruleID, "core/")
+		}
+
+		if existing, ok := canonical[canonicalRuleID]; ok {
+			for optionKey, optionValue := range ruleCfg {
+				if _, exists := existing[optionKey]; !exists {
+					existing[optionKey] = optionValue
+				}
+			}
+			continue
+		}
+
+		canonical[canonicalRuleID] = ruleCfg
+	}
+
+	return canonical
 }
