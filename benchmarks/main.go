@@ -28,23 +28,23 @@ func main() {
 	flag.Parse()
 
 	if *help {
-		fmt.Println(`merm8 Benchmark Runner
+		fmt.Print(`merm8 Benchmark Runner
 
 Usage: go run ./benchmarks/main.go [options]
 
 Options:
   -rule string
-        Run only cases for specific rule (e.g., 'no-cycles')
+		Run only cases for specific rule (e.g., 'no-cycles')
   -category string
-        Filter by category: 'valid', 'violation', 'edge-case'
+		Filter by category: 'valid', 'violation', 'edge-case'
   -compare-baseline string
-        Path to baseline JSON file to compare against (e.g., 'benchmarks/baselines/v0.1.0.json')
+		Path to baseline JSON file to compare against (e.g., 'benchmarks/baselines/v0.1.0.json')
   -regression-threshold float
-        Regression detection threshold percentage (default: 5.0)
+		Regression detection threshold percentage (default: 5.0)
   -verbose
-        Verbose output
+		Verbose output
   -help
-        Show help message
+		Show help message
 
 Examples:
   # Run all benchmarks
