@@ -272,18 +272,51 @@ console.log(result);
 
 ### Troubleshooting CORS Errors
 
-**Error:** `"is not allowed by Access-Control-Allow-Origin"`
+Use this deterministic flow to separate browser CORS misconfiguration from real backend saturation (503) issues.
 
-**Causes:**
-- Your frontend origin is not in `ALLOWED_ORIGINS`
-- The API is not configured with CORS support
+#### Step 1: Preflight check (`OPTIONS /v1/analyze`)
 
-**Solution:**
-1. Check your frontend domain/origin
-2. Ensure `ALLOWED_ORIGINS` includes your domain
-3. Verify the origin header matches exactly (protocol, domain, port)
+Run an explicit preflight from the expected frontend origin:
 
-**Example:**
+```bash
+curl -i -X OPTIONS http://localhost:8080/v1/analyze \
+  -H "Origin: https://merm8-splash.vercel.app" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: Content-Type"
+```
+
+Interpretation:
+- `204 No Content` **with** `Access-Control-Allow-Origin: https://merm8-splash.vercel.app` ⇒ preflight is configured correctly.
+- Missing `Access-Control-Allow-Origin` ⇒ `ALLOWED_ORIGINS` mismatch or CORS config issue.
+
+#### Step 2: Actual request check (`POST /v1/analyze`)
+
+Run a real POST with the same `Origin` and inspect headers + error payload:
+
+```bash
+curl -i -X POST http://localhost:8080/v1/analyze \
+  -H "Origin: https://merm8-splash.vercel.app" \
+  -H "Content-Type: application/json" \
+  -d '{"code":"graph TD; A-->B","config":{"schema-version":"v1","rules":{}}}'
+```
+
+Check all of the following:
+- `Access-Control-Allow-Origin` header present or missing.
+- HTTP status code.
+- `error.code` in JSON body when non-200.
+
+Interpretation matrix:
+- Missing `Access-Control-Allow-Origin` (regardless of status) ⇒ CORS allowlist problem.
+- `503` with `error.code="server_busy"` and CORS header present ⇒ backend concurrency/capacity issue (not CORS).
+- `503` with `error.code="parser_timeout"` and CORS header present ⇒ parser timeout under load/complex input.
+
+#### Operational telemetry interpretation
+
+When diagnosing incidents, correlate API behavior with Prometheus metrics:
+- `cors_rejected_total` increasing ⇒ allowlist/CORS origin mismatch.
+- `analyze_requests_total{outcome="server_busy"}` increasing ⇒ analyze concurrency/capacity bottleneck.
+
+**Example origin mismatch:**
 ```javascript
 // ❌ Won't work if ALLOWED_ORIGINS contains "https://app.example.com"
 fetch('https://api.example.com/v1/analyze', {...})

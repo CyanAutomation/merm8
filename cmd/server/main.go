@@ -106,7 +106,7 @@ func main() {
 		// Default to Vercel frontend domain for merm8
 		allowedOrigins = "https://merm8-splash.vercel.app"
 	}
-	rootHandler = api.CORSMiddleware(allowedOrigins)(rootHandler)
+	rootHandler = api.CORSMiddleware(allowedOrigins, logger, metrics)(rootHandler)
 
 	addr := fmt.Sprintf(":%s", port)
 	parserCfg := parser.ConfigFromEnv().EffectiveConfig()
