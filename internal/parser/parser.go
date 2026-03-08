@@ -483,7 +483,7 @@ func (p *Parser) parseWithWorkerPool(mermaidCode string, cfg Config) (*model.Dia
 	respCh := make(chan *workerResponseEnvelope, 1)
 	errCh := make(chan error, 1)
 	req := workerRequestEnvelope{
-		ID:      fmt.Sprintf("req-%d", rand.Int63()),
+		ID:      fmt.Sprintf("req-%d-%d", time.Now().UnixNano(), rand.Int63()),
 		Code:    mermaidCode,
 		Timeout: cfg.Timeout.Milliseconds(),
 		Limits:  &workerLimits{NodeMaxOldSpaceMB: cfg.NodeMaxOldSpaceMB},
