@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant Requester
+    participant Agent1
+    participant Agent2
+    participant Aggregator
+    
+    Requester->>Agent1: Request data
+    Requester->>Agent2: Request data
+    par Parallel processing
+        Agent1-->>Aggregator: Result 1
+    and
+        Agent2-->>Aggregator: Result 2
+    end
+    Aggregator-->>Requester: Combined result
+    
+    %% @rule: *

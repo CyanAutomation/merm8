@@ -408,6 +408,150 @@ graph TD
     %% Single node—special case: allowed if only node in diagram
 ```
 
+## Diagram Type Examples
+
+This section provides quick-start examples for each supported diagram type beyond flowchart.
+
+### Sequence Diagrams
+
+Sequence diagrams show interactions between actors over time.
+
+**Valid example:**
+
+```mermaid
+sequenceDiagram
+    participant A as Alice
+    participant B as Bob
+    A->>B: Hello Bob
+    B-->>A: I'm good
+    
+    %% @rule: *
+```
+
+**Violation example (duplicate actor):**
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Server
+    participant Server
+    
+    User->>Server: Request
+    Server-->>User: Response
+    
+    %% @rule: *
+    %% Duplicate actor "Server" defined twice—rules can detect this later
+```
+
+### Class Diagrams
+
+Class diagrams show object-oriented class structure and relationships.
+
+**Valid example:**
+
+```mermaid
+classDiagram
+    class Animal {
+        +name: string
+        +eat()
+    }
+    
+    class Dog {
+        +breed: string
+        +bark()
+    }
+    
+    Animal <|-- Dog
+    
+    %% @rule: *
+```
+
+**Violation example (circular inheritance):**
+
+```mermaid
+classDiagram
+    class A {
+        +field: string
+    }
+    
+    class B {
+        +field: string
+    }
+    
+    class C {
+        +field: string
+    }
+    
+    A <|-- B
+    B <|-- C
+    C <|-- A
+    
+    %% @rule: *
+    %% Circular inheritance—rules can detect this later
+```
+
+### ER Diagrams
+
+Entity-Relationship diagrams show database schema and relationships.
+
+**Valid example:**
+
+```mermaid
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE-ITEM : contains
+    CUSTOMER ||--o{ INVOICE : receives
+    
+    CUSTOMER {
+        int id
+        string name
+    }
+    
+    %% @rule: *
+```
+
+**Violation example (circular relationship):**
+
+```mermaid
+erDiagram
+    USER ||--o{ USER : "follows"
+    USER ||--o{ USER : "blocks"
+    
+    %% @rule: *
+    %% Circular self-referential relationships
+```
+
+### State Diagrams
+
+State diagrams show finite state machines and transitions.
+
+**Valid example:**
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Running: start
+    Running --> Paused: pause
+    Paused --> Running: resume
+    Running --> Stopped: stop
+    Stopped --> [*]
+    
+    %% @rule: *
+```
+
+**Violation example (unreachable state):**
+
+```mermaid
+stateDiagram-v2
+    [*] --> Active
+    Active --> Idle: event
+    
+    Unreachable --> [*]
+    
+    %% @rule: *
+    %% Unreachable state—cannot be reached from [*]
+```
+
 ## Testing Your Changes
 
 After adding new fixtures, verify:

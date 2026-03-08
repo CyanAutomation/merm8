@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant A
+    participant B
+    participant C
+    participant D
+    participant E
+    
+    A->>B: msg1
+    B->>C: msg2
+    C->>D: msg3
+    D->>E: msg4
+    E->>A: msg5
+    A->>B: msg6
+    B->>C: msg7
+    
+    %% @rule: *
+    %% Many interactions - potential for performance issues

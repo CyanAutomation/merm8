@@ -51,6 +51,7 @@ type RuleResult struct {
 	Passed            int          `json:"passed"`
 	DetectionRate     float64      `json:"detection_rate"`      // passed / TotalCases
 	FalsePositives    int          `json:"false_positives"`     // Issues found not in expected
+	TotalActualIssues int          `json:"total_actual_issues"` // Total issues reported across all cases
 	FalsePositiveRate float64      `json:"false_positive_rate"` // false_positives / total_actual_issues
 	SelectedCases     []CaseResult `json:"selected_cases"`      // Case-by-case details (failed only)
 	AvgParseTimeMs    int64        `json:"avg_parse_time_ms"`
@@ -81,12 +82,27 @@ type Issue struct {
 
 // RegressionAlert indicates a detected regression from baseline.
 type RegressionAlert struct {
-	RuleID                string  `json:"rule_id"`
-	BaselineDetectionRate float64 `json:"baseline_detection_rate"`
-	CurrentDetectionRate  float64 `json:"current_detection_rate"`
-	DropPercent           float64 `json:"drop_percent"`
-	Threshold             float64 `json:"threshold"` // e.g., 5.0 for 5%
-	IsFailing             bool    `json:"is_failing"`
+	RuleID                   string  `json:"rule_id"`
+	Type                     string  `json:"type"` // "detection_rate" or "performance"
+	BaselineDetectionRate    float64 `json:"baseline_detection_rate,omitempty"`
+	CurrentDetectionRate     float64 `json:"current_detection_rate,omitempty"`
+	DropPercent              float64 `json:"drop_percent,omitempty"`
+	BaselineAvgParseTimeMs   int64   `json:"baseline_avg_parse_time_ms,omitempty"`
+	CurrentAvgParseTimeMs    int64   `json:"current_avg_parse_time_ms,omitempty"`
+	ParseTimeIncreasePercent float64 `json:"parse_time_increase_percent,omitempty"`
+	BaselineAvgLintTimeMs    int64   `json:"baseline_avg_lint_time_ms,omitempty"`
+	CurrentAvgLintTimeMs     int64   `json:"current_avg_lint_time_ms,omitempty"`
+	LintTimeIncreasePercent  float64 `json:"lint_time_increase_percent,omitempty"`
+	Threshold                float64 `json:"threshold"` // e.g., 5.0 for 5%
+	IsFailing                bool    `json:"is_failing"`
+}
+
+// CoverageMetrics describes test coverage statistics.
+type CoverageMetrics struct {
+	LowCoverageRules       []string // Rules with <5 test cases
+	NoViolationsCasesRules []string // Rules with no violations-category test cases
+	UncoveredDiagramTypes  []string // Diagram types with zero test cases
+	FullySupported         bool     // All rules have >=5 cases and violations cases
 }
 
 // MarshalBenchmarkCase marshals a BenchmarkCase to JSON.

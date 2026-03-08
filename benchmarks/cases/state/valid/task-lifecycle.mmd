@@ -1,0 +1,14 @@
+stateDiagram-v2
+    [*] --> Start
+    Start --> Processing: begin
+    
+    Processing --> Success: complete
+    Processing --> Error: fail
+    
+    Error --> Retry: retry
+    Retry --> Processing: attempt
+    
+    Success --> [*]
+    Error --> [*]
+    
+    %% @rule: *

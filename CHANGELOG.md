@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Benchmark Suite Enhancements (Phase 1)
+
+- **False Positive Rate Tracking**: Benchmark suite now calculates and reports `false_positive_rate` (actual issues reported / total actual issues) per rule. Exposed in JSON, HTML, and CSV reports.
+- **CSV Output Format**: Added `--output csv` flag (default: `json,html`). Benchmark results can now be exported as comma-separated values for spreadsheet analysis and programmatic integration.
+- **Improved Version Detection**: Benchmark runner now detects version from:
+  1. `MERM8_VERSION` environment variable (CI/build)
+  2. `git describe --tags` (local development)
+  3. Linker flag `-ldflags` (at build time)
+  Makefile updated to propagate version via linker flags and environment variables.
+- **Test Case Deduplication Warning**: Benchmark discovery now detects and warns about duplicate fixture content (same `.mmd` file included multiple times with different names). Helps identify wasted benchmark runtime.
+- **Enhanced HTML Report**: False positive counts and rates added to rule metrics table for transparency into rule over-reporting behavior.
+
+### Benchmark Suite Enhancements (Phase 2)
+
+- **Performance Regression Detection**: Benchmark comparison (`--compare-baseline`) now detects and alerts on:
+  - Detection rate drops (existing behavior, same threshold)
+  - Parse time increases >10% per rule
+  - Lint time increases >10% per rule
+  Alerts printed with rule, baseline→current values, percentage increase, and threshold. Separate alerts for each regression type.
+- **Test Coverage Analysis**: New "Coverage Analysis" section in HTML report shows:
+  - ✅ Full coverage status when all rules have ≥5 test cases  
+  - ⚠️ Limited coverage with list of low-coverage rules (<5 cases) and uncovered diagram types
+  Helps identify gaps in test suite systematically.
+- **Sample Size Indicators**: Detection rate now displays with sample size (e.g., "100.00% (2/2)") showing actual case count. Rules with <5 test cases display ⚠️ low-confidence badge in rule name column. Improves distinction between high-confidence metrics (many cases) and low-confidence ones (few cases).
+
+### Benchmark Suite Enhancements (Phase 3)
+
+- **Parser Instance Caching**: Benchmark runner now initializes a single parser instance at startup and reuses it across all benchmark cases, eliminating subprocess creation overhead per case. Parser is created once during `Run()` and passed to each `executeCase()` call. Reduces benchmark execution overhead while maintaining identical result accuracy.
+
+### Benchmark Suite Enhancements (Phase 4)
+
+- **Test Suite Expansion for New Diagram Types**: Added comprehensive test fixtures for sequence, class, ER, and state diagrams:
+  - **Sequence diagrams**: 17 fixtures (valid interactions, duplicate actors, high message count, deep nesting, parallel messages)
+  - **Class diagrams**: 12 fixtures (inheritance, composition, interfaces, circular dependencies, deep hierarchies)
+  - **ER diagrams**: 10 fixtures (entity relationships, many-to-many, circular references, single entity edge cases)
+  - **State diagrams**: 10 fixtures (state machines, transitions, unreachable states, nested states)
+  - Total new fixtures: 49 across 4 diagram types; combined with 18 existing flowchart fixtures = 67 test cases
+- **Updated Contributing Guide**: Extended `CONTRIBUTING.md` with diagram-type-specific examples, fixture templates, and best practices for sequence, class, ER, and state diagrams. Helps future contributors author test cases for new diagram types as rules are implemented.
+
+Fixtures are discoverable and ready for rule implementation. As new rules are added for each diagram type, the existing fixtures will automatically be evaluated by the benchmark suite.
+
 ### Added
 
 - Configurable parser timeout via `PARSER_TIMEOUT_SECONDS` environment variable (1–60 seconds, default 5s). Exposed in `GET /info` response as `parser_timeout_seconds` field.

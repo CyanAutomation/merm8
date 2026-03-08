@@ -5641,7 +5641,7 @@ func TestRuleAdvertisement_OnlyImplementedRulesExposedAndConfigurable(t *testing
 	if analyzeW.Code != http.StatusOK {
 		t.Fatalf("expected 200 for graceful degradation of unimplemented rule, got %d body=%s", analyzeW.Code, analyzeW.Body.String())
 	}
-	
+
 	// Verify warnings about unknown rule are present
 	var resp map[string]any
 	if err := json.Unmarshal(analyzeW.Body.Bytes(), &resp); err != nil {

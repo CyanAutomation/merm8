@@ -21,6 +21,7 @@ func main() {
 		categoryFilter      = flag.String("category", "", "Filter by category: 'valid', 'violation', 'edge-case'")
 		compareBaseline     = flag.String("compare-baseline", "", "Path to baseline JSON file to compare against")
 		regressionThreshold = flag.Float64("regression-threshold", 5.0, "Regression detection threshold percentage (default: 5.0)")
+		outputFormat        = flag.String("output", "json,html", "Output formats: json, html, csv (comma-separated, default: json,html)")
 		verbose             = flag.Bool("verbose", false, "Verbose output")
 		help                = flag.Bool("help", false, "Show help message")
 	)
@@ -41,6 +42,8 @@ Options:
 		Path to baseline JSON file to compare against (e.g., 'benchmarks/baselines/v0.1.0.json')
   -regression-threshold float
 		Regression detection threshold percentage (default: 5.0)
+  -output string
+		Output formats: json, html, csv (comma-separated, default: json,html)
   -verbose
 		Verbose output
   -help
@@ -49,6 +52,12 @@ Options:
 Examples:
   # Run all benchmarks
   go run ./benchmarks/main.go
+
+  # Output only CSV
+  go run ./benchmarks/main.go -output csv
+
+  # Output both JSON and CSV
+  go run ./benchmarks/main.go -output json,csv
 
   # Run only no-cycles rule benchmarks
   go run ./benchmarks/main.go -rule no-cycles
@@ -90,6 +99,7 @@ Examples:
 		Verbose:             *verbose,
 		CompareTo:           *compareBaseline,
 		RegressionThreshold: *regressionThreshold,
+		OutputFormats:       *outputFormat,
 	}
 
 	if err := runner.Run(opts); err != nil {

@@ -1,0 +1,26 @@
+classDiagram
+    class Vehicle {
+        #speed: float
+        #make()
+    }
+    
+    class Car {
+        -doors: int
+        +honk()
+    }
+    
+    class Truck {
+        -capacity: float
+        +load()
+    }
+    
+    Vehicle <|-- Car
+    Vehicle <|-- Truck
+    
+    class Garage {
+        -vehicles: Vehicle[]
+    }
+    
+    Garage -- Vehicle
+    
+    %% @rule: *

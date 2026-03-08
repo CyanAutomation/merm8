@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Active
+    
+    Active --> Idle: event
+    Idle --> Processing: event
+    Processing --> Complete: event
+    
+    Unreachable --> Complete: event
+    
+    %% @rule: *
+    %% Unreachable state - cannot be reached from start

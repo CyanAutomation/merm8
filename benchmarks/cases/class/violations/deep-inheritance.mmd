@@ -1,0 +1,25 @@
+classDiagram
+    class Base {
+        +method()
+    }
+    
+    class Derived1 {
+        +method()
+    }
+    
+    class Derived2 {
+        +method()
+    }
+    
+    class Derived3 {
+        +method()
+    }
+    
+    Base <|-- Derived1
+    Base <|-- Derived2
+    Base <|-- Derived3
+    Derived1 <|-- Derived2
+    Derived2 <|-- Derived3
+    
+    %% @rule: *
+    %% Complex inheritance with potential deep hierarchies

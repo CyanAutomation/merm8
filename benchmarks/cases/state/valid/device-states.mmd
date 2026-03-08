@@ -1,0 +1,16 @@
+stateDiagram-v2
+    [*] --> Off
+    
+    Off --> On: turn_on
+    On --> Off: turn_off
+    
+    On --> Idle: default
+    On --> Active: use
+    
+    Idle --> Active: trigger
+    Active --> Idle: release
+    
+    Active --> Charging: low_battery
+    Charging --> Idle: charged
+    
+    %% @rule: *

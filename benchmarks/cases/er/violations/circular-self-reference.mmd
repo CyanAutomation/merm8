@@ -1,0 +1,7 @@
+erDiagram
+    USER ||--o{ USER : "references"
+    USER ||--o{ USER : "follows"
+    USER ||--o{ USER : "blocks"
+    
+    %% @rule: *
+    %% Circular self-referential relationships

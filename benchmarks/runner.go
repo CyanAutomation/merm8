@@ -3,12 +3,14 @@ package benchmarks
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -18,6 +20,9 @@ import (
 	"github.com/CyanAutomation/merm8/internal/parser"
 	"github.com/CyanAutomation/merm8/internal/rules"
 )
+
+// appVersion is set at build time via -ldflags
+var appVersion = "dev"
 
 // Runner orchestrates benchmark execution.
 type Runner struct {
@@ -30,6 +35,7 @@ type Runner struct {
 	ruleFilter     string
 	categoryFilter string
 	verbose        bool
+	parser         *parser.Parser
 }
 
 // NewRunner creates a new benchmark runner.
@@ -54,6 +60,7 @@ type RunOptions struct {
 	Verbose             bool
 	CompareTo           string  // Path to baseline JSON or ""
 	RegressionThreshold float64 // e.g., 5.0 for 5%
+	OutputFormats       string  // "json,html,csv" (comma-separated, default "json,html")
 }
 
 // Run executes all benchmark cases and generates reports.
@@ -61,6 +68,13 @@ func (r *Runner) Run(opts RunOptions) error {
 	r.ruleFilter = opts.RuleFilter
 	r.categoryFilter = opts.CategoryFilter
 	r.verbose = opts.Verbose
+
+	// Initialize parser once for all cases
+	p, err := parser.New(r.parserScript)
+	if err != nil {
+		return fmt.Errorf("initialize parser: %w", err)
+	}
+	r.parser = p
 
 	start := time.Now()
 
@@ -84,8 +98,17 @@ func (r *Runner) Run(opts RunOptions) error {
 	results.Version = getVersion()
 	results.Timestamp = time.Now()
 
+	// Parse output formats (default to json,html)
+	if opts.OutputFormats == "" {
+		opts.OutputFormats = "json,html"
+	}
+	outputFormats := strings.Split(opts.OutputFormats, ",")
+	for i, fmt := range outputFormats {
+		outputFormats[i] = strings.TrimSpace(fmt)
+	}
+
 	// Generate reports
-	if err := r.generateReports(results); err != nil {
+	if err := r.generateReports(results, outputFormats); err != nil {
 		return fmt.Errorf("generate reports: %w", err)
 	}
 
@@ -117,6 +140,7 @@ func (r *Runner) DiscoverCases() ([]*BenchmarkCase, error) {
 // discoverCases scans the fixtures directory and discovers all test cases.
 func (r *Runner) discoverCases() ([]*BenchmarkCase, error) {
 	var cases []*BenchmarkCase
+	contentMap := make(map[string][]string) // Map of SHA256 hash -> list of case IDs
 
 	// Walk through diagram types (flowchart, sequence, class, er, state)
 	diagramTypes := []string{"flowchart", "sequence", "class", "er", "state"}
@@ -136,7 +160,7 @@ func (r *Runner) discoverCases() ([]*BenchmarkCase, error) {
 					continue
 				}
 
-				entryCases, err := r.discoverCasesInDir(catDir, dt, cat)
+				entryCases, err := r.discoverCasesInDir(catDir, dt, cat, contentMap)
 				if err != nil {
 					return nil, err
 				}
@@ -144,7 +168,7 @@ func (r *Runner) discoverCases() ([]*BenchmarkCase, error) {
 			}
 		} else {
 			// For other diagram types, scan directory directly
-			entryCases, err := r.discoverCasesInDir(dtDir, dt, "")
+			entryCases, err := r.discoverCasesInDir(dtDir, dt, "", contentMap)
 			if err != nil {
 				return nil, err
 			}
@@ -152,11 +176,18 @@ func (r *Runner) discoverCases() ([]*BenchmarkCase, error) {
 		}
 	}
 
+	// Warn about duplicates
+	for hash, caseIDs := range contentMap {
+		if len(caseIDs) > 1 {
+			fmt.Fprintf(os.Stderr, "WARNING: cases have identical content (hash: %s): %v\n", hash[:12], strings.Join(caseIDs, ", "))
+		}
+	}
+
 	return cases, nil
 }
 
 // discoverCasesInDir discovers cases in a specific directory.
-func (r *Runner) discoverCasesInDir(dir string, diagramType, category string) ([]*BenchmarkCase, error) {
+func (r *Runner) discoverCasesInDir(dir string, diagramType, category string, contentMap map[string][]string) ([]*BenchmarkCase, error) {
 	var cases []*BenchmarkCase
 
 	entries, err := os.ReadDir(dir)
@@ -173,9 +204,23 @@ func (r *Runner) discoverCasesInDir(dir string, diagramType, category string) ([
 
 			// Extract rule ID from metadata comment if present
 			ruleID := "*"
-			content, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+			var content []byte
+			filePath := filepath.Join(dir, entry.Name())
+			contentData, err := os.ReadFile(filePath)
 			if err == nil {
+				content = contentData
 				ruleID = extractRuleIDFromContent(string(content))
+			}
+
+			// Track content hash for deduplication
+			if len(content) > 0 {
+				hash := sha256.Sum256(content)
+				hashStr := fmt.Sprintf("%x", hash)
+				caseID := strings.TrimSuffix(entry.Name(), ".mmd")
+				if category != "" {
+					caseID = fmt.Sprintf("%s-%s-%s", diagramType, category[:3], caseID)
+				}
+				contentMap[hashStr] = append(contentMap[hashStr], caseID)
 			}
 
 			// Create case from discovered fixture
@@ -282,7 +327,7 @@ func (r *Runner) executeCases(cases []*BenchmarkCase) (*BenchmarkResults, error)
 	ruleResults := make(map[string]*RuleResult)
 
 	for _, bc := range cases {
-		caseResult, err := r.executeCase(bc, eng)
+		caseResult, err := r.executeCase(bc, eng, r.parser)
 		if err != nil {
 			if r.verbose {
 				fmt.Printf("Error executing case %s: %v\n", bc.ID, err)
@@ -319,9 +364,11 @@ func (r *Runner) executeCases(cases []*BenchmarkCase) (*BenchmarkResults, error)
 		for _, ruleID := range ruleIDs {
 			if rr, ok := ruleResults[ruleID]; !ok {
 				ruleResults[ruleID] = &RuleResult{
-					RuleID:     ruleID,
-					TotalCases: 1,
-					Passed:     0,
+					RuleID:            ruleID,
+					TotalCases:        1,
+					Passed:            0,
+					TotalActualIssues: 0,
+					FalsePositives:    0,
 				}
 				if caseResult.Passed {
 					ruleResults[ruleID].Passed = 1
@@ -331,6 +378,29 @@ func (r *Runner) executeCases(cases []*BenchmarkCase) (*BenchmarkResults, error)
 				if caseResult.Passed {
 					rr.Passed++
 				}
+			}
+		}
+
+		// Count false positives and total actual issues per rule
+		actualByRule := make(map[string]int)
+		expectedByRule := make(map[string]int)
+		for _, actual := range caseResult.Actual {
+			parts := strings.Split(actual, ":")
+			if len(parts) > 0 {
+				actualByRule[parts[0]]++
+			}
+		}
+		for _, expected := range caseResult.Expected {
+			parts := strings.Split(expected, ":")
+			if len(parts) > 0 {
+				expectedByRule[parts[0]]++
+			}
+		}
+		for rule, actualCount := range actualByRule {
+			ruleResults[rule].TotalActualIssues += actualCount
+			expectedCount := expectedByRule[rule]
+			if actualCount > expectedCount {
+				ruleResults[rule].FalsePositives += (actualCount - expectedCount)
 			}
 		}
 
@@ -351,6 +421,10 @@ func (r *Runner) executeCases(cases []*BenchmarkCase) (*BenchmarkResults, error)
 		if rr.TotalCases > 0 {
 			rr.DetectionRate = math.Round(rr.DetectionRate*10000) / 10000 // 4 decimals
 		}
+		if rr.TotalActualIssues > 0 {
+			rr.FalsePositiveRate = float64(rr.FalsePositives) / float64(rr.TotalActualIssues)
+			rr.FalsePositiveRate = math.Round(rr.FalsePositiveRate*10000) / 10000 // 4 decimals
+		}
 		results.RuleMetrics[ruleID] = rr
 	}
 
@@ -360,7 +434,7 @@ func (r *Runner) executeCases(cases []*BenchmarkCase) (*BenchmarkResults, error)
 }
 
 // executeCase runs a single benchmark case.
-func (r *Runner) executeCase(bc *BenchmarkCase, eng *engine.Engine) (CaseResult, error) {
+func (r *Runner) executeCase(bc *BenchmarkCase, eng *engine.Engine, p *parser.Parser) (CaseResult, error) {
 	result := CaseResult{
 		CaseID: bc.ID,
 	}
@@ -376,12 +450,6 @@ func (r *Runner) executeCase(bc *BenchmarkCase, eng *engine.Engine) (CaseResult,
 
 	// Parse
 	parseStart := time.Now()
-	p, err := parser.New(r.parserScript)
-	if err != nil {
-		result.Issues = append(result.Issues, fmt.Sprintf("failed to create parser: %v", err))
-		return result, nil
-	}
-
 	diagram, syntaxErr, parseErr := p.Parse(code)
 	result.ParseTimeMs = time.Since(parseStart).Milliseconds()
 
@@ -472,51 +540,127 @@ func mapsEqual(a, b map[string]int) bool {
 }
 
 // generateReports creates JSON and HTML reports from benchmark results.
-func (r *Runner) generateReports(results *BenchmarkResults) error {
+func (r *Runner) generateReports(results *BenchmarkResults, outputFormats []string) error {
 	// Ensure reports directory exists
 	if err := os.MkdirAll(r.reportsDir, 0755); err != nil {
 		return err
 	}
 
-	// JSON report
-	jsonPath := filepath.Join(r.reportsDir, "latest-results.json")
-	jsonData, err := json.MarshalIndent(results, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
-		return err
-	}
+	var generatedFiles []string
 
-	// HTML report (new path + one-release compatibility file)
-	htmlPath := r.htmlOutputPath
-	if htmlPath == "" {
-		htmlPath = filepath.Join(filepath.Dir(r.benchmarkDir), "benchmark.html")
-	}
-	if err := os.MkdirAll(filepath.Dir(htmlPath), 0755); err != nil {
-		return err
-	}
+	// Generate requested format types
+	for _, format := range outputFormats {
+		format = strings.TrimSpace(format)
+		switch format {
+		case "json":
+			jsonPath := filepath.Join(r.reportsDir, "latest-results.json")
+			jsonData, err := json.MarshalIndent(results, "", "  ")
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(jsonPath, jsonData, 0644); err != nil {
+				return err
+			}
+			generatedFiles = append(generatedFiles, fmt.Sprintf("JSON: %s", jsonPath))
 
-	htmlContent := r.generateHTMLReport(results)
-	if err := os.WriteFile(htmlPath, []byte(htmlContent), 0644); err != nil {
-		return err
-	}
+		case "html":
+			htmlPath := r.htmlOutputPath
+			if htmlPath == "" {
+				htmlPath = filepath.Join(filepath.Dir(r.benchmarkDir), "benchmark.html")
+			}
+			if err := os.MkdirAll(filepath.Dir(htmlPath), 0755); err != nil {
+				return err
+			}
 
-	legacyHTMLPath := filepath.Join(r.reportsDir, "index.html")
-	if legacyHTMLPath != htmlPath {
-		if err := os.MkdirAll(filepath.Dir(legacyHTMLPath), 0755); err != nil {
-			return err
+			htmlContent := r.generateHTMLReport(results)
+			if err := os.WriteFile(htmlPath, []byte(htmlContent), 0644); err != nil {
+				return err
+			}
+
+			legacyHTMLPath := filepath.Join(r.reportsDir, "index.html")
+			if legacyHTMLPath != htmlPath {
+				if err := os.MkdirAll(filepath.Dir(legacyHTMLPath), 0755); err != nil {
+					return err
+				}
+				if err := os.WriteFile(legacyHTMLPath, []byte(htmlContent), 0644); err != nil {
+					return err
+				}
+			}
+			generatedFiles = append(generatedFiles, fmt.Sprintf("HTML: %s", htmlPath))
+
+		case "csv":
+			csvPath := filepath.Join(r.reportsDir, "latest-results.csv")
+			csvContent, err := r.generateCSVReport(results)
+			if err != nil {
+				return fmt.Errorf("generate CSV: %w", err)
+			}
+			if err := os.WriteFile(csvPath, []byte(csvContent), 0644); err != nil {
+				return err
+			}
+			generatedFiles = append(generatedFiles, fmt.Sprintf("CSV: %s", csvPath))
 		}
-		if err := os.WriteFile(legacyHTMLPath, []byte(htmlContent), 0644); err != nil {
-			return err
-		}
 	}
 
-	fmt.Printf("\nReports generated:\n  JSON: %s\n  HTML: %s\n", jsonPath, htmlPath)
-	if legacyHTMLPath != htmlPath {
-		fmt.Printf("  HTML (legacy): %s\n", legacyHTMLPath)
+	fmt.Printf("\nReports generated:\n")
+	for _, f := range generatedFiles {
+		fmt.Printf("  %s\n", f)
 	}
 	return nil
+}
+
+// calculateCoverageMetrics analyzes test coverage across rules and diagram types.
+func (r *Runner) calculateCoverageMetrics(results *BenchmarkResults) CoverageMetrics {
+	coverage := CoverageMetrics{
+		LowCoverageRules:       []string{},
+		NoViolationsCasesRules: []string{},
+		UncoveredDiagramTypes:  []string{},
+		FullySupported:         true,
+	}
+
+	// Check rule coverage
+	for ruleID, metrics := range results.RuleMetrics {
+		if metrics.TotalCases < 5 {
+			coverage.LowCoverageRules = append(coverage.LowCoverageRules, fmt.Sprintf("%s (%d cases)", ruleID, metrics.TotalCases))
+			coverage.FullySupported = false
+		}
+	}
+
+	// Check for rules with no violations cases (would require analyzing failed cases by category)
+	// For now, we track if there are failed cases from violations category
+	violationsCasesSeen := make(map[string]bool)
+	for _, failedCase := range results.FailedCases {
+		if strings.Contains(failedCase.CaseID, "-vio-") {
+			parts := strings.Split(failedCase.CaseID, "-")
+			if len(parts) > 0 {
+				for _, rule := range results.RuleMetrics {
+					if strings.HasPrefix(failedCase.CaseID, parts[0]) {
+						violationsCasesSeen[rule.RuleID] = true
+					}
+				}
+			}
+		}
+	}
+
+	// Check diagram type coverage (simplistic: based on file naming convention in failed cases)
+	coveredDiagrams := make(map[string]bool)
+	for failedCase := range results.FailedCases {
+		parts := strings.Split(results.FailedCases[failedCase].CaseID, "-")
+		if len(parts) > 0 {
+			coveredDiagrams[parts[0]] = true
+		}
+	}
+
+	// All rules tested have at least one case (from RuleMetrics), diagram types check is approximate
+	// Since we only have flowchart cases currently
+	expectedDiagrams := []string{"sequence", "class", "er", "state"}
+	for _, dt := range expectedDiagrams {
+		if !coveredDiagrams[dt] {
+			coverage.UncoveredDiagramTypes = append(coverage.UncoveredDiagramTypes, dt)
+			coverage.FullySupported = false
+		}
+	}
+
+	return coverage
 }
 
 // generateHTMLReport creates an HTML representation of benchmark results.
@@ -530,6 +674,12 @@ func (r *Runner) generateHTMLReport(results *BenchmarkResults) string {
 		},
 		"join": func(arr []string, sep string) string {
 			return strings.Join(arr, sep)
+		},
+		"sampleSize": func(passed, total int) string {
+			return fmt.Sprintf("%d/%d", passed, total)
+		},
+		"lowConfidence": func(total int) bool {
+			return total < 5
 		},
 	}
 
@@ -551,6 +701,9 @@ func (r *Runner) generateHTMLReport(results *BenchmarkResults) string {
 		return sortedRules[i].RuleID < sortedRules[j].RuleID
 	})
 
+	// Calculate coverage metrics
+	coverage := r.calculateCoverageMetrics(results)
+
 	data := map[string]interface{}{
 		"Timestamp":    results.Timestamp.Format("2006-01-02 15:04:05"),
 		"Version":      results.Version,
@@ -561,6 +714,7 @@ func (r *Runner) generateHTMLReport(results *BenchmarkResults) string {
 		"ExecutionSec": float64(results.ExecutionTimeMs) / 1000.0,
 		"Rules":        sortedRules,
 		"FailedCases":  results.FailedCases,
+		"Coverage":     coverage,
 	}
 
 	if err := tmpl.Execute(&buf, data); err != nil {
@@ -570,8 +724,72 @@ func (r *Runner) generateHTMLReport(results *BenchmarkResults) string {
 	return buf.String()
 }
 
+// generateCSVReport creates a CSV representation of benchmark results.
+func (r *Runner) generateCSVReport(results *BenchmarkResults) (string, error) {
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+
+	// Write summary section
+	w.Write([]string{"Benchmark Results Summary"})
+	w.Write([]string{"Timestamp", results.Timestamp.Format("2006-01-02 15:04:05")})
+	w.Write([]string{"Version", results.Version})
+	w.Write([]string{"Total Cases", fmt.Sprintf("%d", results.TotalCases)})
+	w.Write([]string{"Total Passed", fmt.Sprintf("%d", results.TotalPassed)})
+	w.Write([]string{"Pass Rate", fmt.Sprintf("%.2f%%", float64(results.TotalPassed)/float64(results.TotalCases)*100)})
+	w.Write([]string{"Execution Time (ms)", fmt.Sprintf("%d", results.ExecutionTimeMs)})
+	w.Write([]string{})
+
+	// Write rule metrics header
+	w.Write([]string{"Rule ID", "Passed", "Total Cases", "Detection Rate", "False Positives", "FP Rate", "Avg Parse Time (ms)", "Avg Lint Time (ms)"})
+
+	// Sort rules by ID for consistent output
+	var sortedRules []string
+	for ruleID := range results.RuleMetrics {
+		sortedRules = append(sortedRules, ruleID)
+	}
+	sort.Strings(sortedRules)
+
+	// Write rule metrics
+	for _, ruleID := range sortedRules {
+		rm := results.RuleMetrics[ruleID]
+		w.Write([]string{
+			rm.RuleID,
+			fmt.Sprintf("%d", rm.Passed),
+			fmt.Sprintf("%d", rm.TotalCases),
+			fmt.Sprintf("%.4f", rm.DetectionRate),
+			fmt.Sprintf("%d", rm.FalsePositives),
+			fmt.Sprintf("%.4f", rm.FalsePositiveRate),
+			fmt.Sprintf("%d", rm.AvgParseTimeMs),
+			fmt.Sprintf("%d", rm.AvgLintTimeMs),
+		})
+	}
+
+	w.Write([]string{})
+
+	// Write failed cases if any
+	if len(results.FailedCases) > 0 {
+		w.Write([]string{"Case ID", "Expected", "Actual"})
+		for _, fc := range results.FailedCases {
+			w.Write([]string{
+				fc.CaseID,
+				strings.Join(fc.Expected, "; "),
+				strings.Join(fc.Actual, "; "),
+			})
+		}
+	}
+
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
 // compareToBaseline compares current results against a baseline and returns regressions.
-func (r *Runner) compareToBaseline(results *BenchmarkResults, baselinePath string, threshold float64) ([]RegressionAlert, error) {
+// It checks for both detection rate drops and performance (parse/lint time) increases.
+// performanceThreshold is applied to timing regressions (10% by default).
+func (r *Runner) compareToBaseline(results *BenchmarkResults, baselinePath string, detectionThreshold float64) ([]RegressionAlert, error) {
 	baselineData, err := os.ReadFile(baselinePath)
 	if err != nil {
 		return nil, fmt.Errorf("read baseline: %w", err)
@@ -583,22 +801,58 @@ func (r *Runner) compareToBaseline(results *BenchmarkResults, baselinePath strin
 	}
 
 	var alerts []RegressionAlert
+	performanceThreshold := 10.0 // Fixed 10% threshold for performance regressions
+
 	for ruleID, currentMetrics := range results.RuleMetrics {
 		baselineMetrics, ok := baseline.RuleMetrics[ruleID]
 		if !ok {
 			continue // New rule
 		}
 
+		// Check for detection rate regression
 		dropPercent := (baselineMetrics.DetectionRate - currentMetrics.DetectionRate) * 100
-		if dropPercent > threshold {
+		if dropPercent > detectionThreshold {
 			alerts = append(alerts, RegressionAlert{
 				RuleID:                ruleID,
+				Type:                  "detection_rate",
 				BaselineDetectionRate: baselineMetrics.DetectionRate,
 				CurrentDetectionRate:  currentMetrics.DetectionRate,
 				DropPercent:           math.Round(dropPercent*100) / 100,
-				Threshold:             threshold,
-				IsFailing:             dropPercent > threshold,
+				Threshold:             detectionThreshold,
+				IsFailing:             true,
 			})
+		}
+
+		// Check for parse time regression
+		if baselineMetrics.AvgParseTimeMs > 0 {
+			parseTimeIncrease := float64(currentMetrics.AvgParseTimeMs-baselineMetrics.AvgParseTimeMs) / float64(baselineMetrics.AvgParseTimeMs) * 100
+			if parseTimeIncrease > performanceThreshold {
+				alerts = append(alerts, RegressionAlert{
+					RuleID:                   ruleID,
+					Type:                     "performance_parse",
+					BaselineAvgParseTimeMs:   baselineMetrics.AvgParseTimeMs,
+					CurrentAvgParseTimeMs:    currentMetrics.AvgParseTimeMs,
+					ParseTimeIncreasePercent: math.Round(parseTimeIncrease*100) / 100,
+					Threshold:                performanceThreshold,
+					IsFailing:                true,
+				})
+			}
+		}
+
+		// Check for lint time regression
+		if baselineMetrics.AvgLintTimeMs > 0 {
+			lintTimeIncrease := float64(currentMetrics.AvgLintTimeMs-baselineMetrics.AvgLintTimeMs) / float64(baselineMetrics.AvgLintTimeMs) * 100
+			if lintTimeIncrease > performanceThreshold {
+				alerts = append(alerts, RegressionAlert{
+					RuleID:                  ruleID,
+					Type:                    "performance_lint",
+					BaselineAvgLintTimeMs:   baselineMetrics.AvgLintTimeMs,
+					CurrentAvgLintTimeMs:    currentMetrics.AvgLintTimeMs,
+					LintTimeIncreasePercent: math.Round(lintTimeIncrease*100) / 100,
+					Threshold:               performanceThreshold,
+					IsFailing:               true,
+				})
+			}
 		}
 	}
 
@@ -654,21 +908,63 @@ func (r *Runner) printRegressions(alerts []RegressionAlert) {
 	fmt.Print(strings.Repeat("-", 80) + "\n\n")
 
 	for _, alert := range alerts {
-		fmt.Printf("⚠️  %s: Detection rate dropped from %.2f%% to %.2f%% (%.2f%% drop, threshold: %.2f%%)\n",
-			alert.RuleID,
-			alert.BaselineDetectionRate*100,
-			alert.CurrentDetectionRate*100,
-			alert.DropPercent,
-			alert.Threshold,
-		)
+		switch alert.Type {
+		case "detection_rate":
+			fmt.Printf("⚠️  %s (detection rate): %.2f%% → %.2f%% (%.2f%% drop, threshold: %.2f%%)\n",
+				alert.RuleID,
+				alert.BaselineDetectionRate*100,
+				alert.CurrentDetectionRate*100,
+				alert.DropPercent,
+				alert.Threshold,
+			)
+		case "performance_parse":
+			fmt.Printf("⚠️  %s (parse time): %dms → %dms (+%.2f%%, threshold: %.2f%%)\n",
+				alert.RuleID,
+				alert.BaselineAvgParseTimeMs,
+				alert.CurrentAvgParseTimeMs,
+				alert.ParseTimeIncreasePercent,
+				alert.Threshold,
+			)
+		case "performance_lint":
+			fmt.Printf("⚠️  %s (lint time): %dms → %dms (+%.2f%%, threshold: %.2f%%)\n",
+				alert.RuleID,
+				alert.BaselineAvgLintTimeMs,
+				alert.CurrentAvgLintTimeMs,
+				alert.LintTimeIncreasePercent,
+				alert.Threshold,
+			)
+		}
 	}
 
 	fmt.Print("\n")
 }
 
-// getVersion returns the current version (stub - can be populated from git tags or env vars).
+// getVersion returns the current version.
+// Priority:
+// 1. MERM8_VERSION environment variable (set by CI/build)
+// 2. git describe --tags (local dev builds)
+// 3. appVersion (set by ldflags at build time)
+// 4. hardcoded fallback
 func getVersion() string {
-	// TODO: Implement proper version detection
+	// Check environment variable first (set by CI/build)
+	if v := strings.TrimSpace(os.Getenv("MERM8_VERSION")); v != "" {
+		return v
+	}
+
+	// Try git describe for local dev builds
+	if cmd := exec.Command("git", "describe", "--tags", "--always"); cmd != nil {
+		if out, err := cmd.Output(); err == nil {
+			if v := strings.TrimSpace(string(out)); v != "" {
+				return v
+			}
+		}
+	}
+
+	// Use appVersion (set by ldflags: -ldflags="-X github.com/CyanAutomation/merm8/benchmarks.appVersion=v0.1.0")
+	if appVersion != "dev" {
+		return appVersion
+	}
+
 	return "v0.1.0-dev"
 }
 
@@ -761,7 +1057,15 @@ const htmlReportTemplate = `<!DOCTYPE html>
         }
         .details-row { margin: 10px 0; }
         .details-row strong { color: #4a5568; }
-        .failed-cases {
+        .coverage-section {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #ed8936;
+        }
+        .coverage-section p { margin: 8px 0; font-size: 0.95em; }
             background: white;
             border-radius: 8px;
             overflow: hidden;
@@ -830,6 +1134,24 @@ const htmlReportTemplate = `<!DOCTYPE html>
             <strong>Version:</strong> {{.Version}}
         </div>
 
+        {{if .Coverage}}
+        <h2>Coverage Analysis</h2>
+        <div class="coverage-section">
+            {{if .Coverage.FullySupported}}
+            <div style="color: #48bb78; font-weight: 600;">✅ Full Coverage</div>
+            <p>All rules have adequate test cases (≥5 per rule) and diagram types are covered.</p>
+            {{else}}
+            <div style="color: #f56565; font-weight: 600;">⚠️ Limited Coverage</div>
+            {{if .Coverage.LowCoverageRules}}
+            <p><strong>Low-coverage rules (&lt;5 cases):</strong> {{join .Coverage.LowCoverageRules ", "}}</p>
+            {{end}}
+            {{if .Coverage.UncoveredDiagramTypes}}
+            <p><strong>Uncovered diagram types:</strong> {{join .Coverage.UncoveredDiagramTypes ", "}}</p>
+            {{end}}
+            {{end}}
+        </div>
+        {{end}}
+
         <h2>Rule Metrics</h2>
         <table>
             <thead>
@@ -838,6 +1160,7 @@ const htmlReportTemplate = `<!DOCTYPE html>
                     <th>Passed</th>
                     <th>Total</th>
                     <th>Detection Rate</th>
+                    <th>False Positives</th>
                     <th>Avg Parse Time</th>
                     <th>Avg Lint Time</th>
                 </tr>
@@ -845,7 +1168,7 @@ const htmlReportTemplate = `<!DOCTYPE html>
             <tbody>
                 {{range .Rules}}
                 <tr>
-                    <td><strong>{{.RuleID}}</strong></td>
+                    <td><strong>{{.RuleID}}</strong>{{if lowConfidence .TotalCases}} <span style="color: #ed8936; font-weight: 600;">⚠️</span>{{end}}</td>
                     <td>{{.Passed}}</td>
                     <td>{{.TotalCases}}</td>
                     <td>
@@ -853,7 +1176,9 @@ const htmlReportTemplate = `<!DOCTYPE html>
                         {{if ge .DetectionRate 0.9}}<span class="rate-high">{{printf "%.2f" $pct}}%</span>
                         {{else if ge .DetectionRate 0.7}}<span class="rate-medium">{{printf "%.2f" $pct}}%</span>
                         {{else}}<span class="rate-low">{{printf "%.2f" $pct}}%</span>{{end}}
+                        <span style="font-size: 0.85em; color: #718096;">({{sampleSize .Passed .TotalCases}})</span>
                     </td>
+                    <td>{{.FalsePositives}} ({{printf "%.2f" (mul .FalsePositiveRate 100)}}%)</td>
                     <td>{{.AvgParseTimeMs}}ms</td>
                     <td>{{.AvgLintTimeMs}}ms</td>
                 </tr>

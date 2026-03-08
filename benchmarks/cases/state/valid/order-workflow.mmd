@@ -1,0 +1,13 @@
+stateDiagram-v2
+    [*] --> OrderPlaced
+    
+    OrderPlaced --> Processing
+    Processing --> Shipped
+    Shipped --> Delivered
+    Delivered --> [*]
+    
+    Processing --> Cancelled: cancel
+    OrderPlaced --> Cancelled: cancel
+    Cancelled --> [*]
+    
+    %% @rule: *

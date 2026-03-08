@@ -1,0 +1,13 @@
+stateDiagram-v2
+    [*] --> State1
+    State1 --> State2: event
+    State2 --> State1
+    State1 --> State3: event
+    State3 --> State1
+    State1 --> State4: event
+    State4 --> State1
+    State1 --> State5: event
+    State5 --> State1
+    
+    %% @rule: *
+    %% Complex state machine with many transitions

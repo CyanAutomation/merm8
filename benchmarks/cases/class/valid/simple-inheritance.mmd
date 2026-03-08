@@ -1,0 +1,14 @@
+classDiagram
+    class Animal {
+        +name: string
+        +eat()
+    }
+    
+    class Dog {
+        +breed: string
+        +bark()
+    }
+    
+    Animal <|-- Dog
+    
+    %% @rule: *

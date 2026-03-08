@@ -1,0 +1,22 @@
+classDiagram
+    class Person {
+        +name: string
+        +getId(): string
+    }
+    
+    class Developer {
+        +languages: string[]
+        +code()
+    }
+    
+    class Manager {
+        +team: Developer[]
+        +manage()
+    }
+    
+    Person <|-- Developer
+    Person <|-- Manager
+    
+    Manager "1" -- "*" Developer : supervises
+    
+    %% @rule: *

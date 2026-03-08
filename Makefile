@@ -46,6 +46,7 @@ test-contract:
 
 benchmark:
 	@echo "Running benchmark suite..."
-	PARSER_SCRIPT=$(PWD)/parser-node/parse.mjs go run ./benchmarks/main.go
-	@echo "✓ Benchmark complete. Open benchmarks/reports/index.html to view results."
+	@VERSION=$$(git describe --tags --always 2>/dev/null || echo "v0.1.0-dev"); \
+	PARSER_SCRIPT=$(PWD)/parser-node/parse.mjs MERM8_VERSION=$$VERSION go run -ldflags="-X github.com/CyanAutomation/merm8/benchmarks.appVersion=$$VERSION" ./benchmarks/main.go
+	@echo "✓ Benchmark complete. Open benchmark.html to view results."
 

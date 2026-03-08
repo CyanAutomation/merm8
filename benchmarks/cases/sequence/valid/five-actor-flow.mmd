@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant User
+    participant Browser
+    participant WebServer
+    participant Cache
+    participant Database
+    
+    User->>Browser: Click Login
+    Browser->>WebServer: POST /login
+    WebServer->>Cache: Check session
+    WebServer->>Database: Query user
+    Database-->>WebServer: User data
+    WebServer-->>Browser: Set cookie
+    Browser-->>User: Show dashboard
+    
+    %% @rule: *

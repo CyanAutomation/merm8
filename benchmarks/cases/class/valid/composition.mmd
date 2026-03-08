@@ -1,0 +1,14 @@
+classDiagram
+    class Person {
+        +name: string
+        +age: int
+    }
+    
+    class Company {
+        +name: string
+        +employees: Person[]
+    }
+    
+    Company "1" -- "*" Person : employs
+    
+    %% @rule: *

@@ -1,0 +1,17 @@
+classDiagram
+    class Animal {
+        +name: string
+    }
+    
+    class Dog {
+        +breed: string
+    }
+    
+    class Dog {
+        +age: int
+    }
+    
+    Animal <|-- Dog
+    
+    %% @rule: *
+    %% Duplicate class "Dog" defined twice
