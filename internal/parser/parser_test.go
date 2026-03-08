@@ -809,8 +809,18 @@ func TestParser_ReadyRejectsTraversalPath(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for traversal path, got nil")
 	}
-	if !contains(err.Error(), "failed to resolve symlinks") {
-		t.Fatalf("expected symlink resolution error, got %v", err)
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected missing-file sentinel error, got %v", err)
+	}
+	if errors.Is(err, parser.ErrTimeout) ||
+		errors.Is(err, parser.ErrSubprocess) ||
+		errors.Is(err, parser.ErrDecode) ||
+		errors.Is(err, parser.ErrContract) ||
+		errors.Is(err, parser.ErrMemoryLimit) {
+		t.Fatalf("expected path-validation error category, got parser runtime category: %v", err)
+	}
+	if !contains(err.Error(), "resolve symlinks") {
+		t.Fatalf("expected concise user-facing symlink phrasing, got %v", err)
 	}
 }
 
