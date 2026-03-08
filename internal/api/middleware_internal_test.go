@@ -11,11 +11,28 @@ import (
 	"github.com/CyanAutomation/merm8/internal/telemetry"
 )
 
-func TestRateLimiterRemaining_NilReceiverDoesNotPanic(t *testing.T) {
-	var rl *RateLimiter
+func TestAnalyzeRateLimitMiddleware_NilLimiterPassesThrough(t *testing.T) {
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusAccepted)
+	})
 
-	if got := rl.Remaining("x"); got != 0 {
-		t.Fatalf("expected nil limiter remaining to default to 0, got %d", got)
+	handler := AnalyzeRateLimitMiddleware(nil, next)
+	req := httptest.NewRequest(http.MethodPost, "/analyze", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if !called {
+		t.Fatal("expected downstream handler to be called when limiter is nil")
+	}
+	if got := rec.Code; got != http.StatusAccepted {
+		t.Fatalf("expected downstream status to pass through, got %d", got)
+	}
+	if got := rec.Header().Get("X-RateLimit-Limit"); got != "" {
+		t.Fatalf("expected no rate-limit headers when limiter is nil, got limit=%q", got)
 	}
 }
 
