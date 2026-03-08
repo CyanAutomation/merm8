@@ -555,6 +555,9 @@ var openapi = map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Analyze and lint a Mermaid diagram",
 				"description": "Validates Mermaid code syntax and runs deterministic lint rules.\n\nMaximum request body size is 1 MiB. Oversized payloads return HTTP 413.\n\nLegacy config acceptance: Phase 1 accepts legacy flat/nested/snake_case config and emits deprecation signals. Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned), where legacy config is rejected with HTTP 400 `deprecated_config_format`.\n\nOperational note: tune `PARSER_CONCURRENCY_LIMIT` and `PARSER_MAX_OLD_SPACE_MB` (documented in API_GUIDE.md under Operational environment variables). When parser concurrency is exhausted, `/analyze` returns HTTP 503 with `error.code=server_busy`; parser subprocess heap is capped with Node `--max-old-space-size`. Per-request parser overrides remain bounded (timeout 1-60s, memory 128-4096 MiB). For oversized/complex diagrams, split work into smaller diagrams and batch requests.\n\nSupports source comment suppressions such as `%% merm8-disable <rule-id>`, `%% merm8-disable all`, and `%% merm8-disable-next-line <rule-id>`.\n\nReturns syntax errors as semantic responses (`valid=false`) if parsing fails, or lint results if parsing succeeds.\n\nParser infrastructure failures return machine-readable API error codes:\n- `parser_subprocess_error`\n- `parser_decode_error`\n- `parser_contract_violation`\n- `parser_timeout` (HTTP 504)\n- `parser_memory_limit` (HTTP 500)",
+				"x-operational-env": map[string]interface{}{
+					"required": []interface{}{"PARSER_CONCURRENCY_LIMIT", "PARSER_MAX_OLD_SPACE_MB"},
+				},
 				"operationId": "analyzeCode",
 				"requestBody": map[string]interface{}{
 					"required": true,
@@ -1362,6 +1365,9 @@ var openapi = map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "Analyze and lint a Mermaid diagram (SARIF output)",
 				"description": "Runs the same analysis pipeline as POST /v1/analyze, returning SARIF 2.1.0 when analysis is valid. Legacy config acceptance follows the same deprecation lifecycle: Phase 1 accepts legacy flat/nested/snake_case config with deprecation signals, and Phase 2 enforcement starts in v1.2.0 (Q2 2026 planned) with HTTP 400 `deprecated_config_format` for legacy config.",
+				"x-operational-env": map[string]interface{}{
+					"required": []interface{}{"PARSER_CONCURRENCY_LIMIT", "PARSER_MAX_OLD_SPACE_MB"},
+				},
 				"operationId": "analyzeCodeSARIF",
 				"requestBody": map[string]interface{}{
 					"required": true,
