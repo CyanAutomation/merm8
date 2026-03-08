@@ -159,10 +159,10 @@ func TestExtractAllNodeIDsFromSource_BasicPatterns(t *testing.T) {
 		{
 			name:              "no duplicate A in output",
 			source:            "graph TD\nA[First]\nA[Second]\nB --> C\nclassDef foo fill:#f9f,stroke:#333\nsubgraph cluster_1\nend",
-			wantIDsInOrder:    []string{"A"},
-			forbiddenIDs:      []string{"graph", "TD", "classDef", "foo", "subgraph", "cluster_1", "end", "B", "C", "First", "Second"},
+			wantIDsInOrder:    []string{"A", "B", "C"},
+			forbiddenIDs:      []string{"graph", "TD", "classDef", "foo", "subgraph", "cluster_1", "end", "First", "Second"},
 			downstreamEdgeIDs: map[string]bool{},
-			wantDisconnected:  []string{"A"},
+			wantDisconnected:  []string{"A", "B", "C"},
 			wantDuplicates:    []string{"A"},
 		},
 	}
@@ -289,6 +289,46 @@ func TestExtractAllNodeIDsFromSource_HyphenatedAndMixedStyles(t *testing.T) {
 	}
 }
 
+func TestExtractAllNodeIDsFromSource_ImplicitEdgeNodes(t *testing.T) {
+	source := `graph td
+    A --> B
+    C---D
+    E-.->F`
+
+	got := extractAllNodeIDsFromSource(source)
+	want := []string{"A", "B", "C", "D", "E", "F"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("expected implicit edge IDs %v, got %v", want, got)
+	}
+}
+
+func TestExtractAllNodeIDsFromSource_MixedExplicitAndImplicitNodes(t *testing.T) {
+	source := `graph TD
+    A[Start]
+    A --> B
+    B --> C[Done]`
+
+	got := extractAllNodeIDsFromSource(source)
+	want := []string{"A", "C", "B"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("expected mixed explicit/implicit IDs %v, got %v", want, got)
+	}
+}
+
+func TestExtractAllNodeIDsFromSource_CommentsAndKeywordCase(t *testing.T) {
+	source := `GrApH td
+    %% A --> B in comment should be ignored
+    subGraph cluster
+    End
+    X --> y %% trailing comment mentions end --> graph`
+
+	got := extractAllNodeIDsFromSource(source)
+	want := []string{"X", "y"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("expected comment/keyword filtered IDs %v, got %v", want, got)
+	}
+}
+
 func TestEnhanceASTWithSourceAnalysis_HyphenatedDuplicateAndDisconnected(t *testing.T) {
 	source := `graph TD
     service-node[Start]
@@ -315,6 +355,37 @@ func TestEnhanceASTWithSourceAnalysis_HyphenatedDuplicateAndDisconnected(t *test
 	}
 	if len(diagram.DisconnectedNodeIDs) != 1 || diagram.DisconnectedNodeIDs[0] != "extra-node" {
 		t.Fatalf("expected disconnected [extra-node], got %v", diagram.DisconnectedNodeIDs)
+	}
+}
+
+func TestEnhanceASTWithSourceAnalysis_ImplicitNodesAffectDisconnectedAndDuplicates(t *testing.T) {
+	source := `graph TD
+    A --> B
+    B --> C
+    orphan[Orphan]
+    dup[One]
+    dup[Two]`
+
+	diagram := &model.Diagram{
+		Type: model.DiagramTypeFlowchart,
+		Nodes: []model.Node{
+			{ID: "a"},
+			{ID: "b"},
+			{ID: "c"},
+		},
+		Edges: []model.Edge{
+			{From: "a", To: "b"},
+			{From: "b", To: "c"},
+		},
+	}
+
+	EnhanceASTWithSourceAnalysis(diagram, source)
+
+	if !reflect.DeepEqual(diagram.DisconnectedNodeIDs, []string{"orphan", "dup"}) {
+		t.Fatalf("expected disconnected [orphan dup], got %v", diagram.DisconnectedNodeIDs)
+	}
+	if !reflect.DeepEqual(diagram.DuplicateNodeIDs, []string{"dup"}) {
+		t.Fatalf("expected duplicates [dup], got %v", diagram.DuplicateNodeIDs)
 	}
 }
 func TestEnhanceASTWithSourceAnalysis_NilDiagram_DefensiveNoPanicAndNoBehaviorMutation(t *testing.T) {
