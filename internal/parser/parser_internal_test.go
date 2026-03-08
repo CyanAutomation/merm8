@@ -1,9 +1,12 @@
 package parser
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/CyanAutomation/merm8/internal/model"
 )
 
 func TestParserCacheKey_UsesNullByteSeparator(t *testing.T) {
@@ -87,6 +90,7 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 			env             map[string]string
 			expectedTimeout time.Duration
 			expectedMemory  int
+			expectedSource  bool
 		}{
 			{
 				name: "PARSER_TIMEOUT_SECONDS within bounds is parsed while PARSER_MAX_OLD_SPACE_MB falls back to default when unset",
@@ -95,6 +99,7 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				},
 				expectedTimeout: 12 * time.Second,
 				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+				expectedSource:  true,
 			},
 			{
 				name: "PARSER_MAX_OLD_SPACE_MB within bounds is parsed while PARSER_TIMEOUT_SECONDS falls back to default when unset",
@@ -103,6 +108,7 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				},
 				expectedTimeout: defaults.Timeout,
 				expectedMemory:  256,
+				expectedSource:  true,
 			},
 			{
 				name: "PARSER_TIMEOUT_SECONDS and PARSER_MAX_OLD_SPACE_MB are both parsed when valid",
@@ -112,6 +118,16 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				},
 				expectedTimeout: 12 * time.Second,
 				expectedMemory:  256,
+				expectedSource:  true,
+			},
+			{
+				name: "PARSER_SOURCE_ENHANCEMENT can disable source analysis",
+				env: map[string]string{
+					"PARSER_SOURCE_ENHANCEMENT": "false",
+				},
+				expectedTimeout: defaults.Timeout,
+				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+				expectedSource:  false,
 			},
 		}
 
@@ -128,6 +144,13 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				}
 				if effective.NodeMaxOldSpaceMB != tc.expectedMemory {
 					t.Fatalf("expected NodeMaxOldSpaceMB %d, got %d", tc.expectedMemory, effective.NodeMaxOldSpaceMB)
+				}
+				if effective.SourceEnhancement == nil || *effective.SourceEnhancement != tc.expectedSource {
+					got := "<nil>"
+					if effective.SourceEnhancement != nil {
+						got = strconv.FormatBool(*effective.SourceEnhancement)
+					}
+					t.Fatalf("expected SourceEnhancement %t, got %s", tc.expectedSource, got)
 				}
 			})
 		}
@@ -140,6 +163,7 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 			env             map[string]string
 			expectedTimeout time.Duration
 			expectedMemory  int
+			expectedSource  bool
 		}{
 			{
 				name: "PARSER_TIMEOUT_SECONDS non-numeric value uses default timeout",
@@ -148,6 +172,7 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				},
 				expectedTimeout: defaults.Timeout,
 				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+				expectedSource:  true,
 			},
 			{
 				name: "PARSER_MAX_OLD_SPACE_MB non-numeric value uses default memory",
@@ -156,6 +181,7 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				},
 				expectedTimeout: defaults.Timeout,
 				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+				expectedSource:  true,
 			},
 			{
 				name: "PARSER_TIMEOUT_SECONDS and PARSER_MAX_OLD_SPACE_MB malformed values both use defaults",
@@ -165,6 +191,7 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				},
 				expectedTimeout: defaults.Timeout,
 				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+				expectedSource:  true,
 			},
 		}
 
@@ -181,6 +208,13 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				}
 				if effective.NodeMaxOldSpaceMB != tc.expectedMemory {
 					t.Fatalf("expected NodeMaxOldSpaceMB %d, got %d", tc.expectedMemory, effective.NodeMaxOldSpaceMB)
+				}
+				if effective.SourceEnhancement == nil || *effective.SourceEnhancement != tc.expectedSource {
+					got := "<nil>"
+					if effective.SourceEnhancement != nil {
+						got = strconv.FormatBool(*effective.SourceEnhancement)
+					}
+					t.Fatalf("expected SourceEnhancement %t, got %s", tc.expectedSource, got)
 				}
 			})
 		}
@@ -193,6 +227,7 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 			env             map[string]string
 			expectedTimeout time.Duration
 			expectedMemory  int
+			expectedSource  bool
 		}{
 			{
 				name: "PARSER_TIMEOUT_SECONDS above max is rejected and defaults timeout",
@@ -201,6 +236,7 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				},
 				expectedTimeout: defaults.Timeout,
 				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+				expectedSource:  true,
 			},
 			{
 				name: "PARSER_MAX_OLD_SPACE_MB above max is rejected and defaults memory",
@@ -209,6 +245,7 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				},
 				expectedTimeout: defaults.Timeout,
 				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+				expectedSource:  true,
 			},
 			{
 				name: "PARSER_TIMEOUT_SECONDS and PARSER_MAX_OLD_SPACE_MB out-of-range values both default",
@@ -218,6 +255,7 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				},
 				expectedTimeout: defaults.Timeout,
 				expectedMemory:  defaults.NodeMaxOldSpaceMB,
+				expectedSource:  true,
 			},
 		}
 
@@ -235,7 +273,37 @@ func TestParserConfigFromEnvNormalization(t *testing.T) {
 				if effective.NodeMaxOldSpaceMB != tc.expectedMemory {
 					t.Fatalf("expected NodeMaxOldSpaceMB %d, got %d", tc.expectedMemory, effective.NodeMaxOldSpaceMB)
 				}
+				if effective.SourceEnhancement == nil || *effective.SourceEnhancement != tc.expectedSource {
+					got := "<nil>"
+					if effective.SourceEnhancement != nil {
+						got = strconv.FormatBool(*effective.SourceEnhancement)
+					}
+					t.Fatalf("expected SourceEnhancement %t, got %s", tc.expectedSource, got)
+				}
 			})
+		}
+	})
+}
+
+func TestReadSourceEnhancementEnabled(t *testing.T) {
+	t.Run("default true", func(t *testing.T) {
+		t.Setenv("PARSER_SOURCE_ENHANCEMENT", "")
+		if got := readSourceEnhancementEnabled(); got == nil || !*got {
+			t.Fatal("expected source enhancement to default to enabled")
+		}
+	})
+
+	t.Run("parse false", func(t *testing.T) {
+		t.Setenv("PARSER_SOURCE_ENHANCEMENT", "false")
+		if got := readSourceEnhancementEnabled(); got == nil || *got {
+			t.Fatal("expected source enhancement to be disabled")
+		}
+	})
+
+	t.Run("invalid falls back to true", func(t *testing.T) {
+		t.Setenv("PARSER_SOURCE_ENHANCEMENT", "invalid")
+		if got := readSourceEnhancementEnabled(); got == nil || !*got {
+			t.Fatal("expected invalid value to fall back to enabled")
 		}
 	})
 }
@@ -294,4 +362,25 @@ func TestNewWorkerRequestID(t *testing.T) {
 	if first == second {
 		t.Fatalf("expected unique request ids across invocations")
 	}
+}
+
+func TestShouldEnhanceSourceAnalysis(t *testing.T) {
+	t.Run("disabled config skips analysis", func(t *testing.T) {
+		d := &model.Diagram{Type: model.DiagramTypeFlowchart}
+		if shouldEnhanceSourceAnalysis(d, Config{SourceEnhancement: boolPtr(false)}) {
+			t.Fatal("expected source analysis to be skipped when config is disabled")
+		}
+	})
+
+	t.Run("only flowchart family enables analysis", func(t *testing.T) {
+		flowchart := &model.Diagram{Type: model.DiagramTypeFlowchart}
+		if !shouldEnhanceSourceAnalysis(flowchart, Config{SourceEnhancement: boolPtr(true)}) {
+			t.Fatal("expected flowchart diagrams to enable source analysis")
+		}
+
+		sequence := &model.Diagram{Type: model.DiagramTypeSequence}
+		if shouldEnhanceSourceAnalysis(sequence, Config{SourceEnhancement: boolPtr(true)}) {
+			t.Fatal("expected non-flowchart diagrams to skip source analysis")
+		}
+	})
 }

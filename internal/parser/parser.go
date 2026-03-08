@@ -26,6 +26,7 @@ import (
 const defaultTimeout = 5 * time.Second
 const minTimeout = 1 * time.Second
 const maxTimeout = 60 * time.Second
+const defaultParserSourceEnhancementEnabled = true
 const defaultNodeMaxOldSpaceSizeMB = 512
 const minNodeMaxOldSpaceSizeMB = 128
 const maxNodeMaxOldSpaceSizeMB = 4096
@@ -53,6 +54,7 @@ var (
 type Config struct {
 	Timeout           time.Duration
 	NodeMaxOldSpaceMB int
+	SourceEnhancement *bool
 }
 
 // EffectiveConfig returns validated parser execution limits.
@@ -60,6 +62,7 @@ func (c Config) EffectiveConfig() Config {
 	effective := Config{
 		Timeout:           defaultTimeout,
 		NodeMaxOldSpaceMB: defaultNodeMaxOldSpaceSizeMB,
+		SourceEnhancement: boolPtr(defaultParserSourceEnhancementEnabled),
 	}
 	if c.Timeout > 0 {
 		effective.Timeout = c.Timeout
@@ -79,12 +82,15 @@ func (c Config) EffectiveConfig() Config {
 			effective.NodeMaxOldSpaceMB = maxNodeMaxOldSpaceSizeMB
 		}
 	}
+	if c.SourceEnhancement != nil {
+		effective.SourceEnhancement = boolPtr(*c.SourceEnhancement)
+	}
 	return effective
 }
 
 // DefaultConfig returns the service defaults for parser execution limits.
 func DefaultConfig() Config {
-	return Config{Timeout: defaultTimeout, NodeMaxOldSpaceMB: defaultNodeMaxOldSpaceSizeMB}
+	return Config{Timeout: defaultTimeout, NodeMaxOldSpaceMB: defaultNodeMaxOldSpaceSizeMB, SourceEnhancement: boolPtr(defaultParserSourceEnhancementEnabled)}
 }
 
 // LimitBounds returns hard bounds for timeout and memory parser options.
@@ -97,6 +103,7 @@ func ConfigFromEnv() Config {
 	return Config{
 		Timeout:           readTimeoutSeconds(),
 		NodeMaxOldSpaceMB: readMaxOldSpaceMB(),
+		SourceEnhancement: readSourceEnhancementEnabled(),
 	}
 }
 
@@ -400,7 +407,7 @@ func findRepoRoot() (string, error) {
 // Parse sends mermaidCode to the Node parser and returns either a Diagram or a
 // SyntaxError. A non-nil error means an unexpected failure (e.g. timeout).
 func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error) {
-	return p.parseWithConfig(mermaidCode, Config{Timeout: p.timeout, NodeMaxOldSpaceMB: p.nodeMaxOldSpaceMB}.EffectiveConfig())
+	return p.parseWithConfig(mermaidCode, Config{Timeout: p.timeout, NodeMaxOldSpaceMB: p.nodeMaxOldSpaceMB, SourceEnhancement: boolPtr(defaultParserSourceEnhancementEnabled)}.EffectiveConfig())
 }
 
 // ParseWithConfig parses Mermaid code using explicit execution limits.
@@ -443,7 +450,11 @@ func (p *Parser) cacheKey(code string, cfg Config) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	payload := strings.Join([]string{code, cfg.Timeout.String(), strconv.Itoa(cfg.NodeMaxOldSpaceMB), version}, "\x00")
+	sourceEnhancement := defaultParserSourceEnhancementEnabled
+	if cfg.SourceEnhancement != nil {
+		sourceEnhancement = *cfg.SourceEnhancement
+	}
+	payload := strings.Join([]string{code, cfg.Timeout.String(), strconv.Itoa(cfg.NodeMaxOldSpaceMB), strconv.FormatBool(sourceEnhancement), version}, "\x00")
 	hash := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(hash[:]), true
 }
@@ -529,7 +540,9 @@ func (p *Parser) parseWithSubprocess(mermaidCode string, cfg Config) (*model.Dia
 
 	// Enhance the diagram with source-level analysis to preserve node information
 	// that the Mermaid parser may drop during normalization
-	EnhanceASTWithSourceAnalysis(diagram, mermaidCode)
+	if shouldEnhanceSourceAnalysis(diagram, cfg) {
+		EnhanceASTWithSourceAnalysis(diagram, mermaidCode)
+	}
 
 	return diagram, nil, nil
 }
@@ -625,8 +638,17 @@ func (p *Parser) mapParseResult(result ParseResult, mermaidCode string, cfg Conf
 	}
 
 	diagram := toDiagram(result)
-	EnhanceASTWithSourceAnalysis(diagram, mermaidCode)
+	if shouldEnhanceSourceAnalysis(diagram, cfg) {
+		EnhanceASTWithSourceAnalysis(diagram, mermaidCode)
+	}
 	return diagram, nil, nil
+}
+
+func shouldEnhanceSourceAnalysis(diagram *model.Diagram, cfg Config) bool {
+	if diagram == nil || cfg.SourceEnhancement == nil || !*cfg.SourceEnhancement {
+		return false
+	}
+	return diagram.Type.Family() == model.DiagramFamilyFlowchart
 }
 
 func (p *Parser) poolForMemory(scriptPath string, memoryMB int) *workerPool {
@@ -680,6 +702,23 @@ func readMaxOldSpaceMB() int {
 	}
 
 	return value
+}
+
+func boolPtr(v bool) *bool {
+	return &v
+}
+
+func readSourceEnhancementEnabled() *bool {
+	raw := strings.TrimSpace(os.Getenv("PARSER_SOURCE_ENHANCEMENT"))
+	if raw == "" {
+		return boolPtr(defaultParserSourceEnhancementEnabled)
+	}
+
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return boolPtr(defaultParserSourceEnhancementEnabled)
+	}
+	return boolPtr(value)
 }
 
 func readParserMode() string {
