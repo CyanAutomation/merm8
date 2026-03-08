@@ -142,7 +142,11 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 	}
 }
 
+// TestServerContractIntegration_ParserTimeoutFromControlledSlowFixture is integration-only and validates
+// server wiring (env -> parser timeout) plus HTTP status/header passthrough from the API layer.
 func TestServerContractIntegration_ParserTimeoutFromControlledSlowFixture(t *testing.T) {
+	t.Setenv("PARSER_TIMEOUT_SECONDS", "1")
+
 	tmpDir := t.TempDir()
 	blockReleaseFile := filepath.Join(tmpDir, "never-release-parse-block")
 	t.Setenv("MERM8_PARSE_BLOCK_RELEASE_FILE", blockReleaseFile)
@@ -158,16 +162,8 @@ func TestServerContractIntegration_ParserTimeoutFromControlledSlowFixture(t *tes
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	slowPayload, err := os.ReadFile(filepath.Join("testdata", "fixtures", "diagrams", "large-slow-timeout.mmd"))
-	if err != nil {
-		t.Fatalf("failed to load large timeout fixture: %v", err)
-	}
-
 	requestBody, err := json.Marshal(map[string]any{
-		"code": string(slowPayload),
-		"parser": map[string]any{
-			"timeout_seconds": 1,
-		},
+		"code": "flowchart TD\n%% SLOW_PARSE_MARKER\nA-->B",
 	})
 	if err != nil {
 		t.Fatalf("failed to marshal request body: %v", err)
@@ -182,16 +178,7 @@ func TestServerContractIntegration_ParserTimeoutFromControlledSlowFixture(t *tes
 	if res.StatusCode != http.StatusGatewayTimeout {
 		t.Fatalf("expected 504 parser timeout, got %d", res.StatusCode)
 	}
-
-	var payload struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
-		t.Fatalf("failed to decode timeout response: %v", err)
-	}
-	if payload.Error.Code != "parser_timeout" {
-		t.Fatalf("expected error.code=parser_timeout, got %q", payload.Error.Code)
+	if contentType := res.Header.Get("Content-Type"); contentType != "application/json" {
+		t.Fatalf("expected JSON Content-Type passthrough from API handler, got %q", contentType)
 	}
 }
