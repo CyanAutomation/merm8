@@ -37,6 +37,7 @@ const (
 )
 
 type analyzeLogFields struct {
+	requestID     string
 	parserOutcome string
 	diagramType   string
 }
@@ -82,6 +83,7 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 
 		w.Header().Set(requestIDHeader, requestID)
 		ctx := context.WithValue(r.Context(), requestIDContextKey, requestID)
+		setAnalyzeLogFields(ctx, requestID, "", "")
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -144,7 +146,10 @@ func AnalyzeLoggingMiddleware(next http.Handler, logger Logger) http.Handler {
 		start := time.Now()
 		next.ServeHTTP(recorder, r)
 
-		requestID := RequestIDFromContext(ctx)
+		requestID := fields.requestID
+		if requestID == "" {
+			requestID = RequestIDFromContext(r.Context())
+		}
 		parserOutcome := fields.parserOutcome
 		if parserOutcome == "" {
 			parserOutcome = "unknown"
@@ -175,10 +180,13 @@ func RequestIDFromContext(ctx context.Context) string {
 	return requestID
 }
 
-func setAnalyzeLogFields(ctx context.Context, parserOutcome string, diagramType string) {
+func setAnalyzeLogFields(ctx context.Context, requestID string, parserOutcome string, diagramType string) {
 	fields, _ := ctx.Value(analyzeLogFieldsContextKey).(*analyzeLogFields)
 	if fields == nil {
 		return
+	}
+	if requestID != "" {
+		fields.requestID = requestID
 	}
 	if parserOutcome != "" {
 		fields.parserOutcome = parserOutcome
