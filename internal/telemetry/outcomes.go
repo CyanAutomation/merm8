@@ -16,6 +16,7 @@ const (
 	OutcomeParserDecodeErrType
 	OutcomeParserContractErrType
 	OutcomeInternalErrorType
+	OutcomeOtherType
 )
 
 // String returns the string representation of the outcome for Prometheus labels.
@@ -35,8 +36,10 @@ func (o Outcome) String() string {
 		return "parser_contract_violation"
 	case OutcomeInternalErrorType:
 		return "internal_error"
+	case OutcomeOtherType:
+		return OutcomeOther
 	default:
-		return "unknown"
+		return OutcomeOther
 	}
 }
 
@@ -45,11 +48,19 @@ func ValidOutcome(s string) bool {
 	switch s {
 	case "syntax_error", "lint_success", "parser_timeout",
 		"parser_subprocess_error", "parser_decode_error", "parser_contract_violation",
-		"internal_error":
+		"internal_error", OutcomeOther:
 		return true
 	default:
 		return false
 	}
+}
+
+// CanonicalOutcome coerces unsupported metric labels to a stable fallback value.
+func CanonicalOutcome(s string) string {
+	if ValidOutcome(s) {
+		return s
+	}
+	return OutcomeOther
 }
 
 // OutcomeFromString converts a string to a typed Outcome.
@@ -70,6 +81,8 @@ func OutcomeFromString(s string) (Outcome, error) {
 		return OutcomeParserContractErrType, nil
 	case "internal_error":
 		return OutcomeInternalErrorType, nil
+	case OutcomeOther:
+		return OutcomeOtherType, nil
 	default:
 		return -1, fmt.Errorf("invalid outcome: %s", s)
 	}
