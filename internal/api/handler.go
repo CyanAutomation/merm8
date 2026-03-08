@@ -2174,6 +2174,7 @@ type syntaxInputSignals struct {
 	trimmedCode               string
 	firstLine                 string
 	diagramType               model.DiagramType
+	unsupportedDiagramKeyword string
 	hasGraphviz               bool
 	hasYAMLFrontmatter        bool
 	hasTabs                   bool
@@ -2187,6 +2188,32 @@ type syntaxInputSignals struct {
 	hasFlowchartLowercaseEnd  bool
 	hasMalformedBracketClose  bool
 	hasUnterminatedEdgeLabel  bool
+}
+
+func unsupportedDiagramKeywordFromFirstLine(firstLine string) string {
+	firstToken := strings.TrimSpace(strings.ToLower(firstLine))
+	if firstToken == "" {
+		return ""
+	}
+	if splitAt := strings.IndexAny(firstToken, " \t\r"); splitAt >= 0 {
+		firstToken = firstToken[:splitAt]
+	}
+	firstToken = strings.Trim(firstToken, ":")
+
+	switch firstToken {
+	case "gantt", "pie":
+		return firstToken
+	default:
+		return ""
+	}
+}
+
+func appliesToFirstLineWithDiagram(diagramType model.DiagramType) *responseHintAppliesTo {
+	appliesTo := &responseHintAppliesTo{Line: 1}
+	if diagramType != model.DiagramTypeUnknown && diagramType != "" {
+		appliesTo.DiagramType = diagramType
+	}
+	return appliesTo
 }
 
 func hasFlowchartUnterminatedEdgeLabel(code string) bool {
@@ -2226,14 +2253,16 @@ func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInput
 	closeBrackets := strings.Count(code, "]")
 
 	missingDiagramTypeLikely := false
+	unsupportedDiagramKeyword := unsupportedDiagramKeywordFromFirstLine(firstLine)
 	if syntaxErr != nil && (strings.Contains(syntaxErr.Message, "No diagram type") || strings.Contains(syntaxErr.Message, "Unexpected")) {
-		missingDiagramTypeLikely = !isDiagramTypeKeyword(firstLine)
+		missingDiagramTypeLikely = !isDiagramTypeKeyword(firstLine) && unsupportedDiagramKeyword == ""
 	}
 
 	return syntaxInputSignals{
 		trimmedCode:               trimmed,
 		firstLine:                 firstLine,
 		diagramType:               defaultDiagramTypeForSyntaxError(code),
+		unsupportedDiagramKeyword: unsupportedDiagramKeyword,
 		hasGraphviz:               strings.Contains(code, "digraph") || strings.Contains(code, "rankdir"),
 		hasYAMLFrontmatter:        strings.HasPrefix(trimmed, "---"),
 		hasTabs:                   strings.Contains(code, "\t"),
@@ -2370,6 +2399,28 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 		})
 	}
 
+	if signals.unsupportedDiagramKeyword == "gantt" {
+		hints = append(hints, responseHint{
+			Code:       "unsupported_diagram_type_gantt",
+			Message:    "`gantt` diagram parsing is currently unavailable in merm8. Consider using `flowchart` for task dependencies or `sequenceDiagram` for timeline-style interactions.",
+			Severity:   "warning",
+			Confidence: 0.99,
+			AppliesTo:  appliesToFirstLineWithDiagram(diagramType),
+			FixExample: "flowchart TD\n  Plan --> Build\n  Build --> Launch",
+		})
+	}
+
+	if signals.unsupportedDiagramKeyword == "pie" {
+		hints = append(hints, responseHint{
+			Code:       "unsupported_diagram_type_pie",
+			Message:    "`pie` diagram parsing is currently unavailable in merm8. Consider a `flowchart` (or `sequenceDiagram` when describing interactions) as a supported substitute.",
+			Severity:   "warning",
+			Confidence: 0.99,
+			AppliesTo:  appliesToFirstLineWithDiagram(diagramType),
+			FixExample: "flowchart TD\n  Total --> SegmentA\n  Total --> SegmentB",
+		})
+	}
+
 	// Detect missing diagram type keyword.
 	if signals.missingDiagramTypeLikely {
 		hints = append(hints, responseHint{
@@ -2491,6 +2542,28 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 		}
 	}
 
+	if signals.unsupportedDiagramKeyword == "gantt" {
+		return &helpSuggestion{
+			Title:          "Unsupported Mermaid diagram type: gantt",
+			Explanation:    "The parser currently does not support Mermaid `gantt` diagrams in merm8. Convert this into a supported type such as `flowchart` (for dependencies) or `sequenceDiagram` (for timeline interactions).",
+			WrongExample:   "gantt\n  title Release Plan\n  section Build\n  Ship :done, 2026-01-01, 7d",
+			CorrectExample: "flowchart TD\n  Plan --> Build\n  Build --> Ship",
+			DocLink:        "#diagram-types",
+			FixAction:      "Replace the first-line `gantt` keyword with a supported Mermaid type (`flowchart` or `sequenceDiagram`) and rewrite the body accordingly",
+		}
+	}
+
+	if signals.unsupportedDiagramKeyword == "pie" {
+		return &helpSuggestion{
+			Title:          "Unsupported Mermaid diagram type: pie",
+			Explanation:    "The parser currently does not support Mermaid `pie` diagrams in merm8. Use a supported substitute such as `flowchart` (or `sequenceDiagram` for interaction-focused narratives).",
+			WrongExample:   "pie\n  title Revenue\n  \"Product A\" : 60\n  \"Product B\" : 40",
+			CorrectExample: "flowchart TD\n  Revenue --> ProductA\n  Revenue --> ProductB",
+			DocLink:        "#diagram-types",
+			FixAction:      "Replace the first-line `pie` keyword with a supported Mermaid type and model the same information with supported syntax",
+		}
+	}
+
 	// Detect tabs instead of spaces (get the problematic line if possible)
 	if signals.hasTabs {
 		probableLine := "    A --> B"
@@ -2539,12 +2612,12 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 	}
 
 	return &helpSuggestion{
-		Title:       "Invalid Mermaid syntax detected",
-		Explanation: "The parser found Mermaid syntax it could not parse. Check for incomplete edge definitions, unmatched delimiters (`[]`, `()`, `{}`, `||`), or a missing diagram type keyword on the first line.",
-		WrongExample: "A -->|No Retry\nB[Start",
+		Title:          "Invalid Mermaid syntax detected",
+		Explanation:    "The parser found Mermaid syntax it could not parse. Check for incomplete edge definitions, unmatched delimiters (`[]`, `()`, `{}`, `||`), or a missing diagram type keyword on the first line.",
+		WrongExample:   "A -->|No Retry\nB[Start",
 		CorrectExample: "flowchart TD\n  A -->|No| Retry\n  B[Start]",
-		DocLink:     "#common-mistakes",
-		FixAction:   "Review the line near the reported syntax-error and correct edge operators, delimiters, and required diagram keywords.",
+		DocLink:        "#common-mistakes",
+		FixAction:      "Review the line near the reported syntax-error and correct edge operators, delimiters, and required diagram keywords.",
 	}
 }
 
