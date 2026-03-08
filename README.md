@@ -528,7 +528,7 @@ This service accepts untrusted Mermaid source text and executes a Node.js parser
 - **Parser wall-clock timeout**: each parser subprocess is bounded by a Go context timeout.
 - **Node heap cap**: parser subprocesses run with `--max-old-space-size=<MB>` (default `512` MB, configurable with `PARSER_MAX_OLD_SPACE_MB`).
 - **Parser concurrency cap**: concurrent parser invocations are limited (default `8`, configurable with `PARSER_CONCURRENCY_LIMIT`).
-- **Optional auth middleware**: in `DEPLOYMENT_MODE=production`, set `ANALYZE_AUTH_TOKEN` to require `Authorization: Bearer <token>` for `POST /analyze`.
+- **Auth middleware**: in `DEPLOYMENT_MODE=production`, `ANALYZE_AUTH_TOKEN` is required and `POST /analyze` requires `Authorization: Bearer <token>`.
 - **Optional rate limiting middleware**: in `DEPLOYMENT_MODE=production`, requests to `POST /analyze` are rate limited per client (default `120/min`, configurable via `ANALYZE_RATE_LIMIT_PER_MINUTE`).
 
 ### Recommended production controls
@@ -569,7 +569,7 @@ readinessProbe:
 | `PARSER_CONCURRENCY_LIMIT` | `8` | Maximum concurrent parser invocations in the API process. |
 | `DEPLOYMENT_MODE` | `development` | Enables production-oriented defaults when set to `production`. |
 | `ANALYZE_RATE_LIMIT_PER_MINUTE` | `0` in development, `120` in production | Per-client fixed-window limit for `POST /analyze`. |
-| `ANALYZE_AUTH_TOKEN` | _unset_ | Bearer token required by auth middleware in production when provided. |
+| `ANALYZE_AUTH_TOKEN` | _unset_ | Required in production; bearer token required by auth middleware for `POST /analyze`. |
 
 ## Rule System
 

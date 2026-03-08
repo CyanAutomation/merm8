@@ -438,6 +438,22 @@ func TestServerStack_AnalyzeRateLimited_IncludesCORSAndRateLimitHeaders(t *testi
 	}
 }
 
+func TestValidateStartupAuthToken_ProductionRequiresAuthToken(t *testing.T) {
+	err := validateStartupAuthToken("production", "")
+	if err == nil {
+		t.Fatal("expected error when production mode has empty ANALYZE_AUTH_TOKEN")
+	}
+	if got, want := err.Error(), "ANALYZE_AUTH_TOKEN is required when DEPLOYMENT_MODE=production"; got != want {
+		t.Fatalf("error=%q want %q", got, want)
+	}
+}
+
+func TestValidateStartupAuthToken_NonProductionAllowsEmptyAuthToken(t *testing.T) {
+	if err := validateStartupAuthToken("development", ""); err != nil {
+		t.Fatalf("expected no error for non-production mode, got %v", err)
+	}
+}
+
 func TestResolveAllowedOrigins_ProductionWarnsWhenEmpty(t *testing.T) {
 	resolved, shouldWarn := resolveAllowedOrigins("production", "")
 
