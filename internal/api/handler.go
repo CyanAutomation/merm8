@@ -1278,13 +1278,14 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, onValid func(resp analyzeResponse)) {
 	observeAnalyzeOutcome := func(outcome string) {
+		canonicalOutcome := telemetry.CanonicalOutcome(outcome)
 		h.mu.RLock()
 		metrics := h.telemetryMetrics
 		h.mu.RUnlock()
 		if metrics != nil {
-			metrics.ObserveAnalyzeOutcome(outcome)
+			metrics.ObserveAnalyzeOutcome(canonicalOutcome)
 		}
-		h.incrementAnalyzeOutcomeCounter(outcome)
+		h.incrementAnalyzeOutcomeCounter(canonicalOutcome)
 	}
 
 	h.mu.RLock()
@@ -1521,13 +1522,14 @@ func emitAnalyseAliasWarning(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request, onValid func(resp analyzeResponse)) {
 	observeAnalyzeOutcome := func(outcome string) {
+		canonicalOutcome := telemetry.CanonicalOutcome(outcome)
 		h.mu.RLock()
 		metrics := h.telemetryMetrics
 		h.mu.RUnlock()
 		if metrics != nil {
-			metrics.ObserveAnalyzeOutcome(outcome)
+			metrics.ObserveAnalyzeOutcome(canonicalOutcome)
 		}
-		h.incrementAnalyzeOutcomeCounter(outcome)
+		h.incrementAnalyzeOutcomeCounter(canonicalOutcome)
 	}
 
 	h.mu.RLock()
@@ -1761,13 +1763,14 @@ func (h *Handler) AnalyzeSARIF(w http.ResponseWriter, r *http.Request) {
 // but returns SARIF-formatted errors instead of JSON errors.
 func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 	observeAnalyzeOutcome := func(outcome string) {
+		canonicalOutcome := telemetry.CanonicalOutcome(outcome)
 		h.mu.RLock()
 		metrics := h.telemetryMetrics
 		h.mu.RUnlock()
 		if metrics != nil {
-			metrics.ObserveAnalyzeOutcome(outcome)
+			metrics.ObserveAnalyzeOutcome(canonicalOutcome)
 		}
-		h.incrementAnalyzeOutcomeCounter(outcome)
+		h.incrementAnalyzeOutcomeCounter(canonicalOutcome)
 	}
 
 	h.mu.RLock()
