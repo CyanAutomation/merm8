@@ -142,6 +142,25 @@ Test all rules:
 %% Case tests all rules
 ```
 
+#### Enhanced Rule Annotation with Expected Counts (Phase 5)
+
+Optionally specify expected issue count for a rule:
+
+```mermaid
+%% @rule: no-cycles:1
+%% Expect exactly 1 "no-cycles" issue
+%% Count can be any integer indicating expected minimum issues for validation
+```
+
+Multiple rules with counts:
+
+```mermaid
+%% @rule: max-fanout:3, max-depth:1
+%% Expect 3 max-fanout violations and 1 max-depth violation
+```
+
+**Note:** Count specification is optional and primarily for documentation. The benchmark suite currently validates issue presence/absence. Future versions may use expected counts for stricter validation (e.g., "must report exactly 2 issues").
+
 ### Optional: `@severity` Annotation
 
 Specify expected severity (rarely needed; inferred from rule defaults):

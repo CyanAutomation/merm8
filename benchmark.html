@@ -150,17 +150,17 @@
             </div>
             <div class="summary-card">
                 <h3>Execution Time</h3>
-                <div class="value">15.00s</div>
+                <div class="value">15.15s</div>
                 <p>total runtime</p>
             </div>
         </div>
 
         <h2>Test Metadata</h2>
         <div class="details-row">
-            <strong>Timestamp:</strong> 2026-03-08 23:11:01
+            <strong>Timestamp:</strong> 2026-03-08 23:18:37
         </div>
         <div class="details-row">
-            <strong>Version:</strong> v1.0.0-phase4
+            <strong>Version:</strong> v1.0.0-phase5
         </div>
 
         
@@ -179,21 +179,24 @@
         
 
         <h2>Rule Metrics</h2>
-        <table>
+        <div style="margin-bottom: 15px;">
+            <input type="text" id="ruleFilter" placeholder="Filter by rule name..." style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; width: 100%; max-width: 300px; font-size: 14px;">
+        </div>
+        <table id="metricsTable">
             <thead>
                 <tr>
-                    <th>Rule</th>
-                    <th>Passed</th>
-                    <th>Total</th>
-                    <th>Detection Rate</th>
-                    <th>False Positives</th>
-                    <th>Avg Parse Time</th>
-                    <th>Avg Lint Time</th>
+                    <th style="cursor: pointer;" data-sort="rule">Rule <span id="sortRule"> ↕</span></th>
+                    <th style="cursor: pointer;" data-sort="passed">Passed <span id="sortPassed">↕</span></th>
+                    <th style="cursor: pointer;" data-sort="total">Total <span id="sortTotal">↕</span></th>
+                    <th style="cursor: pointer;" data-sort="detection">Detection Rate <span id="sortDetection">↕</span></th>
+                    <th style="cursor: pointer;" data-sort="fp">False Positives <span id="sortFp">↕</span></th>
+                    <th style="cursor: pointer;" data-sort="parse">Avg Parse Time <span id="sortParse">↕</span></th>
+                    <th style="cursor: pointer;" data-sort="lint">Avg Lint Time <span id="sortLint">↕</span></th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="metricsBody">
                 
-                <tr>
+                <tr data-rule="max-depth" data-passed="2" data-total="2" data-detection="1" data-fp="0" data-parse="0" data-lint="0">
                     <td><strong>max-depth</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
                     <td>2</td>
                     <td>2</td>
@@ -208,7 +211,7 @@
                     <td>0ms</td>
                 </tr>
                 
-                <tr>
+                <tr data-rule="max-fanout" data-passed="1" data-total="2" data-detection="0.5" data-fp="0" data-parse="0" data-lint="0">
                     <td><strong>max-fanout</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
                     <td>1</td>
                     <td>2</td>
@@ -222,7 +225,7 @@
                     <td>0ms</td>
                 </tr>
                 
-                <tr>
+                <tr data-rule="no-cycles" data-passed="3" data-total="3" data-detection="1" data-fp="0" data-parse="0" data-lint="0">
                     <td><strong>no-cycles</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
                     <td>3</td>
                     <td>3</td>
@@ -237,7 +240,7 @@
                     <td>0ms</td>
                 </tr>
                 
-                <tr>
+                <tr data-rule="no-disconnected-nodes" data-passed="4" data-total="4" data-detection="1" data-fp="0.25" data-parse="0" data-lint="0">
                     <td><strong>no-disconnected-nodes</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
                     <td>4</td>
                     <td>4</td>
@@ -252,7 +255,7 @@
                     <td>0ms</td>
                 </tr>
                 
-                <tr>
+                <tr data-rule="no-duplicate-node-ids" data-passed="3" data-total="3" data-detection="1" data-fp="0" data-parse="0" data-lint="0">
                     <td><strong>no-duplicate-node-ids</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
                     <td>3</td>
                     <td>3</td>
@@ -292,5 +295,67 @@
             <p>For more information, see <a href="../../BENCHMARK.md">BENCHMARK.md</a></p>
         </footer>
     </div>
+    <script>
+        
+        document.getElementById('ruleFilter').addEventListener('input', function(e) {
+            const filter = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('#metricsBody tr');
+            rows.forEach(row => {
+                const ruleCell = row.getAttribute('data-rule');
+                if (ruleCell.toLowerCase().includes(filter)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+
+        
+        const sortableHeaders = document.querySelectorAll('th[data-sort]');
+        let currentSort = { column: null, direction: 'asc' };
+        
+        sortableHeaders.forEach(header => {
+            header.addEventListener('click', function() {
+                const column = this.getAttribute('data-sort');
+                const body = document.getElementById('metricsBody');
+                const rows = Array.from(body.querySelectorAll('tr'));
+                
+                
+                const direction = currentSort.column === column && currentSort.direction === 'asc' ? 'desc' : 'asc';
+                currentSort = { column, direction };
+                
+                
+                rows.sort((a, b) => {
+                    let aVal = a.getAttribute('data-' + column);
+                    let bVal = b.getAttribute('data-' + column);
+                    
+                    
+                    const aNum = parseFloat(aVal);
+                    const bNum = parseFloat(bVal);
+                    
+                    if (!isNaN(aNum) && !isNaN(bNum)) {
+                        return direction === 'asc' ? aNum - bNum : bNum - aNum;
+                    }
+                    
+                    
+                    return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                });
+                
+                
+                rows.forEach(row => body.appendChild(row));
+                
+                
+                sortableHeaders.forEach(h => {
+                    const col = h.getAttribute('data-sort');
+                    const indicator = h.querySelector('span');
+                    if (col === column) {
+                        indicator.textContent = direction === 'asc' ? ' ↑' : ' ↓';
+                    } else {
+                        indicator.textContent = ' ↕';
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>
