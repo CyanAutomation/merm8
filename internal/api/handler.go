@@ -2538,7 +2538,14 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 		}
 	}
 
-	return nil
+	return &helpSuggestion{
+		Title:       "Invalid Mermaid syntax detected",
+		Explanation: "The parser found Mermaid syntax it could not parse. Check for incomplete edge definitions, unmatched delimiters (`[]`, `()`, `{}`, `||`), or a missing diagram type keyword on the first line.",
+		WrongExample: "A -->|No Retry\nB[Start",
+		CorrectExample: "flowchart TD\n  A -->|No| Retry\n  B[Start]",
+		DocLink:     "#common-mistakes",
+		FixAction:   "Review the line near the reported syntax-error and correct edge operators, delimiters, and required diagram keywords.",
+	}
 }
 
 // isDiagramTypeKeyword checks if a line starts with a valid diagram type keyword.
