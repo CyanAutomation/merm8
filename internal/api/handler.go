@@ -343,16 +343,17 @@ func readBody(body io.ReadCloser) ([]byte, error) {
 }
 
 // parseRawMermaidInput attempts to parse JSON first, falling back to treating the entire input as raw mermaid code.
-// It also reports whether JSON mode was used and any JSON decode error encountered.
-func parseRawMermaidInput(body []byte) (analyzeRequest, bool, error) {
+// It reports whether JSON decoding succeeded, whether JSON mode is missing a code value,
+// and any JSON decode error encountered.
+func parseRawMermaidInput(body []byte) (analyzeRequest, bool, bool, error) {
 	var req analyzeRequest
-	if err := json.Unmarshal(body, &req); err == nil && req.Code != "" {
-		return req, true, nil
+	if err := json.Unmarshal(body, &req); err == nil {
+		return req, true, req.Code == "", nil
 	} else if err != nil {
-		return analyzeRequest{Code: string(body)}, false, err
+		return analyzeRequest{Code: string(body)}, false, false, err
 	}
-	// Not JSON or missing code field - treat entire body as raw mermaid code
-	return analyzeRequest{Code: string(body)}, false, nil
+	// Not JSON - treat entire body as raw mermaid code
+	return analyzeRequest{Code: string(body)}, false, false, nil
 }
 
 // likelyJSONIntendedBody reports whether the trimmed request body appears to
@@ -1496,19 +1497,25 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	req, parsedAsJSON, jsonDecodeErr := parseRawMermaidInput(body)
+	req, jsonDecoded, missingCode, jsonDecodeErr := parseRawMermaidInput(body)
 
 	contentType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	jsonContentType := contentType == "application/json" || strings.HasSuffix(contentType, "+json")
 
 	requestHints := make([]responseHint, 0, 1)
-	if jsonContentType && !parsedAsJSON && jsonDecodeErr != nil && likelyJSONIntendedBody(body) {
+	if jsonContentType && !jsonDecoded && jsonDecodeErr != nil && likelyJSONIntendedBody(body) {
 		requestHints = append(requestHints, responseHint{
 			Code:       "raw_json_decode_failed_fallback_to_text",
 			Message:    "request Content-Type is JSON but body failed JSON decoding; falling back to treating body as raw mermaid text",
 			Severity:   "info",
 			Confidence: 1.0,
 		})
+	}
+
+	if jsonDecoded && missingCode {
+		observeAnalyzeOutcome("missing_code")
+		writeError(w, http.StatusBadRequest, "missing_code", "field 'code' is required")
+		return
 	}
 
 	if req.Code == "" {
