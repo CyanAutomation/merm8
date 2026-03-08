@@ -6,10 +6,11 @@ package parser
 import (
 	"bytes"
 	"context"
+	crand "crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -483,7 +484,7 @@ func (p *Parser) parseWithWorkerPool(mermaidCode string, cfg Config) (*model.Dia
 	respCh := make(chan *workerResponseEnvelope, 1)
 	errCh := make(chan error, 1)
 	req := workerRequestEnvelope{
-		ID:      fmt.Sprintf("req-%d-%d", time.Now().UnixNano(), rand.Int63()),
+		ID:      newWorkerRequestID(),
 		Code:    mermaidCode,
 		Timeout: cfg.Timeout.Milliseconds(),
 		Limits:  &workerLimits{NodeMaxOldSpaceMB: cfg.NodeMaxOldSpaceMB},
@@ -530,6 +531,14 @@ func (p *Parser) parseWithWorkerPool(mermaidCode string, cfg Config) (*model.Dia
 		}
 		return p.mapParseResult(resp.Result, mermaidCode, cfg)
 	}
+}
+
+func newWorkerRequestID() string {
+	random := make([]byte, 8)
+	if _, err := crand.Read(random); err != nil {
+		return fmt.Sprintf("req-%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("req-%d-%s", time.Now().UnixNano(), hex.EncodeToString(random))
 }
 
 func (p *Parser) mapParseResult(result ParseResult, mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
