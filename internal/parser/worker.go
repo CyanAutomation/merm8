@@ -130,7 +130,9 @@ func (sw stderrWriter) Write(p []byte) (int, error) {
 	defer sw.worker.errMu.Unlock()
 	sw.worker.stderr = append(sw.worker.stderr, p...)
 	if len(sw.worker.stderr) > maxWorkerStderrBytes {
-		sw.worker.stderr = append([]byte(nil), sw.worker.stderr[len(sw.worker.stderr)-maxWorkerStderrBytes:]...)
+		copy(sw.worker.stderr, sw.worker.stderr[len(sw.worker.stderr)-maxWorkerStderrBytes:])
+		sw.worker.stderr = sw.worker.stderr[:maxWorkerStderrBytes]
+	}
 	}
 	return len(p), nil
 }
