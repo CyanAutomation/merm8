@@ -63,6 +63,7 @@ func startParserWorker(scriptPath string, nodeArgs []string) (*parserWorker, err
 
 	if err := cmd.Start(); err != nil {
 		_ = stdin.Close()
+		_ = stderrPipe.Close()
 		return nil, err
 	}
 
