@@ -2186,6 +2186,31 @@ type syntaxInputSignals struct {
 	hasUnicodeArrowDash       bool
 	hasFlowchartLowercaseEnd  bool
 	hasMalformedBracketClose  bool
+	hasUnterminatedEdgeLabel  bool
+}
+
+func hasFlowchartUnterminatedEdgeLabel(code string) bool {
+	edgeOperators := []string{"-->", "---", "-.-", "==>", "===", "<--", "<->", "<-->"}
+
+	for _, line := range strings.Split(code, "\n") {
+		pipeCount := strings.Count(line, "|")
+		if pipeCount == 0 {
+			continue
+		}
+
+		hasEdgeOperator := false
+		for _, op := range edgeOperators {
+			if strings.Contains(line, op) {
+				hasEdgeOperator = true
+				break
+			}
+		}
+		if hasEdgeOperator && pipeCount%2 != 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInputSignals {
@@ -2221,6 +2246,7 @@ func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInput
 		hasUnicodeArrowDash:       strings.Contains(code, "—>") || strings.Contains(code, "–>") || strings.Contains(code, "—->") || strings.Contains(code, "–->"),
 		hasFlowchartLowercaseEnd:  (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && strings.Contains(code, "\nend\n"),
 		hasMalformedBracketClose:  openBrackets != closeBrackets || strings.Contains(code, "[[") && strings.Count(code, "]]") < strings.Count(code, "[["),
+		hasUnterminatedEdgeLabel:  hasFlowchartUnterminatedEdgeLabel(code),
 	}
 }
 
@@ -2333,6 +2359,17 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 		})
 	}
 
+	if signals.hasUnterminatedEdgeLabel {
+		hints = append(hints, responseHint{
+			Code:       "unterminated_edge_label",
+			Message:    "Edge labels must be wrapped with both pipes, e.g. `A -->|No| B`.",
+			Severity:   "warning",
+			Confidence: 0.96,
+			AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
+			FixExample: "Decision -->|No| Retry",
+		})
+	}
+
 	// Detect missing diagram type keyword.
 	if signals.missingDiagramTypeLikely {
 		hints = append(hints, responseHint{
@@ -2369,8 +2406,8 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 			Severity:   "warning",
 			Confidence: 0.70,
 			AppliesTo: &responseHintAppliesTo{
-				Line:       syntaxErr.Line,
-				Column:     syntaxErr.Column,
+				Line:        syntaxErr.Line,
+				Column:      syntaxErr.Column,
 				DiagramType: diagramType,
 			},
 			FixExample: "flowchart TD\n  A --> B",
