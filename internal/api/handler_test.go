@@ -1055,7 +1055,7 @@ func TestAnalyze_SyntaxError_Detectors_FlowchartReservedEnd(t *testing.T) {
 	assertHintCodePresentForAnalyzeAndRaw(t, syntaxErr, payload, "flowchart_reserved_end_keyword")
 
 	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", payload, "text/plain", syntaxErr)
-	assertHelpSuggestionContract(t, resp, false)
+	assertHelpSuggestionContract(t, resp, true)
 }
 
 func TestAnalyze_SyntaxError_Detectors_MalformedLabelBrackets(t *testing.T) {
@@ -1064,7 +1064,7 @@ func TestAnalyze_SyntaxError_Detectors_MalformedLabelBrackets(t *testing.T) {
 	assertHintCodePresentForAnalyzeAndRaw(t, syntaxErr, payload, "malformed_label_brackets")
 
 	resp := syntaxErrorResponseForEndpoint(t, "/v1/analyze", payload, "text/plain", syntaxErr)
-	assertHelpSuggestionContract(t, resp, false)
+	assertHelpSuggestionContract(t, resp, true)
 }
 
 func TestAnalyze_SyntaxError_HintsSortedByConfidence(t *testing.T) {
