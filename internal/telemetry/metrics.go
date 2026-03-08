@@ -36,6 +36,7 @@ type Metrics struct {
 	diagramTypeAnalyzed   *prometheus.CounterVec   // analyses by diagram type
 	lintSupportCheckCount *prometheus.CounterVec   // count of lint-support checks by result
 	corsRejectedTotal     *prometheus.CounterVec   // total rejected CORS origins
+	parserCacheEvents     *prometheus.CounterVec   // parser cache events by result and entry type
 }
 
 func NewMetrics() *Metrics {
@@ -95,6 +96,10 @@ func NewMetrics() *Metrics {
 			Name: "cors_rejected_total",
 			Help: "Total CORS requests rejected because origin is not in the allowlist.",
 		}, []string{}),
+		parserCacheEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "parser_cache_events_total",
+			Help: "Parser cache events grouped by result (hit/miss/eviction) and entry type.",
+		}, []string{"result", "entry_type"}),
 	}
 
 	registry.MustRegister(
@@ -110,6 +115,7 @@ func NewMetrics() *Metrics {
 		m.diagramTypeAnalyzed,
 		m.lintSupportCheckCount,
 		m.corsRejectedTotal,
+		m.parserCacheEvents,
 	)
 	return m
 }
@@ -225,4 +231,22 @@ func (m *Metrics) ObserveCORSRejectedOrigin() {
 		return
 	}
 	m.corsRejectedTotal.WithLabelValues().Inc()
+}
+
+// ObserveParserCacheEvent records parser cache hit/miss/eviction events.
+func (m *Metrics) ObserveParserCacheEvent(result, entryType string) {
+	if m == nil {
+		return
+	}
+	switch result {
+	case "hit", "miss", "eviction":
+	default:
+		result = "miss"
+	}
+	switch entryType {
+	case "success", "syntax", "any":
+	default:
+		entryType = "any"
+	}
+	m.parserCacheEvents.WithLabelValues(result, entryType).Inc()
 }

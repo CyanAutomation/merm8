@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	crand "crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -193,6 +194,10 @@ type Parser struct {
 	workerPoolSize    int
 	poolMu            sync.Mutex
 	workerPools       map[int]*workerPool
+	cache             *parseCache
+	versionMu         sync.Mutex
+	parserVersion     string
+	versionResolved   bool
 }
 
 // New returns a Parser that will invoke the given Node.js script path.
@@ -227,7 +232,16 @@ func NewWithConfigAndRepoRootResolver(scriptPath string, cfg Config, resolveRepo
 		mode:              readParserMode(),
 		workerPoolSize:    readWorkerPoolSize(),
 		workerPools:       make(map[int]*workerPool),
+		cache:             newParseCache(),
 	}, nil
+}
+
+// SetCacheMetrics configures parser-cache telemetry collectors.
+func (p *Parser) SetCacheMetrics(metrics CacheMetricsObserver) {
+	if p == nil || p.cache == nil {
+		return
+	}
+	p.cache.setMetrics(metrics)
 }
 
 // Timeout returns the configured parser timeout duration.
@@ -299,6 +313,11 @@ func (p *Parser) VersionInfo() (*VersionInfo, error) {
 	if strings.TrimSpace(info.ParserVersion) == "" || strings.TrimSpace(info.MermaidVersion) == "" {
 		return nil, fmt.Errorf("%w: version info missing parser_version or mermaid_version", ErrContract)
 	}
+
+	p.versionMu.Lock()
+	p.parserVersion = strings.TrimSpace(info.ParserVersion)
+	p.versionResolved = true
+	p.versionMu.Unlock()
 
 	return &info, nil
 }
@@ -390,10 +409,62 @@ func (p *Parser) ParseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 }
 
 func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
-	if p.mode == parserModePool {
-		return p.parseWithWorkerPool(mermaidCode, cfg)
+	cacheKey, ok := p.cacheKey(mermaidCode, cfg)
+	if ok {
+		if diagram, syntaxErr, hit := p.cache.get(cacheKey); hit {
+			return diagram, syntaxErr, nil
+		}
 	}
-	return p.parseWithSubprocess(mermaidCode, cfg)
+
+	var (
+		diagram   *model.Diagram
+		syntaxErr *SyntaxError
+		err       error
+	)
+	if p.mode == parserModePool {
+		diagram, syntaxErr, err = p.parseWithWorkerPool(mermaidCode, cfg)
+	} else {
+		diagram, syntaxErr, err = p.parseWithSubprocess(mermaidCode, cfg)
+	}
+
+	if ok && err == nil {
+		if diagram != nil {
+			p.cache.putSuccess(cacheKey, diagram)
+		} else if syntaxErr != nil {
+			p.cache.putSyntax(cacheKey, syntaxErr)
+		}
+	}
+
+	return diagram, syntaxErr, err
+}
+
+func (p *Parser) cacheKey(code string, cfg Config) (string, bool) {
+	version, ok := p.getParserVersion()
+	if !ok {
+		return "", false
+	}
+	payload := strings.Join([]string{code, cfg.Timeout.String(), strconv.Itoa(cfg.NodeMaxOldSpaceMB), version}, "\x00")
+	hash := sha256.Sum256([]byte(payload))
+	return hex.EncodeToString(hash[:]), true
+}
+
+func (p *Parser) getParserVersion() (string, bool) {
+	p.versionMu.Lock()
+	if p.versionResolved && strings.TrimSpace(p.parserVersion) != "" {
+		version := strings.TrimSpace(p.parserVersion)
+		p.versionMu.Unlock()
+		return version, true
+	}
+	if !p.versionResolved {
+		p.versionResolved = true
+		p.parserVersion = "unknown"
+	}
+	version := strings.TrimSpace(p.parserVersion)
+	p.versionMu.Unlock()
+	if version == "" {
+		version = "unknown"
+	}
+	return version, true
 }
 
 func (p *Parser) parseWithSubprocess(mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
