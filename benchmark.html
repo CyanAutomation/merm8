@@ -7,18 +7,19 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
-            background: #0f172a;
-            color: #f1f5f9;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
             line-height: 1.6;
         }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         header {
-            background: #1e293b;
-            color: #f1f5f9;
-            padding: 30px 20px;
-            border-bottom: 1px solid #38bdf8;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            border-radius: 8px;
             margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         header h1 { font-size: 2.5em; margin-bottom: 10px; }
         header p { font-size: 1.1em; opacity: 0.95; }
@@ -29,42 +30,43 @@
             margin-bottom: 30px;
         }
         .summary-card {
-            background: #1e293b;
+            background: white;
             padding: 20px;
             border-radius: 8px;
-            border-left: 4px solid #38bdf8;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #667eea;
         }
-        .summary-card h3 { color: #38bdf8; font-size: 0.9em; margin-bottom: 10px; }
-        .summary-card .value { font-size: 2em; font-weight: bold; color: #f1f5f9; }
-        .summary-card.passed { border-left-color: #10b981; }
-        .summary-card.passed h3 { color: #10b981; }
-        .summary-card.failed { border-left-color: #ef4444; }
-        .summary-card.failed h3 { color: #ef4444; }
+        .summary-card h3 { color: #667eea; font-size: 0.9em; text-transform: uppercase; margin-bottom: 10px; }
+        .summary-card .value { font-size: 2em; font-weight: bold; color: #333; }
+        .summary-card.passed { border-left-color: #48bb78; }
+        .summary-card.passed h3 { color: #48bb78; }
+        .summary-card.failed { border-left-color: #f56565; }
+        .summary-card.failed h3 { color: #f56565; }
         table {
             width: 100%;
             border-collapse: collapse;
-            background: #1e293b;
+            background: white;
             border-radius: 8px;
             overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             margin-bottom: 30px;
         }
         th {
-            background: #0f172a;
+            background: #f7fafc;
             padding: 15px;
             text-align: left;
             font-weight: 600;
-            color: #38bdf8;
-            border-bottom: 2px solid #38bdf8;
+            color: #4a5568;
+            border-bottom: 2px solid #e2e8f0;
         }
         td {
             padding: 12px 15px;
-            border-bottom: 1px solid #334155;
-            color: #f1f5f9;
+            border-bottom: 1px solid #e2e8f0;
         }
-        tr:hover { background: #0f172a; }
-        .rate-high { color: #10b981; font-weight: 600; }
-        .rate-medium { color: #f59e0b; font-weight: 600; }
-        .rate-low { color: #ef4444; font-weight: 600; }
+        tr:hover { background: #f8f9fa; }
+        .rate-high { color: #48bb78; font-weight: 600; }
+        .rate-medium { color: #ed8936; font-weight: 600; }
+        .rate-low { color: #f56565; font-weight: 600; }
         .badge {
             display: inline-block;
             padding: 3px 8px;
@@ -73,35 +75,34 @@
             font-weight: 500;
             margin: 2px;
         }
-        .badge.pass { background: #064e3b; color: #d1fae5; }
-        .badge.fail { background: #7f1d1d; color: #fee2e2; }
+        .badge.pass { background: #c6f6d5; color: #22543d; }
+        .badge.fail { background: #fed7d7; color: #742a2a; }
         h2 {
             margin-top: 40px;
             margin-bottom: 20px;
-            color: #f1f5f9;
-            border-bottom: 1px solid #334155;
+            color: #2d3748;
+            border-bottom: 2px solid #e2e8f0;
             padding-bottom: 10px;
         }
-        .details-row { margin: 10px 0; color: #cbd5e1; }
-        .details-row strong { color: #f1f5f9; }
+        .details-row { margin: 10px 0; }
+        .details-row strong { color: #4a5568; }
         .failed-cases {
-            background: #1e293b;
+            background: white;
             border-radius: 8px;
             overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .failed-case {
             padding: 15px;
-            border-bottom: 1px solid #334155;
-            background: #1e293b;
+            border-bottom: 1px solid #e2e8f0;
+            background: #fff5f5;
         }
         .failed-case:last-child { border-bottom: none; }
-        .failed-case h4 { color: #ef4444; margin-bottom: 8px; }
+        .failed-case h4 { color: #f56565; margin-bottom: 8px; }
         .failed-case pre {
-            background: #0f172a;
-            color: #cbd5e1;
+            background: #f7fafc;
             padding: 10px;
             border-radius: 4px;
-            border-left: 3px solid #38bdf8;
             overflow-x: auto;
             font-size: 0.85em;
             margin: 5px 0;
@@ -110,8 +111,8 @@
             text-align: center;
             margin-top: 40px;
             padding-top: 20px;
-            border-top: 1px solid #334155;
-            color: #94a3b8;
+            border-top: 1px solid #e2e8f0;
+            color: #718096;
             font-size: 0.9em;
         }
     </style>
@@ -141,14 +142,14 @@
             </div>
             <div class="summary-card">
                 <h3>Execution Time</h3>
-                <div class="value">18.25s</div>
+                <div class="value">29.26s</div>
                 <p>total runtime</p>
             </div>
         </div>
 
         <h2>Test Metadata</h2>
         <div class="details-row">
-            <strong>Timestamp:</strong> 2026-03-07 22:03:29
+            <strong>Timestamp:</strong> 2026-03-08 17:43:32
         </div>
         <div class="details-row">
             <strong>Version:</strong> v0.1.0-dev
