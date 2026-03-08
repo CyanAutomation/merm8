@@ -1194,6 +1194,15 @@ func TestAnalyze_SyntaxError_GenericFallbackContextAndBounds(t *testing.T) {
 			wantFixContains:  []string{"Check near column 6 on line 2", "`  A? B`"},
 		},
 		{
+			name:                "empty line clamps column to zero",
+			syntaxErr:           &parser.SyntaxError{Message: "Unexpected token", Line: 2, Column: 999},
+			payload:             "flowchart TD\n",
+			wantHintContains:    []string{"Check for incomplete edge definitions"},
+			wantHintNotContains: []string{"Check near column"},
+			wantFixContains:     []string{"Review the line near the reported syntax-error"},
+			wantFixNotContains:  []string{"Check near column"},
+		},
+		{
 			name:                "line out of range stays stable",
 			syntaxErr:           &parser.SyntaxError{Message: "Unexpected token", Line: 99, Column: 3},
 			payload:             "flowchart TD\n  A --> B",
