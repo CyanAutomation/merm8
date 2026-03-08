@@ -4836,36 +4836,71 @@ func TestAnalyze_MetricsIssueCountsReflectUnsuppressedIssuesOnly(t *testing.T) {
 }
 
 func TestAnalyze_ConfigSuppressionSelectors_MalformedRejected(t *testing.T) {
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return &model.Diagram{
-			Type:  model.DiagramTypeFlowchart,
-			Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
-			Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
-		}, nil, nil
-	})
+	t.Run("rejects malformed selectors", func(t *testing.T) {
+		mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+			return &model.Diagram{
+				Type:  model.DiagramTypeFlowchart,
+				Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+				Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+			}, nil, nil
+		})
 
-	body, _ := json.Marshal(map[string]any{
-		"code": "graph TD\nA-->B\nA-->C",
-		"config": map[string]any{
-			"schema-version": "v1",
-			"rules": map[string]any{
-				"max-fanout": map[string]any{
-					"limit":                 1,
-					"suppression-selectors": []string{"node", "subgraph:"},
+		body, _ := json.Marshal(map[string]any{
+			"code": "graph TD\nA-->B\nA-->C",
+			"config": map[string]any{
+				"schema-version": "v1",
+				"rules": map[string]any{
+					"max-fanout": map[string]any{
+						"limit":                 1,
+						"suppression-selectors": []string{"node", "subgraph:"},
+					},
 				},
 			},
-		},
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+		}
+		assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for suppression-selectors", "config.rules.max-fanout.suppression-selectors", nil)
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	t.Run("rejects unknown selector prefixes", func(t *testing.T) {
+		mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+			return &model.Diagram{
+				Type:  model.DiagramTypeFlowchart,
+				Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+				Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+			}, nil, nil
+		})
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
-	}
-	assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for suppression-selectors", "config.rules.max-fanout.suppression-selectors", nil)
+		body, _ := json.Marshal(map[string]any{
+			"code": "graph TD\nA-->B\nA-->C",
+			"config": map[string]any{
+				"schema-version": "v1",
+				"rules": map[string]any{
+					"max-fanout": map[string]any{
+						"limit":                 1,
+						"suppression-selectors": []string{"unknown:A"},
+					},
+				},
+			},
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+		}
+		assertValidationErrorResponse(t, w.Body.Bytes(), "invalid_option", "invalid option value for suppression-selectors", "config.rules.max-fanout.suppression-selectors", nil)
+	})
 }
 
 func TestAnalyze_RequestIDHeaderPropagation(t *testing.T) {
