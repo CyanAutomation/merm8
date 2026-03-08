@@ -172,14 +172,10 @@ func TestExtractRuleID(t *testing.T) {
 	}
 }
 
-func TestBenchmarkCase_JSONMarshaling(t *testing.T) {
+func TestBenchmarkCase_JSONMarshaling_RequiredFieldsRoundTrip(t *testing.T) {
 	bc := benchmarks.BenchmarkCase{
-		ID:          "test-001",
-		Description: "Test case",
-		RuleID:      "no-cycles",
-		Category:    "violation",
-		DiagramType: "flowchart",
-		Tags:        []string{"test"},
+		ID:     "test-001",
+		RuleID: "no-cycles",
 		ExpectedIssues: []benchmarks.ExpectedIssue{
 			{RuleID: "no-cycles", Severity: "error"},
 		},
@@ -200,60 +196,46 @@ func TestBenchmarkCase_JSONMarshaling(t *testing.T) {
 		t.Fatalf("failed to unmarshal benchmark case: %v", err)
 	}
 
-	if roundTrip.ID != bc.ID {
-		t.Fatalf("expected id %q, got %q", bc.ID, roundTrip.ID)
+	if roundTrip.ID != bc.ID || roundTrip.RuleID != bc.RuleID {
+		t.Fatalf("expected required fields to round-trip, want id=%q rule_id=%q, got id=%q rule_id=%q", bc.ID, bc.RuleID, roundTrip.ID, roundTrip.RuleID)
 	}
 
-	if roundTrip.RuleID != bc.RuleID {
-		t.Fatalf("expected rule_id %q, got %q", bc.RuleID, roundTrip.RuleID)
+	if !reflect.DeepEqual(roundTrip.ExpectedIssues, bc.ExpectedIssues) {
+		t.Fatalf("expected expected_issues %v, got %v", bc.ExpectedIssues, roundTrip.ExpectedIssues)
+	}
+}
+
+func TestBenchmarkCase_JSONMarshaling_OmitsOptionalDefaults(t *testing.T) {
+	bc := benchmarks.BenchmarkCase{
+		ID:             "test-optional",
+		RuleID:         "*",
+		ExpectedIssues: []benchmarks.ExpectedIssue{},
 	}
 
-	if len(roundTrip.ExpectedIssues) != len(bc.ExpectedIssues) {
-		t.Fatalf("expected %d expected_issues, got %d", len(bc.ExpectedIssues), len(roundTrip.ExpectedIssues))
+	data, err := benchmarks.MarshalBenchmarkCase(bc)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
 	}
 
-	if got, want := roundTrip.ExpectedIssues[0], bc.ExpectedIssues[0]; got.RuleID != want.RuleID || got.Severity != want.Severity {
-		t.Fatalf("unexpected expected_issues[0], want %+v, got %+v", want, got)
+	var roundTrip benchmarks.BenchmarkCase
+	if err := json.Unmarshal(data, &roundTrip); err != nil {
+		t.Fatalf("failed to unmarshal benchmark case: %v", err)
 	}
 
-	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("failed to unmarshal benchmark case into map: %v", err)
+	if roundTrip.Description != "" || roundTrip.DiagramPath != "" || roundTrip.Category != "" || roundTrip.DiagramType != "" {
+		t.Fatalf("expected omitted optional text fields to keep zero values, got %+v", roundTrip)
 	}
 
-	for _, key := range []string{"id", "rule_id", "expected_issues"} {
-		if _, ok := raw[key]; !ok {
-			t.Fatalf("expected key %q to be present", key)
-		}
+	if roundTrip.Tags != nil {
+		t.Fatalf("expected omitted tags to remain nil, got %#v", roundTrip.Tags)
 	}
 
-	if got, ok := raw["id"].(string); !ok || got != bc.ID {
-		t.Fatalf("expected id %q, got %#v", bc.ID, raw["id"])
+	if string(roundTrip.Config) != "null" {
+		t.Fatalf("expected omitted config to round-trip as JSON null, got %q", string(roundTrip.Config))
 	}
 
-	if got, ok := raw["rule_id"].(string); !ok || got != bc.RuleID {
-		t.Fatalf("expected rule_id %q, got %#v", bc.RuleID, raw["rule_id"])
-	}
-
-	expectedIssues, ok := raw["expected_issues"].([]any)
-	if !ok {
-		t.Fatal("expected expected_issues to be an array")
-	}
-	if len(expectedIssues) == 0 {
-		t.Fatal("expected expected_issues to contain at least one element")
-	}
-
-	issueMap, ok := expectedIssues[0].(map[string]any)
-	if !ok {
-		t.Fatalf("expected expected_issues[0] to be object, got %T", expectedIssues[0])
-	}
-
-	if got, ok := issueMap["rule_id"].(string); !ok || got != bc.ExpectedIssues[0].RuleID {
-		t.Fatalf("expected expected_issues[0].rule_id %q, got %#v", bc.ExpectedIssues[0].RuleID, issueMap["rule_id"])
-	}
-
-	if got, ok := issueMap["severity"].(string); !ok || got != bc.ExpectedIssues[0].Severity {
-		t.Fatalf("expected expected_issues[0].severity %q, got %#v", bc.ExpectedIssues[0].Severity, issueMap["severity"])
+	if !reflect.DeepEqual(roundTrip.ExpectedIssues, bc.ExpectedIssues) {
+		t.Fatalf("expected expected_issues %v, got %v", bc.ExpectedIssues, roundTrip.ExpectedIssues)
 	}
 }
 
