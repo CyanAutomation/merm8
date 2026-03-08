@@ -3,6 +3,7 @@
 Welcome to the merm8 benchmark suite! This comprehensive testing framework rigorously evaluates the efficacy of mermaid code linting rules.
 
 Similar to LLM benchmarks (FrontierScience, GDPval, HealthBench), the merm8 benchmark system:
+
 - ✅ Defines a **curated test dataset** of real-world and synthetic mermaid diagrams
 - ✅ Measures **rule detection accuracy** (detection rate, false positives)
 - ✅ Tracks **performance metrics** (parse time, lint time)
@@ -20,6 +21,7 @@ go run ./benchmarks/main.go
 ```
 
 This generates:
+
 - **HTML Report**: `benchmark.html` (interactive dashboard)
 - **JSON Results**: `benchmarks/reports/latest-results.json` (structured data)
 - **Text Summary**: Printed to stdout
@@ -102,10 +104,12 @@ benchmarks/
 ### Test Cases
 
 Test cases are `.mmd` (Mermaid) files organized by:
+
 - **Type**: flowchart, sequence, class, ER, state
 - **Category**: valid, violations, edge-cases
 
 **Example:**
+
 ```mermaid
 graph TD
     A["Node A"] --> B["Node B"]
@@ -119,16 +123,17 @@ The runner **auto-discovers** cases and extracts metadata from annotations.
 
 For each rule, the benchmark system tracks:
 
-| Metric | Description |
-|--------|-------------|
-| **Detection Rate** | % of cases with correct results (0–100%) |
-| **False Positives** | Issues reported that weren't expected |
-| **Avg Parse Time** | Average milliseconds to parse case |
-| **Avg Lint Time** | Average milliseconds to execute rule |
+| Metric              | Description                              |
+| ------------------- | ---------------------------------------- |
+| **Detection Rate**  | % of cases with correct results (0–100%) |
+| **False Positives** | Issues reported that weren't expected    |
+| **Avg Parse Time**  | Average milliseconds to parse case       |
+| **Avg Lint Time**   | Average milliseconds to execute rule     |
 
 ### Baselines
 
 Baselines are snapshots of benchmark results at specific version points (e.g., v0.1.0). They're used for:
+
 - **Regression detection**: Alert if detection rate drops >5%
 - **Trend analysis**: Track rule quality over time
 - **Reproducibility**: Compare against known good results
@@ -153,6 +158,7 @@ The benchmark runner generates two reports:
 ### As a Developer
 
 1. **Run benchmarks** to check rule quality:
+
    ```bash
    make benchmark
    ```
@@ -160,10 +166,11 @@ The benchmark runner generates two reports:
 2. **Review results** in HTML report or JSON
 
 3. **Add new test cases** to improve coverage:
+
    ```bash
    # Create new fixture
    echo "graph TD\n  A --> B" > benchmarks/cases/flowchart/valid/my-test.mmd
-   
+
    # Run benchmarks again
    make benchmark
    ```
@@ -242,6 +249,7 @@ See [baselines/v0.1.0.json](baselines/v0.1.0.json) for detailed metrics.
 ### Issue: "parser script not found"
 
 **Solution**: Set parser path or ensure `parser-node/` is initialized:
+
 ```bash
 cd parser-node && npm install && cd ..
 make benchmark
@@ -250,6 +258,7 @@ make benchmark
 ### Issue: Low detection rate (<80%)
 
 **Solution**: Run with verbose output to see which cases failed:
+
 ```bash
 go run ./benchmarks/main.go -verbose
 ```
@@ -259,6 +268,7 @@ Review failed case details in HTML report. See [cases/README.md](cases/README.md
 ### Issue: HTML report doesn't load
 
 **Solution**: Serve via HTTP:
+
 ```bash
 cd benchmarks/reports && python3 -m http.server 8000
 # Visit http://localhost:8000/index.html
@@ -282,6 +292,7 @@ cd benchmarks/reports && python3 -m http.server 8000
 ## Questions?
 
 Refer to the relevant documentation file:
+
 - **What is this?** → [BENCHMARK.md](BENCHMARK.md)
 - **How do I add a test case?** → [CONTRIBUTING.md](CONTRIBUTING.md)
 - **What are test cases?** → [cases/README.md](cases/README.md)

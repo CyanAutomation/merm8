@@ -11,6 +11,7 @@ The easiest way to explore and test the API is through the interactive Swagger U
 ### Accessing the Swagger UI
 
 1. **Start the server**:
+
    ```bash
    # From the workspace root
    PARSER_SCRIPT=./parser-node/parse.mjs go run ./cmd/server
@@ -27,11 +28,11 @@ You should see a professional API documentation page with all available endpoint
 
 For deployment sizing and overload behavior, the parser runtime exposes three key env vars:
 
-| Variable | Default | Behavior |
-|---|---|---|
-| `PARSER_TIMEOUT_SECONDS` | `5` | Timeout for each parse operation in seconds. Valid range: 1–60. Increase for complex diagrams, decrease to prioritize responsiveness. Exposed via `GET /info` canonical response field `parser-timeout-seconds` (legacy alias `parser_timeout_seconds` is temporarily retained for compatibility and is deprecated). |
-| `PARSER_CONCURRENCY_LIMIT` | `8` | Caps in-flight parser subprocesses. When the limit is reached, the server does **not queue indefinitely**; additional `POST /v1/analyze` requests are rejected with `503` and `error.code=server_busy` (`parser concurrency limit reached; try again`) and include `Retry-After: 1` to signal the minimum retry delay in seconds. |
-| `PARSER_MAX_OLD_SPACE_MB` | `512` | Sets the Node.js parser subprocess V8 old-space heap cap (`--max-old-space-size=<MB>`), limiting parser memory growth per parse process. |
+| Variable                   | Default | Behavior                                                                                                                                                                                                                                                                                                                          |
+| -------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PARSER_TIMEOUT_SECONDS`   | `5`     | Timeout for each parse operation in seconds. Valid range: 1–60. Increase for complex diagrams, decrease to prioritize responsiveness. Exposed via `GET /info` canonical response field `parser-timeout-seconds` (legacy alias `parser_timeout_seconds` is temporarily retained for compatibility and is deprecated).              |
+| `PARSER_CONCURRENCY_LIMIT` | `8`     | Caps in-flight parser subprocesses. When the limit is reached, the server does **not queue indefinitely**; additional `POST /v1/analyze` requests are rejected with `503` and `error.code=server_busy` (`parser concurrency limit reached; try again`) and include `Retry-After: 1` to signal the minimum retry delay in seconds. |
+| `PARSER_MAX_OLD_SPACE_MB`  | `512`   | Sets the Node.js parser subprocess V8 old-space heap cap (`--max-old-space-size=<MB>`), limiting parser memory growth per parse process.                                                                                                                                                                                          |
 
 Use these together with your platform CPU/memory limits to tune throughput versus memory headroom in production.
 
@@ -51,6 +52,7 @@ A-->B",
 ```
 
 Validation bounds are enforced server-side regardless of requested value:
+
 - `parser.timeout_seconds`: default **5**, accepted range **1–60** seconds
 - `parser.max_old_space_mb`: default **512**, accepted range **128–4096** MiB
 
@@ -59,11 +61,13 @@ Out-of-range values are rejected with `400` and `error.code=invalid_option`. If 
 #### Parser failure remediation payloads
 
 Timeout and parser-memory failures include structured remediation details under `error.details` when safe:
+
 - `suggestion`: actionable mitigation (reduce diagram size, batch requests, raise limits)
 - `limit`: effective timeout or memory cap that was hit
 - `observed_size`: request code size in bytes (memory-limit errors)
 
 Parser execution error codes:
+
 - `parser_timeout` (HTTP 504)
 - `parser_memory_limit` (HTTP 500)
 - `parser_subprocess_error` (HTTP 500)
@@ -73,14 +77,13 @@ Parser execution error codes:
 #### Tuning guidance
 
 For production stability:
+
 - Start with defaults (`timeout=5s`, `max_old_space=512MB`, `concurrency=8`).
 - If timeouts occur, first reduce diagram complexity (split large diagrams into smaller subgraphs) before increasing timeout.
 - If memory-limit errors occur, batch large analysis jobs and/or raise `PARSER_MAX_OLD_SPACE_MB` conservatively.
 - Prefer tiered limits by environment (e.g., lower defaults on shared/dev tiers, higher caps on dedicated/prod tiers).
 
-
 ---
-
 
 ## Endpoint versioning and deprecation
 
@@ -99,26 +102,26 @@ The Swagger UI provides:
 - **Try it out button** — Execute requests directly from the browser
 - **Example requests** — Pre-filled request templates for common scenarios
 
-
-
 ### Scraping Service Metrics (`GET /metrics`)
 
 The API exposes Prometheus metrics at `GET /metrics` in text exposition format.
 
 Exported metric families and labels:
 
-| Metric family | Type | Labels | Semantics |
-|---|---|---|---|
-| `request_total` | Counter | `route`, `method`, `status` | Total HTTP requests observed by middleware. `route` is the normalized registered pattern (for example `GET /v1/analyze/help`), or `unknown` if not mapped. `status` is the numeric HTTP status code as a string label. |
-| `request_duration_seconds` | Histogram | `route`, `method` | End-to-end HTTP request duration in seconds, measured in middleware with default Prometheus histogram buckets. |
-| `analyze_requests_total` | Counter | `outcome` | Analyze request outcomes. Outcome label values are: `lint_success`, `syntax_error`, `parser_timeout`, `parser_subprocess_error`, `parser_decode_error`, `parser_contract_violation`, `internal_error`. |
-| `parser_duration_seconds` | Histogram | `outcome` | Parser invocation duration in seconds by parse/lint outcome (same `outcome` values as above) with default Prometheus histogram buckets. |
+| Metric family              | Type      | Labels                      | Semantics                                                                                                                                                                                                              |
+| -------------------------- | --------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `request_total`            | Counter   | `route`, `method`, `status` | Total HTTP requests observed by middleware. `route` is the normalized registered pattern (for example `GET /v1/analyze/help`), or `unknown` if not mapped. `status` is the numeric HTTP status code as a string label. |
+| `request_duration_seconds` | Histogram | `route`, `method`           | End-to-end HTTP request duration in seconds, measured in middleware with default Prometheus histogram buckets.                                                                                                         |
+| `analyze_requests_total`   | Counter   | `outcome`                   | Analyze request outcomes. Outcome label values are: `lint_success`, `syntax_error`, `parser_timeout`, `parser_subprocess_error`, `parser_decode_error`, `parser_contract_violation`, `internal_error`.                 |
+| `parser_duration_seconds`  | Histogram | `outcome`                   | Parser invocation duration in seconds by parse/lint outcome (same `outcome` values as above) with default Prometheus histogram buckets.                                                                                |
 
 Notes:
+
 - `request_*` metrics are emitted for all routes wrapped by API metrics middleware, not only analyze endpoints.
 - `analyze_requests_total` and `parser_duration_seconds` are emitted only from analyze code paths.
 
 Example:
+
 ```bash
 curl -s http://localhost:8080/metrics
 ```
@@ -128,6 +131,7 @@ curl -s http://localhost:8080/metrics
 The API exposes a lightweight JSON counter view at `GET /v1/internal/metrics` for direct service/operator inspection.
 
 Response shape:
+
 - `analyze.valid_success`: count of analyze requests that completed parse+lint successfully (`outcome=lint_success`).
 - `analyze.syntax_error`: count of analyze requests where Mermaid parsing returned a syntax error (`outcome=syntax_error`).
 - `parser.timeout`: parser timeout failures (`outcome=parser_timeout`).
@@ -139,6 +143,7 @@ Response shape:
 All fields are cumulative process counters (monotonic for process lifetime; reset on restart).
 
 Example:
+
 ```json
 {
   "analyze": {
@@ -156,6 +161,7 @@ Example:
 ```
 
 Example interpretation:
+
 - `valid_success` is the dominant bucket, so the service is mostly healthy.
 - `syntax_error` is non-zero and often reflects client diagram input quality rather than server instability.
 - `timeout` growth suggests parse pressure/complex diagrams; review parser timeout and request complexity.
@@ -174,6 +180,7 @@ Example interpretation:
 Use **`GET /rules`** to discover the rule metadata catalog at runtime.
 
 The response includes:
+
 - Rule identifier
 - Rule lifecycle `state` (`implemented` or `planned`)
 - Default severity
@@ -182,6 +189,7 @@ The response includes:
 - Configurable option docs (name/type/constraints)
 
 Interpretation guidance:
+
 - `implemented` rules are currently enforced by the runtime engine and can be configured under `config.rules` for `/analyze`.
 - `planned` rules are forward-looking metadata for upcoming rule families and are **not** enforced yet.
 - Planned entries may include `availability` notes to help clients decide whether to show roadmap badges, “coming soon” labels, or hide non-actionable controls.
@@ -248,6 +256,7 @@ The request body editor will appear. Enter your Mermaid code:
 **Example diagrams to try:**
 
 **Valid diagram (no issues):**
+
 ```json
 {
   "code": "graph TD\n  A --> B\n  B --> C"
@@ -255,6 +264,7 @@ The request body editor will appear. Enter your Mermaid code:
 ```
 
 **Diagram with disconnected nodes:**
+
 ```json
 {
   "code": "graph TD\n  A --> B\n  C[Isolated]"
@@ -262,6 +272,7 @@ The request body editor will appear. Enter your Mermaid code:
 ```
 
 **Diagram with high fan-out (warning severity):**
+
 ```json
 {
   "code": "graph TD\n  A --> B\n  A --> C\n  A --> D\n  A --> E\n  A --> F\n  A --> G"
@@ -307,16 +318,17 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 
 ### Understanding the Response
 
-| HTTP status | `valid` | `syntax-error` | `issues` | `error` | when it occurs |
-|---|---:|---|---|---|---|
-| `200` | `true` | `null` | `[]` | `null` | Diagram parsed and linted successfully with no lint findings. |
-| `200` | `true` | `null` | Non-empty array | `null` | Diagram parsed and linted successfully, and lint findings were produced. |
-| `200` | `false` | Populated object | `[]` | `null` | Mermaid parser reports a syntax parse failure. |
-| Non-`200` (`400`/`413`/`429`/`500`/`503`/`504`) | `false` | `null` | `[]` | Populated object | API-level failure (request validation/limits/infrastructure/timeout). |
+| HTTP status                                     | `valid` | `syntax-error`   | `issues`        | `error`          | when it occurs                                                           |
+| ----------------------------------------------- | ------: | ---------------- | --------------- | ---------------- | ------------------------------------------------------------------------ |
+| `200`                                           |  `true` | `null`           | `[]`            | `null`           | Diagram parsed and linted successfully with no lint findings.            |
+| `200`                                           |  `true` | `null`           | Non-empty array | `null`           | Diagram parsed and linted successfully, and lint findings were produced. |
+| `200`                                           | `false` | Populated object | `[]`            | `null`           | Mermaid parser reports a syntax parse failure.                           |
+| Non-`200` (`400`/`413`/`429`/`500`/`503`/`504`) | `false` | `null`           | `[]`            | Populated object | API-level failure (request validation/limits/infrastructure/timeout).    |
 
 `issues` is always present as an array. `syntax-error` and `error` are mutually exclusive.
 
 **Successful analysis of a valid diagram:**
+
 ```json
 {
   "valid": true,
@@ -333,6 +345,7 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 ```
 
 **Response with lint issues:**
+
 ```json
 {
   "valid": true,
@@ -353,6 +366,7 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 ```
 
 **Syntax error response:**
+
 ```json
 {
   "valid": false,
@@ -367,6 +381,7 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 ```
 
 **Request error response (HTTP 400/413/429/500/503/504):**
+
 ```json
 {
   "valid": false,
@@ -381,6 +396,7 @@ Unknown rule IDs in config are rejected with `400 invalid_config`.
 ```
 
 **Common API error codes:**
+
 - `missing_code` — `code` field is missing or empty (HTTP 400)
 - `invalid_json` — body is not valid JSON (HTTP 400)
 - `request_too_large` — request body exceeds 1 MiB (HTTP 413)
@@ -410,6 +426,7 @@ Add jitter (for example ±20% randomization) per attempt to avoid synchronized r
 ### Response Fields Explained
 
 **Current type support behavior:**
+
 - `flowchart`/`graph` diagrams are linted by built-in rules.
 - `sequence`, `class`, `er`, and `state` diagrams are parsed, and return `valid=false`, `lint-supported=false`, `issues=[]`, a structured `error.code` of `unsupported_diagram_type`, and populated `metrics` computed from the parsed diagram (with empty issue-count maps).
 
@@ -445,6 +462,7 @@ The `/v1/analyze/raw` endpoint allows you to send raw Mermaid code directly with
 ### Format Auto-Detection
 
 The endpoint auto-detects the input format:
+
 - **Plain text** (Content-Type: `text/plain`) — Entire body is treated as raw Mermaid code
 - **JSON** (Content-Type: `application/json`) — Attempts to parse `{"code": "..."}` structure. If parsing fails, the body is analyzed as raw text. The `raw_json_decode_failed_fallback_to_text` hint is emitted only when the payload is JSON-like but malformed (for example starting with `{` or `[`), not for plain Mermaid or markdown-fenced Mermaid text sent under JSON content type.
 
@@ -510,6 +528,7 @@ curl -X POST http://localhost:8080/v1/analyze/raw \
 ### Response
 
 The response has the same structure as `/v1/analyze`:
+
 - Successful analysis with no lint issues
 - Lint violations (if linting is supported for the diagram type)
 - Syntax error details
@@ -557,10 +576,10 @@ curl -X POST http://localhost:8080/v1/analyze \
   -d '{"code": "graph TD\n  A --> B"}' | jq .
 ```
 
-
 #### Legacy analyze aliases (deprecated)
 
 Legacy unversioned analyze routes remain available for migration only and are deprecated:
+
 - `POST /v1/analyse`
 - `POST /v1/analyse/raw`
 - `POST /analyze`
@@ -652,9 +671,9 @@ const payload = {
   code: "graph TD\n  A --> B\n  A --> C\n  A --> D",
   config: {
     rules: {
-      "max-fanout": { limit: 2 }
-    }
-  }
+      "max-fanout": { limit: 2 },
+    },
+  },
 };
 
 const maxAttempts = 5;
@@ -671,21 +690,21 @@ const retryAfterToMs = (value) => {
 
 let response;
 for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-  response = await fetch('http://localhost:8080/v1/analyze', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+  response = await fetch("http://localhost:8080/v1/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 
   if (response.status !== 503) break;
 
   const body = await response.clone().json();
-  if (body?.error?.code !== 'server_busy') break;
+  if (body?.error?.code !== "server_busy") break;
 
-  const retryAfterMs = retryAfterToMs(response.headers.get('Retry-After'));
-  const expBackoffMs = baseDelayMs * (2 ** (attempt - 1));
+  const retryAfterMs = retryAfterToMs(response.headers.get("Retry-After"));
+  const expBackoffMs = baseDelayMs * 2 ** (attempt - 1);
   const jitterMs = Math.random() * expBackoffMs * 0.2;
-  const sleepMs = retryAfterMs ?? (expBackoffMs + jitterMs);
+  const sleepMs = retryAfterMs ?? expBackoffMs + jitterMs;
   await new Promise((resolve) => setTimeout(resolve, sleepMs));
 }
 
@@ -693,7 +712,7 @@ const data = await response.json();
 console.log(`Valid: ${data.valid}`);
 console.log(`Issues: ${data.issues.length}`);
 for (const issue of data.issues) {
-  console.log(`  - ${issue['rule-id']}: ${issue.message}`);
+  console.log(`  - ${issue["rule-id"]}: ${issue.message}`);
 }
 ```
 
@@ -716,6 +735,7 @@ curl http://localhost:8080/
 
 **Description:** Dependency/readiness-only endpoint for critical dependencies (parser runtime/script checks when available). This endpoint may return `503` when dependencies are not ready.  
 **Response:**
+
 - `200` with `{"status":"ready"}` when ready
 - `503` with `{"status":"not_ready","error":"..."}` when not ready
 
@@ -728,7 +748,7 @@ curl -i http://localhost:8080/ready
 ### GET `/version`
 
 **Description:** Informational-only endpoint for service/build metadata (service version, build commit/time, parser/runtime versions when available). This endpoint is stable and unauthenticated for probe tooling and diagnostics, but should not be used as readiness gating.  
-**Response:** JSON object of string metadata fields (keys present when values are configured).  
+**Response:** JSON object of string metadata fields (keys present when values are configured).
 
 **Usage:**
 
@@ -751,14 +771,26 @@ curl http://localhost:8080/version
   "parser-timeout-seconds": 5,
   "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
   "lint-supported": ["flowchart"],
-  "supported-rules": ["max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"],
+  "supported-rules": [
+    "max-depth",
+    "max-fanout",
+    "no-cycles",
+    "no-disconnected-nodes",
+    "no-duplicate-node-ids"
+  ],
   "service_version": "1.2.3",
   "parser_version": "1.0.0",
   "mermaid_version": "11.12.3",
   "parser_timeout_seconds": 5,
   "parser_recognized": ["flowchart", "sequence", "class", "er", "state"],
   "lint_supported": ["flowchart"],
-  "supported_rules": ["max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"]
+  "supported_rules": [
+    "max-depth",
+    "max-fanout",
+    "no-cycles",
+    "no-disconnected-nodes",
+    "no-duplicate-node-ids"
+  ]
 }
 ```
 
@@ -795,6 +827,7 @@ You can suppress lint findings directly in Mermaid source using comment directiv
 
 **Description:** Validate and lint a Mermaid diagram  
 **Request body:**
+
 ```json
 {
   "code": "string (required) - Mermaid diagram code",
@@ -803,7 +836,6 @@ You can suppress lint findings directly in Mermaid source using comment directiv
 ```
 
 **Response:** Analysis results with validity, syntax errors (if any), lint issues, and metrics
-
 
 ### Deployment probe settings
 
@@ -868,6 +900,7 @@ Concrete examples:
 The merm8 engine currently includes five built-in lint rules:
 
 #### `no-duplicate-node-ids`
+
 - **Severity:** error
 - **Purpose:** Flags diagrams containing more than one node with the same ID
 - **Configuration options:**
@@ -884,6 +917,7 @@ The merm8 engine currently includes five built-in lint rules:
   ```
 
 #### `no-disconnected-nodes`
+
 - **Severity:** error
 - **Purpose:** Flags nodes that are not connected by any incoming or outgoing edge
 - **Configuration options:**
@@ -900,6 +934,7 @@ The merm8 engine currently includes five built-in lint rules:
   ```
 
 #### `max-fanout`
+
 - **Severity:** warning
 - **Purpose:** Flags nodes whose outgoing edge count exceeds a configurable limit
 - **Configuration options:**
@@ -928,6 +963,7 @@ The merm8 engine currently includes five built-in lint rules:
   ```
 
 #### `max-depth`
+
 - **Severity:** warning
 - **Purpose:** Flags root-to-leaf traversals whose depth exceeds a configurable limit
 - **Configuration options:**
@@ -956,6 +992,7 @@ The merm8 engine currently includes five built-in lint rules:
   ```
 
 #### `no-cycles`
+
 - **Severity:** error
 - **Purpose:** Flags directed cycles in flowcharts
 - **Configuration options:**
@@ -1001,15 +1038,16 @@ Accepted canonical format (versioned contract):
 
 #### Deprecation Policy (Phase-1 acceptance)
 
-| Legacy input | Accepted since | Warn since | Remove in |
-|---|---|---|---|
-| `config.schema_version` (snake_case) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
-| Unversioned nested config (`config.rules` without `config.schema-version`) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
-| Flat config shape (`config.{rule-id}` at root) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
-| Snake_case option keys under a rule (for example `suppression_selectors`) | v1.0.0 | v1.0.0 | v1.2.0 (Q2 2026 planned) |
-| `/info` snake_case response aliases (`service_version`, `parser_version`, `mermaid_version`, `parser_timeout_seconds`, `parser_recognized`, `lint_supported`, `supported_rules`) | v1.0.0 | v1.0.0 | Next major version (TBD) |
+| Legacy input                                                                                                                                                                     | Accepted since | Warn since | Remove in                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- | ------------------------ |
+| `config.schema_version` (snake_case)                                                                                                                                             | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
+| Unversioned nested config (`config.rules` without `config.schema-version`)                                                                                                       | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
+| Flat config shape (`config.{rule-id}` at root)                                                                                                                                   | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
+| Snake_case option keys under a rule (for example `suppression_selectors`)                                                                                                        | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
+| `/info` snake_case response aliases (`service_version`, `parser_version`, `mermaid_version`, `parser_timeout_seconds`, `parser_recognized`, `lint_supported`, `supported_rules`) | v1.0.0         | v1.0.0     | Next major version (TBD) |
 
 **Deprecation signals (runtime):**
+
 - HTTP `Warning` header(s): one or more `299 - "..."` values with exact migration examples.
 - HTTP `Deprecation: true` header.
 - JSON response `warnings` array (string messages).
@@ -1023,6 +1061,7 @@ See [docs/migration-guide.md](docs/migration-guide.md) for a full rollout timeli
 **Migration Guide (Legacy → Canonical)**:
 
 Legacy flat format:
+
 ```json
 {
   "code": "...",
@@ -1034,6 +1073,7 @@ Legacy flat format:
 ```
 
 Canonical format:
+
 ```json
 {
   "code": "...",
@@ -1048,6 +1088,7 @@ Canonical format:
 ```
 
 Key changes:
+
 - Add `"schema-version": "v1"` at config root
 - Wrap rules under `"rules"` key
 - Use kebab-case key names: `max_fanout` → `max-fanout`, `no_disconnected_nodes` → `no-disconnected-nodes`
@@ -1059,6 +1100,7 @@ Use `POST /v1/analyze/sarif` with the same request body as `/v1/analyze` to rece
 Legacy aliases `POST /analyze` and `POST /analyze/sarif` are deprecated and scheduled for removal in v1.2.0 (Q2 2026).
 
 Canonical severity mapping is defined in code at `internal/output/sarif` and used by API docs:
+
 - `error -> error`
 - `warning/warn -> warning`
 - `info -> note`
@@ -1108,6 +1150,7 @@ if (!validate(config)) {
 ### Example 1: Valid Diagram with No Issues
 
 **Request:**
+
 ```bash
 curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
@@ -1117,6 +1160,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 **Response:**
+
 ```json
 {
   "valid": true,
@@ -1135,6 +1179,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ### Example 2: High Fan-out Warning
 
 **Request:**
+
 ```bash
 curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
@@ -1145,6 +1190,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 **Response:**
+
 ```json
 {
   "valid": true,
@@ -1169,6 +1215,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ### Example 3: Disconnected Node Error
 
 **Request:**
+
 ```bash
 curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
@@ -1178,6 +1225,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 **Response:**
+
 ```json
 {
   "valid": true,
@@ -1200,6 +1248,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ### Example 4: Syntax Error
 
 **Request:**
+
 ```bash
 curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
@@ -1209,6 +1258,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 **Response:**
+
 ```json
 {
   "valid": false,
@@ -1230,6 +1280,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 
 **Problem:** Server isn't running or listening on the wrong port  
 **Solution:**
+
 ```bash
 # Check if server is running
 ps aux | grep -i "go run"
@@ -1248,6 +1299,7 @@ PARSER_SCRIPT=./parser-node/parse.mjs go run ./cmd/server
 
 **Problem:** Request body is malformed  
 **Solution:**
+
 - Ensure all JSON strings use double quotes: `"code": "..."`
 - Escape newlines in Mermaid code: `"code": "graph TD\n  A --> B"`
 - Use valid JSON syntax (check with `jq` or similar)
@@ -1255,6 +1307,7 @@ PARSER_SCRIPT=./parser-node/parse.mjs go run ./cmd/server
 ### JSON Parsing in `curl`
 
 **Escaping newlines in bash:**
+
 ```bash
 # Using $'...' syntax (ANSI-C quoting)
 curl -X POST http://localhost:8080/v1/analyze \
@@ -1286,9 +1339,9 @@ for diagram_file in diagrams/*.mmd; do
   response=$(curl -s -X POST "$API_URL" \
     -H "Content-Type: application/json" \
     -d "{\"code\": $(echo "$content" | jq -Rs .)}")
-  
+
   valid=$(echo "$response" | jq .valid)
-  
+
   if [ "$valid" != "true" ]; then
     echo "❌ $diagram_file is invalid"
     echo "$response" | jq .

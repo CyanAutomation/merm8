@@ -88,11 +88,13 @@ git commit -m "benchmark: establish v0.1.1 baseline"
 ## Trends and Analysis
 
 Over time, baselines should show:
+
 - **Increasing detection rates** (rules becoming more accurate)
 - **Decreasing false positives** (rules becoming more precise)
 - **Stable or improving execution times** (rules not regressing in performance)
 
 If trends go in the opposite direction, investigate:
+
 - Recent code changes
 - New test cases added
 - Parser or engine changes

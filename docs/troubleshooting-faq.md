@@ -6,15 +6,15 @@ Common issues, error codes, and solutions for merm8.
 
 ## HTTP Status Codes
 
-| Code | Meaning | Usual Cause | Solution |
-|------|---------|-------------|----------|
-| 200 | OK | Request successful | No action needed |
-| 400 | Bad Request | Invalid JSON or config | Check request format and config validity |
-| 403 | Forbidden | Auth token missing/invalid | Verify `Authorization: Bearer <token>` header |
-| 429 | Too Many Requests | Rate limit exceeded | Implement exponential backoff; check `X-RateLimit-*` headers |
-| 502 | Bad Gateway | Server communication issue | Restart merm8 process; check network routing |
-| 503 | Service Unavailable | Server busy or parser timeout | Reduce concurrency; increase `PARSER_TIMEOUT_SECONDS` |
-| 504 | Gateway Timeout | Request exceeded server timeout | Simplify diagram or increase timeout |
+| Code | Meaning             | Usual Cause                     | Solution                                                     |
+| ---- | ------------------- | ------------------------------- | ------------------------------------------------------------ |
+| 200  | OK                  | Request successful              | No action needed                                             |
+| 400  | Bad Request         | Invalid JSON or config          | Check request format and config validity                     |
+| 403  | Forbidden           | Auth token missing/invalid      | Verify `Authorization: Bearer <token>` header                |
+| 429  | Too Many Requests   | Rate limit exceeded             | Implement exponential backoff; check `X-RateLimit-*` headers |
+| 502  | Bad Gateway         | Server communication issue      | Restart merm8 process; check network routing                 |
+| 503  | Service Unavailable | Server busy or parser timeout   | Reduce concurrency; increase `PARSER_TIMEOUT_SECONDS`        |
+| 504  | Gateway Timeout     | Request exceeded server timeout | Simplify diagram or increase timeout                         |
 
 ---
 
@@ -23,6 +23,7 @@ Common issues, error codes, and solutions for merm8.
 ### Issue: "Invalid config object"
 
 **Error:**
+
 ```json
 {
   "valid": false,
@@ -34,6 +35,7 @@ Common issues, error codes, and solutions for merm8.
 ```
 
 **Causes:**
+
 1. Config is not valid JSON
 2. Config is null instead of object
 3. Missing `schema-version` field in strict mode
@@ -62,6 +64,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ### Issue: "unknown rule: core/max-fanout"
 
 **Error:**
+
 ```json
 {
   "error": {
@@ -72,6 +75,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 **Causes:**
+
 1. Rule ID typo
 2. Using legacy rule ID (without `core/` prefix)
 3. Rule not registered in current version
@@ -100,6 +104,7 @@ curl http://localhost:8080/v1/rules | jq '.rules[].id'
 ### Issue: "Parser timeout after Xs"
 
 **Error:**
+
 ```json
 {
   "valid": false,
@@ -111,6 +116,7 @@ curl http://localhost:8080/v1/rules | jq '.rules[].id'
 ```
 
 **Causes:**
+
 1. Diagram is very complex
 2. Parser timeout too short for diagram
 3. System resources exhausted
@@ -144,6 +150,7 @@ PARSER_TIMEOUT_SECONDS=15 /start-merm8.sh
 ### Issue: "Rate limit exceeded"
 
 **Error:**
+
 ```json
 {
   "error": {
@@ -154,6 +161,7 @@ PARSER_TIMEOUT_SECONDS=15 /start-merm8.sh
 ```
 
 **Response Headers:**
+
 ```
 X-RateLimit-Limit: 60
 X-RateLimit-Remaining: 0
@@ -172,7 +180,7 @@ echo "Wait ${WAIT_MS}ms before retrying"
 for i in {1..5}; do
   response=$(curl -X POST http://localhost:8080/v1/analyze -d '...')
   if [ $? -eq 0 ]; then break; fi
-  
+
   sleep $((2 ** $i))  # Exponential backoff: 2, 4, 8, 16, 32 seconds
 done
 
@@ -185,6 +193,7 @@ ANALYZE_RATE_LIMIT_PER_MINUTE=120 /start-merm8.sh
 ### Issue: "Deprecation warning: legacy config format"
 
 **Warning in Response:**
+
 ```json
 {
   "warnings": [
@@ -220,6 +229,7 @@ Your config is in deprecated format but still accepted. It will be removed in v1
 ```
 
 **Check migration timeline:**
+
 ```bash
 curl http://localhost:8080/v1/config-versions | jq '.deprecations'
 ```
@@ -229,6 +239,7 @@ curl http://localhost:8080/v1/config-versions | jq '.deprecations'
 ### Issue: "JSON parse error on line X"
 
 **Error:**
+
 ```json
 {
   "error": {
@@ -239,6 +250,7 @@ curl http://localhost:8080/v1/config-versions | jq '.deprecations'
 ```
 
 **Causes:**
+
 1. Malformed JSON in request body
 2. Unescaped quotes in code string
 3. Missing commas or brackets
@@ -345,12 +357,12 @@ curl -X POST http://localhost:8080/v1/analyze \
 
 **A:** Use this guide:
 
-| Diagram Size | Nodes | Timeout | Memory |
-|---|---|---|---|
-| Small | < 100 | 2-3s | 256MB |
-| Medium | 100-500 | 5s | 512MB |
-| Large | 500-2000 | 10s | 1024MB |
-| Very Large | > 2000 | 15-30s | 2048MB+ |
+| Diagram Size | Nodes    | Timeout | Memory  |
+| ------------ | -------- | ------- | ------- |
+| Small        | < 100    | 2-3s    | 256MB   |
+| Medium       | 100-500  | 5s      | 512MB   |
+| Large        | 500-2000 | 10s     | 1024MB  |
+| Very Large   | > 2000   | 15-30s  | 2048MB+ |
 
 Test with your actual diagrams:
 
@@ -393,7 +405,7 @@ curl http://localhost:8080/v1/info
 
 for diagram in *.mmd; do
   echo "Processing $diagram..."
-  
+
   # Convert Mermaid file to analyze request
   payload=$(jq -n \
     --arg code "$(cat "$diagram")" \
@@ -404,12 +416,12 @@ for diagram in *.mmd; do
         "rules": {}
       }
     }')
-  
+
   # Send request
   curl -X POST http://localhost:8080/v1/analyze \
     -H "Content-Type: application/json" \
     -d "$payload" > "${diagram%.mmd}-results.json"
-  
+
   # Respect rate limits
   sleep 0.5
 done
@@ -430,14 +442,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Run merm8 linting
         run: |
           docker run --rm -v $PWD:/workspace \
             merm8:latest \
             /app/merm8-cli /workspace/diagrams/*.mmd \
             > results.sarif
-      
+
       - name: Upload to GitHub Security
         uses: github/codeql-action/upload-sarif@v2
         with:
@@ -477,4 +489,3 @@ go build -o merm8-cli ./cmd/merm8-cli
 5. **Review examples:** See [docs/examples/](examples/) directory
 
 ---
-

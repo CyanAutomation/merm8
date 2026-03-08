@@ -17,15 +17,15 @@ merm8 classifies diagram types in two categories:
 
 ## Support Matrix
 
-| Diagram Type | Parser-Recognized | Lint-Supported | Rules Available | Status | Notes |
-|---|---|---|---|---|---|
-| **flowchart** (aka graph) | ✅ | ✅ | max-fanout, max-depth, no-cycles, no-disconnected-nodes, no-duplicate-node-ids | ✅ Stable | Primary use case; all rules active |
-| **sequence** | ✅ | ❌ (planned) | — | 🔜 Planned | Valid Mermaid; no lint rules yet |
-| **class** | ✅ | ❌ (planned) | — | 🔜 Planned | Valid Mermaid; no lint rules yet |
-| **state** | ✅ | ❌ (planned) | — | 🔜 Planned | Valid Mermaid; no lint rules yet |
-| **er** (entity-relationship) | ✅ | ❌ (planned) | — | 🔜 Planned | Valid Mermaid; no lint rules yet |
-| **gantt** | ❌ | ❌ | — | ❌ Not supported | Parser rejects; returns syntax error |
-| **pie** | ❌ | ❌ | — | ❌ Not supported | Parser rejects; returns syntax error |
+| Diagram Type                 | Parser-Recognized | Lint-Supported | Rules Available                                                                | Status           | Notes                                |
+| ---------------------------- | ----------------- | -------------- | ------------------------------------------------------------------------------ | ---------------- | ------------------------------------ |
+| **flowchart** (aka graph)    | ✅                | ✅             | max-fanout, max-depth, no-cycles, no-disconnected-nodes, no-duplicate-node-ids | ✅ Stable        | Primary use case; all rules active   |
+| **sequence**                 | ✅                | ❌ (planned)   | —                                                                              | 🔜 Planned       | Valid Mermaid; no lint rules yet     |
+| **class**                    | ✅                | ❌ (planned)   | —                                                                              | 🔜 Planned       | Valid Mermaid; no lint rules yet     |
+| **state**                    | ✅                | ❌ (planned)   | —                                                                              | 🔜 Planned       | Valid Mermaid; no lint rules yet     |
+| **er** (entity-relationship) | ✅                | ❌ (planned)   | —                                                                              | 🔜 Planned       | Valid Mermaid; no lint rules yet     |
+| **gantt**                    | ❌                | ❌             | —                                                                              | ❌ Not supported | Parser rejects; returns syntax error |
+| **pie**                      | ❌                | ❌             | —                                                                              | ❌ Not supported | Parser rejects; returns syntax error |
 
 ---
 
@@ -48,31 +48,33 @@ graph TD
 
 All 5 implemented rules run on flowchart diagrams:
 
-| Rule | Default Severity | Configurable |
-|---|---|---|
-| **max-fanout** | warning | limit (default 5) |
-| **max-depth** | warning | limit (default 8) |
-| **no-cycles** | error | allow-self-loop (default false) |
-| **no-disconnected-nodes** | error | — |
-| **no-duplicate-node-ids** | error | — |
+| Rule                      | Default Severity | Configurable                    |
+| ------------------------- | ---------------- | ------------------------------- |
+| **max-fanout**            | warning          | limit (default 5)               |
+| **max-depth**             | warning          | limit (default 8)               |
+| **no-cycles**             | error            | allow-self-loop (default false) |
+| **no-disconnected-nodes** | error            | —                               |
+| **no-duplicate-node-ids** | error            | —                               |
 
 ### Example Request/Response
 
 **Request**:
+
 ```json
 {
   "code": "graph TD\n  A[Start] --> B[End]",
   "config": {
     "schema-version": "v1",
     "rules": {
-      "max-fanout": {"limit": 5},
-      "max-depth": {"limit": 8}
+      "max-fanout": { "limit": 5 },
+      "max-depth": { "limit": 8 }
     }
   }
 }
 ```
 
 **Response** (HTTP 200 OK):
+
 ```json
 {
   "valid": true,
@@ -112,6 +114,7 @@ sequenceDiagram
 ### Example Request/Response
 
 **Request**:
+
 ```json
 {
   "code": "sequenceDiagram\n  participant A\n  participant B\n  A->>B: Hello"
@@ -119,6 +122,7 @@ sequenceDiagram
 ```
 
 **Response** (HTTP 200 OK):
+
 ```json
 {
   "valid": true,
@@ -157,6 +161,7 @@ classDiagram
 ### Example Request/Response
 
 **Response** (HTTP 200 OK):
+
 ```json
 {
   "valid": true,
@@ -186,6 +191,7 @@ stateDiagram-v2
 ### Example Request/Response
 
 **Response** (HTTP 200 OK):
+
 ```json
 {
   "valid": true,
@@ -213,6 +219,7 @@ erDiagram
 ### Example Request/Response
 
 **Response** (HTTP 200 OK):
+
 ```json
 {
   "valid": true,
@@ -228,14 +235,15 @@ erDiagram
 
 The following Mermaid diagram types are **not currently supported** and will return a syntax error:
 
-| Type | Reason | Suggested Alternative |
-|---|---|---|
+| Type  | Reason                                                         | Suggested Alternative                                |
+| ----- | -------------------------------------------------------------- | ---------------------------------------------------- |
 | Gantt | Complex time-based syntax; out of scope for current lint rules | Use project management tool + embed diagrams in docs |
-| Pie | Not a flow/structure diagrams; limited linting value | Document metrics separately |
+| Pie   | Not a flow/structure diagrams; limited linting value           | Document metrics separately                          |
 
 ### Example: Unsupported Type
 
 **Request**:
+
 ```json
 {
   "code": "gantt\n  title My Project\n  section Development\n    Task1 :t1, 2024-01-01, 30d"
@@ -243,6 +251,7 @@ The following Mermaid diagram types are **not currently supported** and will ret
 ```
 
 **Response** (HTTP 200 OK, but empty results):
+
 ```json
 {
   "valid": false,
@@ -264,12 +273,14 @@ The following Mermaid diagram types are **not currently supported** and will ret
 ### Phase 2 (Q3 2026): Sequence Diagram Rules
 
 Planned rules for sequence diagrams:
+
 - **sequence-max-participants**: Limit number of actors (prevent overwhelming diagrams)
 - **sequence-message-ordering**: Ensure messages don't violate actor interaction order
 
 ### Phase 3 (Q4 2026): Class Diagram Rules
 
 Planned rules for class diagrams:
+
 - **class-no-orphan-classes**: Ensure all classes are connected to inheritance hierarchy
 - **class-max-depth**: Limit inheritance depth to prevent overly complex hierarchies
 
@@ -293,6 +304,7 @@ When you send a diagram to `/v1/analyze`, the response includes the detected `di
 ```
 
 You can use this to:
+
 1. Validate the diagram was interpreted as the intended type
 2. Decide whether to expect lint results
 3. Show appropriate UI based on supported rules
@@ -307,7 +319,7 @@ for diagram in *.mmd; do
   type=$(curl -s -X POST /v1/analyze \
     -d "{\"code\":\"$(cat $diagram)\"}" \
     | jq -r '.diagram-type')
-  
+
   if [ "$type" == "flowchart" ]; then
     echo "✅ $diagram is linted"
   else

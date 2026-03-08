@@ -89,7 +89,7 @@
           "type": "string"
         "config":
           "$ref": "#/components/schemas/RuleConfigSchema"
-          "description": "Optional lint rule configuration. Canonical format is {\"schema-version\":\"v1\",\"rules\":{...}}. Phase 1 accepts legacy flat/nested/snake_case config with deprecation warnings; Phase 2 rejects legacy config with 400 deprecated_config_format."
+          "description": 'Optional lint rule configuration. Canonical format is {"schema-version":"v1","rules":{...}}. Phase 1 accepts legacy flat/nested/snake_case config with deprecation warnings; Phase 2 rejects legacy config with 400 deprecated_config_format.'
           "example":
             "rules":
               "max-fanout":
@@ -718,8 +718,7 @@
     "RuleConfigSchema":
       "$schema": "https://json-schema.org/draft/2020-12/schema"
       "oneOf":
-        -
-          "additionalProperties": false
+        - "additionalProperties": false
           "properties":
             "max-depth":
               "additionalProperties": false
@@ -833,8 +832,7 @@
                   "type": "array"
               "type": "object"
           "type": "object"
-        -
-          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        - "$schema": "https://json-schema.org/draft/2020-12/schema"
           "additionalProperties": false
           "properties":
             "rules":
@@ -1567,12 +1565,10 @@
                   "value":
                     "diagram-type": "flowchart"
                     "issues":
-                      -
-                        "message": "Node 'D' is not connected to the graph"
+                      - "message": "Node 'D' is not connected to the graph"
                         "rule-id": "no-disconnected-nodes"
                         "severity": "error"
-                      -
-                        "column": 2
+                      - "column": 2
                         "line": 2
                         "message": "Node 'A' has fanout 6, exceeding limit of 5"
                         "rule-id": "max-fanout"
@@ -1607,7 +1603,7 @@
                 "type": "string"
             "Warning":
               "description": "One or more RFC 7234 warning values (code 299) describing legacy config migration guidance when legacy config is accepted."
-              "example": "299 - \"config.schema_version is deprecated; use config.schema-version\""
+              "example": '299 - "config.schema_version is deprecated; use config.schema-version"'
               "schema":
                 "type": "string"
             "X-RateLimit-Limit":
@@ -2127,23 +2123,18 @@
                   "value":
                     "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
                     "runs":
-                      -
-                        "artifacts":
-                          -
-                            "location":
+                      - "artifacts":
+                          - "location":
                               "uri": "mermaid://diagram"
                         "invocations":
-                          -
-                            "executionSuccessful": false
+                          - "executionSuccessful": false
                             "properties":
                               "error-code": "syntax_error"
                               "error-message": "Unexpected token at line 4, column 5"
                         "results":
-                          -
-                            "level": "error"
+                          - "level": "error"
                             "locations":
-                              -
-                                "physicalLocation":
+                              - "physicalLocation":
                                   "artifactLocation":
                                     "uri": "mermaid://diagram"
                                   "region":
@@ -2160,14 +2151,11 @@
                   "value":
                     "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
                     "runs":
-                      -
-                        "artifacts":
-                          -
-                            "location":
+                      - "artifacts":
+                          - "location":
                               "uri": "mermaid://diagram"
                         "invocations":
-                          -
-                            "executionSuccessful": true
+                          - "executionSuccessful": true
                             "properties":
                               "request-uri": "/v1/analyze/sarif"
                         "results":
@@ -2181,22 +2169,17 @@
                   "value":
                     "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
                     "runs":
-                      -
-                        "artifacts":
-                          -
-                            "location":
+                      - "artifacts":
+                          - "location":
                               "uri": "mermaid://diagram"
                         "invocations":
-                          -
-                            "executionSuccessful": true
+                          - "executionSuccessful": true
                             "properties":
                               "request-uri": "/v1/analyze/sarif"
                         "results":
-                          -
-                            "level": "warning"
+                          - "level": "warning"
                             "locations":
-                              -
-                                "physicalLocation":
+                              - "physicalLocation":
                                   "artifactLocation":
                                     "uri": "mermaid://diagram"
                                   "region":
@@ -2212,8 +2195,7 @@
                             "informationUri": "https://github.com/CyanAutomation/merm8"
                             "name": "merm8"
                             "rules":
-                              -
-                                "id": "max-fanout"
+                              - "id": "max-fanout"
                                 "name": "max-fanout"
                                 "shortDescription":
                                   "text": "Flags nodes whose outgoing edge count exceeds a configurable limit (default 5)."
@@ -2229,7 +2211,7 @@
                 "type": "string"
             "Warning":
               "description": "One or more RFC 7234 warning values (code 299) describing legacy config migration guidance when legacy config is accepted."
-              "example": "299 - \"config.schema_version is deprecated; use config.schema-version\""
+              "example": '299 - "config.schema_version is deprecated; use config.schema-version"'
               "schema":
                 "type": "string"
         "400":
@@ -2394,25 +2376,20 @@
                   "summary": "Currently built-in runtime rule metadata"
                   "value":
                     "rules":
-                      -
-                        "configurable-options":
-                          -
-                            "constraints": "Must be true or false."
+                      - "configurable-options":
+                          - "constraints": "Must be true or false."
                             "description": "Enable or disable this rule."
                             "name": "enabled"
                             "type": "boolean"
-                          -
-                            "constraints": "Accepted values (canonical): error, warning, info."
+                          - "constraints": "Accepted values (canonical): error, warning, info."
                             "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                             "name": "severity"
                             "type": "string"
-                          -
-                            "constraints": "Each entry must be a string selector."
+                          - "constraints": "Each entry must be a string selector."
                             "description": "Selectors that suppress matching issues."
                             "name": "suppression-selectors"
                             "type": "array[string]"
-                          -
-                            "constraints": "Must be an integer >= 1. Default is 8."
+                          - "constraints": "Must be an integer >= 1. Default is 8."
                             "description": "Maximum allowed depth for root-to-leaf traversals."
                             "name": "limit"
                             "type": "integer"
@@ -2425,25 +2402,20 @@
                         "id": "max-depth"
                         "severity": "warning"
                         "state": "implemented"
-                      -
-                        "configurable-options":
-                          -
-                            "constraints": "Must be true or false."
+                      - "configurable-options":
+                          - "constraints": "Must be true or false."
                             "description": "Enable or disable this rule."
                             "name": "enabled"
                             "type": "boolean"
-                          -
-                            "constraints": "Accepted values (canonical): error, warning, info."
+                          - "constraints": "Accepted values (canonical): error, warning, info."
                             "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                             "name": "severity"
                             "type": "string"
-                          -
-                            "constraints": "Each entry must be a string selector."
+                          - "constraints": "Each entry must be a string selector."
                             "description": "Selectors that suppress matching issues."
                             "name": "suppression-selectors"
                             "type": "array[string]"
-                          -
-                            "constraints": "Must be an integer >= 1. Default is 5."
+                          - "constraints": "Must be an integer >= 1. Default is 5."
                             "description": "Maximum allowed outgoing edges per node."
                             "name": "limit"
                             "type": "integer"
@@ -2456,25 +2428,20 @@
                         "id": "max-fanout"
                         "severity": "warning"
                         "state": "implemented"
-                      -
-                        "configurable-options":
-                          -
-                            "constraints": "Must be true or false."
+                      - "configurable-options":
+                          - "constraints": "Must be true or false."
                             "description": "Enable or disable this rule."
                             "name": "enabled"
                             "type": "boolean"
-                          -
-                            "constraints": "Accepted values (canonical): error, warning, info."
+                          - "constraints": "Accepted values (canonical): error, warning, info."
                             "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                             "name": "severity"
                             "type": "string"
-                          -
-                            "constraints": "Each entry must be a string selector."
+                          - "constraints": "Each entry must be a string selector."
                             "description": "Selectors that suppress matching issues."
                             "name": "suppression-selectors"
                             "type": "array[string]"
-                          -
-                            "constraints": "Must be true or false."
+                          - "constraints": "Must be true or false."
                             "description": "Allow single-node self-loop cycles without emitting issues."
                             "name": "allow-self-loop"
                             "type": "boolean"
@@ -2487,20 +2454,16 @@
                         "id": "no-cycles"
                         "severity": "error"
                         "state": "implemented"
-                      -
-                        "configurable-options":
-                          -
-                            "constraints": "Must be true or false."
+                      - "configurable-options":
+                          - "constraints": "Must be true or false."
                             "description": "Enable or disable this rule."
                             "name": "enabled"
                             "type": "boolean"
-                          -
-                            "constraints": "Accepted values (canonical): error, warning, info."
+                          - "constraints": "Accepted values (canonical): error, warning, info."
                             "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                             "name": "severity"
                             "type": "string"
-                          -
-                            "constraints": "Each entry must be a string selector."
+                          - "constraints": "Each entry must be a string selector."
                             "description": "Selectors that suppress matching issues."
                             "name": "suppression-selectors"
                             "type": "array[string]"
@@ -2512,20 +2475,16 @@
                         "id": "no-disconnected-nodes"
                         "severity": "error"
                         "state": "implemented"
-                      -
-                        "configurable-options":
-                          -
-                            "constraints": "Must be true or false."
+                      - "configurable-options":
+                          - "constraints": "Must be true or false."
                             "description": "Enable or disable this rule."
                             "name": "enabled"
                             "type": "boolean"
-                          -
-                            "constraints": "Accepted values (canonical): error, warning, info."
+                          - "constraints": "Accepted values (canonical): error, warning, info."
                             "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                             "name": "severity"
                             "type": "string"
-                          -
-                            "constraints": "Each entry must be a string selector."
+                          - "constraints": "Each entry must be a string selector."
                             "description": "Selectors that suppress matching issues."
                             "name": "suppression-selectors"
                             "type": "array[string]"
@@ -2537,21 +2496,17 @@
                         "id": "no-duplicate-node-ids"
                         "severity": "error"
                         "state": "implemented"
-                      -
-                        "availability": "Planned for sequence diagram linting expansion."
+                      - "availability": "Planned for sequence diagram linting expansion."
                         "configurable-options":
-                          -
-                            "constraints": "Must be true or false."
+                          - "constraints": "Must be true or false."
                             "description": "Enable or disable this rule."
                             "name": "enabled"
                             "type": "boolean"
-                          -
-                            "constraints": "Accepted values (canonical): error, warning, info."
+                          - "constraints": "Accepted values (canonical): error, warning, info."
                             "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                             "name": "severity"
                             "type": "string"
-                          -
-                            "constraints": "Each entry must be a string selector."
+                          - "constraints": "Each entry must be a string selector."
                             "description": "Selectors that suppress matching issues."
                             "name": "suppression-selectors"
                             "type": "array[string]"
@@ -2636,17 +2591,12 @@
       "tags":
         - "Probes"
 "servers":
-  -
-    "description": "Local development server"
+  - "description": "Local development server"
     "url": "http://localhost:8080"
 "tags":
-  -
-    "description": "Mermaid diagram analysis and linting"
+  - "description": "Mermaid diagram analysis and linting"
     "name": "Linting"
-  -
-    "description": "API documentation and specification"
+  - "description": "API documentation and specification"
     "name": "Documentation"
-  -
-    "description": "Liveness and readiness probe endpoints"
+  - "description": "Liveness and readiness probe endpoints"
     "name": "Probes"
-

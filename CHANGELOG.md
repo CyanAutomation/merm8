@@ -8,11 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - Configurable parser timeout via `PARSER_TIMEOUT_SECONDS` environment variable (1–60 seconds, default 5s). Exposed in `GET /info` response as `parser_timeout_seconds` field.
 - `POST /analyze/sarif` returns SARIF 2.1.0 format for all error responses (previously returned JSON with 200 OK). **Breaking change**: Clients must expect proper HTTP status codes (400, 413, 504, 503, 500) with SARIF error format.
 - Comprehensive test coverage for timeout configurability, SARIF error response format, and concurrent error handling.
 
 ### Changed
+
 - Documented extensibility contract for rule IDs, `/v1/rules` compatibility guarantees, and deterministic plugin/rule loading strategy in API and namespace docs.
 - Config normalization now accepts namespaced built-in rule IDs (`core/<id>`) as aliases, normalizes them to canonical built-in IDs, and deterministically merges mixed alias entries.
 
@@ -25,10 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Server busy: `503 Service Unavailable`
   - Internal errors: `500 Internal Server Error`
 
-
 ## [0.1.0] - 2026-03-03
 
 ### Added
+
 - Deterministic Mermaid lint API with `POST /analyze` and structured syntax/lint responses.
 - Rule metadata discovery endpoint (`GET /rules`) for live rule/config documentation.
 - Config JSON Schema endpoint (`GET /rules/schema`) and versioned schema artifact at `schemas/config.v1.json`.
@@ -36,5 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Health/readiness/metrics endpoints (`GET /healthz`, `GET /health`, `GET /ready`, `GET /metrics`).
 
 ### Changed
+
 - Canonical request/response/config JSON naming to kebab-case.
 - Config handling to support versioned schema format (`{"schema-version":"v1","rules":{...}}`) with deprecation signaling for legacy key styles/shapes.

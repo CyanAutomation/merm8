@@ -11,6 +11,7 @@ The `/v1/analyze/sarif` endpoint returns analysis results in [SARIF 2.1.0](https
 ### Response Format
 
 All responses include:
+
 - **Report**: Root object wrapping all analysis data
 - **Version**: Always "2.1.0"
 - **Schema**: SARIF schema URI for validation
@@ -113,13 +114,13 @@ Content-Type: application/json
 
 ### Key Fields Explained
 
-| Field | Value | Meaning |
-|-------|-------|---------|
-| `level` | `"warning"` | Severity mapped from rule config (error → error, warning → warning, info → note) |
-| `ruleId` | `"max-fanout"` | Canonical rule identifier from built-in registry |
-| `message.text` | `"Node exceeds max-fanout limit..."` | Human-readable issue description |
-| `locations[0].physicalLocation.region.startLine` | `1` | Line in diagram where issue detected (1-indexed) |
-| `partialFingerprints` | `{ruleId, nodeId}` | Uniquely identifies issue for deduplication |
+| Field                                            | Value                                | Meaning                                                                          |
+| ------------------------------------------------ | ------------------------------------ | -------------------------------------------------------------------------------- |
+| `level`                                          | `"warning"`                          | Severity mapped from rule config (error → error, warning → warning, info → note) |
+| `ruleId`                                         | `"max-fanout"`                       | Canonical rule identifier from built-in registry                                 |
+| `message.text`                                   | `"Node exceeds max-fanout limit..."` | Human-readable issue description                                                 |
+| `locations[0].physicalLocation.region.startLine` | `1`                                  | Line in diagram where issue detected (1-indexed)                                 |
+| `partialFingerprints`                            | `{ruleId, nodeId}`                   | Uniquely identifies issue for deduplication                                      |
 
 ---
 
@@ -195,12 +196,12 @@ Content-Type: application/json
 
 ### Key Differences from Case 1
 
-| Field | Case 1 (Valid) | Case 2 (Error) | Meaning |
-|-------|----------|----------|---------|
-| `invocations[0].executionSuccessful` | `true` | `false` | Analysis ran vs. failed early |
-| `invocations[0].properties` | `request-uri` only | `error-code`, `error-message` | Success flow vs. error details |
-| `results[0].ruleId` | Set to rule name | Absent | Parser error has no rule match |
-| `results[0].level` | `warning`/`info` | Always `"error"` | Severity determined by nature of error |
+| Field                                | Case 1 (Valid)     | Case 2 (Error)                | Meaning                                |
+| ------------------------------------ | ------------------ | ----------------------------- | -------------------------------------- |
+| `invocations[0].executionSuccessful` | `true`             | `false`                       | Analysis ran vs. failed early          |
+| `invocations[0].properties`          | `request-uri` only | `error-code`, `error-message` | Success flow vs. error details         |
+| `results[0].ruleId`                  | Set to rule name   | Absent                        | Parser error has no rule match         |
+| `results[0].level`                   | `warning`/`info`   | Always `"error"`              | Severity determined by nature of error |
 
 ---
 
@@ -258,12 +259,12 @@ Content-Type: application/json
 
 ### Key Fields
 
-| Field | Value | Meaning |
-|-------|-------|---------|
-| `invocations[0].executionSuccessful` | `true` | Parser succeeded; diagram valid |
-| `invocations[0].properties.diagram-type` | `"sequence"` | Diagram type recognized by parser |
-| `invocations[0].properties.lint-applicable` | `false` | No rules exist for this diagram type yet |
-| `results` | `[]` (empty) | No issues found (because linting skipped) |
+| Field                                       | Value        | Meaning                                   |
+| ------------------------------------------- | ------------ | ----------------------------------------- |
+| `invocations[0].executionSuccessful`        | `true`       | Parser succeeded; diagram valid           |
+| `invocations[0].properties.diagram-type`    | `"sequence"` | Diagram type recognized by parser         |
+| `invocations[0].properties.lint-applicable` | `false`      | No rules exist for this diagram type yet  |
+| `results`                                   | `[]` (empty) | No issues found (because linting skipped) |
 
 ---
 
@@ -271,14 +272,14 @@ Content-Type: application/json
 
 The `POST /v1/analyze/sarif` endpoint returns status codes that indicate the outcome:
 
-| Status | Meaning | SARIF Response | Notes |
-|--------|---------|-----------------|-------|
-| **200 OK** | Analysis succeeded, results in `results[]` | Valid SARIF with findings | May have 0 or more results |
-| **400 Bad Request** | Invalid JSON, missing code, or config error | SARIF error in `invocations[0]` | `properties.error-code` set |
-| **413 Payload Too Large** | Request body > 1 MiB | SARIF error with code `request_too_large` | Check max diagram size |
-| **504 Gateway Timeout** | Parser timeout (default 5s) | SARIF error with code `parser_timeout` | Consider splitting diagram or increasing timeout |
-| **503 Service Unavailable** | Parser concurrency limit reached | SARIF error with code `server_busy` | Include `Retry-After` header; try again after delay |
-| **500 Internal Server Error** | Parser subprocess error or memory limit | SARIF error with code matching failure type | Include error details in `properties` |
+| Status                        | Meaning                                     | SARIF Response                              | Notes                                               |
+| ----------------------------- | ------------------------------------------- | ------------------------------------------- | --------------------------------------------------- |
+| **200 OK**                    | Analysis succeeded, results in `results[]`  | Valid SARIF with findings                   | May have 0 or more results                          |
+| **400 Bad Request**           | Invalid JSON, missing code, or config error | SARIF error in `invocations[0]`             | `properties.error-code` set                         |
+| **413 Payload Too Large**     | Request body > 1 MiB                        | SARIF error with code `request_too_large`   | Check max diagram size                              |
+| **504 Gateway Timeout**       | Parser timeout (default 5s)                 | SARIF error with code `parser_timeout`      | Consider splitting diagram or increasing timeout    |
+| **503 Service Unavailable**   | Parser concurrency limit reached            | SARIF error with code `server_busy`         | Include `Retry-After` header; try again after delay |
+| **500 Internal Server Error** | Parser subprocess error or memory limit     | SARIF error with code matching failure type | Include error details in `properties`               |
 
 ---
 
@@ -295,6 +296,7 @@ curl -X POST https://api.github.com/repos/YOUR_ORG/YOUR_REPO/code-scanning/sarif
 ```
 
 Ensure your SARIF output passes GitHub's validation by checking:
+
 1. All issue locations have valid `uri` and `startLine`
 2. Rule IDs are consistent across all invocations
 3. `executionSuccessful` is set appropriately
@@ -306,11 +308,11 @@ Ensure your SARIF output passes GitHub's validation by checking:
 merm8 rule severities map to SARIF levels as follows:
 
 | Rule Severity | SARIF Level | GitHub Tab Color |
-|---------|----------|-----------|
-| `error` | `error` | 🔴 Red |
-| `warning` | `warning` | 🟠 Orange |
-| `info` | `note` | 🔵 Blue |
-| Parser error | `error` | 🔴 Red |
+| ------------- | ----------- | ---------------- |
+| `error`       | `error`     | 🔴 Red           |
+| `warning`     | `warning`   | 🟠 Orange        |
+| `info`        | `note`      | 🔵 Blue          |
+| Parser error  | `error`     | 🔴 Red           |
 
 ---
 

@@ -14,21 +14,21 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 
 ## Deprecation Timeline
 
-| Version | Date | Status | Legacy Format Support |
-|---------|------|--------|----------------------|
-| v1.0.0 | 2026-03 | Current | ✅ Accepted with warnings |
-| v1.1.0 | 2026-06 | Planned | ✅ Accepted with warnings |
-| v1.2.0 | 2026-12 | Planned | ❌ **Removed** |
+| Version | Date    | Status  | Legacy Format Support     |
+| ------- | ------- | ------- | ------------------------- |
+| v1.0.0  | 2026-03 | Current | ✅ Accepted with warnings |
+| v1.1.0  | 2026-06 | Planned | ✅ Accepted with warnings |
+| v1.2.0  | 2026-12 | Planned | ❌ **Removed**            |
 
 ### Sunset Dates by Format
 
-| Format | Deprecated | Sun set Date | Action |
-|--------|-----------|----------------|--------|
-| Flat config (`config.{rule-id}`) | v1.0.0 | 2026-12-31 | **URGENT** - Migrate now |
-| Unversioned nested (`config.rules` without `schema-version`) | v1.0.0 | 2026-12-31 | **URGENT** - Migrate now |
-| Snake_case `schema_version` | v1.0.0 | 2026-09-30 | Migrate by Sept 2026 |
-| Snake_case option keys | v1.0.0 | 2026-09-30 | Migrate by Sept 2026 |
-| Unnamespaced rule IDs (`max-fanout` vs `core/max-fanout`) | v1.0.0 | 2026-12-31 | **Recommended** to update |
+| Format                                                       | Deprecated | Sun set Date | Action                    |
+| ------------------------------------------------------------ | ---------- | ------------ | ------------------------- |
+| Flat config (`config.{rule-id}`)                             | v1.0.0     | 2026-12-31   | **URGENT** - Migrate now  |
+| Unversioned nested (`config.rules` without `schema-version`) | v1.0.0     | 2026-12-31   | **URGENT** - Migrate now  |
+| Snake_case `schema_version`                                  | v1.0.0     | 2026-09-30   | Migrate by Sept 2026      |
+| Snake_case option keys                                       | v1.0.0     | 2026-09-30   | Migrate by Sept 2026      |
+| Unnamespaced rule IDs (`max-fanout` vs `core/max-fanout`)    | v1.0.0     | 2026-12-31   | **Recommended** to update |
 
 ---
 
@@ -45,6 +45,7 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 ### 1) `schema_version` → `schema-version`
 
 **Before**
+
 ```json
 {
   "code": "graph TD; A-->B",
@@ -56,6 +57,7 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 ```
 
 **After**
+
 ```json
 {
   "code": "graph TD; A-->B",
@@ -69,6 +71,7 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 ### 2) unversioned nested `rules` → add schema version
 
 **Before**
+
 ```json
 {
   "code": "graph TD; A-->B",
@@ -79,6 +82,7 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 ```
 
 **After**
+
 ```json
 {
   "code": "graph TD; A-->B",
@@ -92,6 +96,7 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 ### 3) flat config → move under `rules`
 
 **Before**
+
 ```json
 {
   "code": "graph TD; A-->B",
@@ -102,6 +107,7 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 ```
 
 **After**
+
 ```json
 {
   "code": "graph TD; A-->B",
@@ -117,6 +123,7 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 ### 4) snake_case option keys → kebab-case option keys
 
 **Before**
+
 ```json
 {
   "code": "graph TD; A-->B",
@@ -132,6 +139,7 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 ```
 
 **After**
+
 ```json
 {
   "code": "graph TD; A-->B",
@@ -156,7 +164,6 @@ When legacy input is used, the API emits:
 - `meta.warnings[]` structured metadata (`code`, `message`, `replacement`)
 - server log warning with migration hint
 
-
 ## Rule ID namespacing migration (built-ins and plugins)
 
 As part of rule ID extensibility hardening:
@@ -179,17 +186,17 @@ Recommended client posture:
 
 The API returned response fields have underscore variants for backward compatibility. These will be removed in **v1.2.0 (Q2 2026)**.
 
-| Response Field | Deprecated Alias | Location | Status |
-|---|---|---|---|
-| `diagram-type` | `diagram_type` | AnalyzeResponse.metrics | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `lint-supported` | `lint_supported` | AnalyzeResponse | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `parser-timeout-seconds` | `parser_timeout_seconds` | InfoResponse | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `node-count` | `node_count` | metricsResponse | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `edge-count` | `edge_count` | metricsResponse | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `max-fanin` | `max_fanin` | metricsResponse | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `max-fanout` | `max_fanout` | metricsResponse | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `syntax-error` | `syntax_error` | AnalyzeResponse | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `issue-counts` | `issue_counts` | metricsResponse | ⚠️ Deprecated in v1.0, removal v1.2.0 |
+| Response Field           | Deprecated Alias         | Location                | Status                                |
+| ------------------------ | ------------------------ | ----------------------- | ------------------------------------- |
+| `diagram-type`           | `diagram_type`           | AnalyzeResponse.metrics | ⚠️ Deprecated in v1.0, removal v1.2.0 |
+| `lint-supported`         | `lint_supported`         | AnalyzeResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
+| `parser-timeout-seconds` | `parser_timeout_seconds` | InfoResponse            | ⚠️ Deprecated in v1.0, removal v1.2.0 |
+| `node-count`             | `node_count`             | metricsResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
+| `edge-count`             | `edge_count`             | metricsResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
+| `max-fanin`              | `max_fanin`              | metricsResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
+| `max-fanout`             | `max_fanout`             | metricsResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
+| `syntax-error`           | `syntax_error`           | AnalyzeResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
+| `issue-counts`           | `issue_counts`           | metricsResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
 
 ---
 
@@ -207,6 +214,7 @@ cat your-merm8-config.json | jq '.config'
 ```
 
 **Pattern A: Flat config (most urgent)**
+
 ```json
 "config": {
   "max-fanout": {"limit": 3}    // ❌ Issue: rules at root level
@@ -214,6 +222,7 @@ cat your-merm8-config.json | jq '.config'
 ```
 
 **Pattern B: Unversioned nested**
+
 ```json
 "config": {
   "rules": {"max-fanout": {}}    // ❌ Issue: missing schema-version
@@ -221,6 +230,7 @@ cat your-merm8-config.json | jq '.config'
 ```
 
 **Pattern C: Snake_case field names**
+
 ```json
 "config": {
   "schema_version": "v1",        // ❌ Issue: underscore instead of hyphen
@@ -268,7 +278,7 @@ else . end' < legacy.json > migrated.json
 
 # Also convert snake_case to kebab-case
 jq '
-.config.rules |= if . then 
+.config.rules |= if . then
   with_entries(
     .value |= if type == "object" then
       with_entries(
@@ -321,6 +331,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ### Scenario 1: Simple Flat Config
 
 **Before:**
+
 ```json
 {
   "code": "graph TD\n  A-->B\n  A-->C\n  A-->D\n  A-->E\n  A-->F\n  A-->G",
@@ -337,6 +348,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 **After:**
+
 ```json
 {
   "code": "graph TD\n  A-->B\n  A-->C\n  A-->D\n  A-->E\n  A-->F\n  A-->G",
@@ -358,6 +370,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ### Scenario 2: Config with Suppressions
 
 **Before:**
+
 ```json
 {
   "code": "...",
@@ -370,6 +383,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 **After:**
+
 ```json
 {
   "code": "...",
@@ -387,14 +401,15 @@ curl -X POST http://localhost:8080/v1/analyze \
 ### Scenario 3: Complex Multi-Rule Config
 
 **Before:**
+
 ```json
 {
   "code": "...",
   "config": {
     "schema_version": "v1",
     "rules": {
-      "max_fanout": {"limit": 4},
-      "max_depth": {"limit": 5},
+      "max_fanout": { "limit": 4 },
+      "max_depth": { "limit": 5 },
       "no_cycles": {},
       "no_disconnected_nodes": {
         "suppression_selectors": ["node:Deprecated"]
@@ -405,14 +420,15 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 **After:**
+
 ```json
 {
   "code": "...",
   "config": {
     "schema-version": "v1",
     "rules": {
-      "core/max-fanout": {"limit": 4},
-      "core/max-depth": {"limit": 5},
+      "core/max-fanout": { "limit": 4 },
+      "core/max-depth": { "limit": 5 },
       "core/no-cycles": {},
       "core/no-disconnected-nodes": {
         "suppression-selectors": ["node:Deprecated"]
@@ -430,28 +446,28 @@ Check your code for usage of underscore response fields:
 
 ```javascript
 // ❌ OLD - Using underscore aliases (deprecated)
-if (response.diagram_type === 'flowchart') {
+if (response.diagram_type === "flowchart") {
   // Use diagram_type
 }
 
 // ✅ NEW - Using canonical field names (required v1.2.0+)
-if (response['diagram-type'] === 'flowchart') {
+if (response["diagram-type"] === "flowchart") {
   // Use diagram-type
 }
 ```
 
 ### Maps of Field Changes
 
-| Old Field | New Field | Location | Action |
-|-----------|-----------|----------|--------|
-| `diagram_type` | `diagram-type` | metrics | Update client code |
-| `lint_supported` | `lint-supported` | response | Update client code |
+| Old Field                | New Field                | Location      | Action             |
+| ------------------------ | ------------------------ | ------------- | ------------------ |
+| `diagram_type`           | `diagram-type`           | metrics       | Update client code |
+| `lint_supported`         | `lint-supported`         | response      | Update client code |
 | `parser_timeout_seconds` | `parser-timeout-seconds` | info response | Update client code |
-| `node_count` | `node-count` | metrics | Update client code |
-| `edge_count` | `edge-count` | metrics | Update client code |
-| `max_fanin` | `max-fanin` | metrics | Update client code |
-| `max_fanout` | `max-fanout` | metrics | Update client code |
-| `syntax_error` | `syntax-error` | response | Update client code |
+| `node_count`             | `node-count`             | metrics       | Update client code |
+| `edge_count`             | `edge-count`             | metrics       | Update client code |
+| `max_fanin`              | `max-fanin`              | metrics       | Update client code |
+| `max_fanout`             | `max-fanout`             | metrics       | Update client code |
+| `syntax_error`           | `syntax-error`           | response      | Update client code |
 
 ---
 
@@ -490,7 +506,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 for file in *.json; do
   warnings=$(curl -X POST http://localhost:8080/v1/analyze \
     -d @"$file" | jq '.warnings | length')
-  
+
   if [ "$warnings" -gt 0 ]; then
     echo "$file: has $warnings warnings"
   fi
@@ -500,6 +516,7 @@ done
 ### How to Detect Which You're Using
 
 **Canonical (kebab-case)**: Required from v1.2.0 onward
+
 ```json
 {
   "diagram-type": "flowchart",
@@ -512,6 +529,7 @@ done
 ```
 
 **Legacy (snake_case)**: Still accepted in v1.0–v1.1, but logged as warnings
+
 ```json
 {
   "diagram_type": "flowchart",
@@ -525,16 +543,17 @@ done
 
 ### Migration Timeline
 
-| Timeline | Action |
-|---|---|
+| Timeline                | Action                                                                                                    |
+| ----------------------- | --------------------------------------------------------------------------------------------------------- |
 | **v1.0–v1.1** (current) | Underscore aliases returned alongside canonical names in some responses; server logs deprecation warnings |
-| **v1.2.0 (Q2 2026)** | Underscore aliases completely removed; clients using old names will see errors |
+| **v1.2.0 (Q2 2026)**    | Underscore aliases completely removed; clients using old names will see errors                            |
 
 ### Recommended Action
 
 **Update your client code now** to use canonical kebab-case field names:
 
 **Before**
+
 ```python
 diagram_type = response['diagram_type']
 node_count = response['metrics']['node_count']
@@ -542,6 +561,7 @@ lint_supported = response['lint_supported']
 ```
 
 **After**
+
 ```python
 diagram_type = response['diagram-type']
 node_count = response['metrics']['node-count']
