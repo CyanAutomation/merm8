@@ -51,6 +51,10 @@ type analyzeError struct {
 	Support []string `json:"supported,omitempty"`
 }
 
+type apiErrorEnvelope struct {
+	Error *analyzeError `json:"error"`
+}
+
 type outputResult struct {
 	Input       string              `json:"input"`
 	Valid       bool                `json:"valid"`
@@ -243,19 +247,61 @@ func analyzeRemote(name, code string, cfgRaw json.RawMessage, opts cliOptions) (
 		return outputResult{}, err
 	}
 	defer resp.Body.Close()
-
-	var result outputResult
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return outputResult{}, err
 	}
-	result.Input = name
-	if result.Issues == nil {
-		result.Issues = []model.Issue{}
+
+	var result outputResult
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if err := json.Unmarshal(bodyBytes, &result); err != nil {
+			return outputResult{
+				Input:       name,
+				Valid:       false,
+				Supported:   false,
+				SyntaxError: nil,
+				Issues:      []model.Issue{},
+				Error: &analyzeError{
+					Code:    "invalid_response",
+					Message: fmt.Sprintf("remote server returned HTTP %d with invalid JSON body: %v", resp.StatusCode, err),
+				},
+			}, nil
+		}
+		result.Input = name
+		if result.Issues == nil {
+			result.Issues = []model.Issue{}
+		}
+		return result, nil
 	}
-	if resp.StatusCode >= 500 {
-		result.Error = &analyzeError{Code: "server_error", Message: fmt.Sprintf("remote server returned HTTP %d", resp.StatusCode)}
+
+	apiErr := analyzeError{
+		Code:    "http_error",
+		Message: strings.TrimSpace(string(bodyBytes)),
 	}
-	return result, nil
+	var envelope apiErrorEnvelope
+	if err := json.Unmarshal(bodyBytes, &envelope); err == nil && envelope.Error != nil {
+		if strings.TrimSpace(envelope.Error.Code) != "" {
+			apiErr.Code = envelope.Error.Code
+		}
+		if strings.TrimSpace(envelope.Error.Message) != "" {
+			apiErr.Message = envelope.Error.Message
+		}
+	}
+	if apiErr.Message == "" {
+		apiErr.Message = http.StatusText(resp.StatusCode)
+	}
+
+	return outputResult{
+		Input:       name,
+		Valid:       false,
+		Supported:   false,
+		SyntaxError: nil,
+		Issues:      []model.Issue{},
+		Error: &analyzeError{
+			Code:    apiErr.Code,
+			Message: fmt.Sprintf("remote server returned HTTP %d: %s", resp.StatusCode, apiErr.Message),
+		},
+	}, nil
 }
 
 func emitOutput(results []outputResult, format string, w io.Writer) error {

@@ -199,6 +199,66 @@ func TestChooseExitCodePriority(t *testing.T) {
 	}
 }
 
+func TestAnalyzeRemoteHTTPErrorResponses(t *testing.T) {
+	tests := []struct {
+		name        string
+		statusCode  int
+		response    string
+		wantCode    string
+		wantMessage string
+	}{
+		{
+			name:        "non-2xx with API json error envelope",
+			statusCode:  http.StatusBadRequest,
+			response:    `{"error":{"code":"invalid_request","message":"code is required"}}`,
+			wantCode:    "invalid_request",
+			wantMessage: "remote server returned HTTP 400: code is required",
+		},
+		{
+			name:        "non-2xx with plain text body",
+			statusCode:  http.StatusServiceUnavailable,
+			response:    "temporary outage",
+			wantCode:    "http_error",
+			wantMessage: "remote server returned HTTP 503: temporary outage",
+		},
+		{
+			name:        "non-2xx with malformed json body falls back to raw text",
+			statusCode:  http.StatusInternalServerError,
+			response:    `{"error":`,
+			wantCode:    "http_error",
+			wantMessage: `remote server returned HTTP 500: {"error":`,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.statusCode)
+				_, _ = w.Write([]byte(tt.response))
+			}))
+			t.Cleanup(testServer.Close)
+
+			result, err := analyzeRemote("stdin", "graph TD; A-->B", nil, cliOptions{URL: testServer.URL, Timeout: time.Second})
+			if err != nil {
+				t.Fatalf("analyzeRemote returned unexpected error: %v", err)
+			}
+			if result.Error == nil {
+				t.Fatalf("expected Error to be populated")
+			}
+			if result.Error.Code != tt.wantCode {
+				t.Fatalf("expected error code %q, got %q", tt.wantCode, result.Error.Code)
+			}
+			if result.Error.Message != tt.wantMessage {
+				t.Fatalf("expected error message %q, got %q", tt.wantMessage, result.Error.Message)
+			}
+			if result.Error.Code == "transport_error" {
+				t.Fatalf("did not expect transport_error for HTTP response failures")
+			}
+		})
+	}
+}
+
 func runWithStdin(t *testing.T, args []string, stdinContent string) int {
 	t.Helper()
 
