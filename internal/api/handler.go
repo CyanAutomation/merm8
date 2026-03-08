@@ -695,6 +695,10 @@ type healthMetricsOutcome struct {
 // NewHandler creates a Handler with the given parser and engine.
 // This constructor allows dependency injection for testing.
 func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
+	if e == nil {
+		e = engine.New()
+	}
+
 	return &Handler{
 		parser:             p,
 		engine:             e,
@@ -703,6 +707,41 @@ func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
 		strictConfigSchema: defaultStrictConfigSchema.Load(),
 		parserConcurrency:  newParserConcurrencyLimiter(),
 	}
+}
+
+func (h *Handler) ensureEngineAvailable(w http.ResponseWriter, r *http.Request) bool {
+	if h.engine != nil {
+		return true
+	}
+
+	if r != nil {
+		writeErrorWithDetailsAndContext(
+			w,
+			r,
+			http.StatusInternalServerError,
+			"internal_error",
+			"analysis engine unavailable",
+			map[string]any{"dependency": "engine"},
+		)
+		return false
+	}
+
+	writeErrorWithDetails(
+		w,
+		http.StatusInternalServerError,
+		"internal_error",
+		"analysis engine unavailable",
+		map[string]any{"dependency": "engine"},
+	)
+	return false
+}
+
+func writeSARIFEngineUnavailable(w http.ResponseWriter, meta sarif.RequestMetadata) {
+	report := sarif.TransformError(sarif.ErrorInfo{
+		Code:    "internal_error",
+		Message: "analysis engine unavailable",
+	}, meta)
+	writeSARIF(w, http.StatusInternalServerError, report)
 }
 
 // SetStrictConfigSchema toggles strict config schema enforcement for this handler.
@@ -941,7 +980,11 @@ func (h *Handler) ListRules(w http.ResponseWriter, _ *http.Request) {
 }
 
 // RuleConfigSchema handles GET /rules/schema.
-func (h *Handler) RuleConfigSchema(w http.ResponseWriter, _ *http.Request) {
+func (h *Handler) RuleConfigSchema(w http.ResponseWriter, r *http.Request) {
+	if !h.ensureEngineAvailable(w, r) {
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"schema": rules.ConfigJSONSchemaForRuleIDs(h.engine.KnownRuleIDs())})
 }
 
@@ -1336,6 +1379,11 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		return
 	}
 
+	if !h.ensureEngineAvailable(w, r) {
+		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
+		return
+	}
+
 	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled())
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
@@ -1595,6 +1643,11 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
+	if !h.ensureEngineAvailable(w, r) {
+		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
+		return
+	}
+
 	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled())
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
@@ -1843,6 +1896,12 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 			Message: "field 'code' is required",
 		}, meta)
 		writeSARIF(w, http.StatusBadRequest, report)
+		return
+	}
+
+	if h.engine == nil {
+		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
+		writeSARIFEngineUnavailable(w, meta)
 		return
 	}
 
@@ -2686,6 +2745,7 @@ func (h *Handler) parseWithRequestSettings(req analyzeRequest) (*model.Diagram, 
 	}
 	hasOverride := req.Parser.TimeoutSeconds != nil || req.Parser.MaxOldSpaceMB != nil
 	parserWithConfig, supportsConfig := h.parser.(ParserWithConfig)
+	var cfg parser.Config
 	if hasOverride && !supportsConfig {
 		return nil, nil, fmt.Errorf("%w: per-request parser settings are unsupported by the configured parser", errInvalidRequest)
 	}
