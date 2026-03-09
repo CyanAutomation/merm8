@@ -59,6 +59,7 @@ const (
 var defaultStrictConfigSchema atomic.Bool
 
 var errInvalidRequest = errors.New("invalid request")
+var errParserUnavailable = errors.New("parser dependency unavailable")
 
 //go:embed swagger.html
 var swaggerHTML []byte
@@ -99,6 +100,12 @@ type ParserConfigProvider interface {
 // ParserCacheMetricsSetter can be implemented by parsers that expose cache telemetry hooks.
 type ParserCacheMetricsSetter interface {
 	SetCacheMetrics(parser.CacheMetricsObserver)
+}
+
+type noopParser struct{}
+
+func (noopParser) Parse(_ string) (*model.Diagram, *parser.SyntaxError, error) {
+	return nil, nil, errParserUnavailable
 }
 
 // analyzeRequest is the JSON body accepted by POST /analyze.
@@ -707,6 +714,10 @@ type healthMetricsOutcome struct {
 // NewHandler creates a Handler with the given parser and engine.
 // This constructor allows dependency injection for testing.
 func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
+	if p == nil {
+		p = noopParser{}
+	}
+
 	if e == nil {
 		e = engine.New()
 	}
@@ -3214,6 +3225,10 @@ func writeErrorWithDetailsAndContext(w http.ResponseWriter, r *http.Request, sta
 }
 
 func (h *Handler) parseWithRequestSettings(req analyzeRequest) (*model.Diagram, *parser.SyntaxError, error) {
+	if h.parser == nil {
+		return nil, nil, errParserUnavailable
+	}
+
 	if req.Parser == nil {
 		return h.parser.Parse(req.Code)
 	}
@@ -3326,6 +3341,13 @@ func parserErrorDetails(err error) parserFailureDetail {
 		failure = parserFailureDetail{statusCode: http.StatusInternalServerError, code: "parser_decode_error", message: "parser returned malformed output"}
 	case errors.Is(err, parser.ErrContract):
 		failure = parserFailureDetail{statusCode: http.StatusInternalServerError, code: "parser_contract_violation", message: "parser response violated service contract"}
+	case errors.Is(err, errParserUnavailable):
+		failure = parserFailureDetail{
+			statusCode: http.StatusInternalServerError,
+			code:       "internal_error",
+			message:    "parser dependency unavailable",
+			details:    map[string]any{"dependency": "parser"},
+		}
 	}
 	if meta, ok := parser.MetadataFromError(err); ok {
 		info := map[string]any{}
