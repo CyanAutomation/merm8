@@ -252,11 +252,14 @@ func (rl *RateLimiter) Check(clientID string) (allowed bool, remaining int, rese
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	if len(rl.clients) > rl.maxClients {
+	entry := rl.clients[clientID]
+	if entry == nil && len(rl.clients) >= rl.maxClients {
 		rl.deleteExpiredEntries(now, rl.cleanupBatchSize)
+		if len(rl.clients) >= rl.maxClients {
+			return false, 0, now.Add(rl.window).Unix(), limit
+		}
 	}
 
-	entry := rl.clients[clientID]
 	if entry == nil {
 		entry = &clientWindow{windowStart: now, count: 0}
 		rl.clients[clientID] = entry
