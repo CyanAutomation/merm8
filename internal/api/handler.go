@@ -2189,27 +2189,28 @@ func defaultMetrics(diagramType model.DiagramType) *metricsResponse {
 }
 
 type syntaxInputSignals struct {
-	trimmedCode               string
-	firstLine                 string
-	firstDiagramLine          int
-	firstLineTypoOriginal     string
-	firstLineTypoCanonical    string
-	diagramType               model.DiagramType
-	unsupportedDiagramKeyword string
-	hasGraphviz               bool
-	hasYAMLFrontmatter        bool
-	hasTabs                   bool
-	hasFlowchartSingleArrow   bool
-	missingDiagramTypeLikely  bool
-	hasMarkdownFence          bool
-	hasStateDiagramKeyword    bool
-	stateSyntaxErrorMentioned bool
-	hasSmartQuotes            bool
-	hasUnicodeArrowDash       bool
-	hasFlowchartLowercaseEnd  bool
-	hasMalformedBracketClose  bool
-	hasUnterminatedEdgeLabel  bool
-	hasNonMermaidPreamble     bool
+	trimmedCode                string
+	firstLine                  string
+	firstDiagramLine           int
+	firstLineTypoOriginal      string
+	firstLineTypoCanonical     string
+	diagramType                model.DiagramType
+	unsupportedDiagramKeyword  string
+	hasGraphviz                bool
+	hasYAMLFrontmatter         bool
+	hasTabs                    bool
+	hasFlowchartSingleArrow    bool
+	missingDiagramTypeLikely   bool
+	hasMarkdownFence           bool
+	hasStateDiagramKeyword     bool
+	stateSyntaxErrorMentioned  bool
+	hasSmartQuotes             bool
+	hasUnicodeArrowDash        bool
+	hasFlowchartLowercaseEnd   bool
+	hasMalformedBracketClose   bool
+	hasUnterminatedEdgeLabel   bool
+	hasUnterminatedQuotedLabel bool
+	hasNonMermaidPreamble      bool
 }
 
 func firstRecognizedDiagramLine(lines []string) int {
@@ -2362,6 +2363,44 @@ func hasFlowchartUnterminatedEdgeLabel(code string) bool {
 	return false
 }
 
+func lineHasUnterminatedQuotedLabel(line string) bool {
+	if !strings.Contains(line, "\"") {
+		return false
+	}
+
+	quoteCount := 0
+	escaped := false
+	for _, r := range line {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+		if r == '"' {
+			quoteCount++
+		}
+	}
+
+	if quoteCount%2 == 0 {
+		return false
+	}
+
+	// Limit this signal to common Mermaid label contexts.
+	return strings.Contains(line, "[") || strings.Contains(line, "|")
+}
+
+func hasUnterminatedQuotedLabel(code string) bool {
+	for _, line := range strings.Split(code, "\n") {
+		if lineHasUnterminatedQuotedLabel(line) {
+			return true
+		}
+	}
+	return false
+}
+
 func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInputSignals {
 	trimmed := strings.TrimSpace(code)
 	lines := strings.Split(code, "\n")
@@ -2384,27 +2423,28 @@ func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInput
 	}
 
 	return syntaxInputSignals{
-		trimmedCode:               trimmed,
-		firstLine:                 firstLine,
-		firstDiagramLine:          firstDiagramLine,
-		firstLineTypoOriginal:     typoOriginal,
-		firstLineTypoCanonical:    typoCanonical,
-		diagramType:               defaultDiagramTypeForSyntaxError(code),
-		unsupportedDiagramKeyword: unsupportedDiagramKeyword,
-		hasGraphviz:               strings.Contains(code, "digraph") || strings.Contains(code, "rankdir"),
-		hasYAMLFrontmatter:        strings.HasPrefix(trimmed, "---"),
-		hasTabs:                   strings.Contains(code, "\t"),
-		hasFlowchartSingleArrow:   (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && strings.Contains(strings.ReplaceAll(code, "-->", ""), "->"),
-		missingDiagramTypeLikely:  missingDiagramTypeLikely,
-		hasMarkdownFence:          strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "```mermaid"),
-		hasStateDiagramKeyword:    strings.Contains(lowerCode, "statediagram"),
-		stateSyntaxErrorMentioned: strings.Contains(lowerErr, "state") && (strings.Contains(lowerErr, "syntax") || strings.Contains(lowerErr, "parse") || strings.Contains(lowerErr, "expect")),
-		hasSmartQuotes:            strings.ContainsAny(code, "“”‘’"),
-		hasUnicodeArrowDash:       strings.Contains(code, "—>") || strings.Contains(code, "–>") || strings.Contains(code, "—->") || strings.Contains(code, "–->"),
-		hasFlowchartLowercaseEnd:  (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && strings.Contains(code, "\nend\n"),
-		hasMalformedBracketClose:  openBrackets != closeBrackets || strings.Contains(code, "[[") && strings.Count(code, "]]") < strings.Count(code, "[["),
-		hasUnterminatedEdgeLabel:  hasFlowchartUnterminatedEdgeLabel(code),
-		hasNonMermaidPreamble:     hasProseBeforeFirstDiagramHeader(lines, firstDiagramLine),
+		trimmedCode:                trimmed,
+		firstLine:                  firstLine,
+		firstDiagramLine:           firstDiagramLine,
+		firstLineTypoOriginal:      typoOriginal,
+		firstLineTypoCanonical:     typoCanonical,
+		diagramType:                defaultDiagramTypeForSyntaxError(code),
+		unsupportedDiagramKeyword:  unsupportedDiagramKeyword,
+		hasGraphviz:                strings.Contains(code, "digraph") || strings.Contains(code, "rankdir"),
+		hasYAMLFrontmatter:         strings.HasPrefix(trimmed, "---"),
+		hasTabs:                    strings.Contains(code, "\t"),
+		hasFlowchartSingleArrow:    (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && strings.Contains(strings.ReplaceAll(code, "-->", ""), "->"),
+		missingDiagramTypeLikely:   missingDiagramTypeLikely,
+		hasMarkdownFence:           strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "```mermaid"),
+		hasStateDiagramKeyword:     strings.Contains(lowerCode, "statediagram"),
+		stateSyntaxErrorMentioned:  strings.Contains(lowerErr, "state") && (strings.Contains(lowerErr, "syntax") || strings.Contains(lowerErr, "parse") || strings.Contains(lowerErr, "expect")),
+		hasSmartQuotes:             strings.ContainsAny(code, "“”‘’"),
+		hasUnicodeArrowDash:        strings.Contains(code, "—>") || strings.Contains(code, "–>") || strings.Contains(code, "—->") || strings.Contains(code, "–->"),
+		hasFlowchartLowercaseEnd:   (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && strings.Contains(code, "\nend\n"),
+		hasMalformedBracketClose:   openBrackets != closeBrackets || strings.Contains(code, "[[") && strings.Count(code, "]]") < strings.Count(code, "[["),
+		hasUnterminatedEdgeLabel:   hasFlowchartUnterminatedEdgeLabel(code),
+		hasUnterminatedQuotedLabel: hasUnterminatedQuotedLabel(code),
+		hasNonMermaidPreamble:      hasProseBeforeFirstDiagramHeader(lines, firstDiagramLine),
 	}
 }
 
@@ -2536,6 +2576,17 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 			Confidence: 0.96,
 			AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
 			FixExample: "Decision -->|No| Retry",
+		})
+	}
+
+	if signals.hasUnterminatedQuotedLabel {
+		hints = append(hints, responseHint{
+			Code:       "unterminated_quoted_label",
+			Message:    "Quoted labels must close with a matching quote on the same line (escaped quotes like \\\" are ignored).",
+			Severity:   "warning",
+			Confidence: 0.95,
+			AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
+			FixExample: "A[\"Start\"] --> B\nA -->|\"Yes\"| B",
 		})
 	}
 
@@ -2692,6 +2743,17 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 			CorrectExample: "flowchart TD\n  A --> B\n  B[\"Quoted\"]",
 			DocLink:        "#arrow-syntax",
 			FixAction:      "Replace typographic quotes/dashes with plain ASCII characters",
+		}
+	}
+
+	if signals.hasUnterminatedQuotedLabel {
+		return &helpSuggestion{
+			Title:          "Unterminated quoted label",
+			Explanation:    "A label opened with a double quote but did not close on the same line. Mermaid labels and edge text require balanced quotes.",
+			WrongExample:   "flowchart TD\n  A[\"Start] --> B\n  A -->|\"Yes| B",
+			CorrectExample: "flowchart TD\n  A[\"Start\"] --> B\n  A -->|\"Yes\"| B",
+			DocLink:        "#common-mistakes",
+			FixAction:      "Close each opening double quote in node labels and edge text, keeping escaped quotes as \\\" when needed",
 		}
 	}
 
