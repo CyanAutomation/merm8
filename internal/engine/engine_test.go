@@ -498,6 +498,35 @@ func TestEngine_RunWithInstrumentation_SkipsDisabledRules(t *testing.T) {
 	}
 }
 
+
+func TestEngine_RunWithInstrumentation_NilDiagramReturnsEmptyIssues(t *testing.T) {
+	e := engine.NewWithRules(supportedRule{})
+	sink := &capturingSink{}
+
+	issues := e.RunWithInstrumentation(nil, rules.Config{}, sink)
+	if issues == nil {
+		t.Fatal("RunWithInstrumentation should never return a nil slice")
+	}
+	if len(issues) != 0 {
+		t.Fatalf("expected no issues for nil diagram, got %#v", issues)
+	}
+	if len(sink.metrics) != 0 {
+		t.Fatalf("expected no metrics for nil diagram, got %#v", sink.metrics)
+	}
+}
+
+func TestEngine_Run_NilDiagramReturnsEmptyIssues(t *testing.T) {
+	e := engine.NewWithRules(supportedRule{})
+
+	issues := e.Run(nil, rules.Config{})
+	if issues == nil {
+		t.Fatal("Run should never return a nil slice")
+	}
+	if len(issues) != 0 {
+		t.Fatalf("expected no issues for nil diagram, got %#v", issues)
+	}
+}
+
 func TestEngine_Run_ConcurrentSinkUpdates(t *testing.T) {
 	e := engine.NewWithRules(supportedRule{})
 	d := &model.Diagram{Type: model.DiagramTypeFlowchart}

@@ -84,6 +84,10 @@ func (e *Engine) Run(d *model.Diagram, cfg rules.Config) []model.Issue {
 // RunWithInstrumentation executes rules and emits per-rule metrics into sink.
 // A nil sink uses a no-op implementation.
 func (e *Engine) RunWithInstrumentation(d *model.Diagram, cfg rules.Config, sink InstrumentationSink) []model.Issue {
+	if d == nil {
+		return []model.Issue{}
+	}
+
 	if sink == nil {
 		sink = NoopInstrumentationSink{}
 	}
