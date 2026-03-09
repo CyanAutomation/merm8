@@ -3,10 +3,12 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/CyanAutomation/merm8/internal/telemetry"
 )
@@ -40,6 +42,83 @@ func TestAnalyzeRateLimitMiddleware_NilLimiterPassesThrough(t *testing.T) {
 	}
 	if got := rec.Header().Get("X-RateLimit-Limit"); got != "" {
 		t.Fatalf("expected no rate-limit headers when limiter is nil, got limit=%q", got)
+	}
+}
+
+func TestRateLimiterCheck_AtCapacityRejectsUnknownClient(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0)
+	limiter := NewRateLimiter(2, time.Hour)
+	limiter.maxClients = 3
+	limiter.cleanupBatchSize = 64
+	limiter.now = func() time.Time { return base }
+
+	for i := 0; i < limiter.maxClients; i++ {
+		clientID := fmt.Sprintf("known-%d", i)
+		allowed, remaining, reset, limit := limiter.Check(clientID)
+		if !allowed {
+			t.Fatalf("expected initial known client %q to be allowed", clientID)
+		}
+		if remaining != limiter.limit-1 {
+			t.Fatalf("expected remaining=%d for first request, got %d", limiter.limit-1, remaining)
+		}
+		if limit != limiter.limit {
+			t.Fatalf("expected reported limit %d, got %d", limiter.limit, limit)
+		}
+		if reset != base.Add(limiter.window).Unix() {
+			t.Fatalf("expected reset %d, got %d", base.Add(limiter.window).Unix(), reset)
+		}
+	}
+
+	allowed, remaining, _, _ := limiter.Check("known-1")
+	if !allowed {
+		t.Fatal("expected existing client to continue being allowed at capacity")
+	}
+	if remaining != 0 {
+		t.Fatalf("expected remaining=0 after second allowed request, got %d", remaining)
+	}
+
+	allowed, remaining, reset, limit := limiter.Check("unknown-client")
+	if allowed {
+		t.Fatal("expected unknown client to be rejected at capacity")
+	}
+	if remaining != 0 {
+		t.Fatalf("expected remaining=0 for rejected client, got %d", remaining)
+	}
+	if limit != limiter.limit {
+		t.Fatalf("expected reported limit %d, got %d", limiter.limit, limit)
+	}
+	if reset != base.Add(limiter.window).Unix() {
+		t.Fatalf("expected reset %d for rejection, got %d", base.Add(limiter.window).Unix(), reset)
+	}
+	if got := len(limiter.clients); got != limiter.maxClients {
+		t.Fatalf("expected clients map to remain bounded at %d, got %d", limiter.maxClients, got)
+	}
+}
+
+func TestRateLimiterCheck_CleanupThenAdmitDeterministically(t *testing.T) {
+	base := time.Unix(1_700_000_100, 0)
+	window := time.Hour
+	limiter := NewRateLimiter(1, window)
+	limiter.maxClients = 3
+	limiter.cleanupBatchSize = 4
+	limiter.now = func() time.Time { return base }
+
+	limiter.clients["expired-1"] = &clientWindow{windowStart: base.Add(-3 * window), count: 1}
+	limiter.clients["expired-2"] = &clientWindow{windowStart: base.Add(-4 * window), count: 1}
+	limiter.clients["active"] = &clientWindow{windowStart: base, count: 0}
+
+	allowed, remaining, _, _ := limiter.Check("new-client")
+	if !allowed {
+		t.Fatal("expected new client to be admitted after expired cleanup")
+	}
+	if remaining != 0 {
+		t.Fatalf("expected remaining=0 for limit=1 first request, got %d", remaining)
+	}
+	if got := len(limiter.clients); got != 2 {
+		t.Fatalf("expected expired entries removed and bounded size, got %d", got)
+	}
+	if _, ok := limiter.clients["new-client"]; !ok {
+		t.Fatal("expected new client entry to exist after admission")
 	}
 }
 
