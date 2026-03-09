@@ -227,7 +227,27 @@ func cloneDiagram(diagram *model.Diagram) *model.Diagram {
 	}
 	copied := *diagram
 	copied.Nodes = append([]model.Node(nil), diagram.Nodes...)
+	for i := range copied.Nodes {
+		if copied.Nodes[i].Line != nil {
+			line := *copied.Nodes[i].Line
+			copied.Nodes[i].Line = &line
+		}
+		if copied.Nodes[i].Column != nil {
+			column := *copied.Nodes[i].Column
+			copied.Nodes[i].Column = &column
+		}
+	}
 	copied.Edges = append([]model.Edge(nil), diagram.Edges...)
+	for i := range copied.Edges {
+		if copied.Edges[i].Line != nil {
+			line := *copied.Edges[i].Line
+			copied.Edges[i].Line = &line
+		}
+		if copied.Edges[i].Column != nil {
+			column := *copied.Edges[i].Column
+			copied.Edges[i].Column = &column
+		}
+	}
 	copied.Subgraphs = append([]model.Subgraph(nil), diagram.Subgraphs...)
 	for i := range copied.Subgraphs {
 		copied.Subgraphs[i].Nodes = append([]string(nil), diagram.Subgraphs[i].Nodes...)
