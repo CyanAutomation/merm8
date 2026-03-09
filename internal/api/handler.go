@@ -3225,10 +3225,6 @@ func writeErrorWithDetailsAndContext(w http.ResponseWriter, r *http.Request, sta
 }
 
 func (h *Handler) parseWithRequestSettings(req analyzeRequest) (*model.Diagram, *parser.SyntaxError, error) {
-	if h.parser == nil {
-		return nil, nil, errParserUnavailable
-	}
-
 	if req.Parser == nil {
 		return h.parser.Parse(req.Code)
 	}
