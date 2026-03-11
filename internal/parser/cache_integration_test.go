@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/CyanAutomation/merm8/internal/model"
 	"github.com/CyanAutomation/merm8/internal/parser"
 )
 
@@ -98,6 +100,54 @@ func TestParserCache_DoesNotCacheInternalFailures(t *testing.T) {
 	}
 	if got := strings.Count(string(counterContent), "parse"); got != 2 {
 		t.Fatalf("expected parser subprocess to run twice because transient failures are uncached, got %d", got)
+	}
+}
+
+func TestParserCache_DeduplicatesInFlightParses(t *testing.T) {
+	t.Setenv("COUNTER_FILE", filepath.Join(t.TempDir(), "counter-inflight.log"))
+	script, root := writeCacheTestParserScript(t)
+	p := mustNewCacheTestParser(t, script, root)
+
+	const workers = 8
+	type parseResponse struct {
+		diagram   *model.Diagram
+		syntaxErr *parser.SyntaxError
+		err       error
+	}
+	results := make([]parseResponse, workers)
+
+	var start sync.WaitGroup
+	start.Add(1)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			start.Wait()
+			diagram, syntaxErr, err := p.Parse("graph TD\nA-->B")
+			results[idx] = parseResponse{diagram: diagram, syntaxErr: syntaxErr, err: err}
+		}(i)
+	}
+	start.Done()
+	wg.Wait()
+
+	for i, result := range results {
+		if result.err != nil || result.syntaxErr != nil || result.diagram == nil {
+			t.Fatalf("expected successful parse result at index %d, got diagram=%v syntax=%v err=%v", i, result.diagram, result.syntaxErr, result.err)
+		}
+	}
+
+	results[0].diagram.Nodes[0].ID = "mutated"
+	if results[1].diagram.Nodes[0].ID != "a" {
+		t.Fatalf("expected independent cloned diagrams across deduplicated fan-out, got %q", results[1].diagram.Nodes[0].ID)
+	}
+
+	counterContent, err := os.ReadFile(os.Getenv("COUNTER_FILE"))
+	if err != nil {
+		t.Fatalf("failed to read counter file: %v", err)
+	}
+	if got := strings.Count(string(counterContent), "parse"); got != 1 {
+		t.Fatalf("expected parser subprocess to run once for concurrent duplicate requests, got %d invocations", got)
 	}
 }
 
