@@ -309,10 +309,10 @@ func TestReadSourceEnhancementEnabled(t *testing.T) {
 }
 
 func TestReadParserMode(t *testing.T) {
-	t.Run("defaults to subprocess", func(t *testing.T) {
+	t.Run("defaults to pool", func(t *testing.T) {
 		t.Setenv("PARSER_MODE", "")
-		if got := readParserMode(); got != "subprocess" {
-			t.Fatalf("expected subprocess default, got %q", got)
+		if got := readParserMode(); got != "pool" {
+			t.Fatalf("expected pool default, got %q", got)
 		}
 	})
 
@@ -325,8 +325,8 @@ func TestReadParserMode(t *testing.T) {
 
 	t.Run("invalid mode falls back", func(t *testing.T) {
 		t.Setenv("PARSER_MODE", "garbage")
-		if got := readParserMode(); got != "subprocess" {
-			t.Fatalf("expected subprocess fallback, got %q", got)
+		if got := readParserMode(); got != "pool" {
+			t.Fatalf("expected pool fallback, got %q", got)
 		}
 	})
 }
