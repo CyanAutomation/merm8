@@ -147,6 +147,7 @@ PARSER_CONCURRENCY_LIMIT=16 go run ./cmd/server
 **What it does**: Chooses parser execution strategy.
 
 - `pool` (default): reuses long-lived Node workers and recycles only a timed-out worker
+- `auto`: compatibility alias for `pool`
 - `subprocess`: starts a fresh Node process per parse request
 
 **When to adjust**:
@@ -164,7 +165,7 @@ PARSER_CONCURRENCY_LIMIT=16 go run ./cmd/server
 
 **How to tune with CPU/memory**:
 
-- Start at `min(4, CPU cores)` and load test
+- Start at `min(4, CPU cores)` and load test (for CPU-bound traffic, 1–2 workers per core is a practical upper bound)
 - Increase gradually while CPU has headroom and memory remains stable
 - Budget memory roughly as: `worker_pool_size × PARSER_MAX_OLD_SPACE_MB` plus Go/server overhead
 

@@ -20,6 +20,7 @@ import (
 
 func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.T) {
 	t.Setenv("PARSER_CONCURRENCY_LIMIT", "1")
+	t.Setenv("PARSER_MODE", "subprocess")
 
 	tmpDir := t.TempDir()
 	marker := filepath.Join(tmpDir, "parse-started.log")
@@ -146,6 +147,7 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 // server wiring (env -> parser timeout) plus HTTP status/header passthrough from the API layer.
 func TestServerContractIntegration_ParserTimeoutFromControlledSlowFixture(t *testing.T) {
 	t.Setenv("PARSER_TIMEOUT_SECONDS", "1")
+	t.Setenv("PARSER_MODE", "subprocess")
 
 	tmpDir := t.TempDir()
 	blockReleaseFile := filepath.Join(tmpDir, "never-release-parse-block")

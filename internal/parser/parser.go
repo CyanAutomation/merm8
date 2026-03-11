@@ -31,6 +31,7 @@ const defaultNodeMaxOldSpaceSizeMB = 512
 const minNodeMaxOldSpaceSizeMB = 128
 const maxNodeMaxOldSpaceSizeMB = 4096
 const defaultParserMode = "pool"
+const parserModeAuto = "auto"
 const parserModePool = "pool"
 const parserModeSubprocess = "subprocess"
 const defaultWorkerPoolSize = 4
@@ -776,10 +777,10 @@ func WorkerPoolSizeFromEnv() int {
 func readParserMode() string {
 	mode := strings.ToLower(strings.TrimSpace(os.Getenv("PARSER_MODE")))
 	switch mode {
-	case parserModePool:
+	case parserModePool, parserModeAuto, "":
 		return parserModePool
-	case parserModeSubprocess, "":
-		return defaultParserMode
+	case parserModeSubprocess:
+		return parserModeSubprocess
 	default:
 		return defaultParserMode
 	}
