@@ -5814,7 +5814,7 @@ func TestAnalyze_SourceEnhancementCapabilityEnabledForDefaultRules(t *testing.T)
 }
 
 func TestAnalyze_SourceEnhancementCapabilityPreservesParserSourceEnhancementSetting(t *testing.T) {
-	sourceEnhancementDisabled := false
+	sourceEnhancementValue := false
 	baseCfg := parser.Config{Timeout: 5 * time.Second, NodeMaxOldSpaceMB: 512, SourceEnhancement: &sourceEnhancementDisabled}
 	var captured parser.Config
 	mockP := &mockParser{
