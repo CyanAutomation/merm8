@@ -54,10 +54,7 @@ var (
 type Config struct {
 	Timeout               time.Duration
 	NodeMaxOldSpaceMB     int
-	if current == 0 {
-		return ""
-	}
-	return input[:current]
+	SourceEnhancement     *bool
 	NeedSourceEnhancement bool
 }
 
