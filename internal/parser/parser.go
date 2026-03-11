@@ -433,11 +433,18 @@ func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 			return diagram, syntaxErr, nil
 		}
 
+	p.inflightMu.Lock()
+	if existing := p.inflightParses[cacheKey]; existing != nil {
+		p.inflightMu.Unlock()
+		<-existing.done
 		p.inflightMu.Lock()
-		if existing := p.inflightParses[cacheKey]; existing != nil {
-			p.inflightMu.Unlock()
-			<-existing.done
-			return cloneDiagram(existing.diagram), cloneSyntaxError(existing.syntaxErr), existing.err
+		result := &inflightParse{
+			diagram:   existing.diagram,
+			syntaxErr: existing.syntaxErr,
+			err:       existing.err,
+		}
+		p.inflightMu.Unlock()
+		return cloneDiagram(result.diagram), cloneSyntaxError(result.syntaxErr), result.err
 		}
 		inFlight = &inflightParse{done: make(chan struct{})}
 		p.inflightParses[cacheKey] = inFlight
