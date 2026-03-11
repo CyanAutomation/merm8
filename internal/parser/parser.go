@@ -474,15 +474,18 @@ func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 	}
 
 	if inFlight != nil {
+		fanoutDiagram := cloneDiagram(diagram)
+		fanoutSyntaxErr := cloneSyntaxError(syntaxErr)
+
 		p.inflightMu.Lock()
-		inFlight.diagram = cloneDiagram(diagram)
-		inFlight.syntaxErr = cloneSyntaxError(syntaxErr)
+		inFlight.diagram = fanoutDiagram
+		inFlight.syntaxErr = fanoutSyntaxErr
 		inFlight.err = err
 		delete(p.inflightParses, cacheKey)
 		close(inFlight.done)
 		p.inflightMu.Unlock()
 
-		return cloneDiagram(inFlight.diagram), cloneSyntaxError(inFlight.syntaxErr), inFlight.err
+		return cloneDiagram(fanoutDiagram), cloneSyntaxError(fanoutSyntaxErr), err
 	}
 
 	return diagram, syntaxErr, err
