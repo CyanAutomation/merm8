@@ -323,6 +323,13 @@ func TestReadParserMode(t *testing.T) {
 		}
 	})
 
+	t.Run("supports auto mode alias", func(t *testing.T) {
+		t.Setenv("PARSER_MODE", "auto")
+		if got := readParserMode(); got != "pool" {
+			t.Fatalf("expected auto alias to resolve to pool mode, got %q", got)
+		}
+	})
+
 	t.Run("invalid mode falls back", func(t *testing.T) {
 		t.Setenv("PARSER_MODE", "garbage")
 		if got := readParserMode(); got != "pool" {
