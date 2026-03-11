@@ -30,7 +30,7 @@ const defaultParserSourceEnhancementEnabled = true
 const defaultNodeMaxOldSpaceSizeMB = 512
 const minNodeMaxOldSpaceSizeMB = 128
 const maxNodeMaxOldSpaceSizeMB = 4096
-const defaultParserMode = "subprocess"
+const defaultParserMode = "pool"
 const parserModePool = "pool"
 const parserModeSubprocess = "subprocess"
 const defaultWorkerPoolSize = 4
@@ -719,6 +719,16 @@ func readSourceEnhancementEnabled() *bool {
 		return boolPtr(defaultParserSourceEnhancementEnabled)
 	}
 	return boolPtr(value)
+}
+
+// ModeFromEnv returns the normalized parser execution mode from PARSER_MODE.
+func ModeFromEnv() string {
+	return readParserMode()
+}
+
+// WorkerPoolSizeFromEnv returns the normalized worker pool size from PARSER_WORKER_POOL_SIZE.
+func WorkerPoolSizeFromEnv() int {
+	return readWorkerPoolSize()
 }
 
 func readParserMode() string {

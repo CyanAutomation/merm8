@@ -117,7 +117,9 @@ func main() {
 
 	addr := fmt.Sprintf(":%s", port)
 	parserCfg := parser.ConfigFromEnv().EffectiveConfig()
-	logger.Info("server starting", "addr", addr, "parser", scriptPath, "mode", deploymentMode, "parser_concurrency_limit", parserConcurrencyLimit, "parser_timeout_seconds", int(parserCfg.Timeout.Seconds()), "parser_max_old_space_mb", parserCfg.NodeMaxOldSpaceMB, "analyze_rate_limit_per_minute", rateLimitPerMinute, "analyze_auth_enabled", authToken != "", "cors_allowed_origins", allowedOrigins)
+	parserExecMode := parser.ModeFromEnv()
+	parserWorkerPoolSize := parser.WorkerPoolSizeFromEnv()
+	logger.Info("server starting", "addr", addr, "parser", scriptPath, "mode", deploymentMode, "parser_mode", parserExecMode, "parser_worker_pool_size", parserWorkerPoolSize, "parser_concurrency_limit", parserConcurrencyLimit, "parser_timeout_seconds", int(parserCfg.Timeout.Seconds()), "parser_max_old_space_mb", parserCfg.NodeMaxOldSpaceMB, "analyze_rate_limit_per_minute", rateLimitPerMinute, "analyze_auth_enabled", authToken != "", "cors_allowed_origins", allowedOrigins)
 	if err := http.ListenAndServe(addr, rootHandler); err != nil {
 		logger.Error("server error", "error", err.Error())
 		panic(fmt.Sprintf("server error: %v", err))
