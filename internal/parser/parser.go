@@ -202,9 +202,18 @@ type Parser struct {
 	poolMu            sync.Mutex
 	workerPools       map[int]*workerPool
 	cache             *parseCache
+	inflightMu        sync.Mutex
+	inflightParses    map[string]*inflightParse
 	versionMu         sync.Mutex
 	parserVersion     string
 	versionResolved   bool
+}
+
+type inflightParse struct {
+	done      chan struct{}
+	diagram   *model.Diagram
+	syntaxErr *SyntaxError
+	err       error
 }
 
 // New returns a Parser that will invoke the given Node.js script path.
@@ -240,6 +249,7 @@ func NewWithConfigAndRepoRootResolver(scriptPath string, cfg Config, resolveRepo
 		workerPoolSize:    readWorkerPoolSize(),
 		workerPools:       make(map[int]*workerPool),
 		cache:             newParseCache(),
+		inflightParses:    make(map[string]*inflightParse),
 	}, nil
 }
 
@@ -417,10 +427,21 @@ func (p *Parser) ParseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 
 func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
 	cacheKey, ok := p.cacheKey(mermaidCode, cfg)
+	var inFlight *inflightParse
 	if ok {
 		if diagram, syntaxErr, hit := p.cache.get(cacheKey); hit {
 			return diagram, syntaxErr, nil
 		}
+
+		p.inflightMu.Lock()
+		if existing := p.inflightParses[cacheKey]; existing != nil {
+			p.inflightMu.Unlock()
+			<-existing.done
+			return cloneDiagram(existing.diagram), cloneSyntaxError(existing.syntaxErr), existing.err
+		}
+		inFlight = &inflightParse{done: make(chan struct{})}
+		p.inflightParses[cacheKey] = inFlight
+		p.inflightMu.Unlock()
 	}
 
 	var (
@@ -440,6 +461,18 @@ func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 		} else if syntaxErr != nil {
 			p.cache.putSyntax(cacheKey, syntaxErr)
 		}
+	}
+
+	if inFlight != nil {
+		p.inflightMu.Lock()
+		inFlight.diagram = cloneDiagram(diagram)
+		inFlight.syntaxErr = cloneSyntaxError(syntaxErr)
+		inFlight.err = err
+		delete(p.inflightParses, cacheKey)
+		close(inFlight.done)
+		p.inflightMu.Unlock()
+
+		return cloneDiagram(inFlight.diagram), cloneSyntaxError(inFlight.syntaxErr), inFlight.err
 	}
 
 	return diagram, syntaxErr, err
