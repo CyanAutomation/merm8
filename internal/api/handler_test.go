@@ -5813,6 +5813,39 @@ func TestAnalyze_SourceEnhancementCapabilityEnabledForDefaultRules(t *testing.T)
 	}
 }
 
+func TestAnalyze_SourceEnhancementCapabilityPreservesParserSourceEnhancementSetting(t *testing.T) {
+	sourceEnhancementValue := false
+	baseCfg := parser.Config{Timeout: 5 * time.Second, NodeMaxOldSpaceMB: 512, SourceEnhancement: &sourceEnhancementValue}
+	var captured parser.Config
+	mockP := &mockParser{
+		parserConfig: &baseCfg,
+		parseWithConfig: func(_ string, cfg parser.Config) (*model.Diagram, *parser.SyntaxError, error) {
+			captured = cfg
+			return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+		},
+	}
+	mux := http.NewServeMux()
+	h := api.NewHandler(mockP, engine.New())
+	h.RegisterRoutes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B"}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusOK)
+	}
+	if captured.SourceEnhancement == nil || *captured.SourceEnhancement {
+		t.Fatalf("expected SourceEnhancement=false to be preserved from parser config, got %+v", captured.SourceEnhancement)
+	}
+	if !captured.NeedSourceEnhancement {
+		t.Fatal("expected NeedSourceEnhancement=true when source-dependent rules are enabled by default")
+	}
+}
+
 func TestAnalyze_SourceEnhancementCapabilityDisabledWhenSourceRulesAreDisabled(t *testing.T) {
 	var captured parser.Config
 	mockP := &mockParser{
