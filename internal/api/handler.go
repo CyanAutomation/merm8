@@ -3228,12 +3228,14 @@ func (h *Handler) parseWithRequestSettings(req analyzeRequest, normalizedCfg rul
 	needSourceEnhancement := requiresSourceEnhancement(normalizedCfg)
 	if req.Parser == nil {
 		if parserWithConfig, supportsConfig := h.parser.(ParserWithConfig); supportsConfig {
-			cfg := parser.DefaultConfig().EffectiveConfig()
-			if configProvider, ok := h.parser.(ParserConfigProvider); ok {
-				cfg = configProvider.ParserConfig().EffectiveConfig()
-			}
+		cfg := parser.DefaultConfig().EffectiveConfig()
+		if configProvider, ok := h.parser.(ParserConfigProvider); ok {
+			cfg = configProvider.ParserConfig().EffectiveConfig()
+		}
+		if cfg.SourceEnhancement == nil {
 			cfg.NeedSourceEnhancement = needSourceEnhancement
-			return parserWithConfig.ParseWithConfig(req.Code, cfg)
+		}
+		return parserWithConfig.ParseWithConfig(req.Code, cfg)
 		}
 		return h.parser.Parse(req.Code)
 	}
