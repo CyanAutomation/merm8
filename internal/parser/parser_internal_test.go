@@ -374,12 +374,15 @@ func TestShouldEnhanceSourceAnalysis(t *testing.T) {
 
 	t.Run("only flowchart family enables analysis", func(t *testing.T) {
 		flowchart := &model.Diagram{Type: model.DiagramTypeFlowchart}
-		if !shouldEnhanceSourceAnalysis(flowchart, Config{SourceEnhancement: boolPtr(true)}) {
-			t.Fatal("expected flowchart diagrams to enable source analysis")
+		if shouldEnhanceSourceAnalysis(flowchart, Config{SourceEnhancement: boolPtr(true)}) {
+			t.Fatal("expected flowchart diagrams to skip source analysis when request does not need it")
+		}
+		if !shouldEnhanceSourceAnalysis(flowchart, Config{SourceEnhancement: boolPtr(true), NeedSourceEnhancement: true}) {
+			t.Fatal("expected flowchart diagrams to enable source analysis when requested")
 		}
 
 		sequence := &model.Diagram{Type: model.DiagramTypeSequence}
-		if shouldEnhanceSourceAnalysis(sequence, Config{SourceEnhancement: boolPtr(true)}) {
+		if shouldEnhanceSourceAnalysis(sequence, Config{SourceEnhancement: boolPtr(true), NeedSourceEnhancement: true}) {
 			t.Fatal("expected non-flowchart diagrams to skip source analysis")
 		}
 	})
