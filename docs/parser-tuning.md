@@ -141,6 +141,52 @@ PARSER_CONCURRENCY_LIMIT=16 go run ./cmd/server
 
 ---
 
+
+### 4. PARSER_MODE (Default: pool)
+
+**What it does**: Chooses parser execution strategy.
+
+- `pool` (default): reuses long-lived Node workers and recycles only a timed-out worker
+- `subprocess`: starts a fresh Node process per parse request
+
+**When to adjust**:
+
+- Keep `pool` for most production workloads (better startup/throughput characteristics)
+- Use `subprocess` if you need strict one-request-per-process isolation
+
+---
+
+### 5. PARSER_WORKER_POOL_SIZE (Default: 4 when mode=pool)
+
+**What it does**: Max long-lived parser workers maintained per memory profile in pool mode.
+
+**Valid range**: 1–64
+
+**How to tune with CPU/memory**:
+
+- Start at `min(4, CPU cores)` and load test
+- Increase gradually while CPU has headroom and memory remains stable
+- Budget memory roughly as: `worker_pool_size × PARSER_MAX_OLD_SPACE_MB` plus Go/server overhead
+
+**Examples**:
+
+```bash
+# 2-core / tight memory
+PARSER_MODE=pool
+PARSER_WORKER_POOL_SIZE=2
+go run ./cmd/server
+
+# 8-core service with memory headroom
+PARSER_MODE=pool
+PARSER_WORKER_POOL_SIZE=6
+go run ./cmd/server
+
+# Force legacy subprocess behavior
+PARSER_MODE=subprocess
+go run ./cmd/server
+```
+
+---
 ## Decision Tree: How to Tune
 
 ```
@@ -184,6 +230,8 @@ Start: Getting timeout or memory errors?
 # Sane defaults, fast feedback loop
 PARSER_TIMEOUT_SECONDS=5
 PARSER_MAX_OLD_SPACE_MB=512
+PARSER_MODE=pool
+PARSER_WORKER_POOL_SIZE=4
 PARSER_CONCURRENCY_LIMIT=8
 go run ./cmd/server
 ```
@@ -204,6 +252,7 @@ PARSER_CONCURRENCY_LIMIT=2
 # Balanced for scale, memory controlled, concurrency tuned to CPU
 PARSER_TIMEOUT_SECONDS=10
 PARSER_MAX_OLD_SPACE_MB=1024
+PARSER_WORKER_POOL_SIZE=6
 PARSER_CONCURRENCY_LIMIT=12
 # Plus: set resource limits in container manifest
 ```
@@ -214,6 +263,7 @@ PARSER_CONCURRENCY_LIMIT=12
 # Generous timeouts for complex diagrams, high concurrency
 PARSER_TIMEOUT_SECONDS=20
 PARSER_MAX_OLD_SPACE_MB=2048
+PARSER_WORKER_POOL_SIZE=8
 PARSER_CONCURRENCY_LIMIT=16
 # Plus: distribute across multiple instances with load balancer
 ```
