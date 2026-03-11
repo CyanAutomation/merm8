@@ -34,7 +34,7 @@ For deployment sizing and overload behavior, the parser runtime exposes key env 
 | `PARSER_TIMEOUT_SECONDS`   | `5`     | Timeout for each parse operation in seconds. Valid range: 1–60. Increase for complex diagrams, decrease to prioritize responsiveness. Exposed via `GET /info` canonical response field `parser-timeout-seconds` (legacy alias `parser_timeout_seconds` is temporarily retained for compatibility and is deprecated).              |
 | `PARSER_CONCURRENCY_LIMIT` | `8`     | Caps in-flight parser subprocesses. When the limit is reached, the server does **not queue indefinitely**; additional `POST /v1/analyze` requests are rejected with `503` and `error.code=server_busy` (`parser concurrency limit reached; try again`) and include `Retry-After: 1` to signal the minimum retry delay in seconds. |
 | `PARSER_MAX_OLD_SPACE_MB`  | `512`   | Sets the Node.js parser subprocess V8 old-space heap cap (`--max-old-space-size=<MB>`), limiting parser memory growth per parse process.                                                                                                                                                                                          |
-| `PARSER_MODE`              | `pool` | Parser execution mode. `pool` reuses long-lived Node workers and isolates stuck requests by recycling only the timed-out worker; set `subprocess` to preserve one-parse-per-process behavior. |
+| `PARSER_MODE`              | `pool` | Parser execution mode. `pool` (and compatibility alias `auto`) reuses long-lived Node workers and isolates stuck requests by recycling only the timed-out worker; set `subprocess` to preserve one-parse-per-process behavior. |
 | `PARSER_WORKER_POOL_SIZE`  | `4`     | Maximum number of long-lived parser workers per memory profile when `PARSER_MODE=pool` (bounded to 1–64). Tune this with available CPU and memory (roughly 1-2 workers per core and enough memory headroom for each worker's `PARSER_MAX_OLD_SPACE_MB`). |
 | `PARSER_SOURCE_ENHANCEMENT` | `true` | Enables source-level AST enhancement used by flowchart-family rules (`no-disconnected-nodes`, `no-duplicate-node-ids`) to preserve disconnected and duplicate node IDs that Mermaid normalizes away. Set to `false` for rollout control or to disable the extra source scan. |
 
@@ -82,7 +82,7 @@ Parser execution error codes:
 
 For production stability:
 
-- Start with defaults (`mode=pool`, `worker_pool_size=4`, `timeout=5s`, `max_old_space=512MB`, `concurrency=8`).
+- Start with defaults (`mode=pool`, `worker_pool_size=4`, `timeout=5s`, `max_old_space=512MB`, `concurrency=8`), then tune `worker_pool_size` against host CPU and memory headroom.
 - If timeouts occur, first reduce diagram complexity (split large diagrams into smaller subgraphs) before increasing timeout.
 - If memory-limit errors occur, batch large analysis jobs and/or raise `PARSER_MAX_OLD_SPACE_MB` conservatively.
 - Prefer tiered limits by environment (e.g., lower defaults on shared/dev tiers, higher caps on dedicated/prod tiers).
