@@ -1437,7 +1437,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 	defer releaseParserSlot()
 
 	parseStart := time.Now()
-	diagram, syntaxErr, err := h.parseWithRequestSettings(req)
+	diagram, syntaxErr, err := h.parseWithRequestSettings(req, normalizedCfg)
 	parseDuration := time.Since(parseStart)
 	if err != nil {
 		if errors.Is(err, errInvalidRequest) {
@@ -1700,7 +1700,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 	defer releaseParserSlot()
 
 	parseStart := time.Now()
-	diagram, syntaxErr, err := h.parseWithRequestSettings(req)
+	diagram, syntaxErr, err := h.parseWithRequestSettings(req, normalizedCfg)
 	parseDuration := time.Since(parseStart)
 	if err != nil {
 		if errors.Is(err, errInvalidRequest) {
@@ -1973,7 +1973,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 	defer releaseParserSlot()
 
 	parseStart := time.Now()
-	diagram, syntaxErr, err := h.parseWithRequestSettings(req)
+	diagram, syntaxErr, err := h.parseWithRequestSettings(req, normalizedCfg)
 	parseDuration := time.Since(parseStart)
 	if err != nil {
 		if errors.Is(err, errInvalidRequest) {
@@ -3224,8 +3224,12 @@ func writeErrorWithDetailsAndContext(w http.ResponseWriter, r *http.Request, sta
 	})
 }
 
-func (h *Handler) parseWithRequestSettings(req analyzeRequest) (*model.Diagram, *parser.SyntaxError, error) {
+func (h *Handler) parseWithRequestSettings(req analyzeRequest, normalizedCfg rules.Config) (*model.Diagram, *parser.SyntaxError, error) {
+	needSourceEnhancement := requiresSourceEnhancement(normalizedCfg)
 	if req.Parser == nil {
+		if parserWithConfig, supportsConfig := h.parser.(ParserWithConfig); supportsConfig {
+			return parserWithConfig.ParseWithConfig(req.Code, parser.Config{NeedSourceEnhancement: needSourceEnhancement})
+		}
 		return h.parser.Parse(req.Code)
 	}
 	hasOverride := req.Parser.TimeoutSeconds != nil || req.Parser.MaxOldSpaceMB != nil
@@ -3255,10 +3259,20 @@ func (h *Handler) parseWithRequestSettings(req analyzeRequest) (*model.Diagram, 
 		}
 		cfg.NodeMaxOldSpaceMB = *req.Parser.MaxOldSpaceMB
 	}
+	cfg.NeedSourceEnhancement = needSourceEnhancement
 	if supportsConfig {
 		return parserWithConfig.ParseWithConfig(req.Code, cfg)
 	}
 	return h.parser.Parse(req.Code)
+}
+
+func requiresSourceEnhancement(cfg rules.Config) bool {
+	for _, ruleID := range []string{"no-disconnected-nodes", "no-duplicate-node-ids"} {
+		if rules.RuleEnabled(ruleID, cfg) {
+			return true
+		}
+	}
+	return false
 }
 
 func writeParserFailure(w http.ResponseWriter, ctx context.Context, logger Logger, err error) {

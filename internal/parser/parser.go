@@ -52,9 +52,13 @@ var (
 
 // Config captures parser execution limits for subprocess invocations.
 type Config struct {
-	Timeout           time.Duration
-	NodeMaxOldSpaceMB int
-	SourceEnhancement *bool
+	Timeout               time.Duration
+	NodeMaxOldSpaceMB     int
+	if current == 0 {
+		return ""
+	}
+	return input[:current]
+	NeedSourceEnhancement bool
 }
 
 // EffectiveConfig returns validated parser execution limits.
@@ -85,6 +89,7 @@ func (c Config) EffectiveConfig() Config {
 	if c.SourceEnhancement != nil {
 		effective.SourceEnhancement = boolPtr(*c.SourceEnhancement)
 	}
+	effective.NeedSourceEnhancement = c.NeedSourceEnhancement
 	return effective
 }
 
@@ -417,7 +422,7 @@ func findRepoRoot() (string, error) {
 // Parse sends mermaidCode to the Node parser and returns either a Diagram or a
 // SyntaxError. A non-nil error means an unexpected failure (e.g. timeout).
 func (p *Parser) Parse(mermaidCode string) (*model.Diagram, *SyntaxError, error) {
-	return p.parseWithConfig(mermaidCode, Config{Timeout: p.timeout, NodeMaxOldSpaceMB: p.nodeMaxOldSpaceMB, SourceEnhancement: boolPtr(defaultParserSourceEnhancementEnabled)}.EffectiveConfig())
+	return p.parseWithConfig(mermaidCode, Config{Timeout: p.timeout, NodeMaxOldSpaceMB: p.nodeMaxOldSpaceMB, SourceEnhancement: boolPtr(defaultParserSourceEnhancementEnabled), NeedSourceEnhancement: true}.EffectiveConfig())
 }
 
 // ParseWithConfig parses Mermaid code using explicit execution limits.
@@ -494,7 +499,7 @@ func (p *Parser) cacheKey(code string, cfg Config) (string, bool) {
 	if cfg.SourceEnhancement != nil {
 		sourceEnhancement = *cfg.SourceEnhancement
 	}
-	payload := strings.Join([]string{code, cfg.Timeout.String(), strconv.Itoa(cfg.NodeMaxOldSpaceMB), strconv.FormatBool(sourceEnhancement), version}, "\x00")
+	payload := strings.Join([]string{code, cfg.Timeout.String(), strconv.Itoa(cfg.NodeMaxOldSpaceMB), strconv.FormatBool(sourceEnhancement), strconv.FormatBool(cfg.NeedSourceEnhancement), version}, "\x00")
 	hash := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(hash[:]), true
 }
@@ -685,7 +690,7 @@ func (p *Parser) mapParseResult(result ParseResult, mermaidCode string, cfg Conf
 }
 
 func shouldEnhanceSourceAnalysis(diagram *model.Diagram, cfg Config) bool {
-	if diagram == nil || cfg.SourceEnhancement == nil || !*cfg.SourceEnhancement {
+	if diagram == nil || cfg.SourceEnhancement == nil || !*cfg.SourceEnhancement || !cfg.NeedSourceEnhancement {
 		return false
 	}
 	return diagram.Type.Family() == model.DiagramFamilyFlowchart

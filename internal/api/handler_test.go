@@ -5786,6 +5786,61 @@ func TestAnalyze_ParserOverridesAcceptedAndPropagated(t *testing.T) {
 	}
 }
 
+func TestAnalyze_SourceEnhancementCapabilityEnabledForDefaultRules(t *testing.T) {
+	var captured parser.Config
+	mockP := &mockParser{
+		parseWithConfig: func(_ string, cfg parser.Config) (*model.Diagram, *parser.SyntaxError, error) {
+			captured = cfg
+			return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+		},
+	}
+	mux := http.NewServeMux()
+	h := api.NewHandler(mockP, engine.New())
+	h.RegisterRoutes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B"}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusOK)
+	}
+	if !captured.NeedSourceEnhancement {
+		t.Fatal("expected NeedSourceEnhancement=true when source-dependent rules are enabled by default")
+	}
+}
+
+func TestAnalyze_SourceEnhancementCapabilityDisabledWhenSourceRulesAreDisabled(t *testing.T) {
+	var captured parser.Config
+	mockP := &mockParser{
+		parseWithConfig: func(_ string, cfg parser.Config) (*model.Diagram, *parser.SyntaxError, error) {
+			captured = cfg
+			return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+		},
+	}
+	mux := http.NewServeMux()
+	h := api.NewHandler(mockP, engine.New())
+	h.RegisterRoutes(mux)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	payload := `{"code":"graph TD; A-->B","config":{"schema-version":"v1","rules":{"no-disconnected-nodes":{"enabled":false},"no-duplicate-node-ids":{"enabled":false}}}}`
+	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(payload))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d want=%d", resp.StatusCode, http.StatusOK)
+	}
+	if captured.NeedSourceEnhancement {
+		t.Fatal("expected NeedSourceEnhancement=false when source-dependent rules are disabled")
+	}
+}
+
 func TestAnalyze_ParserOverridePreservesParserInstanceMemoryWhenOnlyTimeoutProvided(t *testing.T) {
 	baseCfg := parser.Config{Timeout: 11 * time.Second, NodeMaxOldSpaceMB: 768}
 	var captured parser.Config
