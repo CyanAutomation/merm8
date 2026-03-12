@@ -178,40 +178,64 @@ func TestClientIdentifier_UsesXFFForTrustedProxySingleHop(t *testing.T) {
 	}
 }
 
-func TestClientIdentifier_UsesLeftmostIPForTrustedProxyMultiHop(t *testing.T) {
+func TestClientIdentifier_UsesFirstPublicUntrustedIPForTrustedProxyMultiHop(t *testing.T) {
+	t.Setenv(trustedProxyCIDRsEnv, "10.0.0.0/8,192.168.0.0/16")
+
+	req := httptest.NewRequest(http.MethodGet, "/analyze", nil)
+	req.RemoteAddr = "10.1.2.3:443"
+	req.Header.Set("X-Forwarded-For", "203.0.113.99, 192.168.1.9, 198.51.100.20, 10.1.2.3")
+
+	if got := clientIdentifier(req); got != "198.51.100.20" {
+		t.Fatalf("expected first public untrusted IP from right, got %q", got)
+	}
+}
+
+func TestClientIdentifier_IgnoresSpoofedLeftmostEntriesForTrustedProxy(t *testing.T) {
 	t.Setenv(trustedProxyCIDRsEnv, "10.0.0.0/8")
 
 	req := httptest.NewRequest(http.MethodGet, "/analyze", nil)
 	req.RemoteAddr = "10.1.2.3:443"
-	req.Header.Set("X-Forwarded-For", "198.51.100.1, 203.0.113.2, 10.1.2.3")
+	req.Header.Set("X-Forwarded-For", "203.0.113.200, 198.51.100.31, 10.1.2.3")
 
-	if got := clientIdentifier(req); got != "198.51.100.1" {
-		t.Fatalf("expected original client IP from XFF chain, got %q", got)
+	if got := clientIdentifier(req); got != "198.51.100.31" {
+		t.Fatalf("expected spoofed leftmost entry ignored, got %q", got)
 	}
 }
 
 func TestClientIdentifier_SkipsMalformedXFFEntriesForTrustedProxy(t *testing.T) {
 	t.Setenv(trustedProxyCIDRsEnv, "10.0.0.0/8")
 
-	t.Run("uses first token when valid", func(t *testing.T) {
+	t.Run("uses first valid public token from right", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/analyze", nil)
 		req.RemoteAddr = "10.1.2.3:443"
-		req.Header.Set("X-Forwarded-For", "198.51.100.30, not-an-ip")
+		req.Header.Set("X-Forwarded-For", "198.51.100.30, not-an-ip, 10.1.2.3")
 
 		if got := clientIdentifier(req); got != "198.51.100.30" {
-			t.Fatalf("expected first valid XFF token, got %q", got)
+			t.Fatalf("expected first valid untrusted token, got %q", got)
 		}
 	})
 
-	t.Run("uses second token when first malformed", func(t *testing.T) {
+	t.Run("uses next valid token when right-most untrusted malformed", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/analyze", nil)
 		req.RemoteAddr = "10.1.2.3:443"
-		req.Header.Set("X-Forwarded-For", "bad-token, 198.51.100.31")
+		req.Header.Set("X-Forwarded-For", "198.51.100.31, bad-token, 10.1.2.3")
 
 		if got := clientIdentifier(req); got != "198.51.100.31" {
 			t.Fatalf("expected next valid XFF token, got %q", got)
 		}
 	})
+}
+
+func TestClientIdentifier_FallsBackToRemoteAddrWhenForwardedChainHasNoUntrustedHop(t *testing.T) {
+	t.Setenv(trustedProxyCIDRsEnv, "10.0.0.0/8")
+
+	req := httptest.NewRequest(http.MethodGet, "/analyze", nil)
+	req.RemoteAddr = "10.1.2.3:443"
+	req.Header.Set("X-Forwarded-For", "10.3.4.5, 10.1.2.3")
+
+	if got := clientIdentifier(req); got != "10.1.2.3" {
+		t.Fatalf("expected remote address fallback when forwarded chain has no untrusted hop, got %q", got)
+	}
 }
 
 func TestClientIdentifier_IgnoresXFFForUntrustedProxy(t *testing.T) {
