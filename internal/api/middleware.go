@@ -489,6 +489,13 @@ func CORSMiddleware(allowedOrigins string, logger Logger, metrics *telemetry.Met
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
+			if origin != "" {
+				appendVaryHeader(w.Header(), "Origin")
+				if r.Method == http.MethodOptions {
+					appendVaryHeader(w.Header(), "Access-Control-Request-Method")
+					appendVaryHeader(w.Header(), "Access-Control-Request-Headers")
+				}
+			}
 
 			// Check if origin is allowed
 			if origin != "" && matcher.isAllowed(origin) {

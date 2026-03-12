@@ -346,6 +346,9 @@ func TestCORSMiddleware_AllowsMatchingOrigin(t *testing.T) {
 	if got := rec.Header().Get("Access-Control-Allow-Headers"); got == "" {
 		t.Fatal("expected Access-Control-Allow-Headers header")
 	}
+	if !headerContainsToken(rec.Header(), "Vary", "Origin") {
+		t.Fatalf("expected Vary header to include Origin, got %q", rec.Header().Values("Vary"))
+	}
 	if got := rec.Code; got != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", got)
 	}
@@ -368,6 +371,9 @@ func TestCORSMiddleware_RejectsNonMatchingOrigin(t *testing.T) {
 
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
 		t.Fatalf("expected no CORS header for rejected origin, got %q", got)
+	}
+	if !headerContainsToken(rec.Header(), "Vary", "Origin") {
+		t.Fatalf("expected Vary header to include Origin for rejected origin path, got %q", rec.Header().Values("Vary"))
 	}
 }
 
@@ -433,6 +439,23 @@ func TestCORSMiddleware_HandlesPreflight(t *testing.T) {
 	if got := rec.Body.String(); got != "" {
 		t.Fatalf("expected empty body for preflight, got %q", got)
 	}
+	for _, token := range []string{"Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"} {
+		if !headerContainsToken(rec.Header(), "Vary", token) {
+			t.Fatalf("expected Vary header to include %q, got %q", token, rec.Header().Values("Vary"))
+		}
+	}
+}
+
+func headerContainsToken(headers http.Header, headerName, token string) bool {
+	for _, entry := range headers.Values(headerName) {
+		for _, part := range strings.Split(entry, ",") {
+			if strings.EqualFold(strings.TrimSpace(part), token) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func TestCORSMiddleware_AllowsConfiguredWildcardPattern(t *testing.T) {
