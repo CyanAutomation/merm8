@@ -2197,28 +2197,36 @@ func defaultMetrics(diagramType model.DiagramType) *metricsResponse {
 }
 
 type syntaxInputSignals struct {
-	trimmedCode                string
-	firstLine                  string
-	firstDiagramLine           int
-	firstLineTypoOriginal      string
-	firstLineTypoCanonical     string
-	diagramType                model.DiagramType
-	unsupportedDiagramKeyword  string
-	hasGraphviz                bool
-	hasYAMLFrontmatter         bool
-	hasTabs                    bool
-	hasFlowchartSingleArrow    bool
-	missingDiagramTypeLikely   bool
-	hasMarkdownFence           bool
-	hasStateDiagramKeyword     bool
-	stateSyntaxErrorMentioned  bool
-	hasSmartQuotes             bool
-	hasUnicodeArrowDash        bool
-	hasFlowchartLowercaseEnd   bool
-	hasMalformedBracketClose   bool
-	hasUnterminatedEdgeLabel   bool
-	hasUnterminatedQuotedLabel bool
-	hasNonMermaidPreamble      bool
+	trimmedCode                 string
+	firstLine                   string
+	firstDiagramLine            int
+	firstLineTypoOriginal       string
+	firstLineTypoCanonical      string
+	diagramType                 model.DiagramType
+	unsupportedDiagramKeyword   string
+	hasGraphviz                 bool
+	hasYAMLFrontmatter          bool
+	hasTabs                     bool
+	tabLine                     int
+	tabColumn                   int
+	hasFlowchartSingleArrow     bool
+	missingDiagramTypeLikely    bool
+	hasMarkdownFence            bool
+	hasStateDiagramKeyword      bool
+	stateSyntaxErrorMentioned   bool
+	hasSmartQuotes              bool
+	smartPunctuationLine        int
+	smartPunctuationColumn      int
+	hasUnicodeArrowDash         bool
+	hasFlowchartLowercaseEnd    bool
+	hasMalformedBracketClose    bool
+	hasUnterminatedEdgeLabel    bool
+	unterminatedEdgeLabelLine   int
+	unterminatedEdgeLabelColumn int
+	hasUnterminatedQuotedLabel  bool
+	unterminatedQuoteLine       int
+	unterminatedQuoteColumn     int
+	hasNonMermaidPreamble       bool
 }
 
 func firstRecognizedDiagramLine(lines []string) int {
@@ -2347,10 +2355,10 @@ func appliesToFirstLineWithDiagram(diagramType model.DiagramType) *responseHintA
 	return appliesTo
 }
 
-func hasFlowchartUnterminatedEdgeLabel(code string) bool {
+func hasFlowchartUnterminatedEdgeLabel(code string) (int, int, bool) {
 	edgeOperators := []string{"-->", "---", "-.-", "==>", "===", "<--", "<->", "<-->"}
 
-	for _, line := range strings.Split(code, "\n") {
+	for idx, line := range strings.Split(code, "\n") {
 		pipeCount := strings.Count(line, "|")
 		if pipeCount == 0 {
 			continue
@@ -2364,16 +2372,20 @@ func hasFlowchartUnterminatedEdgeLabel(code string) bool {
 			}
 		}
 		if hasEdgeOperator && pipeCount%2 != 0 {
-			return true
+			col := strings.Index(line, "|") + 1
+			if col < 1 {
+				col = 1
+			}
+			return idx + 1, col, true
 		}
 	}
 
-	return false
+	return 0, 0, false
 }
 
-func lineHasUnterminatedQuotedLabel(line string) bool {
+func lineHasUnterminatedQuotedLabel(line string) (int, bool) {
 	if !strings.Contains(line, "\"") {
-		return false
+		return 0, false
 	}
 
 	quoteCount := 0
@@ -2393,20 +2405,54 @@ func lineHasUnterminatedQuotedLabel(line string) bool {
 	}
 
 	if quoteCount%2 == 0 {
-		return false
+		return 0, false
 	}
 
 	// Limit this signal to common Mermaid label contexts.
-	return strings.Contains(line, "[") || strings.Contains(line, "|")
+	if strings.Contains(line, "[") || strings.Contains(line, "|") {
+		col := strings.Index(line, "\"") + 1
+		if col < 1 {
+			col = 1
+		}
+		return col, true
+	}
+
+	return 0, false
 }
 
-func hasUnterminatedQuotedLabel(code string) bool {
-	for _, line := range strings.Split(code, "\n") {
-		if lineHasUnterminatedQuotedLabel(line) {
-			return true
+func hasUnterminatedQuotedLabel(code string) (int, int, bool) {
+	for idx, line := range strings.Split(code, "\n") {
+		if col, ok := lineHasUnterminatedQuotedLabel(line); ok {
+			return idx + 1, col, true
 		}
 	}
-	return false
+	return 0, 0, false
+}
+
+func scanSmartPunctuation(code string) (int, int, bool, bool) {
+	for idx, line := range strings.Split(code, "\n") {
+		for col, r := range line {
+			switch r {
+			case '“', '”', '‘', '’':
+				return idx + 1, col + 1, true, false
+			case '—', '–':
+				if strings.HasPrefix(line[col:], "—>") || strings.HasPrefix(line[col:], "–>") || strings.HasPrefix(line[col:], "—->") || strings.HasPrefix(line[col:], "–->") {
+					return idx + 1, col + 1, false, true
+				}
+			}
+		}
+	}
+
+	return 0, 0, false, false
+}
+
+func findFirstTab(code string) (int, int, bool) {
+	for idx, line := range strings.Split(code, "\n") {
+		if col := strings.Index(line, "\t"); col >= 0 {
+			return idx + 1, col + 1, true
+		}
+	}
+	return 0, 0, false
 }
 
 func stripQuotedText(line string) string {
@@ -2540,30 +2586,56 @@ func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInput
 		missingDiagramTypeLikely = !isDiagramTypeKeyword(firstLine) && unsupportedDiagramKeyword == "" && !hasDiagramTypeHeaderTypo
 	}
 
+	tabLine, tabColumn, hasTabs := findFirstTab(code)
+	smartLine, smartColumn, hasSmartQuotes, hasUnicodeArrowDash := scanSmartPunctuation(code)
+	unterminatedEdgeLabelLine, unterminatedEdgeLabelColumn, hasUnterminatedEdgeLabel := hasFlowchartUnterminatedEdgeLabel(code)
+	unterminatedQuoteLine, unterminatedQuoteColumn, hasUnterminatedQuotedLabel := hasUnterminatedQuotedLabel(code)
+
 	return syntaxInputSignals{
-		trimmedCode:                trimmed,
-		firstLine:                  firstLine,
-		firstDiagramLine:           firstDiagramLine,
-		firstLineTypoOriginal:      typoOriginal,
-		firstLineTypoCanonical:     typoCanonical,
-		diagramType:                defaultDiagramTypeForSyntaxError(code),
-		unsupportedDiagramKeyword:  unsupportedDiagramKeyword,
-		hasGraphviz:                detectGraphvizHeader(lines),
-		hasYAMLFrontmatter:         strings.HasPrefix(trimmed, "---"),
-		hasTabs:                    strings.Contains(code, "\t"),
-		hasFlowchartSingleArrow:    (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && strings.Contains(strings.ReplaceAll(code, "-->", ""), "->"),
-		missingDiagramTypeLikely:   missingDiagramTypeLikely,
-		hasMarkdownFence:           strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "```mermaid"),
-		hasStateDiagramKeyword:     strings.Contains(lowerCode, "statediagram"),
-		stateSyntaxErrorMentioned:  strings.Contains(lowerErr, "state") && (strings.Contains(lowerErr, "syntax") || strings.Contains(lowerErr, "parse") || strings.Contains(lowerErr, "expect")),
-		hasSmartQuotes:             strings.ContainsAny(code, "“”‘’"),
-		hasUnicodeArrowDash:        strings.Contains(code, "—>") || strings.Contains(code, "–>") || strings.Contains(code, "—->") || strings.Contains(code, "–->"),
-		hasFlowchartLowercaseEnd:   (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && detectReservedEndToken(lines),
-		hasMalformedBracketClose:   detectBracketMismatchNearError(lines, errLine),
-		hasUnterminatedEdgeLabel:   hasFlowchartUnterminatedEdgeLabel(code),
-		hasUnterminatedQuotedLabel: hasUnterminatedQuotedLabel(code),
-		hasNonMermaidPreamble:      hasProseBeforeFirstDiagramHeader(lines, firstDiagramLine),
+		trimmedCode:                 trimmed,
+		firstLine:                   firstLine,
+		firstDiagramLine:            firstDiagramLine,
+		firstLineTypoOriginal:       typoOriginal,
+		firstLineTypoCanonical:      typoCanonical,
+		diagramType:                 defaultDiagramTypeForSyntaxError(code),
+		unsupportedDiagramKeyword:   unsupportedDiagramKeyword,
+		hasGraphviz:                 detectGraphvizHeader(lines),
+		hasYAMLFrontmatter:          strings.HasPrefix(trimmed, "---"),
+		hasTabs:                     hasTabs,
+		tabLine:                     tabLine,
+		tabColumn:                   tabColumn,
+		hasFlowchartSingleArrow:     (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && strings.Contains(strings.ReplaceAll(code, "-->", ""), "->"),
+		missingDiagramTypeLikely:    missingDiagramTypeLikely,
+		hasMarkdownFence:            strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "```mermaid"),
+		hasStateDiagramKeyword:      strings.Contains(lowerCode, "statediagram"),
+		stateSyntaxErrorMentioned:   strings.Contains(lowerErr, "state") && (strings.Contains(lowerErr, "syntax") || strings.Contains(lowerErr, "parse") || strings.Contains(lowerErr, "expect")),
+		hasSmartQuotes:              hasSmartQuotes,
+		smartPunctuationLine:        smartLine,
+		smartPunctuationColumn:      smartColumn,
+		hasUnicodeArrowDash:         hasUnicodeArrowDash,
+		hasFlowchartLowercaseEnd:    (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && detectReservedEndToken(lines),
+		hasMalformedBracketClose:    detectBracketMismatchNearError(lines, errLine),
+		hasUnterminatedEdgeLabel:    hasUnterminatedEdgeLabel,
+		unterminatedEdgeLabelLine:   unterminatedEdgeLabelLine,
+		unterminatedEdgeLabelColumn: unterminatedEdgeLabelColumn,
+		hasUnterminatedQuotedLabel:  hasUnterminatedQuotedLabel,
+		unterminatedQuoteLine:       unterminatedQuoteLine,
+		unterminatedQuoteColumn:     unterminatedQuoteColumn,
+		hasNonMermaidPreamble:       hasProseBeforeFirstDiagramHeader(lines, firstDiagramLine),
 	}
+}
+
+func appliesToFromLocation(signalLine int, signalColumn int, syntaxErr *parser.SyntaxError, diagramType model.DiagramType) *responseHintAppliesTo {
+	line := signalLine
+	column := signalColumn
+	if line <= 0 && syntaxErr != nil {
+		line = syntaxErr.Line
+	}
+	if column <= 0 && syntaxErr != nil {
+		column = syntaxErr.Column
+	}
+
+	return &responseHintAppliesTo{Line: line, Column: column, DiagramType: diagramType}
 }
 
 // hintsForSyntaxError analyzes a syntax error and code to provide smart, actionable hints.
@@ -2603,7 +2675,7 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 			Message:    "Replace tabs with spaces (Mermaid uses space indentation).",
 			Severity:   "info",
 			Confidence: 0.98,
-			AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
+			AppliesTo:  appliesToFromLocation(signals.tabLine, signals.tabColumn, syntaxErr, diagramType),
 			FixExample: "    A --> B",
 		})
 	}
@@ -2659,7 +2731,7 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 			Message:    "Replace smart quotes/dashes with plain ASCII characters (" + `"` + `'` + `, -, -->` + ").",
 			Severity:   "warning",
 			Confidence: 0.98,
-			AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
+			AppliesTo:  appliesToFromLocation(signals.smartPunctuationLine, signals.smartPunctuationColumn, syntaxErr, diagramType),
 			FixExample: "A --> B\nC[\"Quoted label\"]",
 		})
 	}
@@ -2692,7 +2764,7 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 			Message:    "Edge labels must be wrapped with both pipes, e.g. `A -->|No| B`.",
 			Severity:   "warning",
 			Confidence: 0.96,
-			AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
+			AppliesTo:  appliesToFromLocation(signals.unterminatedEdgeLabelLine, signals.unterminatedEdgeLabelColumn, syntaxErr, diagramType),
 			FixExample: "Decision -->|No| Retry",
 		})
 	}
@@ -2703,7 +2775,7 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 			Message:    "Quoted labels must close with a matching quote on the same line (escaped quotes like \\\" are ignored).",
 			Severity:   "warning",
 			Confidence: 0.95,
-			AppliesTo:  &responseHintAppliesTo{Line: syntaxErr.Line, Column: syntaxErr.Column, DiagramType: diagramType},
+			AppliesTo:  appliesToFromLocation(signals.unterminatedQuoteLine, signals.unterminatedQuoteColumn, syntaxErr, diagramType),
 			FixExample: "A[\"Start\"] --> B\nA -->|\"Yes\"| B",
 		})
 	}
