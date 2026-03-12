@@ -111,16 +111,57 @@ async function runWorkerMode() {
       continue;
     }
 
+    const timeoutMs = normalizeWorkerTimeoutMs(envelope?.timeout_ms);
+
     try {
-      const result = await parseSource(String(envelope?.code || ""));
+      const result = await withWorkerTimeout(
+        parseSource(String(envelope?.code || "")),
+        timeoutMs,
+      );
       writeResult({ id, result });
     } catch (err) {
+      if (isWorkerTimeoutError(err)) {
+        writeResult({
+          id,
+          error: "parser_timeout: exceeded " + String(timeoutMs) + "ms",
+        });
+        continue;
+      }
       writeResult({
         id,
         error: "internal parser error: " + String(err?.message || err),
       });
     }
   }
+}
+
+function normalizeWorkerTimeoutMs(rawTimeoutMs) {
+  const parsed = Number.parseInt(String(rawTimeoutMs ?? ""), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0;
+  }
+  return Math.min(parsed, 24 * 60 * 60 * 1000);
+}
+
+function withWorkerTimeout(promise, timeoutMs) {
+  if (!timeoutMs || timeoutMs <= 0) {
+    return promise;
+  }
+
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        const err = new Error("worker parse timeout");
+        err.code = "WORKER_TIMEOUT";
+        reject(err);
+      }, timeoutMs);
+    }),
+  ]);
+}
+
+function isWorkerTimeoutError(err) {
+  return String(err?.code || "") === "WORKER_TIMEOUT";
 }
 
 async function parseSource(input) {
