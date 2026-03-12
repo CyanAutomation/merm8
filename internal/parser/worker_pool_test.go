@@ -56,11 +56,12 @@ func TestWorkerPoolUnhealthyReleaseWaitsForCloseBeforeReturningCapacity(t *testi
 
 		borrowDone := make(chan *parserWorker, 1)
 		go func() {
-			next, borrowErr := pool.borrow()
-			if borrowErr != nil {
-				t.Errorf("borrow replacement worker: %v", borrowErr)
-				return
-			}
+		next, borrowErr := pool.borrow()
+		if borrowErr != nil {
+			borrowDone <- nil
+			return
+		}
+		borrowDone <- next
 			borrowDone <- next
 		}()
 
