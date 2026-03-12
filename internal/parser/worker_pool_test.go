@@ -92,13 +92,15 @@ func TestWorkerPoolUnhealthyReleaseWaitsForCloseBeforeReturningCapacity(t *testi
 		pool.release(replacement, true)
 	}
 
-	trackedMu.Lock()
-	cleanup := append([]*trackedWorker(nil), tracked...)
-	trackedMu.Unlock()
-	for _, tw := range cleanup {
-		unlockWorkerCloseMu(tw)
-		tw.worker.close()
-	}
+	t.Cleanup(func() {
+		trackedMu.Lock()
+		cleanup := append([]*trackedWorker(nil), tracked...)
+		trackedMu.Unlock()
+		for _, tw := range cleanup {
+			unlockWorkerCloseMu(tw)
+			tw.worker.close()
+		}
+	})
 }
 
 func newTrackedProcessWorker(t *testing.T) (*trackedWorker, error) {
