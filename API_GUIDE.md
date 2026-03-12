@@ -40,6 +40,23 @@ For deployment sizing and overload behavior, the parser runtime exposes key env 
 
 Use these together with your platform CPU/memory limits to tune throughput versus memory headroom in production.
 
+
+### Client IP attribution behind trusted proxies
+
+When rate limiting or abuse controls need client identity, the API derives client IPs from `X-Forwarded-For` only when the direct peer (`RemoteAddr`) is trusted.
+
+Configure trusted peers with `ANALYZE_TRUSTED_PROXY_CIDRS` as a comma-separated list of IPs or CIDRs (for example `10.0.0.0/8,192.168.0.0/16,203.0.113.10`).
+
+Forwarding behavior:
+
+- If `RemoteAddr` is **not** in `ANALYZE_TRUSTED_PROXY_CIDRS`, `X-Forwarded-For` is ignored and `RemoteAddr` is used.
+- If `RemoteAddr` **is** trusted, the full `X-Forwarded-For` chain is parsed and evaluated from **right to left**.
+- Right-most trusted proxy hops are discarded first.
+- The first untrusted **public** hop is used as the client IP.
+- If no untrusted/public hop is available, the middleware falls back to `RemoteAddr`.
+
+This right-to-left strategy prevents simple spoofing with attacker-controlled left-most entries while preserving multi-hop proxy attribution.
+
 #### Per-request parser overrides (optional)
 
 `POST /v1/analyze` also accepts an optional `parser` object for bounded overrides:

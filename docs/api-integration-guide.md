@@ -167,6 +167,14 @@ X-RateLimit-Remaining: 45
 X-RateLimit-Reset: 1678123456
 ```
 
+### Trusted Proxy Client IP Attribution
+
+When running behind load balancers/reverse proxies, set `ANALYZE_TRUSTED_PROXY_CIDRS` (comma-separated IPs/CIDRs) so rate limiting uses the correct client identity.
+
+- If the direct peer (`RemoteAddr`) is not trusted, `X-Forwarded-For` is ignored.
+- If trusted, the API parses the full `X-Forwarded-For` chain from right to left, strips trusted proxy hops, and chooses the first untrusted public hop.
+- If no trusted forwarding path resolves to an untrusted/public hop, the API falls back to `RemoteAddr`.
+
 ### Handling Rate Limits
 
 ```javascript
