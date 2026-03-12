@@ -204,6 +204,7 @@ type Parser struct {
 	workerPoolSize    int
 	poolMu            sync.Mutex
 	workerPools       map[int]*workerPool
+	closed            bool
 	cache             *parseCache
 	inflightMu        sync.Mutex
 	inflightParses    map[string]*inflightParse
@@ -429,6 +430,13 @@ func (p *Parser) ParseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 }
 
 func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
+	p.poolMu.Lock()
+	closed := p.closed
+	p.poolMu.Unlock()
+	if closed {
+		return nil, nil, fmt.Errorf("%w: parser is closed", ErrSubprocess)
+	}
+
 	cacheKey, ok := p.cacheKey(mermaidCode, cfg)
 	var inFlight *inflightParse
 	if ok {
@@ -489,6 +497,32 @@ func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 	}
 
 	return diagram, syntaxErr, err
+}
+
+// Close shuts down parser worker pools and prevents future pool borrows.
+func (p *Parser) Close() error {
+	p.poolMu.Lock()
+	if p.closed {
+		p.poolMu.Unlock()
+		return nil
+	}
+	p.closed = true
+	pools := make([]*workerPool, 0, len(p.workerPools))
+	for _, pool := range p.workerPools {
+		pools = append(pools, pool)
+	}
+	p.poolMu.Unlock()
+
+	var errs []error
+	for _, pool := range pools {
+		if pool == nil {
+			continue
+		}
+		if err := pool.close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (p *Parser) cacheKey(code string, cfg Config) (string, bool) {
@@ -604,7 +638,10 @@ func (p *Parser) parseWithWorkerPool(mermaidCode string, cfg Config) (*model.Dia
 		return nil, nil, err
 	}
 
-	pool := p.poolForMemory(scriptPath, cfg.NodeMaxOldSpaceMB)
+	pool, err := p.poolForMemory(scriptPath, cfg.NodeMaxOldSpaceMB)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", ErrSubprocess, err)
+	}
 	worker, err := pool.borrow()
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: %w", ErrSubprocess, err)
@@ -697,16 +734,19 @@ func shouldEnhanceSourceAnalysis(diagram *model.Diagram, cfg Config) bool {
 	return diagram.Type.Family() == model.DiagramFamilyFlowchart
 }
 
-func (p *Parser) poolForMemory(scriptPath string, memoryMB int) *workerPool {
+func (p *Parser) poolForMemory(scriptPath string, memoryMB int) (*workerPool, error) {
 	p.poolMu.Lock()
 	defer p.poolMu.Unlock()
+	if p.closed {
+		return nil, fmt.Errorf("parser is closed")
+	}
 	if pool, ok := p.workerPools[memoryMB]; ok {
-		return pool
+		return pool, nil
 	}
 	p.workerPools[memoryMB] = newWorkerPool(p.workerPoolSize, func() (*parserWorker, error) {
 		return startParserWorker(scriptPath, []string{fmt.Sprintf("--max-old-space-size=%d", memoryMB)})
 	})
-	return p.workerPools[memoryMB]
+	return p.workerPools[memoryMB], nil
 }
 
 func (p *Parser) nodeArgs() []string {

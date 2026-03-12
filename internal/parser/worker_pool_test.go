@@ -56,12 +56,12 @@ func TestWorkerPoolUnhealthyReleaseWaitsForCloseBeforeReturningCapacity(t *testi
 
 		borrowDone := make(chan *parserWorker, 1)
 		go func() {
-		next, borrowErr := pool.borrow()
-		if borrowErr != nil {
-			borrowDone <- nil
-			return
-		}
-		borrowDone <- next
+			next, borrowErr := pool.borrow()
+			if borrowErr != nil {
+				borrowDone <- nil
+				return
+			}
+			borrowDone <- next
 			borrowDone <- next
 		}()
 
@@ -167,4 +167,41 @@ func unlockWorkerCloseMu(tw *trackedWorker) {
 		return
 	}
 	tw.worker.closeMu.Unlock()
+}
+
+func TestWorkerPoolCloseUnblocksWaiters(t *testing.T) {
+	pool := newWorkerPool(1, func() (*parserWorker, error) {
+		tw, err := newTrackedProcessWorker(t)
+		if err != nil {
+			return nil, err
+		}
+		unlockWorkerCloseMu(tw)
+		return tw.worker, nil
+	})
+
+	worker, err := pool.borrow()
+	if err != nil {
+		t.Fatalf("borrow worker: %v", err)
+	}
+
+	borrowErrCh := make(chan error, 1)
+	go func() {
+		_, err := pool.borrow()
+		borrowErrCh <- err
+	}()
+
+	if err := pool.close(); err != nil {
+		t.Fatalf("close pool: %v", err)
+	}
+
+	select {
+	case err := <-borrowErrCh:
+		if err == nil {
+			t.Fatal("expected borrow error after pool close")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for blocked borrow to unblock")
+	}
+
+	pool.release(worker, true)
 }
