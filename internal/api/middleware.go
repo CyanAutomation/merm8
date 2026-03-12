@@ -54,9 +54,9 @@ type corsRejectLogger struct {
 }
 
 type bufferedResponseWriter struct {
-	header http.Header
-	body   bytes.Buffer
-	status int
+	header     http.Header
+	body       bytes.Buffer
+	status     int
 	underlying http.ResponseWriter
 }
 
@@ -99,8 +99,8 @@ func AnalyzeResponseCompressionMiddleware(next http.Handler, thresholdBytes int)
 			return
 		}
 
-	buffered := &bufferedResponseWriter{underlying: w}
-	next.ServeHTTP(buffered, r)
+		buffered := &bufferedResponseWriter{underlying: w}
+		next.ServeHTTP(buffered, r)
 
 		status := buffered.status
 		if status == 0 {
@@ -113,8 +113,10 @@ func AnalyzeResponseCompressionMiddleware(next http.Handler, thresholdBytes int)
 			}
 		}
 		appendVaryHeader(w.Header(), "Accept-Encoding")
+		existingContentEncoding := strings.TrimSpace(w.Header().Get("Content-Encoding"))
 
 		shouldCompress := acceptsGzipEncoding(r.Header.Get("Accept-Encoding")) &&
+			existingContentEncoding == "" &&
 			isCompressibleResponseType(w.Header().Get("Content-Type")) &&
 			buffered.body.Len() >= thresholdBytes
 
