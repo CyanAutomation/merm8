@@ -226,6 +226,49 @@ func TestClientIdentifier_IgnoresXFFForUntrustedProxy(t *testing.T) {
 	}
 }
 
+func TestAnalyzeResponseCompressionMiddleware_FlushCommitsBufferedBodyOnce(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"part":"one"}`))
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		_, _ = w.Write([]byte(`{"part":"two"}`))
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", nil)
+	rec := httptest.NewRecorder()
+
+	AnalyzeResponseCompressionMiddleware(next, defaultAnalyzeCompressionThresholdBytes).ServeHTTP(rec, req)
+
+	if got := rec.Body.String(); got != `{"part":"one"}{"part":"two"}` {
+		t.Fatalf("body mismatch: got %q", got)
+	}
+	if rec.Flushed != true {
+		t.Fatal("expected downstream flush to reach underlying writer")
+	}
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("expected no compression for early flush path, got %q", got)
+	}
+}
+
+func TestAnalyzeResponseCompressionMiddleware_NoFlushUsesFinalCompressionPath(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(strings.Repeat("x", defaultAnalyzeCompressionThresholdBytes+64)))
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+
+	AnalyzeResponseCompressionMiddleware(next, defaultAnalyzeCompressionThresholdBytes).ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("content-encoding = %q, want gzip", got)
+	}
+}
+
 func TestAnalyzeResponseCompressionMiddleware_CompressesLargeJSONWhenAccepted(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
