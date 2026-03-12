@@ -102,7 +102,7 @@ func TestParser_ValidFlowchart(t *testing.T) {
 	for _, n := range diagram.Nodes {
 		nodeIDs[n.ID] = true
 	}
-	expected := map[string]bool{"a": true, "b": true, "c": true}
+	expected := map[string]bool{"A": true, "B": true, "C": true}
 	for id := range expected {
 		if !nodeIDs[id] {
 			t.Errorf("expected node %s not found", id)
@@ -111,10 +111,10 @@ func TestParser_ValidFlowchart(t *testing.T) {
 
 	// Verify edges
 	if len(diagram.Edges) >= 2 {
-		if diagram.Edges[0].From != "a" || diagram.Edges[0].To != "b" {
-			t.Errorf("expected edge a -> b, got %s -> %s", diagram.Edges[0].From, diagram.Edges[0].To)
+		if diagram.Edges[0].From != "A" || diagram.Edges[0].To != "B" {
+			t.Errorf("expected edge A -> B, got %s -> %s", diagram.Edges[0].From, diagram.Edges[0].To)
 		}
-		if diagram.Edges[1].From != "b" || diagram.Edges[1].To != "c" {
+		if diagram.Edges[1].From != "B" || diagram.Edges[1].To != "C" {
 			t.Errorf("expected edge b -> C, got %s -> %s", diagram.Edges[1].From, diagram.Edges[1].To)
 		}
 	}
@@ -139,19 +139,19 @@ func TestParser_FlowchartIncludesNodeAndEdgeLocations(t *testing.T) {
 
 	var nodeA *model.Node
 	for i := range diagram.Nodes {
-		if diagram.Nodes[i].ID == "a" { // parser normalizes ID to lowercase
+		if diagram.Nodes[i].ID == "A" {
 			nodeA = &diagram.Nodes[i]
 			break
 		}
 	}
 	if nodeA == nil {
-		t.Fatalf("expected node a in diagram nodes: %#v", diagram.Nodes)
+		t.Fatalf("expected node A in diagram nodes: %#v", diagram.Nodes)
 	}
 	if nodeA.Line == nil || *nodeA.Line != 2 {
 		t.Fatalf("expected node A line=2, got %v", nodeA.Line)
 	}
 	if nodeA.Column == nil || *nodeA.Column != 3 {
-		t.Fatalf("expected node a column=3, got %v", nodeA.Column)
+		t.Fatalf("expected node A column=3, got %v", nodeA.Column)
 	}
 
 	if len(diagram.Edges) == 0 {
@@ -166,7 +166,7 @@ func TestParser_FlowchartIncludesNodeAndEdgeLocations(t *testing.T) {
 	}
 }
 
-func TestParser_FlowchartLocationLookupIsCaseInsensitive(t *testing.T) {
+func TestParser_FlowchartLocationLookupPreservesCase(t *testing.T) {
 	script := getParserScript(t)
 	p := mustNewParser(t, script)
 
@@ -185,19 +185,19 @@ func TestParser_FlowchartLocationLookupIsCaseInsensitive(t *testing.T) {
 
 	var nodeA *model.Node
 	for i := range diagram.Nodes {
-		if diagram.Nodes[i].ID == "a" {
+		if diagram.Nodes[i].ID == "A" {
 			nodeA = &diagram.Nodes[i]
 			break
 		}
 	}
 	if nodeA == nil {
-		t.Fatalf("expected node a in diagram nodes: %#v", diagram.Nodes)
+		t.Fatalf("expected node A in diagram nodes: %#v", diagram.Nodes)
 	}
 	if nodeA.Line == nil || *nodeA.Line != 2 {
-		t.Fatalf("expected node line=2 for lowercase DB id against uppercase source, got %v", nodeA.Line)
+		t.Fatalf("expected node line=2 for uppercase DB id against uppercase source, got %v", nodeA.Line)
 	}
 	if nodeA.Column == nil || *nodeA.Column != 3 {
-		t.Fatalf("expected node column=3 for lowercase DB id against uppercase source, got %v", nodeA.Column)
+		t.Fatalf("expected node column=3 for uppercase DB id against uppercase source, got %v", nodeA.Column)
 	}
 
 	if len(diagram.Edges) == 0 {
@@ -205,14 +205,58 @@ func TestParser_FlowchartLocationLookupIsCaseInsensitive(t *testing.T) {
 	}
 	edge := diagram.Edges[0]
 	if edge.Line == nil || *edge.Line != 2 {
-		t.Fatalf("expected edge line=2 for lowercase DB ids against uppercase source, got %v", edge.Line)
+		t.Fatalf("expected edge line=2 for case-preserved DB ids against source, got %v", edge.Line)
 	}
 	if edge.Column == nil || *edge.Column != 3 {
-		t.Fatalf("expected edge column=3 for lowercase DB ids against uppercase source, got %v", edge.Column)
+		t.Fatalf("expected edge column=3 for case-preserved DB ids against source, got %v", edge.Column)
 	}
 }
 
 // TestParser_InvalidMermaid tests parsing invalid Mermaid code.
+
+func TestParser_FlowchartPreservesCaseSensitiveNodeIdentity(t *testing.T) {
+	script := getParserScript(t)
+	p := mustNewParser(t, script)
+
+	mermaidCode := `graph TD
+  A[Upper]
+  a[Lower]
+  A --> a
+  a --> A`
+
+	diagram, syntaxErr, err := p.Parse(mermaidCode)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if syntaxErr != nil {
+		t.Fatalf("unexpected syntax error: %+v", syntaxErr)
+	}
+	if diagram == nil {
+		t.Fatal("expected diagram, got nil")
+	}
+
+	nodeIDs := make(map[string]bool)
+	for _, n := range diagram.Nodes {
+		nodeIDs[n.ID] = true
+	}
+	if !nodeIDs["A"] || !nodeIDs["a"] {
+		t.Fatalf("expected distinct case-sensitive node IDs A and a, got %#v", diagram.Nodes)
+	}
+
+	seenUpperToLower := false
+	seenLowerToUpper := false
+	for _, e := range diagram.Edges {
+		if e.From == "A" && e.To == "a" {
+			seenUpperToLower = true
+		}
+		if e.From == "a" && e.To == "A" {
+			seenLowerToUpper = true
+		}
+	}
+	if !seenUpperToLower || !seenLowerToUpper {
+		t.Fatalf("expected edges A->a and a->A, got %#v", diagram.Edges)
+	}
+}
 
 func TestParser_FlowchartLocationWithLeadingAndTrailingBlankLines(t *testing.T) {
 	script := getParserScript(t)
@@ -393,12 +437,12 @@ func TestParser_MultipleEdges(t *testing.T) {
 	// Count outgoing edges from A
 	aOutgoing := 0
 	for _, e := range diagram.Edges {
-		if e.From == "a" { // parser normalizes ID to lowercase
+		if e.From == "A" {
 			aOutgoing++
 		}
 	}
 	if aOutgoing != 3 {
-		t.Errorf("expected 3 edges from a (normalized), got %d", aOutgoing)
+		t.Errorf("expected 3 edges from A, got %d", aOutgoing)
 	}
 }
 
