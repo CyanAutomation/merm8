@@ -361,7 +361,7 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 }
 ```
 
-> `config` is optional. Canonical format is `{"schema-version":"v1","rules":{"max-fanout": {...}}}`.
+> `config` is optional. Canonical format is `{"schema-version":"v1","rules":{"max-fanout": {...}}}`. If `config.schema-version` is `"v1"` and `config.rules` is omitted, the server normalizes it to an empty rules object (`rules:{}`).
 >
 > During Phase 1, legacy flat/nested shapes and snake_case keys are still accepted with deprecation signals (`Deprecation`/`Warning` headers and response `warnings`).
 >
