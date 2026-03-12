@@ -724,3 +724,112 @@ func TestAnalyze_SyntaxError_TabDetectionHelp(t *testing.T) {
 		t.Errorf("expected fix-action about replacing tabs with spaces, got %q", fixAction)
 	}
 }
+
+func assertHintCodeAbsent(t *testing.T, resp map[string]interface{}, unexpected string) {
+	t.Helper()
+	hints, ok := resp["hints"].([]interface{})
+	if !ok {
+		t.Fatalf("expected hints array, got %#v", resp["hints"])
+	}
+	for _, rawHint := range hints {
+		hint, ok := rawHint.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if code, _ := hint["code"].(string); code == unexpected {
+			t.Fatalf("did not expect hint code %q, got %#v", unexpected, hint)
+		}
+	}
+}
+
+func TestAnalyzeRaw_SyntaxError_GraphvizDetectionUppercaseKeywords(t *testing.T) {
+	t.Parallel()
+
+	syntaxErr := &parser.SyntaxError{Message: "No diagram type detected", Line: 1, Column: 1}
+	mux := newTestMux(func(string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+
+	code := "DIGRAPH G {\n  RANKDIR=LR\n  A -> B\n}"
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", bytes.NewReader([]byte(code)))
+	req.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	assertHintCodePresent(t, resp, "graphviz_syntax_detected")
+}
+
+func TestAnalyzeRaw_SyntaxError_ReservedEndTokenDetection(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		code string
+	}{
+		{name: "reserved end at eof", code: "flowchart TD\n  A --> B\nend"},
+		{name: "reserved indented end", code: "flowchart TD\n  A --> B\n    end\n  B --> C"},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			syntaxErr := &parser.SyntaxError{Message: "Parse error on line 3", Line: 3, Column: 1}
+			mux := newTestMux(func(string) (*model.Diagram, *parser.SyntaxError, error) {
+				return nil, syntaxErr, nil
+			})
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", bytes.NewReader([]byte(tt.code)))
+			req.Header.Set("Content-Type", "text/plain")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", w.Code)
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			assertHintCodePresent(t, resp, "flowchart_reserved_end_keyword")
+		})
+	}
+}
+
+func TestAnalyzeRaw_SyntaxError_NonStructuralBracketTextDoesNotTriggerMalformedLabelHint(t *testing.T) {
+	t.Parallel()
+
+	syntaxErr := &parser.SyntaxError{Message: "Parse error on line 2", Line: 2, Column: 10}
+	mux := newTestMux(func(string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+
+	code := "flowchart TD\n  A[\"release notes [draft]\"] -> B"
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", bytes.NewReader([]byte(code)))
+	req.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	assertHintCodeAbsent(t, resp, "malformed_label_brackets")
+}
