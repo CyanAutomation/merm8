@@ -858,6 +858,46 @@ for await (const line of rl) {
 	}
 }
 
+func TestParser_WorkerPoolWorkerTimeoutEnvelopeMapsToErrTimeout(t *testing.T) {
+	t.Setenv("PARSER_MODE", "pool")
+	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
+
+	tempDir := repoTempDir(t)
+	script := filepath.Join(tempDir, "parse.mjs")
+	scriptBody := `#!/usr/bin/env node
+if (!process.argv.includes("--worker")) {
+  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:"oneshot"}],edges:[],subgraphs:[],suppressions:[]}})+"\n");
+  process.exit(0);
+}
+
+import readline from "readline";
+const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
+for await (const line of rl) {
+  const req = JSON.parse(line);
+  process.stdout.write(JSON.stringify({
+    id: req.id,
+    error: "parser_timeout: exceeded " + String(req.timeout_ms || 0) + "ms"
+  }) + "\n");
+}
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write test parser script: %v", err)
+	}
+
+	p, err := parser.NewWithConfig(script, parser.Config{Timeout: time.Second, NodeMaxOldSpaceMB: 256})
+	if err != nil {
+		t.Fatalf("failed to construct parser: %v", err)
+	}
+
+	diagram, syntaxErr, err := p.Parse("graph TD\nA-->B")
+	if err == nil || !errors.Is(err, parser.ErrTimeout) {
+		t.Fatalf("expected timeout category from worker envelope, got %v", err)
+	}
+	if diagram != nil || syntaxErr != nil {
+		t.Fatalf("expected nil diagram/syntaxErr on timeout, got diagram=%v syntaxErr=%v", diagram, syntaxErr)
+	}
+}
+
 // Helper to check if string contains substring (Go 1.24 doesn't have strings.Contains in all contexts)
 func contains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
