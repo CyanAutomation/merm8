@@ -57,13 +57,17 @@ func (p *workerPool) release(w *parserWorker, healthy bool) {
 		return
 	}
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if p.closing || !healthy {
+		p.mu.Unlock()
+		w.close()
+
+		p.mu.Lock()
 		p.total--
 		p.cond.Signal()
-		go w.close()
+		p.mu.Unlock()
 		return
 	}
 	p.idle = append(p.idle, w)
 	p.cond.Signal()
+	p.mu.Unlock()
 }
