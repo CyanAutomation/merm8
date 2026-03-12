@@ -448,9 +448,9 @@ async function extractAST(mermaidAPI, source, diagramType) {
 function findNodeLocation(lines, id) {
   const escaped = escapeRegExp(id);
   const patterns = [
-    new RegExp(`(^|\\s)${escaped}(?=\\s*[\\[({])`, "i"),
-    new RegExp(`(^|\\s)${escaped}(?=\\s*[-.=xo]+>)`, "i"),
-    new RegExp(`(^|\\s)${escaped}(?=\\s*$)`, "i"),
+    new RegExp(`(^|\\s)${escaped}(?=\\s*[\\[({])`),
+    new RegExp(`(^|\\s)${escaped}(?=\\s*[-.=xo]+>)`),
+    new RegExp(`(^|\\s)${escaped}(?=\\s*$)`),
   ];
 
   for (let i = 0; i < lines.length; i++) {
@@ -474,9 +474,8 @@ function findEdgeLocation(lines, from, to) {
   const escapedTo = escapeRegExp(to);
   const fromPattern = new RegExp(
     `(^|\\s)${escapedFrom}(?=\\s*(?:[\\[({]|[-.=xo]+>))`,
-    "i",
   );
-  const toPattern = new RegExp(`(^|\\s)${escapedTo}(?=\\s*(?:[\\[({]|$))`, "i");
+  const toPattern = new RegExp(`(^|\\s)${escapedTo}(?=\\s*(?:[\\[({]|$))`);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -528,9 +527,9 @@ function normalizeFlowchartDirection(dir) {
 }
 
 function normalizeNodeID(id) {
-  // Normalize node IDs by trimming whitespace and converting to lowercase.
-  // This ensures that "A", " A", "  A", "a", etc. are all treated as the same node ID.
-  return String(id).trim().toLowerCase();
+  // Preserve Mermaid's canonical node identity (case-sensitive), while trimming
+  // incidental surrounding whitespace from parser/runtime values.
+  return String(id).trim();
 }
 
 function normalizeDiagramType(detectedType) {

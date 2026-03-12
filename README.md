@@ -620,7 +620,7 @@ Compatibility migration for existing plugins:
 
 | Rule ID                 | Severity | Description                                          |
 | ----------------------- | -------- | ---------------------------------------------------- |
-| `no-duplicate-node-ids` | error    | Each node ID must be unique within the diagram.      |
+| `no-duplicate-node-ids` | error    | Each node ID (case-sensitive) must be unique within the diagram. |
 | `no-disconnected-nodes` | error    | Every node must participate in at least one edge.    |
 | `max-fanout`            | warning  | No node may have more outgoing edges than the limit. |
 
