@@ -691,6 +691,9 @@ func (p *Parser) parseWithWorkerPool(mermaidCode string, cfg Config) (*model.Dia
 	case resp := <-respCh:
 		pool.release(worker, true)
 		if strings.TrimSpace(resp.Error) != "" {
+			if strings.HasPrefix(strings.TrimSpace(resp.Error), "parser_timeout:") {
+				return nil, nil, &parserExecutionError{err: fmt.Errorf("%w: after %s", ErrTimeout, cfg.Timeout), metadata: ErrorMetadata{Suggestion: "reduce diagram size or increase PARSER_TIMEOUT_SECONDS", Limit: cfg.Timeout.String()}}
+			}
 			if isLikelyNodeMemoryLimit(resp.Error) {
 				return nil, nil, &parserExecutionError{err: fmt.Errorf("%w: %s", ErrMemoryLimit, resp.Error), metadata: ErrorMetadata{Suggestion: "reduce diagram size, batch requests, or increase PARSER_MAX_OLD_SPACE_MB", Limit: fmt.Sprintf("%d MiB", cfg.NodeMaxOldSpaceMB), ObservedSizeByte: len(mermaidCode)}}
 			}
