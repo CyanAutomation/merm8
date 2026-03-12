@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 )
@@ -101,18 +103,31 @@ func (w *parserWorker) do(req workerRequestEnvelope) (*workerResponseEnvelope, e
 	return &resp, nil
 }
 
-func (w *parserWorker) close() {
+func (w *parserWorker) close() error {
 	w.closeMu.Lock()
 	defer w.closeMu.Unlock()
 	if w.isClosed {
-		return
+		return nil
 	}
 	w.isClosed = true
+
+	var errs []error
 	if w.cmd.Process != nil {
-		_ = w.cmd.Process.Kill()
+		if err := w.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			errs = append(errs, err)
+		}
 	}
-	_ = w.stdin.Close()
-	_ = w.cmd.Wait()
+	if err := w.stdin.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := w.cmd.Wait(); err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 func (w *parserWorker) stderrString() string {

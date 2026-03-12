@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/CyanAutomation/merm8/internal/api"
+	"github.com/CyanAutomation/merm8/internal/engine"
 	"github.com/CyanAutomation/merm8/internal/parser"
 	"github.com/CyanAutomation/merm8/internal/telemetry"
 )
@@ -18,6 +23,7 @@ const (
 	defaultRateLimitPerMinute       = 120
 	defaultAllowedOrigins           = "https://merm8-splash.vercel.app"
 	dockerAllowedOriginsPlaceholder = "https://merm8.example.app"
+	defaultShutdownTimeout          = 10 * time.Second
 )
 
 var appVersion = ""
@@ -41,10 +47,11 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	handler, err := api.NewHandlerWithScript(scriptPath)
+	p, err := parser.New(scriptPath)
 	if err != nil {
-		panic(fmt.Sprintf("failed to initialize handler: %v", err))
+		panic(fmt.Sprintf("failed to initialize parser: %v", err))
 	}
+	handler := api.NewHandler(p, engine.New())
 
 	logger := api.NewLogger("server")
 	handler.SetLogger(api.NewLogger("api"))
@@ -52,8 +59,6 @@ func main() {
 	parserConcurrencyLimit := envInt("PARSER_CONCURRENCY_LIMIT", defaultParserConcurrencyLimit)
 	handler.SetParserConcurrencyLimit(parserConcurrencyLimit)
 
-	// Wire up strict config schema enforcement based on environment variable.
-	// Default is false for backward compatibility with v1.0; production deployments should enable.
 	strictConfigSchema := strings.ToLower(strings.TrimSpace(os.Getenv("STRICT_CONFIG_SCHEMA")))
 	if strictConfigSchema == "true" || strictConfigSchema == "1" {
 		handler.SetStrictConfigSchema(true)
@@ -106,9 +111,6 @@ func main() {
 	rootHandler = api.MetricsMiddleware(rootHandler, routePatterns, metrics)
 	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, logger)
 
-	// Configure CORS with allowed origins from environment variable.
-	// Apply this middleware last so it executes first on request entry,
-	// including short-circuit 401/429 responses from inner middleware.
 	configuredAllowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 	allowedOrigins, warnOnAllowedOrigins := resolveAllowedOrigins(deploymentMode, configuredAllowedOrigins)
 	if warnOnAllowedOrigins {
@@ -121,9 +123,33 @@ func main() {
 	parserExecMode := parser.ModeFromEnv()
 	parserWorkerPoolSize := parser.WorkerPoolSizeFromEnv()
 	logger.Info("server starting", "addr", addr, "parser", scriptPath, "mode", deploymentMode, "parser_mode", parserExecMode, "parser_mode_default", "pool", "parser_worker_pool_size", parserWorkerPoolSize, "parser_worker_pool_size_guidance", "tune with CPU/memory headroom when parser_mode=pool", "parser_concurrency_limit", parserConcurrencyLimit, "parser_timeout_seconds", int(parserCfg.Timeout.Seconds()), "parser_max_old_space_mb", parserCfg.NodeMaxOldSpaceMB, "analyze_rate_limit_per_minute", rateLimitPerMinute, "analyze_auth_enabled", authToken != "", "cors_allowed_origins", allowedOrigins)
-	if err := http.ListenAndServe(addr, rootHandler); err != nil {
-		logger.Error("server error", "error", err.Error())
-		panic(fmt.Sprintf("server error: %v", err))
+
+	server := &http.Server{Addr: addr, Handler: rootHandler}
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serverErr:
+		if !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("server error", "error", err.Error())
+			panic(fmt.Sprintf("server error: %v", err))
+		}
+	case <-shutdownCtx.Done():
+		logger.Info("shutdown signal received")
+	}
+
+	gracefulCtx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
+	defer cancel()
+	if err := server.Shutdown(gracefulCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Error("graceful shutdown failed", "error", err.Error())
+	}
+	if err := p.Close(); err != nil {
+		logger.Error("parser shutdown failed", "error", err.Error())
 	}
 }
 
