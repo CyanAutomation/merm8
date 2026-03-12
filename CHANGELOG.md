@@ -97,6 +97,7 @@ Fixtures are discoverable and ready for rule implementation. As new rules are ad
   - Internal errors: `500 Internal Server Error`
 - CORS allowlist origin matching now supports constrained wildcard entries (single `*` with explicit prefix/suffix, e.g. `https://merm8-splash-*.vercel.app`) while preserving exact-match behavior as the default fast path.
 - Analyze endpoints now apply conditional gzip compression for `application/json` and `application/sarif+json` responses when clients send `Accept-Encoding: gzip` and payloads exceed the response-size threshold, with correct `Content-Encoding` and `Vary: Accept-Encoding` headers.
+- Trusted-proxy client attribution for analyze middleware now parses full `X-Forwarded-For` chains right-to-left, drops trusted proxy hops, prefers the first untrusted public hop, and falls back to `RemoteAddr` when no trustworthy forwarded client can be resolved.
 
 ## [0.1.0] - 2026-03-03
 
