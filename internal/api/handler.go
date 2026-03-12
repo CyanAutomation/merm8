@@ -2409,6 +2409,114 @@ func hasUnterminatedQuotedLabel(code string) bool {
 	return false
 }
 
+func stripQuotedText(line string) string {
+	var b strings.Builder
+	b.Grow(len(line))
+
+	inSingleQuote := false
+	inDoubleQuote := false
+	escaped := false
+
+	for _, r := range line {
+		if escaped {
+			escaped = false
+			continue
+		}
+
+		if r == '\\' && (inSingleQuote || inDoubleQuote) {
+			escaped = true
+			continue
+		}
+
+		if !inDoubleQuote && r == '\'' {
+			inSingleQuote = !inSingleQuote
+			continue
+		}
+		if !inSingleQuote && r == '"' {
+			inDoubleQuote = !inDoubleQuote
+			continue
+		}
+
+		if !inSingleQuote && !inDoubleQuote {
+			b.WriteRune(r)
+		}
+	}
+
+	return b.String()
+}
+
+func detectGraphvizHeader(lines []string) bool {
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(stripQuotedText(rawLine))
+		if line == "" {
+			continue
+		}
+
+		token := strings.ToLower(line)
+		if splitAt := strings.IndexAny(token, " \t\r{[=(;,"); splitAt >= 0 {
+			token = token[:splitAt]
+		}
+
+		if token == "digraph" || token == "rankdir" {
+			return true
+		}
+	}
+
+	return false
+}
+
+func detectReservedEndToken(lines []string) bool {
+	for i, line := range lines {
+		if i == 0 {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(stripQuotedText(line)), "end") {
+			return true
+		}
+	}
+	return false
+}
+
+func detectBracketMismatchNearError(lines []string, errLine int) bool {
+	if len(lines) == 0 {
+		return false
+	}
+
+	start := 0
+	end := len(lines) - 1
+	if errLine > 0 {
+		center := errLine - 1
+		if center < 0 {
+			center = 0
+		}
+		if center >= len(lines) {
+			center = len(lines) - 1
+		}
+		start = center - 2
+		if start < 0 {
+			start = 0
+		}
+		end = center + 2
+		if end >= len(lines) {
+			end = len(lines) - 1
+		}
+	}
+
+	openBrackets := 0
+	closeBrackets := 0
+	for i := start; i <= end; i++ {
+		line := stripQuotedText(lines[i])
+		openBrackets += strings.Count(line, "[")
+		closeBrackets += strings.Count(line, "]")
+
+		if strings.Contains(line, "[[") && strings.Count(line, "]]") < strings.Count(line, "[[") {
+			return true
+		}
+	}
+
+	return (openBrackets+closeBrackets) > 0 && openBrackets != closeBrackets
+}
+
 func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInputSignals {
 	trimmed := strings.TrimSpace(code)
 	lines := strings.Split(code, "\n")
@@ -2420,8 +2528,10 @@ func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInput
 		lowerErr = strings.ToLower(syntaxErr.Message)
 	}
 
-	openBrackets := strings.Count(code, "[")
-	closeBrackets := strings.Count(code, "]")
+	errLine := 0
+	if syntaxErr != nil {
+		errLine = syntaxErr.Line
+	}
 
 	missingDiagramTypeLikely := false
 	unsupportedDiagramKeyword := unsupportedDiagramKeywordFromFirstLine(firstLine)
@@ -2438,7 +2548,7 @@ func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInput
 		firstLineTypoCanonical:     typoCanonical,
 		diagramType:                defaultDiagramTypeForSyntaxError(code),
 		unsupportedDiagramKeyword:  unsupportedDiagramKeyword,
-		hasGraphviz:                strings.Contains(code, "digraph") || strings.Contains(code, "rankdir"),
+		hasGraphviz:                detectGraphvizHeader(lines),
 		hasYAMLFrontmatter:         strings.HasPrefix(trimmed, "---"),
 		hasTabs:                    strings.Contains(code, "\t"),
 		hasFlowchartSingleArrow:    (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && strings.Contains(strings.ReplaceAll(code, "-->", ""), "->"),
@@ -2448,8 +2558,8 @@ func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInput
 		stateSyntaxErrorMentioned:  strings.Contains(lowerErr, "state") && (strings.Contains(lowerErr, "syntax") || strings.Contains(lowerErr, "parse") || strings.Contains(lowerErr, "expect")),
 		hasSmartQuotes:             strings.ContainsAny(code, "“”‘’"),
 		hasUnicodeArrowDash:        strings.Contains(code, "—>") || strings.Contains(code, "–>") || strings.Contains(code, "—->") || strings.Contains(code, "–->"),
-		hasFlowchartLowercaseEnd:   (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && strings.Contains(code, "\nend\n"),
-		hasMalformedBracketClose:   openBrackets != closeBrackets || strings.Contains(code, "[[") && strings.Count(code, "]]") < strings.Count(code, "[["),
+		hasFlowchartLowercaseEnd:   (strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) && detectReservedEndToken(lines),
+		hasMalformedBracketClose:   detectBracketMismatchNearError(lines, errLine),
 		hasUnterminatedEdgeLabel:   hasFlowchartUnterminatedEdgeLabel(code),
 		hasUnterminatedQuotedLabel: hasUnterminatedQuotedLabel(code),
 		hasNonMermaidPreamble:      hasProseBeforeFirstDiagramHeader(lines, firstDiagramLine),
