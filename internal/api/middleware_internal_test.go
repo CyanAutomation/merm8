@@ -302,6 +302,28 @@ func TestAnalyzeResponseCompressionMiddleware_SkipsCompressionWhenHeaderMissingO
 	})
 }
 
+func TestAnalyzeResponseCompressionMiddleware_SkipsCompressionWhenAlreadyEncoded(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(strings.Repeat("x", defaultAnalyzeCompressionThresholdBytes+64)))
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+
+	AnalyzeResponseCompressionMiddleware(next, defaultAnalyzeCompressionThresholdBytes).ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("content-encoding = %q, want gzip", got)
+	}
+	if got := rec.Body.String(); got != strings.Repeat("x", defaultAnalyzeCompressionThresholdBytes+64) {
+		t.Fatalf("body mismatch for pre-encoded response")
+	}
+}
+
 func TestAnalyzeResponseCompressionMiddleware_IgnoresNonAnalyzePaths(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
