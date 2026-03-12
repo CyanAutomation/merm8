@@ -68,6 +68,7 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 		expectHelpSuggestion    bool
 		expectedHelpTitle       string
 		expectedHelpExplanation string
+		expectedAppliesToLine   int
 	}{
 		{
 			name:                    "graphviz syntax maps to graphviz help",
@@ -158,6 +159,7 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			expectHelpSuggestion:    true,
 			expectedHelpTitle:       "syntax",
 			expectedHelpExplanation: "diagram",
+			expectedAppliesToLine:   2,
 		},
 		{
 			name:                    "odd pipe count around edge operator maps to dedicated hint",
@@ -188,6 +190,41 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			expectHelpSuggestion:    true,
 			expectedHelpTitle:       "unterminated quoted label",
 			expectedHelpExplanation: "balanced quotes",
+			expectedAppliesToLine:   2,
+		},
+
+		{
+			name:                    "unterminated edge label uses detector line instead of parser line",
+			syntaxErr:               &parser.SyntaxError{Message: "Parse error on line 4", Line: 4, Column: 2},
+			code:                    "flowchart TD\n  A -->|No B\n  C --> D\n  D --> E",
+			expectedHintCode:        "unterminated_edge_label",
+			expectedHintMessage:     "both pipes",
+			expectHelpSuggestion:    true,
+			expectedHelpTitle:       "syntax",
+			expectedHelpExplanation: "diagram",
+			expectedAppliesToLine:   2,
+		},
+		{
+			name:                    "smart punctuation uses detector line instead of parser line",
+			syntaxErr:               &parser.SyntaxError{Message: "Parse error on line 4", Line: 4, Column: 1},
+			code:                    "flowchart TD\n  A —> B\n  B --> C\n  C --> D",
+			expectedHintCode:        "smart_punctuation_detected",
+			expectedHintMessage:     "ascii",
+			expectHelpSuggestion:    true,
+			expectedHelpTitle:       "Smart punctuation",
+			expectedHelpExplanation: "ascii",
+			expectedAppliesToLine:   2,
+		},
+		{
+			name:                    "unterminated quoted label uses detector line instead of parser line",
+			syntaxErr:               &parser.SyntaxError{Message: "Parse error on line 4", Line: 4, Column: 3},
+			code:                    "flowchart TD\n  A[\"Start] --> B\n  B --> C\n  C --> D",
+			expectedHintCode:        "unterminated_quoted_label",
+			expectedHintMessage:     "matching quote",
+			expectHelpSuggestion:    true,
+			expectedHelpTitle:       "unterminated quoted label",
+			expectedHelpExplanation: "balanced quotes",
+			expectedAppliesToLine:   2,
 		},
 		{
 			name:                    "unknown syntax falls back to generic hint",
@@ -232,17 +269,26 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			assertHintCodePresent(t, resp, tt.expectedHintCode)
 			assertHintMessageContains(t, resp, tt.expectedHintCode, tt.expectedHintMessage)
 			if strings.HasPrefix(tt.expectedHintCode, "unsupported_diagram_type_") {
+				tt.expectedAppliesToLine = 1
+			}
+
+			if tt.expectedAppliesToLine > 0 {
+				matched := false
 				for _, rawHint := range hints {
 					hint := rawHint.(map[string]interface{})
 					if code, _ := hint["code"].(string); code == tt.expectedHintCode {
+						matched = true
 						appliesTo, ok := hint["applies-to"].(map[string]interface{})
 						if !ok {
 							t.Fatalf("expected applies-to on %s hint, got %#v", tt.expectedHintCode, hint["applies-to"])
 						}
-						if line, ok := appliesTo["line"].(float64); !ok || line != 1 {
-							t.Fatalf("expected applies-to.line=1 on %s hint, got %#v", tt.expectedHintCode, appliesTo["line"])
+						if line, ok := appliesTo["line"].(float64); !ok || int(line) != tt.expectedAppliesToLine {
+							t.Fatalf("expected applies-to.line=%d on %s hint, got %#v", tt.expectedAppliesToLine, tt.expectedHintCode, appliesTo["line"])
 						}
 					}
+				}
+				if !matched {
+					t.Fatalf("expected hint code %q for applies-to assertion", tt.expectedHintCode)
 				}
 			}
 
