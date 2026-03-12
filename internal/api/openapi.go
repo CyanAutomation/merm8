@@ -2147,7 +2147,7 @@ var openapi = map[string]interface{}{
 					},
 					"config": map[string]interface{}{
 						"$ref":        "#/components/schemas/RuleConfigSchema",
-						"description": "Optional lint rule configuration. Canonical format is {\"schema-version\":\"v1\",\"rules\":{...}}. Phase 1 accepts legacy flat/nested/snake_case config with deprecation warnings; Phase 2 rejects legacy config with 400 deprecated_config_format.",
+						"description": "Optional lint rule configuration. Canonical format is {\"schema-version\":\"v1\",\"rules\":{...}}. If schema-version is v1 and rules is omitted, the server normalizes rules to {}. Phase 1 accepts legacy flat/nested/snake_case config with deprecation warnings; Phase 2 rejects legacy config with 400 deprecated_config_format.",
 						"example": map[string]interface{}{
 							"schema-version": "v1",
 							"rules": map[string]interface{}{

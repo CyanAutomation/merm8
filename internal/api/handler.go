@@ -182,12 +182,13 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 			}
 		}
 
-		if !hasTopLevelRules {
-			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules is required when config.schema-version is set"}
-		}
-		rulesMap, ok := rulesValue.(map[string]any)
-		if !ok {
-			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
+		rulesMap := map[string]any{}
+		if hasTopLevelRules {
+			var ok bool
+			rulesMap, ok = rulesValue.(map[string]any)
+			if !ok {
+				return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config.rules", Message: "config.rules must be object"}
+			}
 		}
 		for topLevelKey := range asMap {
 			if topLevelKey != "schema-version" && topLevelKey != "rules" && !(topLevelKey == "schema_version" && !strict) {
