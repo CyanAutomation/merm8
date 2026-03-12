@@ -58,15 +58,22 @@ type bufferedResponseWriter struct {
 	body       bytes.Buffer
 	status     int
 	underlying http.ResponseWriter
+	committed  bool
 }
 
 func (w *bufferedResponseWriter) Flush() {
+	if !w.committed && (w.status != 0 || w.header != nil || w.body.Len() > 0) {
+		w.commitBuffered()
+	}
 	if f, ok := w.underlying.(http.Flusher); ok {
 		f.Flush()
 	}
 }
 
 func (w *bufferedResponseWriter) Header() http.Header {
+	if w.committed {
+		return w.underlying.Header()
+	}
 	if w.header == nil {
 		w.header = make(http.Header)
 	}
@@ -81,10 +88,35 @@ func (w *bufferedResponseWriter) WriteHeader(status int) {
 }
 
 func (w *bufferedResponseWriter) Write(p []byte) (int, error) {
+	if w.committed {
+		return w.underlying.Write(p)
+	}
 	if w.status == 0 {
 		w.status = http.StatusOK
 	}
 	return w.body.Write(p)
+}
+
+func (w *bufferedResponseWriter) commitBuffered() {
+	if w.committed {
+		return
+	}
+
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	for k, values := range w.header {
+		for _, value := range values {
+			w.underlying.Header().Add(k, value)
+		}
+	}
+
+	w.underlying.WriteHeader(w.status)
+	if w.body.Len() > 0 {
+		_, _ = w.underlying.Write(w.body.Bytes())
+		w.body.Reset()
+	}
+	w.committed = true
 }
 
 // AnalyzeResponseCompressionMiddleware applies gzip encoding to eligible analyze JSON/SARIF responses.
@@ -101,6 +133,9 @@ func AnalyzeResponseCompressionMiddleware(next http.Handler, thresholdBytes int)
 
 		buffered := &bufferedResponseWriter{underlying: w}
 		next.ServeHTTP(buffered, r)
+		if buffered.committed {
+			return
+		}
 
 		status := buffered.status
 		if status == 0 {
