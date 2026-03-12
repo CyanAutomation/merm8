@@ -1192,3 +1192,50 @@ process.exit(1);
 		t.Fatalf("expected metadata limit and observed size, got %+v", meta)
 	}
 }
+
+func TestParser_ClosePreventsFutureBorrows(t *testing.T) {
+	t.Setenv("PARSER_MODE", "pool")
+	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
+
+	tempDir := repoTempDir(t)
+	script := filepath.Join(tempDir, "parse.mjs")
+	scriptBody := `#!/usr/bin/env node
+if (!process.argv.includes("--worker")) {
+  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:"oneshot"}],edges:[],subgraphs:[],suppressions:[]}})+"\n");
+  process.exit(0);
+}
+
+import readline from "readline";
+const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
+for await (const line of rl) {
+  const req = JSON.parse(line);
+  process.stdout.write(JSON.stringify({
+    id: req.id,
+    result: {
+      valid: true,
+      diagram_type: "flowchart",
+      ast: { type: "flowchart", direction: "TD", nodes: [{id: "a", label: "A"}], edges: [], subgraphs: [], suppressions: [] }
+    }
+  }) + "\n");
+}
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write parser script: %v", err)
+	}
+
+	p := mustNewParser(t, script)
+	if err := p.Close(); err != nil {
+		t.Fatalf("close parser: %v", err)
+	}
+
+	diagram, syntaxErr, err := p.Parse("graph TD\nA-->B")
+	if err == nil {
+		t.Fatal("expected parse error after parser close")
+	}
+	if diagram != nil || syntaxErr != nil {
+		t.Fatalf("expected nil outputs after parser close, got diagram=%v syntaxErr=%v", diagram, syntaxErr)
+	}
+	if !errors.Is(err, parser.ErrSubprocess) {
+		t.Fatalf("expected ErrSubprocess after parser close, got %v", err)
+	}
+}
