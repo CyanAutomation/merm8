@@ -99,8 +99,8 @@ func AnalyzeResponseCompressionMiddleware(next http.Handler, thresholdBytes int)
 			return
 		}
 
-		buffered := &bufferedResponseWriter{}
-		next.ServeHTTP(buffered, r)
+	buffered := &bufferedResponseWriter{underlying: w}
+	next.ServeHTTP(buffered, r)
 
 		status := buffered.status
 		if status == 0 {
