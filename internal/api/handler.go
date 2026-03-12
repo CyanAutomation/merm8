@@ -455,6 +455,62 @@ type responseHint struct {
 	FixExample string                 `json:"fix-example,omitempty"`
 }
 
+func hintForUnsupportedDiagramType(diagramType model.DiagramType) responseHint {
+	return responseHint{
+		Code:       "lint_unsupported_diagram_type",
+		Message:    "diagram parsed successfully but linting is not available for this Mermaid type yet",
+		Severity:   "info",
+		Confidence: 1.0,
+		AppliesTo: &responseHintAppliesTo{
+			DiagramType: diagramType,
+		},
+		FixExample: "Use a lint-supported Mermaid type (for example: flowchart, classDiagram, or stateDiagram-v2) when lint checks are required.",
+	}
+}
+
+func hintsForConfigValidationError(validErr *validationError) []responseHint {
+	if validErr == nil {
+		return nil
+	}
+
+	switch validErr.Code {
+	case "invalid_option":
+		return []responseHint{{
+			Code:       "config_invalid_option_value",
+			Message:    "configuration contains an invalid option value",
+			Severity:   "error",
+			Confidence: 1.0,
+			FixExample: "Update the value at error.details.path to a documented type/range; for example, set \"limit\": 3 and \"severity\": \"warning\".",
+		}}
+	case "unknown_option":
+		return []responseHint{{
+			Code:       "config_unknown_option",
+			Message:    "configuration contains an unknown option key",
+			Severity:   "error",
+			Confidence: 1.0,
+			FixExample: "Remove the unknown key at error.details.path and use one of error.details.supported option names.",
+		}}
+	case "unsupported_schema_version":
+		return []responseHint{{
+			Code:       "config_unsupported_schema_version",
+			Message:    "configuration schema-version is not supported",
+			Severity:   "error",
+			Confidence: 1.0,
+			FixExample: "Set \"schema-version\" to a value listed in error.details.supported (for example, \"v1\").",
+		}}
+	case "deprecated_config_format":
+		return []responseHint{{
+			Code:       "config_deprecated_format",
+			Message:    "configuration uses a deprecated format",
+			Severity:   "warning",
+			Confidence: 1.0,
+			FixExample: "Migrate to the versioned shape: {\"schema-version\":\"v1\",\"rules\":{...}}.",
+		}}
+	default:
+		return nil
+	}
+}
+
 type analyzeResponse struct {
 	Valid          bool                 `json:"valid"`
 	DiagramType    model.DiagramType    `json:"diagram-type,omitempty"`
@@ -1534,6 +1590,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 			Issues:        []model.Issue{unsupportedIssue},
 			Warnings:      deprecationWarnings,
 			Meta:          responseMetaForWarnings(deprecationWarnings),
+			Hints:         []responseHint{hintForUnsupportedDiagramType(diagram.Type)},
 			Error: &apiErrorDetails{
 				Code:    "unsupported_diagram_type",
 				Message: "diagram type is parsed but linting is not supported",
@@ -1803,6 +1860,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 			Issues:        []model.Issue{unsupportedIssue},
 			Warnings:      deprecationWarnings,
 			Meta:          responseMetaForWarnings(deprecationWarnings),
+			Hints:         append(requestHints, hintForUnsupportedDiagramType(diagram.Type)),
 			Error: &apiErrorDetails{
 				Code:    "unsupported_diagram_type",
 				Message: "diagram type is parsed but linting is not supported",
@@ -3192,6 +3250,7 @@ func writeConfigValidationError(w http.ResponseWriter, configValidationErr *vali
 
 	writeJSON(w, http.StatusBadRequest, analyzeResponse{
 		Valid: false,
+		Hints: hintsForConfigValidationError(configValidationErr),
 		Error: &apiErrorDetails{
 			Code:    configValidationErr.Code,
 			Message: configValidationErr.Message,
