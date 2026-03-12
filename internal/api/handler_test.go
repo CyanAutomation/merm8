@@ -1872,6 +1872,30 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 		}
 	})
 
+	t.Run("accepts versioned config without rules and normalizes to empty rules", func(t *testing.T) {
+		mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+			return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+		})
+
+		body := []byte(`{"code":"graph TD; A-->B","config":{"schema-version":"v1"}}`)
+		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200 for schema-version without rules, got %d body=%s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if valid, ok := resp["valid"].(bool); !ok || !valid {
+			t.Fatalf("expected valid=true response, got %#v", resp["valid"])
+		}
+	})
+
 	t.Run("rejects unknown schema version", func(t *testing.T) {
 		parserCalled := false
 		mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
