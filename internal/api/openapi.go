@@ -2208,7 +2208,7 @@ var openapi = map[string]interface{}{
 				"type":     "object",
 				"required": []string{"code", "message", "severity", "confidence"},
 				"properties": map[string]interface{}{
-					"code":        map[string]interface{}{"type": "string", "description": "Stable machine-readable hint code.", "example": "graphviz_syntax_detected"},
+					"code":        map[string]interface{}{"type": "string", "description": "Machine-readable hint code. See API_GUIDE.md \"Hint codes\" for the current catalog and semantics. Codes are stable for automation (no silent semantic repurposing); clients should treat unknown codes as additive future expansion.", "example": "graphviz_syntax_detected"},
 					"message":     map[string]interface{}{"type": "string", "description": "Human-readable hint message."},
 					"severity":    map[string]interface{}{"type": "string", "enum": []string{"info", "warning"}},
 					"confidence":  map[string]interface{}{"type": "number", "minimum": 0, "maximum": 1},
@@ -2220,7 +2220,7 @@ var openapi = map[string]interface{}{
 				"type":     "object",
 				"required": []string{"code", "message", "severity", "confidence"},
 				"properties": map[string]interface{}{
-					"code":        map[string]interface{}{"type": "string", "description": "Stable machine-readable hint code.", "example": "graphviz_syntax_detected"},
+					"code":        map[string]interface{}{"type": "string", "description": "Machine-readable hint code. See API_GUIDE.md \"Hint codes\" for the current catalog and semantics. Codes are stable for automation (no silent semantic repurposing); clients should treat unknown codes as additive future expansion.", "example": "graphviz_syntax_detected"},
 					"message":     map[string]interface{}{"type": "string", "description": "Human-readable hint message."},
 					"severity":    map[string]interface{}{"type": "string", "enum": []string{"info", "warning"}},
 					"confidence":  map[string]interface{}{"type": "number", "minimum": 0, "maximum": 1},
