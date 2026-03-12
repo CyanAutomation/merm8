@@ -698,7 +698,7 @@ func isProtectedAnalyzePath(path string) bool {
 func clientIdentifier(r *http.Request) string {
 	if remoteIP, ok := remoteIPFromAddr(r.RemoteAddr); ok {
 		if isTrustedProxy(remoteIP) {
-			if forwardedIP, ok := leftmostForwardedForIP(r.Header.Get("X-Forwarded-For")); ok {
+			if forwardedIP, ok := forwardedClientIP(r.Header.Get("X-Forwarded-For")); ok {
 				return forwardedIP.String()
 			}
 		}
@@ -717,17 +717,61 @@ func clientIdentifier(r *http.Request) string {
 	return "unknown"
 }
 
-func leftmostForwardedForIP(header string) (netip.Addr, bool) {
-	for _, part := range strings.Split(header, ",") {
+func forwardedClientIP(header string) (netip.Addr, bool) {
+	hops := parseForwardedForChain(header)
+	if len(hops) == 0 {
+		return netip.Addr{}, false
+	}
+
+	var firstUntrusted netip.Addr
+	for i := len(hops) - 1; i >= 0; i-- {
+		hop := hops[i]
+		if isTrustedProxy(hop) {
+			continue
+		}
+
+		if firstUntrusted == (netip.Addr{}) {
+			firstUntrusted = hop
+		}
+
+		if isPublicClientIP(hop) {
+			return hop, true
+		}
+	}
+
+	if firstUntrusted != (netip.Addr{}) {
+		return firstUntrusted, true
+	}
+
+	return netip.Addr{}, false
+}
+
+func parseForwardedForChain(header string) []netip.Addr {
+	parts := strings.Split(header, ",")
+	hops := make([]netip.Addr, 0, len(parts))
+	for _, part := range parts {
 		candidate := strings.TrimSpace(part)
 		if candidate == "" {
 			continue
 		}
-		if ip, err := netip.ParseAddr(candidate); err == nil {
-			return ip, true
+		ip, err := netip.ParseAddr(candidate)
+		if err != nil {
+			continue
 		}
+		hops = append(hops, ip)
 	}
-	return netip.Addr{}, false
+	return hops
+}
+
+func isPublicClientIP(ip netip.Addr) bool {
+	return ip.IsValid() &&
+		!ip.IsPrivate() &&
+		!ip.IsLoopback() &&
+		!ip.IsLinkLocalUnicast() &&
+		!ip.IsLinkLocalMulticast() &&
+		!ip.IsMulticast() &&
+		!ip.IsInterfaceLocalMulticast() &&
+		!ip.IsUnspecified()
 }
 
 func remoteIPFromAddr(addr string) (netip.Addr, bool) {
