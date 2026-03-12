@@ -360,6 +360,25 @@ func assertValidationErrorResponse(t *testing.T, body []byte, wantCode, wantMess
 	}
 }
 
+func assertResponseHasHintCode(t *testing.T, resp map[string]interface{}, wantCode string) map[string]interface{} {
+	t.Helper()
+	rawHints, ok := resp["hints"].([]interface{})
+	if !ok {
+		t.Fatalf("expected hints array, got %#v", resp["hints"])
+	}
+	for _, raw := range rawHints {
+		hint, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if code, _ := hint["code"].(string); code == wantCode {
+			return hint
+		}
+	}
+	t.Fatalf("expected hint code %q in %#v", wantCode, rawHints)
+	return nil
+}
+
 func TestAnalyze_MissingCode(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, nil
@@ -1436,6 +1455,37 @@ func TestAnalyze_UnsupportedDiagramType_ReturnsStructuredError(t *testing.T) {
 }
 
 // TestAnalyze_ConfigApplied_MaxFanout tests that custom rule config is applied.
+func TestAnalyze_UnsupportedDiagramType_IncludesHint(t *testing.T) {
+	diagram := &model.Diagram{Type: model.DiagramTypeSequence}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	body, _ := json.Marshal(map[string]string{"code": "sequenceDiagram\n  Alice->>Bob: Hi"})
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	hint := assertResponseHasHintCode(t, resp, "lint_unsupported_diagram_type")
+	if severity, _ := hint["severity"].(string); severity != "info" {
+		t.Fatalf("expected hint severity=info, got %#v", hint["severity"])
+	}
+	if fixExample, _ := hint["fix-example"].(string); fixExample == "" {
+		t.Fatalf("expected non-empty fix-example in hint, got %#v", hint)
+	}
+}
+
 func TestAnalyze_ConfigApplied_MaxFanout(t *testing.T) {
 	// Diagram with node A having 3 outgoing edges (violates limit of 2)
 	diagram := &model.Diagram{
@@ -1949,6 +1999,85 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 			assertValidationErrorResponse(t, w.Body.Bytes(), "deprecated_config_format", "legacy unversioned config shape is deprecated; use config.schema-version and config.rules", "config", nil)
 		}
 	})
+}
+
+func TestAnalyze_ConfigValidationErrors_IncludeStructuredHints(t *testing.T) {
+	tests := []struct {
+		name         string
+		config       map[string]any
+		wantCode     string
+		wantHintCode string
+	}{
+		{
+			name: "invalid option value",
+			config: map[string]any{
+				"schema-version": "v1",
+				"rules": map[string]any{
+					"max-fanout": map[string]any{"limit": 0},
+				},
+			},
+			wantCode:     "invalid_option",
+			wantHintCode: "config_invalid_option_value",
+		},
+		{
+			name: "unknown option",
+			config: map[string]any{
+				"schema-version": "v1",
+				"rules": map[string]any{
+					"max-fanout": map[string]any{"threshold": 3},
+				},
+			},
+			wantCode:     "unknown_option",
+			wantHintCode: "config_unknown_option",
+		},
+		{
+			name: "unsupported schema version",
+			config: map[string]any{
+				"schema-version": "v9",
+				"rules":          map[string]any{},
+			},
+			wantCode:     "unsupported_schema_version",
+			wantHintCode: "config_unsupported_schema_version",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				t.Fatal("expected parser not to be called when config validation fails")
+				return nil, nil, nil
+			})
+
+			body, _ := json.Marshal(map[string]any{
+				"code":   "graph TD; A-->B",
+				"config": tt.config,
+			})
+			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d", w.Code)
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+			errorObj, ok := resp["error"].(map[string]interface{})
+			if !ok {
+				t.Fatalf("expected error object, got %#v", resp["error"])
+			}
+			if gotCode, _ := errorObj["code"].(string); gotCode != tt.wantCode {
+				t.Fatalf("expected error.code=%s, got %#v", tt.wantCode, errorObj["code"])
+			}
+			hint := assertResponseHasHintCode(t, resp, tt.wantHintCode)
+			if fixExample, _ := hint["fix-example"].(string); fixExample == "" {
+				t.Fatalf("expected non-empty fix-example for hint %s", tt.wantHintCode)
+			}
+		})
+	}
 }
 
 // TestAnalyze_MultipleRulesAggregate tests that multiple rule violations are aggregated.
