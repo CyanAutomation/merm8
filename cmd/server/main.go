@@ -71,6 +71,7 @@ func main() {
 	rootHandler := http.Handler(mux)
 	rootHandler = api.RequestIDMiddleware(rootHandler)
 	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
+	rootHandler = api.AnalyzeResponseCompressionMiddleware(rootHandler, 0)
 
 	authToken := strings.TrimSpace(os.Getenv("ANALYZE_AUTH_TOKEN"))
 	if err := validateStartupAuthToken(deploymentMode, authToken); err != nil {

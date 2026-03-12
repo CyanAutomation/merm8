@@ -2,8 +2,10 @@ package api
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -221,6 +223,102 @@ func TestClientIdentifier_IgnoresXFFForUntrustedProxy(t *testing.T) {
 
 	if got := clientIdentifier(req); got != "192.0.2.50" {
 		t.Fatalf("expected remote address for untrusted proxy, got %q", got)
+	}
+}
+
+func TestAnalyzeResponseCompressionMiddleware_CompressesLargeJSONWhenAccepted(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(strings.Repeat("x", defaultAnalyzeCompressionThresholdBytes+64)))
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", nil)
+	req.Header.Set("Accept-Encoding", "br, gzip")
+	rec := httptest.NewRecorder()
+
+	AnalyzeResponseCompressionMiddleware(next, defaultAnalyzeCompressionThresholdBytes).ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("content-encoding = %q, want gzip", got)
+	}
+	if got := rec.Header().Get("Vary"); !strings.Contains(strings.ToLower(got), "accept-encoding") {
+		t.Fatalf("vary = %q, want to include Accept-Encoding", got)
+	}
+
+	gz, err := gzip.NewReader(bytes.NewReader(rec.Body.Bytes()))
+	if err != nil {
+		t.Fatalf("gzip.NewReader error: %v", err)
+	}
+	defer gz.Close()
+
+	decoded, err := io.ReadAll(gz)
+	if err != nil {
+		t.Fatalf("io.ReadAll error: %v", err)
+	}
+	if got := string(decoded); got != strings.Repeat("x", defaultAnalyzeCompressionThresholdBytes+64) {
+		t.Fatalf("decoded body mismatch: got len=%d", len(decoded))
+	}
+}
+
+func TestAnalyzeResponseCompressionMiddleware_SkipsCompressionWhenHeaderMissingOrBodySmall(t *testing.T) {
+	t.Run("missing accept-encoding", func(t *testing.T) {
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(strings.Repeat("x", defaultAnalyzeCompressionThresholdBytes+64)))
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/analyze", nil)
+		rec := httptest.NewRecorder()
+
+		AnalyzeResponseCompressionMiddleware(next, defaultAnalyzeCompressionThresholdBytes).ServeHTTP(rec, req)
+
+		if got := rec.Header().Get("Content-Encoding"); got != "" {
+			t.Fatalf("unexpected content-encoding %q", got)
+		}
+		if got := rec.Body.String(); got != strings.Repeat("x", defaultAnalyzeCompressionThresholdBytes+64) {
+			t.Fatalf("body mismatch for uncompressed response")
+		}
+	})
+
+	t.Run("body under threshold", func(t *testing.T) {
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/sarif+json")
+			_, _ = w.Write([]byte(`{"small":true}`))
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/analyze/sarif", nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		rec := httptest.NewRecorder()
+
+		AnalyzeResponseCompressionMiddleware(next, defaultAnalyzeCompressionThresholdBytes).ServeHTTP(rec, req)
+
+		if got := rec.Header().Get("Content-Encoding"); got != "" {
+			t.Fatalf("unexpected content-encoding %q", got)
+		}
+		if got := rec.Header().Get("Vary"); !strings.Contains(strings.ToLower(got), "accept-encoding") {
+			t.Fatalf("vary = %q, want to include Accept-Encoding", got)
+		}
+	})
+}
+
+func TestAnalyzeResponseCompressionMiddleware_IgnoresNonAnalyzePaths(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(strings.Repeat("x", defaultAnalyzeCompressionThresholdBytes+64)))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+
+	AnalyzeResponseCompressionMiddleware(next, defaultAnalyzeCompressionThresholdBytes).ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("unexpected content-encoding %q", got)
+	}
+	if got := rec.Header().Get("Vary"); got != "" {
+		t.Fatalf("unexpected vary header %q", got)
 	}
 }
 
