@@ -1,10 +1,13 @@
 package api
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"fmt"
+	"mime"
 	"net"
 	"net/http"
 	"net/netip"
@@ -21,6 +24,7 @@ const trustedProxyCIDRsEnv = "ANALYZE_TRUSTED_PROXY_CIDRS"
 const requestIDHeader = "X-Request-Id"
 const apiVersionHeader = "Accept-Version"
 const contentVersionHeader = "Content-Version"
+const defaultAnalyzeCompressionThresholdBytes = 1024
 
 // CurrentAPIVersion is the current version of the API
 const CurrentAPIVersion = "1.0"
@@ -47,6 +51,88 @@ type corsRejectLogger struct {
 	interval time.Duration
 	mu       sync.Mutex
 	lastLog  time.Time
+}
+
+type bufferedResponseWriter struct {
+	header http.Header
+	body   bytes.Buffer
+	status int
+	underlying http.ResponseWriter
+}
+
+func (w *bufferedResponseWriter) Flush() {
+	if f, ok := w.underlying.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (w *bufferedResponseWriter) Header() http.Header {
+	if w.header == nil {
+		w.header = make(http.Header)
+	}
+	return w.header
+}
+
+func (w *bufferedResponseWriter) WriteHeader(status int) {
+	if w.status != 0 {
+		return
+	}
+	w.status = status
+}
+
+func (w *bufferedResponseWriter) Write(p []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.body.Write(p)
+}
+
+// AnalyzeResponseCompressionMiddleware applies gzip encoding to eligible analyze JSON/SARIF responses.
+func AnalyzeResponseCompressionMiddleware(next http.Handler, thresholdBytes int) http.Handler {
+	if thresholdBytes <= 0 {
+		thresholdBytes = defaultAnalyzeCompressionThresholdBytes
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isAnalyzePath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+	buffered := &bufferedResponseWriter{underlying: w}
+	next.ServeHTTP(buffered, r)
+
+		status := buffered.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+
+		for k, values := range buffered.Header() {
+			for _, value := range values {
+				w.Header().Add(k, value)
+			}
+		}
+		appendVaryHeader(w.Header(), "Accept-Encoding")
+
+		shouldCompress := acceptsGzipEncoding(r.Header.Get("Accept-Encoding")) &&
+			isCompressibleResponseType(w.Header().Get("Content-Type")) &&
+			buffered.body.Len() >= thresholdBytes
+
+		w.Header().Del("Content-Length")
+		if shouldCompress {
+			w.Header().Set("Content-Encoding", "gzip")
+		}
+
+		w.WriteHeader(status)
+		if !shouldCompress {
+			_, _ = w.Write(buffered.body.Bytes())
+			return
+		}
+
+		gzipWriter := gzip.NewWriter(w)
+		_, _ = gzipWriter.Write(buffered.body.Bytes())
+		_ = gzipWriter.Close()
+	})
 }
 
 func newCORSRejectLogger(logger Logger) *corsRejectLogger {
@@ -503,6 +589,56 @@ func (m corsOriginMatcher) allowlistSize() int {
 
 func isAnalyzePath(path string) bool {
 	return isAnalyzeJSONPath(path) || path == "/analyze/sarif" || path == "/v1/analyze/sarif"
+}
+
+func acceptsGzipEncoding(acceptEncoding string) bool {
+	for _, token := range strings.Split(acceptEncoding, ",") {
+		encoding := strings.ToLower(strings.TrimSpace(token))
+		if encoding == "" {
+			continue
+		}
+		name := encoding
+		quality := ""
+		if idx := strings.Index(encoding, ";"); idx >= 0 {
+			name = strings.TrimSpace(encoding[:idx])
+			quality = strings.TrimSpace(encoding[idx+1:])
+		}
+		if name != "gzip" && name != "*" {
+			continue
+		}
+		if strings.EqualFold(quality, "q=0") {
+			continue
+		}
+		return true
+	}
+
+	return false
+}
+
+func isCompressibleResponseType(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		mediaType = strings.TrimSpace(strings.ToLower(contentType))
+	}
+	mediaType = strings.ToLower(mediaType)
+
+	return mediaType == "application/json" || mediaType == "application/sarif+json"
+}
+
+func appendVaryHeader(headers http.Header, value string) {
+	if headers == nil || value == "" {
+		return
+	}
+
+	existing := headers.Values("Vary")
+	for _, entry := range existing {
+		for _, token := range strings.Split(entry, ",") {
+			if strings.EqualFold(strings.TrimSpace(token), value) {
+				return
+			}
+		}
+	}
+	headers.Add("Vary", value)
 }
 
 func isAnalyzeJSONPath(path string) bool {
