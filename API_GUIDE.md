@@ -517,6 +517,42 @@ Add jitter (for example ±20% randomization) per attempt to avoid synchronized r
   - `edge-count` — Total connections/edges
   - `max-fanout` — Maximum outgoing edges from any single node
 
+### Hint codes
+
+Hint codes are machine-readable remediation signals returned in `hints[]`. Codes are stable for client automation; new codes may be added over time.
+
+#### Request-level hints
+
+These hints describe request parsing/transport behavior and can appear even without a Mermaid syntax failure.
+
+| Hint code | Trigger condition | Severity | Intended remediation |
+| --- | --- | --- | --- |
+| `raw_json_decode_failed_fallback_to_text` | `POST /v1/analyze/raw` receives `Content-Type: application/json`, body looks JSON-like (for example starts with `{` or `[`), JSON decode fails, and server falls back to raw text analysis. | `info` | Send valid JSON (`{"code":"..."}`) when using JSON content type, or send plain Mermaid with `text/plain`. |
+
+#### Syntax-error hints
+
+These hints are generated when Mermaid syntax parsing fails (`valid=false` and `syntax-error` is present).
+
+| Hint code | Trigger condition | Severity | Intended remediation |
+| --- | --- | --- | --- |
+| `diagram_type_header_typo` | First-line diagram type header appears malformed (close typo match to a known Mermaid diagram keyword). | `warning` | Correct line 1 to a canonical Mermaid header (for example `flowchart TD`). |
+| `flowchart_arrow_operator_detected` | Flowchart content appears to use `->` where Mermaid expects `-->`. | `warning` | Replace single-arrow operators with Mermaid flowchart arrow operators (for example `A --> B`). |
+| `flowchart_reserved_end_keyword` | Flowchart appears to use reserved keyword `end` as a node identifier/label. | `warning` | Rename `end` node identifiers/labels (for example `EndNode`). |
+| `generic_syntax_error` | Parser returned a syntax error but no specific higher-confidence hint signal matched. | `warning` | Review the parser location and correct nearby Mermaid syntax (headers, arrows, brackets, indentation). |
+| `graphviz_syntax_detected` | Input looks like Graphviz (`digraph`, `->`, braces, etc.) rather than Mermaid. | `warning` | Rewrite as Mermaid (for example start with `flowchart TD` and Mermaid arrow syntax). |
+| `malformed_label_brackets` | Unbalanced node label brackets detected (for example missing `]`). | `warning` | Ensure every opening label delimiter has a matching closing delimiter. |
+| `markdown_fence_detected` | Markdown code fences (```) were detected in submitted diagram text. | `warning` | Remove markdown fences and submit raw Mermaid only. |
+| `missing_diagram_type_keyword` | Diagram likely omitted the required Mermaid diagram type header. | `warning` | Start line 1 with a valid diagram type keyword (for example `flowchart TD`, `sequenceDiagram`). |
+| `non_mermaid_preamble_detected` | Leading prose/markdown appears before the diagram header. | `warning` | Remove preamble text and start directly with Mermaid syntax on line 1. |
+| `smart_punctuation_detected` | Smart quotes or Unicode dash/arrow punctuation detected. | `warning` | Replace with plain ASCII punctuation (`'`, `"`, `-`, `-->`). |
+| `state_diagram_variant_migration` | State diagram syntax mismatch suggests variant/header migration issue. | `warning` | Use `stateDiagram-v2` and Mermaid state transitions (for example `[*] --> Idle`). |
+| `tab_indentation_detected` | Tab characters detected where Mermaid expects spaces for indentation. | `info` | Replace tabs with spaces. |
+| `unterminated_edge_label` | Edge label appears to be missing a closing pipe (`|`). | `warning` | Close edge labels with both pipes (for example `A -->|Yes| B`). |
+| `unterminated_quoted_label` | Quoted label appears to be missing a closing quote on the same line. | `warning` | Close quoted labels and escape internal quotes as needed. |
+| `unsupported_diagram_type_gantt` | Syntax-error signals indicate `gantt` diagram input, which is currently unsupported by parser coverage. | `warning` | Convert to a currently supported diagram type (for example flowchart/sequence) or split representation. |
+| `unsupported_diagram_type_pie` | Syntax-error signals indicate `pie` diagram input, which is currently unsupported by parser coverage. | `warning` | Convert to a currently supported diagram type (for example flowchart/sequence) or split representation. |
+| `yaml_frontmatter_detected` | YAML frontmatter (`---`) detected ahead of Mermaid content. | `warning` | Remove YAML frontmatter and start directly with Mermaid syntax. |
+
 ---
 
 ## Testing the `/v1/analyze/raw` Endpoint (Raw Mermaid Text)

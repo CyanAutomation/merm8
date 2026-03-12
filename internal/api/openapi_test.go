@@ -446,6 +446,19 @@ func TestServeSpec_AnalyzeResponseIncludesHelpSuggestionAndHintsSchemas(t *testi
 		t.Fatalf("expected Hint.applies-to to reference HintAppliesTo, got %#v", got)
 	}
 
+	hintCodeDescription := lookup(t, spec, "components", "schemas", "Hint", "properties", "code", "description").(string)
+	if !strings.Contains(hintCodeDescription, "API_GUIDE.md \"Hint codes\"") {
+		t.Fatalf("expected Hint.code description to point to API guide catalog, got %q", hintCodeDescription)
+	}
+	if !strings.Contains(hintCodeDescription, "unknown codes as additive future expansion") {
+		t.Fatalf("expected Hint.code description to document additive expansion handling, got %q", hintCodeDescription)
+	}
+
+	responseHintCodeDescription := lookup(t, spec, "components", "schemas", "ResponseHint", "properties", "code", "description").(string)
+	if responseHintCodeDescription != hintCodeDescription {
+		t.Fatalf("expected ResponseHint.code description to match Hint.code description, got %q vs %q", responseHintCodeDescription, hintCodeDescription)
+	}
+
 	helpRequired := lookup(t, spec, "components", "schemas", "HelpSuggestion", "required").([]interface{})
 	for _, field := range []string{"title", "explanation", "wrong-example", "correct-example", "doc-link", "fix-action"} {
 		if !slices.Contains(helpRequired, interface{}(field)) {
