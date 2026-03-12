@@ -57,6 +57,13 @@ type bufferedResponseWriter struct {
 	header http.Header
 	body   bytes.Buffer
 	status int
+	underlying http.ResponseWriter
+}
+
+func (w *bufferedResponseWriter) Flush() {
+	if f, ok := w.underlying.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func (w *bufferedResponseWriter) Header() http.Header {
