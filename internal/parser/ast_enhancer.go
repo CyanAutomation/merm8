@@ -42,23 +42,19 @@ func EnhanceASTWithSourceAnalysis(diagram *model.Diagram, sourceCode string) {
 	// Extract all node IDs defined in the source code
 	allNodeIDs, duplicates := analyzeSourceNodes(sourceCode)
 
-	// Identify disconnected nodes (defined but not referenced in edges)
-	// Note: parser normalizes node IDs to lowercase, so we must normalize
-	// source-extracted IDs for comparison
+	// Identify disconnected nodes (defined but not referenced in edges).
 	edgeNodes := make(map[string]bool)
 	for _, edge := range diagram.Edges {
-		edgeNodes[strings.ToLower(edge.From)] = true
-		edgeNodes[strings.ToLower(edge.To)] = true
+		edgeNodes[edge.From] = true
+		edgeNodes[edge.To] = true
 	}
 	for _, node := range diagram.Nodes {
-		edgeNodes[strings.ToLower(node.ID)] = true
+		edgeNodes[node.ID] = true
 	}
 
 	disconnected := []string{}
 	for _, nodeID := range allNodeIDs {
-		// Parser normalizes node IDs to lowercase; normalize source ID for comparison
-		normalizedID := strings.ToLower(nodeID)
-		if !edgeNodes[normalizedID] {
+		if !edgeNodes[nodeID] {
 			disconnected = append(disconnected, nodeID)
 		}
 	}

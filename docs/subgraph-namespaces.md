@@ -6,7 +6,7 @@ This document clarifies how the `no-duplicate-node-ids` rule treats subgraphs an
 
 ## The Rule: `no-duplicate-node-ids`
 
-**Purpose**: Ensures all node identifiers are unique within a diagram, preventing ID collisions that cause parse ambiguity.
+**Purpose**: Ensures all node identifiers are unique within a diagram (case-sensitive), preventing ID collisions that cause parse ambiguity.
 
 **Severity**: Error (blocks diagram)
 
@@ -19,6 +19,8 @@ This document clarifies how the `no-duplicate-node-ids` rule treats subgraphs an
 ⚠️ **In Mermaid (and merm8), node IDs must be globally unique across the entire diagram, including all subgraphs.**
 
 Subgraph namespaces DO NOT create separate ID scopes. A node ID `A` cannot appear in both `subgraph cluster1` and `subgraph cluster2`.
+
+Node identity is case-sensitive (`A` and `a` are distinct IDs).
 
 ---
 

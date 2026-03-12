@@ -44,6 +44,30 @@ func TestEnhanceASTWithSourceAnalysis_DisconnectedNodes(t *testing.T) {
 	}
 }
 
+func TestEnhanceASTWithSourceAnalysis_PreservesCaseSensitiveNodeIdentity(t *testing.T) {
+	source := `graph TD
+    A --> a`
+
+	diagram := &model.Diagram{
+		Type: model.DiagramTypeFlowchart,
+		Nodes: []model.Node{
+			{ID: "A"},
+		},
+		Edges: []model.Edge{
+			{From: "A", To: "a"},
+		},
+	}
+
+	EnhanceASTWithSourceAnalysis(diagram, source)
+
+	if !reflect.DeepEqual(diagram.SourceNodeIDs, []string{"A", "a"}) {
+		t.Fatalf("expected source IDs [A a], got %v", diagram.SourceNodeIDs)
+	}
+	if len(diagram.DisconnectedNodeIDs) != 0 {
+		t.Fatalf("expected no disconnected IDs with case-preserved edge references, got %v", diagram.DisconnectedNodeIDs)
+	}
+}
+
 func TestEnhanceASTWithSourceAnalysis_DuplicateNodeIDs(t *testing.T) {
 	source := `graph TD
     A[First]
@@ -369,13 +393,13 @@ func TestEnhanceASTWithSourceAnalysis_ImplicitNodesAffectDisconnectedAndDuplicat
 	diagram := &model.Diagram{
 		Type: model.DiagramTypeFlowchart,
 		Nodes: []model.Node{
-			{ID: "a"},
-			{ID: "b"},
-			{ID: "c"},
+			{ID: "A"},
+			{ID: "B"},
+			{ID: "C"},
 		},
 		Edges: []model.Edge{
-			{From: "a", To: "b"},
-			{From: "b", To: "c"},
+			{From: "A", To: "B"},
+			{From: "B", To: "C"},
 		},
 	}
 
