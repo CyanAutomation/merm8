@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -1321,5 +1322,61 @@ for await (const line of rl) {
 	}
 	if !errors.Is(err, parser.ErrSubprocess) {
 		t.Fatalf("expected ErrSubprocess after parser close, got %v", err)
+	}
+}
+
+func TestParser_SubprocessCloseRacingWithParseReturnsClosedError(t *testing.T) {
+	t.Setenv("PARSER_MODE", "subprocess")
+
+	tempDir := repoTempDir(t)
+	script := filepath.Join(tempDir, "parse-slow.mjs")
+	scriptBody := `#!/usr/bin/env node
+setTimeout(() => {
+  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:"ok"}],edges:[],subgraphs:[],suppressions:[]}}));
+  process.exit(0);
+}, 25);
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write parser script: %v", err)
+	}
+
+	p := mustNewParser(t, script)
+
+	const goroutines = 24
+	start := make(chan struct{})
+	errCh := make(chan error, goroutines)
+	var wg sync.WaitGroup
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, _, err := p.ParseWithConfig("graph TD\nA-->B", parser.Config{Timeout: time.Second, NodeMaxOldSpaceMB: 256})
+			errCh <- err
+		}()
+	}
+
+	closeDone := make(chan struct{})
+	go func() {
+		<-start
+		_ = p.Close()
+		close(closeDone)
+	}()
+
+	close(start)
+	wg.Wait()
+	<-closeDone
+	close(errCh)
+
+	var sawClosed bool
+	for err := range errCh {
+		if err != nil && errors.Is(err, parser.ErrSubprocess) && contains(err.Error(), "parser is closed") {
+			sawClosed = true
+			break
+		}
+	}
+	if !sawClosed {
+		t.Fatal("expected at least one parse to fail with closed-parser error when racing Close with ParseWithConfig")
 	}
 }

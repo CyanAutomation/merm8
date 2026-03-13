@@ -430,10 +430,7 @@ func (p *Parser) ParseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 }
 
 func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
-	p.poolMu.Lock()
-	closed := p.closed
-	p.poolMu.Unlock()
-	if closed {
+	if p.isClosed() {
 		return nil, nil, fmt.Errorf("%w: parser is closed", ErrSubprocess)
 	}
 
@@ -568,6 +565,9 @@ func (p *Parser) parseWithSubprocess(mermaidCode string, cfg Config) (*model.Dia
 	if err != nil {
 		return nil, nil, err
 	}
+	if p.isClosed() {
+		return nil, nil, fmt.Errorf("%w: parser is closed", ErrSubprocess)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()
@@ -625,6 +625,12 @@ func (p *Parser) parseWithSubprocess(mermaidCode string, cfg Config) (*model.Dia
 	}
 
 	return diagram, nil, nil
+}
+
+func (p *Parser) isClosed() bool {
+	p.poolMu.Lock()
+	defer p.poolMu.Unlock()
+	return p.closed
 }
 
 func (p *Parser) parseWithWorkerPool(mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
