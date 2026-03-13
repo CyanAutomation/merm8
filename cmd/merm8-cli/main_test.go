@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,8 +12,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/CyanAutomation/merm8/internal/model"
+	"github.com/CyanAutomation/merm8/internal/parser"
 	"github.com/CyanAutomation/merm8/internal/rules"
 )
+
+type parserSpy struct {
+	parseDiagramCalled bool
+	closeCalled        bool
+	closeErr           error
+}
+
+func (s *parserSpy) Parse(_ string) (*model.Diagram, *parser.SyntaxError, error) {
+	s.parseDiagramCalled = true
+	return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+}
+
+func (s *parserSpy) Close() error {
+	s.closeCalled = true
+	return s.closeErr
+}
 
 func TestParseArgsDefaultsToStdin(t *testing.T) {
 	tests := []struct {
@@ -435,5 +454,71 @@ func TestCanonicalizeConfigRuleKeysDeterministicAliasPrecedence(t *testing.T) {
 				t.Fatalf("expected merged rule %#v, got %#v", tt.wantRule, ruleCfg)
 			}
 		})
+	}
+}
+
+func TestRunLocalModeClosesParser(t *testing.T) {
+	originalParserNew := parserNew
+	t.Cleanup(func() {
+		parserNew = originalParserNew
+	})
+
+	spy := &parserSpy{}
+	parserNew = func(_ string) (localDiagramParser, error) {
+		return spy, nil
+	}
+
+	exitCode := runWithStdin(t, []string{"--stdin"}, "graph TD; A-->B")
+	if exitCode != exitOK {
+		t.Fatalf("expected exit code %d, got %d", exitOK, exitCode)
+	}
+	if !spy.parseDiagramCalled {
+		t.Fatalf("expected local parser Parse to be called")
+	}
+	if !spy.closeCalled {
+		t.Fatalf("expected local parser Close to be called")
+	}
+}
+
+func TestRunLocalModeLogsParserCloseError(t *testing.T) {
+	originalParserNew := parserNew
+	t.Cleanup(func() {
+		parserNew = originalParserNew
+	})
+
+	spy := &parserSpy{closeErr: errors.New("close failed")}
+	parserNew = func(_ string) (localDiagramParser, error) {
+		return spy, nil
+	}
+
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create stdin pipe: %v", err)
+	}
+	if _, err := writer.WriteString("graph TD; A-->B"); err != nil {
+		t.Fatalf("write stdin content: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close stdin writer: %v", err)
+	}
+
+	originalStdin := os.Stdin
+	os.Stdin = reader
+	t.Cleanup(func() {
+		os.Stdin = originalStdin
+		_ = reader.Close()
+	})
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := run([]string{"--stdin"}, stdout, stderr)
+	if exitCode != exitOK {
+		t.Fatalf("expected exit code %d, got %d", exitOK, exitCode)
+	}
+	if !spy.closeCalled {
+		t.Fatalf("expected local parser Close to be called")
+	}
+	if !strings.Contains(stderr.String(), "parser close error: close failed") {
+		t.Fatalf("expected parser close error message in stderr, got %q", stderr.String())
 	}
 }

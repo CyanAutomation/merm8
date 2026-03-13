@@ -73,6 +73,15 @@ type runSummary struct {
 	HasTransport       bool           `json:"-"`
 }
 
+type localDiagramParser interface {
+	Parse(code string) (*model.Diagram, *parser.SyntaxError, error)
+	Close() error
+}
+
+var parserNew = func(scriptPath string) (localDiagramParser, error) {
+	return parser.New(scriptPath)
+}
+
 func parseArgs(args []string) (cliOptions, error) {
 	fs := flag.NewFlagSet("merm8-cli", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -126,18 +135,23 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 
 	summary := runSummary{Results: make([]outputResult, 0, len(inputs))}
 
-	var localParser *parser.Parser
+	var localParser localDiagramParser
 	var eng *engine.Engine
 	if opts.URL == "" {
 		scriptPath := os.Getenv("PARSER_SCRIPT")
 		if strings.TrimSpace(scriptPath) == "" {
 			scriptPath = filepath.Join(".", "parser-node", "parse.mjs")
 		}
-		localParser, err = parser.New(scriptPath)
+		localParser, err = parserNew(scriptPath)
 		if err != nil {
 			fmt.Fprintf(stderr, "parser init error: %v\n", err)
 			return exitInternal
 		}
+		defer func() {
+			if closeErr := localParser.Close(); closeErr != nil {
+				fmt.Fprintf(stderr, "parser close error: %v\n", closeErr)
+			}
+		}()
 		eng = engine.New()
 		if _, err := eng.NormalizeConfig(cfg); err != nil {
 			fmt.Fprintf(stderr, "config validation error: %v\n", err)
@@ -200,7 +214,7 @@ func collectInputs(opts cliOptions) ([]inputCode, error) {
 	return inputs, nil
 }
 
-func analyzeLocal(name, code string, cfg rules.Config, p *parser.Parser, eng *engine.Engine) outputResult {
+func analyzeLocal(name, code string, cfg rules.Config, p localDiagramParser, eng *engine.Engine) outputResult {
 	diagram, syntaxErr, err := p.Parse(code)
 	if err != nil {
 		return outputResult{Input: name, Valid: false, Supported: false, SyntaxError: nil, Issues: []model.Issue{}, Error: &analyzeError{Code: "internal_error", Message: err.Error()}}
