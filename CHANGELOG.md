@@ -66,6 +66,23 @@ Fixtures are discoverable and ready for rule implementation. As new rules are ad
   - Vanilla JavaScript with zero dependencies—works offline
   - Follows "normal UI" aesthetic: functional, no decorative elements, minimal transitions
 
+### Benchmark Suite Enhancements (Phase 6)
+
+- **Rule-Specific Debug Context in Failed Cases**: When a test case fails, the HTML report now displays contextual debugging guidance tied to the rule being tested. Template function `ruleContext()` maps rule IDs to actionable hints:
+  - `no-cycles`: "Verify no circular edges exist. Check for A→B→...→A patterns."
+  - `max-fanout`: "Check node has ≤6 outgoing edges. Count direct connections."
+  - `max-depth`: "Verify depth ≤4 from root to deepest leaf. Count node levels."
+  - `no-disconnected-nodes`: "All nodes except source must have incoming edges."
+  - `no-duplicate-node-ids`: "Node IDs must be unique. Check id duplicates."
+  Helps developers quickly understand expected rule behavior when fixing failing test fixtures.
+
+- **Markdown Output Format for CI/CD**: Added `--output markdown` flag (can be combined with `json`, `html`, `csv`). Benchmark results are now exported as GitHub-flavored markdown, suitable for posting in CI/CD workflow comments or CI dashboards:
+  - Summary section with timestamp, version, execution time
+  - Rule metrics table (pipe-delimited for GitHub markdown)
+  - Failed cases section with expected vs. actual values
+  - Output to `benchmarks/reports/latest-results.md`
+  Enables seamless integration with GitHub Actions, GitLab CI, and other workflow automation.
+
 ### Added
 
 - Configurable parser timeout via `PARSER_TIMEOUT_SECONDS` environment variable (1–60 seconds, default 5s). Exposed in `GET /info` response as `parser_timeout_seconds` field.
