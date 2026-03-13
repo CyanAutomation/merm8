@@ -11,11 +11,23 @@ func FlowchartRules() []Rule {
 	}
 }
 
-// SequenceRules is a placeholder for incremental sequence diagram support.
-func SequenceRules() []Rule { return []Rule{} }
+// SequenceRules returns currently supported sequence diagram rules.
+func SequenceRules() []Rule {
+	return []Rule{
+		SequenceNoUndefinedActors{},
+		SequenceNoDuplicateActors{},
+		SequenceMaxNesting{},
+	}
+}
 
-// ClassRules is a placeholder for incremental class diagram support.
-func ClassRules() []Rule { return []Rule{} }
+// ClassRules returns currently supported class diagram rules.
+func ClassRules() []Rule {
+	return []Rule{
+		ClassNoCircularInheritance{},
+		ClassNoDuplicateClasses{},
+		ClassMaxInheritanceDepth{},
+	}
+}
 
 // ERRules is a placeholder for incremental ER diagram support.
 func ERRules() []Rule { return []Rule{} }

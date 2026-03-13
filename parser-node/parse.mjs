@@ -399,6 +399,14 @@ async function extractAST(mermaidAPI, source, diagramType) {
     throw new Error("AST extraction failed in parser runtime");
   }
 
+  if (diagramType === "sequence") {
+    return extractSequenceAST(ast, db, sourceLines);
+  }
+
+  if (diagramType === "class") {
+    return extractClassAST(ast, db, sourceLines);
+  }
+
   if (diagramType !== "flowchart") {
     return ast;
   }
@@ -576,6 +584,120 @@ function normalizeNodeID(id) {
   // Preserve Mermaid's canonical node identity (case-sensitive), while trimming
   // incidental surrounding whitespace from parser/runtime values.
   return String(id).trim();
+}
+
+function extractSequenceAST(ast, db, sourceLines) {
+  const state = db?.state?.records;
+  if (!state) return ast;
+
+  // Extract explicitly defined participants from source (preserve duplicates for detection)
+  const participantDefinitions = [];
+  for (let i = 0; i < sourceLines.length; i++) {
+    const trimmed = sourceLines[i].trim();
+    // Match "participant X" or "participant X as Y" - capture full name (may include spaces)
+    const participantMatch = trimmed.match(/^participant\s+(.+?)(?:\s+as\s+.+)?$/i);
+    if (participantMatch) {
+      participantDefinitions.push({
+        id: participantMatch[1].trim(),
+        line: i + 1,
+        column: trimmed.indexOf(participantMatch[1]) + 1,
+      });
+    }
+  }
+
+  // Extract messages as edges
+  const messages = Array.isArray(state.messages) ? state.messages : [];
+  const allActors = new Set();
+
+  for (const msg of messages) {
+    const from = String(msg.from || "").trim();
+    const to = String(msg.to || "").trim();
+    if (from) allActors.add(from);
+    if (to) allActors.add(to);
+
+    ast.edges.push({
+      from,
+      to,
+      type: msg.type === 1 ? "dotted" : "solid",
+      label: String(msg.message || ""),
+    });
+  }
+
+  // Add all participant definitions as nodes (including duplicates for detection)
+  for (const def of participantDefinitions) {
+    ast.nodes.push({
+      id: def.id,
+      label: "",
+      line: def.line,
+      column: def.column,
+    });
+  }
+
+  return ast;
+}
+
+function extractClassAST(ast, db, sourceLines) {
+  const relations = Array.isArray(db.relations) ? db.relations : [];
+  const classes = db.classes || {};
+
+  // Extract class definitions from source (preserve duplicates for detection)
+  const classDefinitions = [];
+  for (let i = 0; i < sourceLines.length; i++) {
+    const trimmed = sourceLines[i].trim();
+    // Match "class ClassName" or "class ClassName {"
+    const classMatch = trimmed.match(/^class\s+(\w+)/i);
+    if (classMatch) {
+      classDefinitions.push({
+        id: classMatch[1].trim(),
+        line: i + 1,
+        column: trimmed.indexOf(classMatch[1]) + 1,
+      });
+    }
+  }
+
+  // Extract relations as edges
+  for (const rel of relations) {
+    const id1 = String(rel.id1 || "").trim();
+    const id2 = String(rel.id2 || "").trim();
+
+    // Map relation types
+    let relType = "dependency";
+    const type1 = rel.relation?.type1;
+    if (type1 === 0) relType = "aggregation";
+    else if (type1 === 1) relType = "extension";
+    else if (type1 === 2) relType = "composition";
+    else if (type1 === 3) relType = "dependency";
+    else if (type1 === 4) relType = "lollipop";
+
+    // For inheritance (extension), the edge direction is from child to parent
+    // In Mermaid: "Base <|-- Derived" means Derived extends Base
+    // So edge should be from Derived (id2) to Base (id1)
+    if (relType === "extension") {
+      ast.edges.push({
+        from: id2,
+        to: id1,
+        type: relType,
+      });
+    } else {
+      ast.edges.push({
+        from: id1,
+        to: id2,
+        type: relType,
+      });
+    }
+  }
+
+  // Add all class definitions as nodes (including duplicates for detection)
+  for (const def of classDefinitions) {
+    ast.nodes.push({
+      id: def.id,
+      label: "",
+      line: def.line,
+      column: def.column,
+    });
+  }
+
+  return ast;
 }
 
 function normalizeDiagramType(detectedType) {

@@ -1,0 +1,24 @@
+graph TD
+    A["L1"]
+    B["L2"]
+    C["L3"]
+    D["L4"]
+    E["L5"]
+    F["L6"]
+    G["L7"]
+    H["L8"]
+    I["L9"]
+    J["L10"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+    H --> I
+    I --> J
+    
+    %% @rule: max-depth
+    %% Depth of 9 edges (over the default limit of 8)—should fail

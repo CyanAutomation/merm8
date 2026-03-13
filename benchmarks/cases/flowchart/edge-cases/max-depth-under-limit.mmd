@@ -1,0 +1,18 @@
+graph TD
+    A["L1"]
+    B["L2"]
+    C["L3"]
+    D["L4"]
+    E["L5"]
+    F["L6"]
+    G["L7"]
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    
+    %% @rule: max-depth
+    %% Depth of 7 levels (under the default limit of 8)—should pass

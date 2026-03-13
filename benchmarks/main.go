@@ -22,6 +22,8 @@ func main() {
 		compareBaseline     = flag.String("compare-baseline", "", "Path to baseline JSON file to compare against")
 		regressionThreshold = flag.Float64("regression-threshold", 5.0, "Regression detection threshold percentage (default: 5.0)")
 		outputFormat        = flag.String("output", "json,html", "Output formats: json, html, csv (comma-separated, default: json,html)")
+		maxParseTimeMs      = flag.Int64("max-parse-time-ms", 0, "Maximum allowed parse time per case in ms (0 = no limit)")
+		maxLintTimeMs       = flag.Int64("max-lint-time-ms", 0, "Maximum allowed lint time per case in ms (0 = no limit)")
 		verbose             = flag.Bool("verbose", false, "Verbose output")
 		help                = flag.Bool("help", false, "Show help message")
 	)
@@ -100,6 +102,8 @@ Examples:
 		CompareTo:           *compareBaseline,
 		RegressionThreshold: *regressionThreshold,
 		OutputFormats:       *outputFormat,
+		MaxParseTimeMs:      *maxParseTimeMs,
+		MaxLintTimeMs:       *maxLintTimeMs,
 	}
 
 	if err := runner.Run(opts); err != nil {
