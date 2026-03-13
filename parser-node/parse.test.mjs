@@ -36,7 +36,11 @@ function createTimerHarness() {
 test("withWorkerTimeout clears timeout when wrapped promise resolves", async () => {
   const harness = createTimerHarness();
 
-  const result = await withWorkerTimeout(Promise.resolve("ok"), 25, harness.timer);
+  const result = await withWorkerTimeout(
+    Promise.resolve("ok"),
+    25,
+    harness.timer,
+  );
 
   assert.equal(result, "ok");
   assert.deepEqual(harness.getCleared(), [1]);
@@ -57,12 +61,14 @@ test("withWorkerTimeout keeps WORKER_TIMEOUT error code for timeout failures", a
   const harness = createTimerHarness();
   let timeoutErr;
 
-  const pending = withWorkerTimeout(new Promise(() => {}), 25, harness.timer).catch(
-    (err) => {
-      timeoutErr = err;
-      throw err;
-    },
-  );
+  const pending = withWorkerTimeout(
+    new Promise(() => {}),
+    25,
+    harness.timer,
+  ).catch((err) => {
+    timeoutErr = err;
+    throw err;
+  });
 
   harness.triggerTimeout(1);
 
