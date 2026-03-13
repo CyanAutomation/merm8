@@ -49,7 +49,7 @@ var sharedOptionConstraints = map[string]optionConstraint{
 	},
 	"suppression-selectors": {
 		validate: func(value any) bool {
-			selectors := make([]string, 0)
+			var selectors []string
 			switch typedSelectors := value.(type) {
 			case []interface{}:
 				selectors = make([]string, 0, len(typedSelectors))

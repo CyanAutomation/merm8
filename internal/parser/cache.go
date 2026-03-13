@@ -63,24 +63,6 @@ func (c *parseCache) getSuccess(key string) (*model.Diagram, bool) {
 	return cloneDiagram(v), true
 }
 
-func (c *parseCache) getSyntax(key string) (*SyntaxError, bool) {
-	if c == nil {
-		return nil, false
-	}
-	c.entries.RLock()
-	v, ok, evicted := c.syntax.Get(key)
-	c.entries.RUnlock()
-	for i := 0; i < evicted; i++ {
-		c.observe("eviction", "syntax")
-	}
-	if !ok {
-		c.observe("miss", "syntax")
-		return nil, false
-	}
-	c.observe("hit", "syntax")
-	return cloneSyntaxError(v), true
-}
-
 func (c *parseCache) get(key string) (*model.Diagram, *SyntaxError, bool) {
 	if c == nil {
 		return nil, nil, false
