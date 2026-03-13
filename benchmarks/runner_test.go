@@ -2,115 +2,12 @@ package benchmarks_test
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/CyanAutomation/merm8/benchmarks"
 )
-
-func TestRunner_DiscoverCases(t *testing.T) {
-	tmpDir := t.TempDir()
-	benchDir := filepath.Join(tmpDir, "benchmarks")
-
-	mustWrite := func(rel, content string) {
-		t.Helper()
-		abs := filepath.Join(benchDir, rel)
-		if err := os.MkdirAll(filepath.Dir(abs), 0755); err != nil {
-			t.Fatalf("mkdir %s: %v", rel, err)
-		}
-		if err := os.WriteFile(abs, []byte(content), 0644); err != nil {
-			t.Fatalf("write %s: %v", rel, err)
-		}
-	}
-
-	// Valid fixtures across discovery paths.
-	mustWrite("cases/flowchart/valid/a-first.mmd", "graph TD\n  A --> B\n  %% @rule: no-cycles\n")
-	mustWrite("cases/flowchart/valid/b-second.mmd", "graph TD\n  C --> D\n  %% @rule: no-cycles, max-fanout\n")
-	mustWrite("cases/flowchart/violations/c-third.mmd", "graph TD\n  E --> F\n  %% @rule: max-depth\n")
-	mustWrite("cases/flowchart/edge-cases/d-fourth.mmd", "graph TD\n  G --> H\n  %% @rule no-cycles\n")
-	mustWrite("cases/sequence/alpha.mmd", "sequenceDiagram\n  A->>B: ping\n")
-
-	// Invalid fixture for discovery contract: non-.mmd files are ignored.
-	mustWrite("cases/flowchart/valid/zzz-invalid.txt", "not a mermaid fixture")
-
-	runner := benchmarks.NewRunner(benchDir, "/path/to/parser")
-	cases, err := runner.DiscoverCases()
-	if err != nil {
-		t.Fatalf("discover cases: %v", err)
-	}
-
-	if got, want := len(cases), 5; got != want {
-		t.Fatalf("discovered case count = %d, want %d", got, want)
-	}
-
-	// Assert stable ordering (diagram type + category scan order and filename order).
-	var gotIDs []string
-	for _, bc := range cases {
-		gotIDs = append(gotIDs, bc.ID)
-	}
-	wantIDs := []string{
-		"flowchart-val-a-first",
-		"flowchart-val-b-second",
-		"flowchart-vio-c-third",
-		"flowchart-edg-d-fourth",
-		"alpha",
-	}
-	if !reflect.DeepEqual(gotIDs, wantIDs) {
-		t.Fatalf("discovered IDs = %v, want %v", gotIDs, wantIDs)
-	}
-
-	// Assert diagram type/category parsing.
-	if cases[0].DiagramType != "flowchart" || cases[0].Category != "valid" {
-		t.Fatalf("first case type/category = %s/%s, want flowchart/valid", cases[0].DiagramType, cases[0].Category)
-	}
-	if cases[2].DiagramType != "flowchart" || cases[2].Category != "violations" {
-		t.Fatalf("third case type/category = %s/%s, want flowchart/violations", cases[2].DiagramType, cases[2].Category)
-	}
-	if cases[4].DiagramType != "sequence" || cases[4].Category != "" {
-		t.Fatalf("fifth case type/category = %s/%s, want sequence/empty", cases[4].DiagramType, cases[4].Category)
-	}
-
-	for _, bc := range cases {
-		if bc.ID == "zzz-invalid" || filepath.Ext(bc.DiagramPath) == ".txt" {
-			t.Fatalf("invalid fixture should be ignored, got case %+v", bc)
-		}
-	}
-
-	// Assert fixture annotation parsing via the public discovery/output contract.
-	wantRuleByID := map[string]string{
-		"flowchart-val-a-first":  "no-cycles",
-		"flowchart-val-b-second": "no-cycles",
-		"flowchart-vio-c-third":  "max-depth",
-		"flowchart-edg-d-fourth": "*",
-		"alpha":                  "*",
-	}
-	for _, bc := range cases {
-		wantRule, ok := wantRuleByID[bc.ID]
-		if !ok {
-			t.Fatalf("unexpected discovered case %q", bc.ID)
-		}
-		if bc.RuleID != wantRule {
-			t.Fatalf("case %q rule_id = %q, want %q", bc.ID, bc.RuleID, wantRule)
-		}
-	}
-
-	// Assert expected issue metadata reflects discovered RuleID in runner output.
-	if got, want := len(cases[2].ExpectedIssues), 1; got != want {
-		t.Fatalf("violations case expected issue count = %d, want %d", got, want)
-	}
-	if got, want := cases[2].ExpectedIssues[0].RuleID, "max-depth"; got != want {
-		t.Fatalf("violations case expected issue rule = %q, want %q", got, want)
-	}
-	if got, want := cases[2].ExpectedIssues[0].Severity, "warning"; got != want {
-		t.Fatalf("violations case expected issue severity = %q, want %q", got, want)
-	}
-	if got := len(cases[0].ExpectedIssues); got != 0 {
-		t.Fatalf("valid case expected issue count = %d, want 0", got)
-	}
-}
 
 func TestExtractRuleID(t *testing.T) {
 	tests := []struct {

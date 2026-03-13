@@ -562,6 +562,9 @@ func TestAnalyze_ParserContractViolation_Returns500(t *testing.T) {
 	assertExactErrorResponse(t, w.Body.Bytes(), "parser_contract_violation", "parser response violated service contract")
 }
 
+// TestAnalyze_ParserReturnsNilDiagram_Returns500 validates error handling when parser
+// returns nil diagram. Also verifies no panic occurs (implicitly by completing successfully).
+// @spec: API-001: Nil diagram from parser returns 500 with structured error response
 func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, nil
@@ -570,6 +573,8 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
+
+	// Verify no panic occurs and handler completes
 	mux.ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
@@ -614,25 +619,6 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 		t.Fatalf("expected exact error message %q, got %q", "parser returned nil diagram", resp.Error.Message)
 	}
 
-}
-
-// TestAnalyze_NoPanicOnNilDiagram tests that nil diagram from parser doesn't cause panic.
-func TestAnalyze_NoPanicOnNilDiagram(t *testing.T) {
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return nil, nil, nil
-	})
-	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	// Verify no panic on nil diagram
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("Analyze panicked for nil diagram: %v", r)
-		}
-	}()
-	mux.ServeHTTP(w, req)
 }
 
 // TestAnalyze_ValidDiagram_SuccessPath tests a valid diagram end-to-end.
