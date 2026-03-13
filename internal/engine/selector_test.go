@@ -28,4 +28,3 @@ func TestParseSelector_ValidatesFormatAndSupport(t *testing.T) {
 		})
 	}
 }
-
