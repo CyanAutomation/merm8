@@ -661,6 +661,252 @@ Content-Type: application/json
 
 ---
 
+## 12. Valid Sequence Diagram (Lint Unsupported)
+
+When analyzing a diagram type that the parser recognizes but which doesn't have lint rules yet (e.g., sequence, class, state, ER), the API returns HTTP 200 with `valid=true` and `lint-supported=false`.
+
+**Key point**: This is **NOT** a syntax error. The diagram is syntactically correct; linting is simply unavailable.
+
+**Request**:
+
+```json
+{
+  "code": "sequenceDiagram\n  participant Alice\n  participant Bob\n  Alice->>Bob: Hi Bob",
+  "config": {
+    "schema-version": "v1",
+    "rules": {}
+  }
+}
+```
+
+**Response (HTTP 200 OK)**:
+
+```json
+{
+  "valid": true,
+  "diagram-type": "sequence",
+  "lint-supported": false,
+  "syntax-error": null,
+  "issues": [
+    {
+      "rule-id": "unsupported-diagram-type",
+      "severity": "info",
+      "message": "diagram type \"sequence\" is parsed but lint rules are not available yet"
+    }
+  ],
+  "metrics": {
+    "node-count": 0,
+    "edge-count": 0,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 0,
+    "diagram-type": "sequence",
+    "direction": null,
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
+  },
+  "error": {
+    "code": "unsupported_diagram_type",
+    "message": "diagram type is parsed but linting is not supported"
+  }
+}
+```
+
+---
+
+## 13. Unknown Rule in Config
+
+When the config references a rule ID that is not implemented or recognized, the server returns HTTP 400 with the error code `unknown_rule` and includes a list of supported rules in the error details.
+
+**Request**:
+
+```json
+{
+  "code": "graph TD\n  A --> B\n  B --> C",
+  "config": {
+    "schema-version": "v1",
+    "rules": {
+      "custom-undefined-rule": {
+        "enabled": true,
+        "severity": "warning"
+      }
+    }
+  }
+}
+```
+
+**Response (HTTP 400 Bad Request)**:
+
+```json
+{
+  "valid": false,
+  "diagram-type": "unknown",
+  "lint-supported": false,
+  "syntax-error": null,
+  "issues": [],
+  "metrics": {
+    "node-count": 0,
+    "edge-count": 0,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 0,
+    "diagram-type": "unknown",
+    "direction": null,
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
+  },
+  "error": {
+    "code": "unknown_rule",
+    "message": "unknown rule: custom-undefined-rule",
+    "details": {
+      "path": "config.rules.custom-undefined-rule",
+      "supported": ["max-depth", "max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"]
+    }
+  }
+}
+```
+
+**Client guidance**:
+
+- Check the `supported` array to find the correct rule name
+- Rule IDs are case-sensitive and use kebab-case (e.g., `max-fanout`, not `maxFanOut`)
+- See [docs/error-responses.md](error-responses.md#unknown_rule) for more details
+
+---
+
+## 14. Invalid Suppression Selector
+
+When a suppression selector in the config has invalid syntax, the server returns HTTP 400 with the error code `invalid_suppression_selector` and includes a hint about valid formats.
+
+**Request**:
+
+```json
+{
+  "code": "graph TD\n  A[Node A] --> B[Node B]",
+  "config": {
+    "schema-version": "v1",
+    "rules": {
+      "max-fanout": {
+        "enabled": true,
+        "limit": 3,
+        "suppression-selectors": ["node:"]
+      }
+    }
+  }
+}
+```
+
+**Response (HTTP 400 Bad Request)**:
+
+```json
+{
+  "valid": false,
+  "diagram-type": "unknown",
+  "lint-supported": false,
+  "syntax-error": null,
+  "issues": [],
+  "metrics": {
+    "node-count": 0,
+    "edge-count": 0,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 0,
+    "diagram-type": "unknown",
+    "direction": null,
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
+  },
+  "error": {
+    "code": "invalid_suppression_selector",
+    "message": "invalid suppression selector format: node:",
+    "details": {
+      "path": "config.rules.max-fanout.suppression-selectors[0]",
+      "hint": "valid formats: rule:*, node:ID, subgraph:NAME, file:*.js, or negation with ! prefix"
+    }
+  }
+}
+```
+
+**Valid suppression selector formats**:
+
+- `rule:*` — suppress all issues from all rules
+- `rule:max-fanout` — suppress issues from specific rule
+- `node:A` — suppress issues on node with ID "A"
+- `subgraph:MyGroup` — suppress issues in subgraph "MyGroup"
+- `!node:CriticalPath` — negation/exemption (exclude from suppression)
+
+See [docs/examples/rule-suppressions.md](examples/rule-suppressions.md) for detailed examples.
+
+---
+
+## 15. Server Busy: Parser Concurrency Limit Reached
+
+When the parser concurrency limit is reached (default 8 concurrent requests), the server returns HTTP 503 with the error code `server_busy` and includes a `Retry-After` header indicating when to retry.
+
+**Request**:
+
+```json
+{
+  "code": "graph TD\n  A --> B"
+}
+```
+
+**Response (HTTP 503 Service Unavailable)**:
+
+```json
+{
+  "valid": false,
+  "diagram-type": "unknown",
+  "lint-supported": false,
+  "syntax-error": null,
+  "issues": [],
+  "metrics": {
+    "node-count": 0,
+    "edge-count": 0,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 0,
+    "diagram-type": "unknown",
+    "direction": null,
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
+  },
+  "error": {
+    "code": "server_busy",
+    "message": "parser concurrency limit reached; try again"
+  }
+}
+```
+
+**Response headers**:
+
+```
+HTTP/1.1 503 Service Unavailable
+Retry-After: 1
+Content-Type: application/json
+```
+
+**Client guidance**:
+
+- Implement exponential backoff: wait 1s, then 2s, 4s, 8s, etc.
+- Use the `Retry-After` header value as the initial wait duration
+- Recommended max retries: 5-10 depending on your SLA
+- See the "Python: Analyze with Retry" helper script below for implementation example
+
+---
+
 ## Helper Scripts
 
 ### Python: Analyze with Retry

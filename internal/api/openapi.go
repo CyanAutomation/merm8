@@ -718,13 +718,19 @@ var openapi = map[string]interface{}{
 										},
 									},
 									"sequenceDiagram": map[string]interface{}{
-										"summary": "Parsed sequence diagram (lint currently unsupported)",
+										"summary": "Valid sequence diagram (lint currently unsupported)",
 										"value": map[string]interface{}{
-											"valid":          false,
+											"valid":          true,
 											"diagram-type":   "sequence",
 											"lint-supported": false,
 											"syntax-error":   nil,
-											"issues":         []interface{}{},
+											"issues": []interface{}{
+												map[string]interface{}{
+													"rule-id":  "unsupported-diagram-type",
+													"severity": "info",
+													"message":  "diagram type \"sequence\" is parsed but lint rules are not available yet",
+												},
+											},
 											"metrics": map[string]interface{}{
 												"node-count":              0,
 												"edge-count":              0,
@@ -737,6 +743,10 @@ var openapi = map[string]interface{}{
 													"by-severity": map[string]interface{}{},
 													"by-rule":     map[string]interface{}{},
 												},
+											},
+											"error": map[string]interface{}{
+												"code":    "unsupported_diagram_type",
+												"message": "diagram type is parsed but linting is not supported",
 											},
 										},
 									},
@@ -942,6 +952,36 @@ var openapi = map[string]interface{}{
 												"code":    "invalid_option",
 												"message": "invalid option value for limit",
 												"details": map[string]interface{}{"path": "config.rules.max-fanout.limit"},
+											},
+										},
+									},
+									"invalidSuppressionSelector": map[string]interface{}{
+										"summary": "Invalid suppression selector format",
+										"value": map[string]interface{}{
+											"valid":          false,
+											"lint-supported": false,
+											"syntax-error":   nil,
+											"issues":         []interface{}{},
+											"metrics": map[string]interface{}{
+												"node-count":              0,
+												"edge-count":              0,
+												"disconnected-node-count": 0,
+												"duplicate-node-count":    0,
+												"max-fanin":               0,
+												"max-fanout":              0,
+												"diagram-type":            "unknown",
+												"issue-counts": map[string]interface{}{
+													"by-severity": map[string]interface{}{},
+													"by-rule":     map[string]interface{}{},
+												},
+											},
+											"error": map[string]interface{}{
+												"code":    "invalid_suppression_selector",
+												"message": "invalid suppression selector format: node:",
+												"details": map[string]interface{}{
+													"path": "config.rules.max-fanout.suppression-selectors[0]",
+													"hint": "valid formats: rule:*, node:ID, subgraph:NAME, file:*.js, or negation with ! prefix",
+												},
 											},
 										},
 									},

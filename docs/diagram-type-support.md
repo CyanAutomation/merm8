@@ -15,6 +15,63 @@ merm8 classifies diagram types in two categories:
 
 ---
 
+## Understanding API Response Fields for Diagram Type Support
+
+The API response includes two fields that control how you should interpret analysis results:
+
+### `valid` Field
+
+**Meaning**: `true` = syntactically correct Mermaid syntax; `false` = parsing failed
+
+- `valid=true`: Diagram parsed successfully (regardless of lint support)
+- `valid=false`: Mermaid syntax is invalid; see `syntax-error` for details
+
+**Important**: `valid` does **NOT** indicate whether linting is supported. Use `lint-supported` to determine that.
+
+**Example**:
+
+```json
+{
+  "valid": true,                    // Syntax is correct
+  "diagram-type": "sequence",       // Type was successfully identified
+  "lint-supported": false,          // Linting rules are not available
+  "syntax-error": null,             // No syntax errors
+  "error": {
+    "code": "unsupported_diagram_type",
+    "message": "diagram type is parsed but linting is not supported"
+  }
+}
+```
+
+### `lint-supported` Field
+
+**Meaning**: `true` = linting rules are available and were evaluated; `false` = linting rules not available for this type
+
+- `lint-supported=true`: Rules ran and `issues` array contains lint results
+- `lint-supported=false`: Linting was skipped; `issues` will be empty or contain only info-level messages
+
+**Example**:
+
+| Scenario | valid | lint-supported | syntax-error | issues | Interpretation |
+|----------|-------|----------------|--------------|--------|---|
+| Valid flowchart, no issues | true | true | null | [] | Success; diagram is valid and passes all rules |
+| Valid flowchart, has issues | true | true | null | [{rule-id: ..., }] | Success; diagram is valid but has lint violations |
+| Syntax error | false | true | {msg...} | [] | Failure; diagram syntax is invalid |
+| Valid sequence diagram | true | false | null | [{rule-id: "unsupported-diagram-type", ...}] | **Success**; diagram parses but linting is unavailable |
+| Unsupported diagram (gantt/pie) | false | false | {msg...} | [] | Failure; diagram type not recognized by parser |
+
+---
+
+## Key Takeaway
+
+**If you see `valid=true` with `lint-supported=false`, this is NOT an error**. It means:
+
+- ✅ Diagram syntax is **correct**
+- ℹ️ Linting is **not available** for this diagram type (yet)
+- ℹ️ Consult the roadmap below to see when rules will be available
+
+---
+
 ## Support Matrix
 
 | Diagram Type                 | Parser-Recognized | Lint-Supported | Rules Available                                                                | Status           | Notes                                |

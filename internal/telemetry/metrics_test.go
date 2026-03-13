@@ -16,7 +16,7 @@ func TestMetrics_UnknownAnalyzeOutcomeDefaultsToOther(t *testing.T) {
 	m.ObserveAnalyzeOutcome(OutcomeInternalError) // Known outcome
 	m.ObserveAnalyzeOutcome("invalid_json")       // Unknown outcome
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/metrics", nil)
 	w := httptest.NewRecorder()
 	m.Handler().ServeHTTP(w, req)
 
@@ -39,7 +39,7 @@ func TestMetrics_UnknownParserDurationOutcomeDefaultsToOther(t *testing.T) {
 	m.ObserveParserDuration(OutcomeParserTimeout, 5*time.Millisecond) // Known outcome
 	m.ObserveParserDuration("missing_code", 5*time.Millisecond)       // Unknown outcome
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/metrics", nil)
 	w := httptest.NewRecorder()
 	m.Handler().ServeHTTP(w, req)
 
@@ -62,7 +62,7 @@ func TestObserveParserCacheEvent_NormalizesLabels(t *testing.T) {
 	m.ObserveParserCacheEvent("hit", "success")
 	m.ObserveParserCacheEvent("invalid", "invalid")
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/metrics", nil)
 	w := httptest.NewRecorder()
 	m.Handler().ServeHTTP(w, req)
 

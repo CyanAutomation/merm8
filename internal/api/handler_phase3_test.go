@@ -107,7 +107,7 @@ func TestInfo_ParserTimeout(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	resp, err := http.Get(server.URL + "/info")
+	resp, err := http.Get(server.URL + "/v1/info")
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestAnalyzeSARIF_InvalidJSON(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	resp, err := http.Post(server.URL+"/analyze/sarif", "application/json", bytes.NewBufferString("{invalid json"))
+	resp, err := http.Post(server.URL+"/v1/analyze/sarif", "application/json", bytes.NewBufferString("{invalid json"))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -186,8 +186,8 @@ func TestAnalyzeSARIF_InvalidJSON(t *testing.T) {
 	if props["error-code"] != "invalid_json" {
 		t.Errorf("invocation properties error-code = %q, want %q", props["error-code"], "invalid_json")
 	}
-	if props["request-uri"] != "/analyze/sarif" {
-		t.Errorf("invocation properties request-uri = %q, want %q", props["request-uri"], "/analyze/sarif")
+	if props["request-uri"] != "/v1/analyze/sarif" {
+		t.Errorf("invocation properties request-uri = %q, want %q", props["request-uri"], "/v1/analyze/sarif")
 	}
 }
 
@@ -201,7 +201,7 @@ func TestAnalyzeSARIF_MissingCode(t *testing.T) {
 	defer server.Close()
 
 	body := []byte(`{"options": {}}`)
-	resp, err := http.Post(server.URL+"/analyze/sarif", "application/json", bytes.NewReader(body))
+	resp, err := http.Post(server.URL+"/v1/analyze/sarif", "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestAnalyzeSARIF_InvalidParserOptionReturnsSARIF(t *testing.T) {
 	defer server.Close()
 
 	body := []byte(`{"code":"graph LR; A --> B","parser":{"timeout_seconds":0}}`)
-	resp, err := http.Post(server.URL+"/analyze/sarif", "application/json", bytes.NewReader(body))
+	resp, err := http.Post(server.URL+"/v1/analyze/sarif", "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestAnalyzeSARIF_ValidDiagram(t *testing.T) {
 	defer server.Close()
 
 	body := []byte(`{"code":"graph LR; A --> B"}`)
-	resp, err := http.Post(server.URL+"/analyze/sarif", "application/json", bytes.NewReader(body))
+	resp, err := http.Post(server.URL+"/v1/analyze/sarif", "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -349,8 +349,8 @@ func TestAnalyzeSARIF_ValidDiagram(t *testing.T) {
 	if invocation.Properties == nil {
 		t.Fatalf("expected invocation properties to be non-nil")
 	}
-	if invocation.Properties["request-uri"] != "/analyze/sarif" {
-		t.Errorf("invocation properties request-uri = %q, want %q", invocation.Properties["request-uri"], "/analyze/sarif")
+	if invocation.Properties["request-uri"] != "/v1/analyze/sarif" {
+		t.Errorf("invocation properties request-uri = %q, want %q", invocation.Properties["request-uri"], "/v1/analyze/sarif")
 	}
 
 	// With no findings there are no result-level fields to populate. Verify clean
@@ -395,7 +395,7 @@ func TestAnalyzeSARIF_RequestTooLarge(t *testing.T) {
 		strings.NewReader(`"}`),
 	)
 
-	req, err := http.NewRequest(http.MethodPost, server.URL+"/analyze/sarif", bodyReader)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/analyze/sarif", bodyReader)
 	if err != nil {
 		t.Fatalf("build request failed: %v", err)
 	}
@@ -446,8 +446,8 @@ func TestAnalyzeSARIF_RequestTooLarge(t *testing.T) {
 	if props["error-code"] != "request_too_large" {
 		t.Errorf("invocation properties error-code = %q, want %q", props["error-code"], "request_too_large")
 	}
-	if props["request-uri"] != "/analyze/sarif" {
-		t.Errorf("invocation properties request-uri = %q, want %q", props["request-uri"], "/analyze/sarif")
+	if props["request-uri"] != "/v1/analyze/sarif" {
+		t.Errorf("invocation properties request-uri = %q, want %q", props["request-uri"], "/v1/analyze/sarif")
 	}
 }
 
@@ -464,7 +464,7 @@ func TestAnalyzeSARIF_ParserTimeout(t *testing.T) {
 	defer server.Close()
 
 	body, _ := json.Marshal(map[string]string{"code": "graph LR; A --> B"})
-	resp, err := http.Post(server.URL+"/analyze/sarif", "application/json", bytes.NewReader(body))
+	resp, err := http.Post(server.URL+"/v1/analyze/sarif", "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -507,7 +507,7 @@ func TestAnalyzeSARIF_SARIFFormatConsistency(t *testing.T) {
 			server := httptest.NewServer(mux)
 			defer server.Close()
 
-			resp, err := http.Post(server.URL+"/analyze/sarif", "application/json", bytes.NewBufferString(tc.payload))
+			resp, err := http.Post(server.URL+"/v1/analyze/sarif", "application/json", bytes.NewBufferString(tc.payload))
 			if err != nil {
 				t.Fatalf("request failed: %v", err)
 			}
