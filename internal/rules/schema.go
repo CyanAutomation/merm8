@@ -52,10 +52,6 @@ func ConfigV1JSONSchemaForRuleIDs(ruleIDs map[string]struct{}) map[string]any {
 	}
 }
 
-func flatConfigSchema() map[string]any {
-	return flatConfigSchemaForRuleIDs(nil)
-}
-
 func flatConfigSchemaForRuleIDs(ruleIDs map[string]struct{}) map[string]any {
 	registry := ConfigRegistryForRuleIDs(ruleIDs)
 	ruleIDList := make([]string, 0, len(registry))

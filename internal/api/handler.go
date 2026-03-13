@@ -2131,22 +2131,6 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 	writeSARIF(w, http.StatusOK, report)
 }
 
-func setLegacyAnalyzeDeprecationHeaders(w http.ResponseWriter, r *http.Request) {
-	if r == nil || r.URL == nil {
-		return
-	}
-	if !isLegacyAnalyzeAliasPath(r.URL.Path) {
-		return
-	}
-	w.Header().Set("Deprecation", "true")
-	w.Header().Set("Sunset", legacyAnalyzeSunsetHeader)
-	w.Header().Set("Link", legacyAnalyzeSuccessorDocLink)
-}
-
-func isLegacyAnalyzeAliasPath(path string) bool {
-	return path == "/analyze" || strings.HasPrefix(path, "/analyze/")
-}
-
 func emitLegacyConfigWarnings(ctx context.Context, logger Logger, w http.ResponseWriter, warnings []string) {
 	if len(warnings) == 0 {
 		return
@@ -3120,12 +3104,9 @@ func syntaxErrorLineContext(code string, syntaxErr *parser.SyntaxError) syntaxEr
 		col = 1
 	}
 	if len(runes) == 0 {
-		if len(runes) == 0 {
-			col = 0
-			return ctx
-		}
-		ctx.column = col
+		return ctx
 	}
+	ctx.column = col
 	if col > len(runes) {
 		col = len(runes)
 	}
@@ -3407,11 +3388,6 @@ func setServerBusyRetryAfterHeader(w http.ResponseWriter) {
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeErrorWithDetails(w, status, code, message, nil)
-}
-
-// writeErrorWithContext includes request ID and timestamp in error responses
-func writeErrorWithContext(w http.ResponseWriter, r *http.Request, status int, code, message string) {
-	writeErrorWithDetailsAndContext(w, r, status, code, message, nil)
 }
 
 func writeErrorWithDetails(w http.ResponseWriter, status int, code, message string, details map[string]any) {

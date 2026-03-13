@@ -1162,7 +1162,6 @@ const htmlReportTemplate = `<!DOCTYPE html>
             padding: 16px;
             border-bottom: 1px solid #e2e8f0;
             background: #ffffff;
-            border-left: 3px solid #dc2626;
         }
         .failed-case:last-child { border-bottom: none; }
         .failed-case h4 { color: #dc2626; margin-bottom: 8px; font-weight: 600; }
