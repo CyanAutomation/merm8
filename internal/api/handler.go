@@ -149,8 +149,6 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 
 	rulePathPrefix := "config"
 	deprecations := make([]string, 0, 2)
-	var nestedRulesCfg rules.Config
-	useNestedRulesCfg := false
 
 	schemaVersionValue, hasSchemaVersion := asMap["schema-version"]
 	if legacySchemaVersionValue, hasLegacySchemaVersion := asMap["schema_version"]; hasLegacySchemaVersion {
@@ -207,14 +205,6 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 			return rules.Config{}, nil, &validationError{Code: "deprecated_config_format", Path: "config", Message: "legacy unversioned config shape is deprecated; use config.schema-version and config.rules"}
 		}
 		deprecations = append(deprecations, legacyUnversionedRulesWarning)
-
-		var nested struct {
-			Rules rules.Config `json:"rules"`
-		}
-		if err := json.Unmarshal(raw, &nested); err == nil {
-			nestedRulesCfg = nested.Rules
-			useNestedRulesCfg = true
-		}
 
 		rulesMap, ok := rulesValue.(map[string]any)
 		if !ok {
@@ -297,17 +287,14 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 		normalizedRulesMap[canonicalRuleID] = json.RawMessage(ruleConfigRaw)
 	}
 
+	normalizedCfgRaw, err := json.Marshal(normalizedRulesMap)
+	if err != nil {
+		return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
+	}
+
 	var cfg rules.Config
-	if useNestedRulesCfg {
-		cfg = nestedRulesCfg
-	} else {
-		normalizedCfgRaw, err := json.Marshal(normalizedRulesMap)
-		if err != nil {
-			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
-		}
-		if err := json.Unmarshal(normalizedCfgRaw, &cfg); err != nil {
-			return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
-		}
+	if err := json.Unmarshal(normalizedCfgRaw, &cfg); err != nil {
+		return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "invalid config object"}
 	}
 
 	// Validate suppression selectors reference known rules (warnings, not errors)
