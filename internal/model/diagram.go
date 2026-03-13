@@ -85,6 +85,7 @@ type Diagram struct {
 	SourceNodeIDs       []string // All node IDs from source code (before parser normalization)
 	DisconnectedNodeIDs []string // Node IDs not referenced by any edge
 	DuplicateNodeIDs    []string // Node IDs defined more than once in source
+	StartStates         []string // Initial states for state diagrams (from [*] transitions)
 }
 
 // SuppressionDirective represents a source-level lint suppression comment.

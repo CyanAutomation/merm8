@@ -79,21 +79,94 @@ benchmarks/
 │   ├── flowchart/
 │   │   ├── valid/                    # Valid diagrams (should pass linting)
 │   │   │   ├── simple-linear.mmd
-│   │   │   ├── fully-connected.mmd
-│   │   │   └── complex-flow.mmd
+│   │   │   ├── branched-flow.mmd
+│   │   │   ├── complex-flow.mmd
+│   │   │   ├── long-linear-chain.mmd
+│   │   │   └── parallel-paths.mmd
 │   │   ├── violations/               # Diagrams with known violations
 │   │   │   ├── simple-cycle.mmd
 │   │   │   ├── self-loop.mmd
+│   │   │   ├── complex-cycle.mmd
 │   │   │   ├── duplicate-nodes.mmd
+│   │   │   ├── triple-duplicate.mmd
 │   │   │   ├── disconnected-node.mmd
+│   │   │   ├── fully-connected.mmd
+│   │   │   ├── two-isolated.mmd
 │   │   │   ├── high-fanout.mmd
-│   │   │   └── deep-tree.mmd
+│   │   │   ├── max-fanout-over-limit.mmd
+│   │   │   ├── deep-tree.mmd
+│   │   │   └── max-depth-over-limit.mmd
 │   │   └── edge-cases/               # Boundary conditions
-│   │       └── single-node.mmd
-│   ├── sequence/                     # Placeholder for sequence rules
-│   ├── class/                        # Placeholder for class diagram rules
-│   ├── er/                           # Placeholder for ER diagram rules
-│   └── state/                        # Placeholder for state diagram rules
+│   │       ├── single-node.mmd
+│   │       ├── fanout-at-limit.mmd
+│   │       ├── max-fanout-under-limit.mmd
+│   │       ├── max-depth-at-limit.mmd
+│   │       └── max-depth-under-limit.mmd
+│   ├── sequence/
+│   │   ├── valid/                    # Valid sequence diagrams
+│   │   │   ├── simple-interaction.mmd
+│   │   │   ├── three-actor-interaction.mmd
+│   │   │   ├── five-actor-flow.mmd
+│   │   │   ├── loop-and-alt.mmd
+│   │   │   ├── microservice-call.mmd
+│   │   │   ├── nested-async-flow.mmd
+│   │   │   ├── parallel-processing.mmd
+│   │   │   ├── pubsub-pattern.mmd
+│   │   │   └── request-response-flow.mmd
+│   │   ├── violations/
+│   │   │   ├── undefined-actor-reference.mmd
+│   │   │   ├── duplicate-actor.mmd
+│   │   │   ├── duplicate-actor-alias.mmd
+│   │   │   ├── deep-nesting.mmd
+│   │   │   └── high-message-count.mmd
+│   │   └── edge-cases/
+│   │       ├── self-message.mmd
+│   │       ├── single-actor-no-messages.mmd
+│   │       └── with-notes.mmd
+│   ├── class/
+│   │   ├── valid/                    # Valid class diagrams
+│   │   │   ├── simple-inheritance.mmd
+│   │   │   ├── multi-inheritance.mmd
+│   │   │   ├── complex-hierarchy.mmd
+│   │   │   ├── composition.mmd
+│   │   │   ├── interface-implementation.mmd
+│   │   │   ├── organization-structure.mmd
+│   │   │   └── single-class.mmd
+│   │   ├── violations/
+│   │   │   ├── circular-inheritance.mmd
+│   │   │   ├── duplicate-class.mmd
+│   │   │   └── deep-inheritance.mmd
+│   │   └── edge-cases/
+│   │       ├── empty-class.mmd
+│   │       └── many-members.mmd
+│   ├── er/
+│   │   ├── valid/                    # Valid ER diagrams
+│   │   │   ├── blog-schema.mmd
+│   │   │   ├── company-structure.mmd
+│   │   │   ├── ecommerce-schema.mmd
+│   │   │   ├── library-system.mmd
+│   │   │   └── university-system.mmd
+│   │   ├── violations/
+│   │   │   ├── circular-chain.mmd
+│   │   │   ├── circular-self-reference.mmd
+│   │   │   └── self-referential.mmd
+│   │   └── edge-cases/
+│   │       ├── many-relationships.mmd
+│   │       └── single-entity.mmd
+│   └── state/
+│       ├── valid/                    # Valid state diagrams
+│       │   ├── simple-state-machine.mmd
+│       │   ├── connection-lifecycle.mmd
+│       │   ├── device-states.mmd
+│       │   ├── order-workflow.mmd
+│       │   └── task-lifecycle.mmd
+│       ├── violations/
+│       │   ├── circular-transitions.mmd
+│       │   ├── unreachable-state.mmd
+│       │   ├── high-complexity.mmd
+│       │   └── nested-states.mmd
+│       └── edge-cases/
+│           └── single-state.mmd
 ├── baselines/
 │   └── v0.1.0.json                   # v0.1.0 baseline results
 └── reports/

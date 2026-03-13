@@ -163,6 +163,7 @@ type parsedAST struct {
 	Edges        []parsedEdge        `json:"edges"`
 	Subgraphs    []parsedSubgraph    `json:"subgraphs"`
 	Suppressions []parsedSuppression `json:"suppressions"`
+	StartStates  []string            `json:"startStates,omitempty"`
 }
 
 type parsedNode struct {
@@ -927,5 +928,6 @@ func toDiagram(result ParseResult) *model.Diagram {
 			SubgraphID: suppression.SubgraphID,
 		})
 	}
+	d.StartStates = ast.StartStates
 	return d
 }
