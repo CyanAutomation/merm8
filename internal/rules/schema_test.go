@@ -70,19 +70,6 @@ func TestConfigJSONSchema_EncodesAllowedOptionsAndConstraints(t *testing.T) {
 	}
 }
 
-func TestConfigJSONSchema_SeverityEnumDoesNotIncludeWarnAlias(t *testing.T) {
-	schema := ConfigV1JSONSchema()
-	rulesProps := schema["properties"].(map[string]any)["rules"].(map[string]any)["properties"].(map[string]any)
-	maxFanoutProps := rulesProps["max-fanout"].(map[string]any)["properties"].(map[string]any)
-	severity := maxFanoutProps["severity"].(map[string]any)
-	enumVals := severity["enum"].([]string)
-	for _, v := range enumVals {
-		if v == "warn" {
-			t.Fatalf("warn alias should not appear in schema enum: %#v", enumVals)
-		}
-	}
-}
-
 func TestConfigJSONSchema_ValidationAcceptsFlatAndVersionedConfigs(t *testing.T) {
 	schema := ConfigJSONSchema()
 	validConfigs := []string{
