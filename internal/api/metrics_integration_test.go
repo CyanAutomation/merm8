@@ -34,11 +34,11 @@ func TestMetricsEndpoint_ExposesCoreMetricFamilies(t *testing.T) {
 	h.RegisterRoutes(mux)
 
 	routes := map[string]string{
-		"GET /health":   "/health",
-		"GET /healthz":  "/healthz",
-		"GET /ready":    "/ready",
-		"GET /metrics":  "/metrics",
-		"POST /analyze": "/analyze",
+		"GET /v1/health":   "/v1/health",
+		"GET /v1/healthz":  "/v1/healthz",
+		"GET /v1/ready":    "/v1/ready",
+		"GET /v1/metrics":  "/v1/metrics",
+		"POST /v1/analyze": "/v1/analyze",
 	}
 	root := api.MetricsMiddleware(mux, routes, tm)
 
@@ -47,16 +47,16 @@ func TestMetricsEndpoint_ExposesCoreMetricFamilies(t *testing.T) {
 		path   string
 		body   string
 	}{
-		{method: http.MethodGet, path: "/healthz"},
-		{method: http.MethodGet, path: "/ready"},
-		{method: http.MethodPost, path: "/analyze", body: `{"code":"graph TD\nA-->B"}`},
+		{method: http.MethodGet, path: "/v1/healthz"},
+		{method: http.MethodGet, path: "/v1/ready"},
+		{method: http.MethodPost, path: "/v1/analyze", body: `{"code":"graph TD\nA-->B"}`},
 	} {
 		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
 		w := httptest.NewRecorder()
 		root.ServeHTTP(w, req)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/metrics", nil)
 	w := httptest.NewRecorder()
 	root.ServeHTTP(w, req)
 
@@ -89,16 +89,16 @@ func TestAnalyzeErrorMetrics_OutcomesRecorded(t *testing.T) {
 	h.RegisterRoutes(mux)
 
 	routes := map[string]string{
-		"GET /metrics":  "/metrics",
-		"POST /analyze": "/analyze",
+		"GET /v1/metrics":  "/v1/metrics",
+		"POST /v1/analyze": "/v1/analyze",
 	}
 	root := api.MetricsMiddleware(mux, routes, tm)
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewBufferString(`{"code":"graph TD\nA-->B"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewBufferString(`{"code":"graph TD\nA-->B"}`))
 	w := httptest.NewRecorder()
 	root.ServeHTTP(w, req)
 
-	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsReq := httptest.NewRequest(http.MethodGet, "/v1/metrics", nil)
 	metricsW := httptest.NewRecorder()
 	root.ServeHTTP(metricsW, metricsReq)
 
@@ -133,19 +133,19 @@ func TestAnalyzeErrorMetrics_NonCanonicalOutcomesCoerced(t *testing.T) {
 	h.RegisterRoutes(mux)
 
 	routes := map[string]string{
-		"GET /metrics":  "/metrics",
-		"POST /analyze": "/analyze",
+		"GET /v1/metrics":  "/v1/metrics",
+		"POST /v1/analyze": "/v1/analyze",
 	}
 	root := api.MetricsMiddleware(mux, routes, tm)
 
 	go func() {
-		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewBufferString(`{"code":"graph TD\nA-->B"}`))
+		req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewBufferString(`{"code":"graph TD\nA-->B"}`))
 		w := httptest.NewRecorder()
 		root.ServeHTTP(w, req)
 	}()
 	<-bp.started
 
-	busyReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewBufferString(`{"code":"graph TD\nA-->B"}`))
+	busyReq := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewBufferString(`{"code":"graph TD\nA-->B"}`))
 	busyW := httptest.NewRecorder()
 	root.ServeHTTP(busyW, busyReq)
 	if busyW.Code != http.StatusServiceUnavailable {
@@ -155,7 +155,7 @@ func TestAnalyzeErrorMetrics_NonCanonicalOutcomesCoerced(t *testing.T) {
 	close(bp.release)
 
 	for _, body := range []string{"{invalid}", `{"options":{}}`} {
-		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewBufferString(body))
+		req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewBufferString(body))
 		w := httptest.NewRecorder()
 		root.ServeHTTP(w, req)
 		if w.Code != http.StatusBadRequest {
@@ -163,7 +163,7 @@ func TestAnalyzeErrorMetrics_NonCanonicalOutcomesCoerced(t *testing.T) {
 		}
 	}
 
-	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsReq := httptest.NewRequest(http.MethodGet, "/v1/metrics", nil)
 	metricsW := httptest.NewRecorder()
 	root.ServeHTTP(metricsW, metricsReq)
 

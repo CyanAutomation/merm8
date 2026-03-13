@@ -2761,11 +2761,11 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 func readInternalAnalyzeMetrics(t *testing.T, mux *http.ServeMux) map[string]map[string]float64 {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodGet, "/internal/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/internal/metrics", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
-		t.Fatalf("expected /internal/metrics 200, got %d body=%s", w.Code, w.Body.String())
+		t.Fatalf("expected /v1/internal/metrics 200, got %d body=%s", w.Code, w.Body.String())
 	}
 
 	var got map[string]map[string]float64
@@ -4563,7 +4563,7 @@ func TestRuleConfigSchema_ResponseShape(t *testing.T) {
 		return nil, nil, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/rules/schema", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/rules/schema", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -5285,16 +5285,13 @@ func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
 		{method: http.MethodGet, path: "/v1/rules", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/rules", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/rules/schema", want: http.StatusOK},
-		{method: http.MethodGet, path: "/rules/schema", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/spec", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/spec", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/docs", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/docs", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/benchmark.html", want: http.StatusNotFound},
-		{method: http.MethodGet, path: "/benchmark.html", want: http.StatusNotFound},
 		{method: http.MethodGet, path: "/v1/healthz", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/healthz", want: http.StatusOK},
-		{method: http.MethodGet, path: "/", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/ready", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/ready", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/version", want: http.StatusOK},
@@ -5333,7 +5330,7 @@ func TestServeBenchmark_Returns200WhenFileExists(t *testing.T) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/benchmark.html", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/benchmark.html", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -5364,7 +5361,7 @@ func TestServeBenchmark_ReturnsPlaceholderStatusForPlaceholderContent(t *testing
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/benchmark.html", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/benchmark.html", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -5383,7 +5380,7 @@ func TestServeBenchmark_Returns404WhenFileMissing(t *testing.T) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/benchmark.html", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/benchmark.html", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -5410,21 +5407,14 @@ func TestServeBenchmark_DoesNotInterfereWithHealthEndpoints(t *testing.T) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
 
-	healthReq := httptest.NewRequest(http.MethodGet, "/", nil)
-	healthW := httptest.NewRecorder()
-	mux.ServeHTTP(healthW, healthReq)
-	if healthW.Code != http.StatusOK {
-		t.Fatalf("expected GET / to remain healthy with 200, got %d", healthW.Code)
-	}
-
 	healthzReq := httptest.NewRequest(http.MethodGet, "/v1/healthz", nil)
 	healthzW := httptest.NewRecorder()
 	mux.ServeHTTP(healthzW, healthzReq)
 	if healthzW.Code != http.StatusOK {
-		t.Fatalf("expected GET /healthz to remain healthy with 200, got %d", healthzW.Code)
+		t.Fatalf("expected GET /v1/healthz to remain healthy with 200, got %d", healthzW.Code)
 	}
 
-	benchmarkReq := httptest.NewRequest(http.MethodGet, "/benchmark.html", nil)
+	benchmarkReq := httptest.NewRequest(http.MethodGet, "/v1/benchmark.html", nil)
 	benchmarkW := httptest.NewRecorder()
 	mux.ServeHTTP(benchmarkW, benchmarkReq)
 	if benchmarkW.Code != http.StatusNotFound {
@@ -5800,11 +5790,11 @@ func TestRuleAdvertisement_OnlyImplementedRulesExposedAndConfigurable(t *testing
 		}
 	}
 
-	schemaReq := httptest.NewRequest(http.MethodGet, "/rules/schema", nil)
+	schemaReq := httptest.NewRequest(http.MethodGet, "/v1/rules/schema", nil)
 	schemaW := httptest.NewRecorder()
 	mux.ServeHTTP(schemaW, schemaReq)
 	if schemaW.Code != http.StatusOK {
-		t.Fatalf("expected 200 from /rules/schema, got %d", schemaW.Code)
+		t.Fatalf("expected 200 from /v1/rules/schema, got %d", schemaW.Code)
 	}
 	var schemaResp struct {
 		Schema map[string]any `json:"schema"`

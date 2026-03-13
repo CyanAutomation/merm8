@@ -177,7 +177,7 @@ func TestServerStack_CORSHeaders_AllowedOrigin(t *testing.T) {
 	rootHandler = api.RequestIDMiddleware(rootHandler)
 	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
 	allowedOrigins := "https://example.com,https://app.example.com"
-	rootHandler = api.MetricsMiddleware(rootHandler, map[string]string{"GET /health": "/health"}, nil)
+	rootHandler = api.MetricsMiddleware(rootHandler, map[string]string{"GET /v1/health": "/v1/health"}, nil)
 	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, api.NewLogger("test"))
 	rootHandler = api.CORSMiddleware(allowedOrigins, nil, nil)(rootHandler)
 
@@ -185,7 +185,7 @@ func TestServerStack_CORSHeaders_AllowedOrigin(t *testing.T) {
 	defer server.Close()
 
 	// Test request from allowed origin
-	req, err := http.NewRequest(http.MethodGet, server.URL+"/health", nil)
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/v1/health", nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestServerStack_CORSHeaders_DisallowedOrigin(t *testing.T) {
 	rootHandler = api.RequestIDMiddleware(rootHandler)
 	rootHandler = api.VersionNegotiationMiddleware(rootHandler)
 	allowedOrigins := "https://example.com"
-	rootHandler = api.MetricsMiddleware(rootHandler, map[string]string{"GET /health": "/health"}, nil)
+	rootHandler = api.MetricsMiddleware(rootHandler, map[string]string{"GET /v1/health": "/v1/health"}, nil)
 	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, api.NewLogger("test"))
 	rootHandler = api.CORSMiddleware(allowedOrigins, nil, nil)(rootHandler)
 
@@ -226,7 +226,7 @@ func TestServerStack_CORSHeaders_DisallowedOrigin(t *testing.T) {
 	defer server.Close()
 
 	// Test request from non-allowed origin
-	req, err := http.NewRequest(http.MethodGet, server.URL+"/health", nil)
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/v1/health", nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}

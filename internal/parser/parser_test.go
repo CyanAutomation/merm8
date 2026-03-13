@@ -54,7 +54,8 @@ func getParserScript(t *testing.T) string {
 func mustNewParser(t *testing.T, scriptPath string) *parser.Parser {
 	t.Helper()
 
-	p, err := parser.New(scriptPath)
+	t.Setenv("PARSER_MODE", "subprocess")
+	p, err := parser.NewWithConfig(scriptPath, parser.Config{Timeout: 10 * time.Second})
 	if err != nil {
 		t.Fatalf("failed to construct parser: %v", err)
 	}

@@ -153,7 +153,8 @@ func TestParserCache_DeduplicatesInFlightParses(t *testing.T) {
 
 func mustNewCacheTestParser(t *testing.T, scriptPath, root string) *parser.Parser {
 	t.Helper()
-	p, err := parser.NewWithConfigAndRepoRootResolver(scriptPath, parser.Config{}, func() (string, error) {
+	t.Setenv("PARSER_MODE", "subprocess")
+	p, err := parser.NewWithConfigAndRepoRootResolver(scriptPath, parser.Config{Timeout: 10 * time.Second}, func() (string, error) {
 		return root, nil
 	})
 	if err != nil {
