@@ -72,8 +72,12 @@ async function main() {
   const singleResult = await parseSource(input);
   writeResult(singleResult);
   if (
-    String(singleResult?.error?.message || "").startsWith("internal parser error:") ||
-    String(singleResult?.error?.message || "").startsWith("parser_memory_limit:")
+    String(singleResult?.error?.message || "").startsWith(
+      "internal parser error:",
+    ) ||
+    String(singleResult?.error?.message || "").startsWith(
+      "parser_memory_limit:",
+    )
   ) {
     process.exit(1);
   }
