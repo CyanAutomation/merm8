@@ -151,14 +151,14 @@
             </div>
             <div class="summary-card">
                 <h3>Execution Time</h3>
-                <div class="value">1.32s</div>
+                <div class="value">1.40s</div>
                 <p>total runtime</p>
             </div>
         </div>
 
         <h2>Test Metadata</h2>
         <div class="details-row">
-            <strong>Timestamp:</strong> 2026-03-13 23:41:42
+            <strong>Timestamp:</strong> 2026-03-13 23:58:20
         </div>
         <div class="details-row">
             <strong>Version:</strong> test
@@ -170,7 +170,7 @@
             
             <div style="color: #f56565; font-weight: 600;">⚠️ Limited Coverage</div>
             
-            <p><strong>Low-coverage rules (&lt;5 cases):</strong> max-depth (4 cases), no-circular-inheritance (1 cases), no-cycles (3 cases), max-inheritance-depth (1 cases), no-duplicate-node-ids (3 cases), no-duplicate-actors (2 cases), no-undefined-actors (1 cases), no-duplicate-classes (1 cases), max-fanout (4 cases), no-disconnected-nodes (4 cases)</p>
+            <p><strong>Low-coverage rules (&lt;5 cases):</strong> no-duplicate-node-ids (3 cases), no-duplicate-classes (1 cases), max-transitions (1 cases), no-unreachable-state (2 cases), no-duplicate-actors (2 cases), no-self-referential (2 cases), no-disconnected-nodes (4 cases), max-inheritance-depth (1 cases), no-circular-transitions (1 cases), no-cycles (3 cases), max-depth (4 cases), max-fanout (4 cases), no-circular-chain (1 cases), no-undefined-actors (1 cases), no-circular-inheritance (1 cases)</p>
             
             
             <p><strong>Uncovered diagram types:</strong> flowchart, sequence, class, er, state</p>
@@ -242,8 +242,53 @@
                     <td>0ms</td>
                 </tr>
                 
+                <tr data-rule="max-transitions" data-passed="1" data-total="1" data-detection="1" data-fp="0" data-parse="0" data-lint="0">
+                    <td><strong>max-transitions</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>
+                        
+                        <span class="rate-high">100.00%</span>
+                        
+                        <span style="font-size: 0.85em; color: #718096;">(1/1)</span>
+                    </td>
+                    <td>0 (0.00%)</td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
+                <tr data-rule="no-circular-chain" data-passed="1" data-total="1" data-detection="1" data-fp="0" data-parse="0" data-lint="0">
+                    <td><strong>no-circular-chain</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>
+                        
+                        <span class="rate-high">100.00%</span>
+                        
+                        <span style="font-size: 0.85em; color: #718096;">(1/1)</span>
+                    </td>
+                    <td>0 (0.00%)</td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
                 <tr data-rule="no-circular-inheritance" data-passed="1" data-total="1" data-detection="1" data-fp="0" data-parse="0" data-lint="0">
                     <td><strong>no-circular-inheritance</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
+                    <td>1</td>
+                    <td>1</td>
+                    <td>
+                        
+                        <span class="rate-high">100.00%</span>
+                        
+                        <span style="font-size: 0.85em; color: #718096;">(1/1)</span>
+                    </td>
+                    <td>0 (0.00%)</td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
+                <tr data-rule="no-circular-transitions" data-passed="1" data-total="1" data-detection="1" data-fp="0" data-parse="0" data-lint="0">
+                    <td><strong>no-circular-transitions</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
                     <td>1</td>
                     <td>1</td>
                     <td>
@@ -332,6 +377,21 @@
                     <td>0ms</td>
                 </tr>
                 
+                <tr data-rule="no-self-referential" data-passed="2" data-total="2" data-detection="1" data-fp="0" data-parse="0" data-lint="0">
+                    <td><strong>no-self-referential</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
+                    <td>2</td>
+                    <td>2</td>
+                    <td>
+                        
+                        <span class="rate-high">100.00%</span>
+                        
+                        <span style="font-size: 0.85em; color: #718096;">(2/2)</span>
+                    </td>
+                    <td>0 (0.00%)</td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
                 <tr data-rule="no-undefined-actors" data-passed="1" data-total="1" data-detection="1" data-fp="0" data-parse="0" data-lint="0">
                     <td><strong>no-undefined-actors</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
                     <td>1</td>
@@ -341,6 +401,21 @@
                         <span class="rate-high">100.00%</span>
                         
                         <span style="font-size: 0.85em; color: #718096;">(1/1)</span>
+                    </td>
+                    <td>0 (0.00%)</td>
+                    <td>0ms</td>
+                    <td>0ms</td>
+                </tr>
+                
+                <tr data-rule="no-unreachable-state" data-passed="2" data-total="2" data-detection="1" data-fp="0" data-parse="0" data-lint="0">
+                    <td><strong>no-unreachable-state</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
+                    <td>2</td>
+                    <td>2</td>
+                    <td>
+                        
+                        <span class="rate-high">100.00%</span>
+                        
+                        <span style="font-size: 0.85em; color: #718096;">(2/2)</span>
                     </td>
                     <td>0 (0.00%)</td>
                     <td>0ms</td>

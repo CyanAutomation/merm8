@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -241,13 +242,21 @@ func (r *Runner) discoverCasesInDir(dir string, diagramType, category string, co
 				if ruleID != "*" && ruleID != "" {
 					// Determine severity based on rule type
 					severity := "error"
-					if ruleID == "max-depth" || ruleID == "max-fanout" || ruleID == "max-inheritance-depth" {
+					if ruleID == "max-depth" || ruleID == "max-fanout" || ruleID == "max-inheritance-depth" || ruleID == "no-self-referential" || ruleID == "max-transitions" {
 						severity = "warning"
 					}
-					expectedIssues = append(expectedIssues, ExpectedIssue{
-						RuleID:   ruleID,
-						Severity: severity,
-					})
+					// Check for @count annotation to specify expected issue count
+					count := 1
+					if countStr := extractCountFromContent(string(content)); countStr > 0 {
+						count = countStr
+					}
+					// Add one ExpectedIssue per expected count
+					for i := 0; i < count; i++ {
+						expectedIssues = append(expectedIssues, ExpectedIssue{
+							RuleID:   ruleID,
+							Severity: severity,
+						})
+					}
 				}
 			}
 			// "valid", "edge-cases", and non-violations expect no issues
@@ -301,6 +310,27 @@ func extractRuleIDFromContent(content string) string {
 		}
 	}
 	return "*"
+}
+
+// extractCountFromContent parses the mermaid diagram content for expected issue count.
+// Format: %% @count: N
+func extractCountFromContent(content string) int {
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "%%") {
+			if strings.Contains(line, "@count:") {
+				parts := strings.SplitN(line, "@count:", 2)
+				if len(parts) > 1 {
+					countStr := strings.TrimSpace(parts[1])
+					if count, err := strconv.Atoi(countStr); err == nil && count > 0 {
+						return count
+					}
+				}
+			}
+		}
+	}
+	return 0
 }
 
 // ExtractRuleIDFromContent parses mermaid metadata comments and returns the

@@ -1,13 +1,16 @@
 stateDiagram-v2
     [*] --> State1
-    State1 --> State2: event
-    State2 --> State1
-    State1 --> State3: event
-    State3 --> State1
-    State1 --> State4: event
-    State4 --> State1
-    State1 --> State5: event
-    State5 --> State1
+    State1 --> State2: event1
+    State1 --> State3: event2
+    State1 --> State4: event3
+    State1 --> State5: event4
+    State1 --> State6: event5
+    State1 --> State7: event6
+    State1 --> State8: event7
+    State1 --> State9: event8
+    State1 --> State10: event9
+    State1 --> State11: event10
+    State1 --> State12: event11
     
-    %% @rule: *
-    %% Complex state machine with many transitions
+    %% @rule: max-transitions
+    %% State1 has 11 outgoing transitions (exceeds default limit of 10)

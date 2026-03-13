@@ -407,6 +407,14 @@ async function extractAST(mermaidAPI, source, diagramType) {
     return extractClassAST(ast, db, sourceLines);
   }
 
+  if (diagramType === "er") {
+    return extractERAST(ast, db, sourceLines);
+  }
+
+  if (diagramType === "state") {
+    return extractStateAST(ast, db, sourceLines);
+  }
+
   if (diagramType !== "flowchart") {
     return ast;
   }
@@ -695,6 +703,96 @@ function extractClassAST(ast, db, sourceLines) {
       line: def.line,
       column: def.column,
     });
+  }
+
+  return ast;
+}
+
+function extractERAST(ast, db, sourceLines) {
+  const relationships = Array.isArray(db.relationships) ? db.relationships : [];
+
+  // Extract entity names from relationships
+  const entityNames = new Set();
+  for (const rel of relationships) {
+    // Entity names are prefixed with "entity-" and suffixed with "-N"
+    const entityA = String(rel.entityA || "").replace(/^entity-/, "").replace(/-\d+$/, "");
+    const entityB = String(rel.entityB || "").replace(/^entity-/, "").replace(/-\d+$/, "");
+    
+    if (entityA) entityNames.add(entityA);
+    if (entityB) entityNames.add(entityB);
+
+    // Map relationship types
+    let relType = "identifying";
+    if (rel.relSpec?.relType === "NON_IDENTIFYING") {
+      relType = "non-identifying";
+    }
+
+    ast.edges.push({
+      from: entityA,
+      to: entityB,
+      type: relType,
+      label: String(rel.roleA || rel.roleB || ""),
+    });
+  }
+
+  // Add entities as nodes
+  for (const entityName of entityNames) {
+    const loc = findNodeLocation(sourceLines, entityName);
+    ast.nodes.push({
+      id: entityName,
+      label: "",
+      ...(loc || {}),
+    });
+  }
+
+  return ast;
+}
+
+function extractStateAST(ast, db, sourceLines) {
+  const nodes = Array.isArray(db.nodes) ? db.nodes : [];
+  const edges = Array.isArray(db.edges) ? db.edges : [];
+
+  // Track start state transitions for reachability
+  const startTransitions = [];
+
+  // Extract states as nodes (skip start/end markers)
+  for (const node of nodes) {
+    const id = String(node.id || "").trim();
+    if (id === "root_start" || id === "root_end") continue;
+    
+    const loc = findNodeLocation(sourceLines, id);
+    ast.nodes.push({
+      id,
+      label: String(node.label || ""),
+      ...(loc || {}),
+    });
+  }
+
+  // Extract transitions as edges
+  for (const edge of edges) {
+    const from = String(edge.start || "").trim();
+    const to = String(edge.end || "").trim();
+    
+    // Track start state transitions
+    if (from === "root_start" && to !== "root_end") {
+      startTransitions.push(to);
+      continue;
+    }
+    
+    // Skip edges from/to end markers
+    if (from === "root_end" || to === "root_start" || to === "root_end") continue;
+
+    ast.edges.push({
+      from,
+      to,
+      type: "transition",
+      label: String(edge.label || ""),
+    });
+  }
+
+  // Store start state info in a special field for reachability analysis
+  if (startTransitions.length > 0) {
+    ast.startStates = startTransitions;
   }
 
   return ast;

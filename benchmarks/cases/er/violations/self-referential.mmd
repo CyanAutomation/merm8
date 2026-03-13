@@ -2,5 +2,5 @@ erDiagram
     CUSTOMER ||--o{ ORDER : places
     ORDER ||--o{ ORDER : "contains"
     
-    %% @rule: *
+    %% @rule: no-self-referential
     %% Self-referential relationship (ORDER contains ORDER)

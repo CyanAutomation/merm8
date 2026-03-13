@@ -12,4 +12,6 @@ stateDiagram-v2
     Nested --> End
     End --> [*]
     
-    %% @rule: *
+    %% @rule: no-unreachable-state
+    %% @count: 5
+    %% Nested states with internal transitions - 5 unreachable states (A, B, C, Nested_start, Nested_end)

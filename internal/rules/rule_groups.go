@@ -29,8 +29,19 @@ func ClassRules() []Rule {
 	}
 }
 
-// ERRules is a placeholder for incremental ER diagram support.
-func ERRules() []Rule { return []Rule{} }
+// ERRules returns currently supported ER diagram rules.
+func ERRules() []Rule {
+	return []Rule{
+		ERNoCircularChain{},
+		ERNoSelfReferential{},
+	}
+}
 
-// StateRules is a placeholder for incremental state diagram support.
-func StateRules() []Rule { return []Rule{} }
+// StateRules returns currently supported state diagram rules.
+func StateRules() []Rule {
+	return []Rule{
+		StateNoCircularTransitions{},
+		StateNoUnreachable{},
+		StateMaxTransitions{},
+	}
+}
