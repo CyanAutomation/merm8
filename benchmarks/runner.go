@@ -469,7 +469,7 @@ func (r *Runner) executeCase(bc *BenchmarkCase, eng *engine.Engine, p *parser.Pa
 	// Lint
 	lintStart := time.Now()
 	var cfg rules.Config
-	if bc.Config != nil && len(bc.Config) > 0 {
+	if len(bc.Config) > 0 {
 		if err := json.Unmarshal(bc.Config, &cfg); err != nil {
 			result.Issues = append(result.Issues, fmt.Sprintf("invalid config: %v", err))
 		}
@@ -827,7 +827,7 @@ func (r *Runner) generateMarkdownReport(results *BenchmarkResults) (string, erro
 
 	// Overall result
 	passPercentage := float64(results.TotalPassed) / float64(results.TotalCases) * 100
-	buf.WriteString(fmt.Sprintf("## Overall Result\n\n"))
+	buf.WriteString("## Overall Result\n\n")
 	buf.WriteString(fmt.Sprintf("**%d/%d** cases passed (**%.1f%%**)\n\n", results.TotalPassed, results.TotalCases, passPercentage))
 
 	// Rule metrics table

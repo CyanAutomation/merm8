@@ -16,7 +16,7 @@ lint: vet
 
 format:
 	@echo "Formatting Go code..."
-	gofmt -w .
+	gofmt -w ./cmd ./internal ./benchmarks scripts/*.go
 	@echo "✓ Go code formatted"
 	@if command -v prettier >/dev/null 2>&1; then \
 		echo "Formatting with prettier..."; \

@@ -498,7 +498,6 @@ func TestEngine_RunWithInstrumentation_SkipsDisabledRules(t *testing.T) {
 	}
 }
 
-
 func TestEngine_RunWithInstrumentation_NilDiagramReturnsEmptyIssues(t *testing.T) {
 	e := engine.NewWithRules(supportedRule{})
 	sink := &capturingSink{}
