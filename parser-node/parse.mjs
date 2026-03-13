@@ -422,15 +422,44 @@ async function extractAST(mermaidAPI, source, diagramType) {
 
   const rawVertices = db.vertices ?? {};
   const explicitNodes = Object.entries(rawVertices);
+  
+  // Build a set of all node IDs referenced in edges
+  const nodeIDsInEdges = new Set();
+  for (const e of ast.edges) {
+    if (e.from) nodeIDsInEdges.add(e.from);
+    if (e.to) nodeIDsInEdges.add(e.to);
+  }
+  
   if (explicitNodes.length > 0) {
+    const seen = new Set();
     for (const [id, v] of explicitNodes) {
       const normalizedID = normalizeNodeID(id);
+      
+      // Only include nodes that are referenced in edges (filters out phantom nodes from labels)
+      if (!nodeIDsInEdges.has(normalizedID)) {
+        continue;
+      }
+      
+      if (seen.has(normalizedID)) {
+        continue;
+      }
+      seen.add(normalizedID);
+      
       const nodeLoc = findNodeLocation(sourceLines, id);
       ast.nodes.push({
         id: normalizedID,
         label: extractLabel(v),
         ...(nodeLoc || {}),
       });
+    }
+    
+    // Add any nodes from edges that weren't in rawVertices
+    for (const nodeID of nodeIDsInEdges) {
+      if (!seen.has(nodeID)) {
+        seen.add(nodeID);
+        const nodeLoc = findNodeLocation(sourceLines, nodeID);
+        ast.nodes.push({ id: nodeID, label: "", ...(nodeLoc || {}) });
+      }
     }
   } else {
     const seen = new Set();

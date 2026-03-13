@@ -176,8 +176,33 @@ func nearestNodeAfter(indices []tokenSpan, pos int) *tokenSpan {
 
 func extractNodeIDSpans(line string) []tokenSpan {
 	spans := make([]tokenSpan, 0, 8)
+	// Track nesting depth of label brackets/parens/braces to skip identifiers inside them
+	var bracketStack []byte
+	
 	for i := 0; i < len(line); {
-		if !isIdentifierStart(line[i]) {
+		c := line[i]
+		
+		// Update bracket stack to track if we're inside a label block
+		if c == '[' || c == '(' || c == '{' {
+			bracketStack = append(bracketStack, c)
+			i++
+			continue
+		}
+		if c == ']' || c == ')' || c == '}' {
+			if len(bracketStack) > 0 {
+				bracketStack = bracketStack[:len(bracketStack)-1]
+			}
+			i++
+			continue
+		}
+		
+		// Skip identifiers that are inside label blocks (bracket/paren/brace content)
+		if len(bracketStack) > 0 {
+			i++
+			continue
+		}
+		
+		if !isIdentifierStart(c) {
 			i++
 			continue
 		}

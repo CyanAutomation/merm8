@@ -136,32 +136,32 @@
         <div class="summary">
             <div class="summary-card passed">
                 <h3>Passed</h3>
-                <div class="value">17</div>
+                <div class="value">18</div>
                 <p>of 18 cases</p>
             </div>
             <div class="summary-card failed">
                 <h3>Failed</h3>
-                <div class="value">1</div>
+                <div class="value">0</div>
                 <p>quality failures</p>
             </div>
             <div class="summary-card">
                 <h3>Pass Rate</h3>
-                <div class="value">94.4%</div>
+                <div class="value">100.0%</div>
                 <p>overall success</p>
             </div>
             <div class="summary-card">
                 <h3>Execution Time</h3>
-                <div class="value">1.15s</div>
+                <div class="value">0.89s</div>
                 <p>total runtime</p>
             </div>
         </div>
 
         <h2>Test Metadata</h2>
         <div class="details-row">
-            <strong>Timestamp:</strong> 2026-03-13 22:06:47
+            <strong>Timestamp:</strong> 2026-03-13 22:17:10
         </div>
         <div class="details-row">
-            <strong>Version:</strong> v1.0.0-467-g92f95e8
+            <strong>Version:</strong> test
         </div>
 
         
@@ -170,7 +170,7 @@
             
             <div style="color: #f56565; font-weight: 600;">⚠️ Limited Coverage</div>
             
-            <p><strong>Low-coverage rules (&lt;5 cases):</strong> no-duplicate-node-ids (3 cases), no-cycles (3 cases), max-depth (2 cases), max-fanout (2 cases), no-disconnected-nodes (4 cases)</p>
+            <p><strong>Low-coverage rules (&lt;5 cases):</strong> max-fanout (2 cases), no-disconnected-nodes (4 cases), no-duplicate-node-ids (3 cases), no-cycles (3 cases), max-depth (2 cases)</p>
             
             
             <p><strong>Uncovered diagram types:</strong> sequence, class, er, state</p>
@@ -212,14 +212,15 @@
                     <td>0ms</td>
                 </tr>
                 
-                <tr data-rule="max-fanout" data-passed="1" data-total="2" data-detection="0.5" data-fp="0" data-parse="0" data-lint="0">
+                <tr data-rule="max-fanout" data-passed="2" data-total="2" data-detection="1" data-fp="0" data-parse="0" data-lint="0">
                     <td><strong>max-fanout</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
-                    <td>1</td>
+                    <td>2</td>
                     <td>2</td>
                     <td>
                         
-                        <span class="rate-low">50.00%</span>
-                        <span style="font-size: 0.85em; color: #718096;">(1/2)</span>
+                        <span class="rate-high">100.00%</span>
+                        
+                        <span style="font-size: 0.85em; color: #718096;">(2/2)</span>
                     </td>
                     <td>0 (0.00%)</td>
                     <td>0ms</td>
@@ -241,7 +242,7 @@
                     <td>0ms</td>
                 </tr>
                 
-                <tr data-rule="no-disconnected-nodes" data-passed="4" data-total="4" data-detection="1" data-fp="0.25" data-parse="0" data-lint="0">
+                <tr data-rule="no-disconnected-nodes" data-passed="4" data-total="4" data-detection="1" data-fp="0" data-parse="0" data-lint="0">
                     <td><strong>no-disconnected-nodes</strong> <span style="color: #ed8936; font-weight: 600;">⚠️</span></td>
                     <td>4</td>
                     <td>4</td>
@@ -251,7 +252,7 @@
                         
                         <span style="font-size: 0.85em; color: #718096;">(4/4)</span>
                     </td>
-                    <td>1 (25.00%)</td>
+                    <td>0 (0.00%)</td>
                     <td>0ms</td>
                     <td>0ms</td>
                 </tr>
@@ -274,22 +275,6 @@
             </tbody>
         </table>
 
-        
-        <h2>Failed Cases</h2>
-        <div class="failed-cases">
-            
-            <div class="failed-case">
-                <h4>flowchart-edg-fanout-at-limit</h4>
-                <div><strong>Expected:</strong> <span class="badge fail"></span></div>
-                <div><strong>Got:</strong> <span class="badge fail">no-disconnected-nodes:error</span></div>
-                
-                <div><strong>Issues:</strong></div>
-                <pre>expected [], got [no-disconnected-nodes:error]</pre>
-                
-                
-            </div>
-            
-        </div>
         
 
         <footer>
