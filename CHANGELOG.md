@@ -87,6 +87,7 @@ Fixtures are discoverable and ready for rule implementation. As new rules are ad
 - Generic syntax-error fallback messaging now includes bounded line/column context and compact source excerpts when available, while safely handling zero or out-of-range parser positions without changing response schema.
 - Documented extensibility contract for rule IDs, `/v1/rules` compatibility guarantees, and deterministic plugin/rule loading strategy in API and namespace docs.
 - Config normalization now accepts namespaced built-in rule IDs (`core/<id>`) as aliases, normalizes them to canonical built-in IDs, and deterministically merges mixed alias entries.
+- Legacy nested config payloads (`{"rules":{...}}`) now follow the same canonical normalization path as versioned/flat payloads, so unknown rules are leniently ignored and emitted rule IDs remain canonical.
 - Versioned config payloads with `{"schema-version":"v1"}` and omitted `rules` are now accepted and normalized to `rules:{}` while preserving unknown top-level key validation.
 
 - `GET /rules` and `GET /rules/schema` now advertise only rules implemented by the active runtime registry; configs that reference non-implemented/planned rules return `400 unknown_rule` without implying enforceability.
