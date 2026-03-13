@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Updated Contributing Guide**: Extended `CONTRIBUTING.md` with diagram-type-specific examples, fixture templates, and best practices for sequence, class, ER, and state diagrams. Helps future contributors author test cases for new diagram types as rules are implemented.
 
 Fixtures are discoverable and ready for rule implementation. As new rules are added for each diagram type, the existing fixtures will automatically be evaluated by the benchmark suite.
+
 ### Benchmark Suite Enhancements (Phase 5)
 
 - **Enhanced Metadata Syntax**: Test fixtures now support optional expected issue counts in rule annotations:
@@ -64,6 +65,7 @@ Fixtures are discoverable and ready for rule implementation. As new rules are ad
   - **Clean indicators**: ↑/↓/↕ symbols show current sort state (no animations, simple visual feedback)
   - Vanilla JavaScript with zero dependencies—works offline
   - Follows "normal UI" aesthetic: functional, no decorative elements, minimal transitions
+
 ### Added
 
 - Configurable parser timeout via `PARSER_TIMEOUT_SECONDS` environment variable (1–60 seconds, default 5s). Exposed in `GET /info` response as `parser_timeout_seconds` field.
