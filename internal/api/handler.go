@@ -3433,9 +3433,7 @@ func (h *Handler) parseWithRequestSettings(req analyzeRequest, normalizedCfg rul
 			if configProvider, ok := h.parser.(ParserConfigProvider); ok {
 				cfg = configProvider.ParserConfig().EffectiveConfig()
 			}
-			if cfg.SourceEnhancement == nil {
-				cfg.NeedSourceEnhancement = needSourceEnhancement
-			}
+			cfg.NeedSourceEnhancement = needSourceEnhancement
 			return parserWithConfig.ParseWithConfig(req.Code, cfg)
 		}
 		return h.parser.Parse(req.Code)
