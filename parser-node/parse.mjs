@@ -7,6 +7,7 @@
  */
 
 import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
 import readline from "readline";
 import parserPkg from "./package.json" with { type: "json" };
 
@@ -36,44 +37,46 @@ async function loadMermaid() {
   return mermaidRuntime;
 }
 
-if (versionInfoMode) {
-  try {
-    const mermaid = await loadMermaid();
-    const mermaidRuntimeVersion = String(mermaid?.version || "").trim();
-    const mermaidDependencyVersion = String(
-      parserPkg?.dependencies?.mermaid || "",
-    ).trim();
-    writeResult({
-      parser_version: String(parserPkg?.version || "").trim(),
-      mermaid_version: mermaidRuntimeVersion || mermaidDependencyVersion,
-    });
+async function main() {
+  if (versionInfoMode) {
+    try {
+      const mermaid = await loadMermaid();
+      const mermaidRuntimeVersion = String(mermaid?.version || "").trim();
+      const mermaidDependencyVersion = String(
+        parserPkg?.dependencies?.mermaid || "",
+      ).trim();
+      writeResult({
+        parser_version: String(parserPkg?.version || "").trim(),
+        mermaid_version: mermaidRuntimeVersion || mermaidDependencyVersion,
+      });
+      process.exit(0);
+    } catch (err) {
+      const mermaidDependencyVersion = String(
+        parserPkg?.dependencies?.mermaid || "",
+      ).trim();
+      writeResult({
+        parser_version: String(parserPkg?.version || "").trim(),
+        mermaid_version: mermaidDependencyVersion,
+        error: "internal parser error: " + String(err?.message || err),
+      });
+      process.exit(1);
+    }
+  }
+
+  if (workerMode) {
+    await runWorkerMode();
     process.exit(0);
-  } catch (err) {
-    const mermaidDependencyVersion = String(
-      parserPkg?.dependencies?.mermaid || "",
-    ).trim();
-    writeResult({
-      parser_version: String(parserPkg?.version || "").trim(),
-      mermaid_version: mermaidDependencyVersion,
-      error: "internal parser error: " + String(err?.message || err),
-    });
+  }
+
+  const input = readFileSync("/dev/stdin", "utf8");
+  const singleResult = await parseSource(input);
+  writeResult(singleResult);
+  if (
+    String(singleResult?.error?.message || "").startsWith("internal parser error:") ||
+    String(singleResult?.error?.message || "").startsWith("parser_memory_limit:")
+  ) {
     process.exit(1);
   }
-}
-
-if (workerMode) {
-  await runWorkerMode();
-  process.exit(0);
-}
-
-const input = readFileSync("/dev/stdin", "utf8");
-const singleResult = await parseSource(input);
-writeResult(singleResult);
-if (
-  String(singleResult?.error?.message || "").startsWith("internal parser error:") ||
-  String(singleResult?.error?.message || "").startsWith("parser_memory_limit:")
-) {
-  process.exit(1);
 }
 
 async function runWorkerMode() {
@@ -143,21 +146,31 @@ function normalizeWorkerTimeoutMs(rawTimeoutMs) {
   return Math.min(parsed, 24 * 60 * 60 * 1000);
 }
 
-function withWorkerTimeout(promise, timeoutMs) {
+export function withWorkerTimeout(promise, timeoutMs, timer = globalThis) {
   if (!timeoutMs || timeoutMs <= 0) {
     return promise;
   }
 
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      setTimeout(() => {
-        const err = new Error("worker parse timeout");
-        err.code = "WORKER_TIMEOUT";
+  return new Promise((resolve, reject) => {
+    const timerId = timer.setTimeout(() => {
+      const err = new Error("worker parse timeout");
+      err.code = "WORKER_TIMEOUT";
+      reject(err);
+    }, timeoutMs);
+
+    timerId.unref?.();
+
+    promise.then(
+      (value) => {
+        timer.clearTimeout(timerId);
+        resolve(value);
+      },
+      (err) => {
+        timer.clearTimeout(timerId);
         reject(err);
-      }, timeoutMs);
-    }),
-  ]);
+      },
+    );
+  });
 }
 
 function isWorkerTimeoutError(err) {
@@ -590,4 +603,8 @@ function extractLabel(vertex) {
 
 function writeResult(obj) {
   process.stdout.write(JSON.stringify(obj) + "\n");
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  await main();
 }
