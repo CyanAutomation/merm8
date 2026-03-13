@@ -598,6 +598,17 @@ func (r *Runner) generateReports(results *BenchmarkResults, outputFormats []stri
 				return err
 			}
 			generatedFiles = append(generatedFiles, fmt.Sprintf("CSV: %s", csvPath))
+
+		case "markdown":
+			mdPath := filepath.Join(r.reportsDir, "latest-results.md")
+			mdContent, err := r.generateMarkdownReport(results)
+			if err != nil {
+				return fmt.Errorf("generate Markdown: %w", err)
+			}
+			if err := os.WriteFile(mdPath, []byte(mdContent), 0644); err != nil {
+				return err
+			}
+			generatedFiles = append(generatedFiles, fmt.Sprintf("Markdown: %s", mdPath))
 		}
 	}
 
@@ -675,11 +686,28 @@ func (r *Runner) generateHTMLReport(results *BenchmarkResults) string {
 		"join": func(arr []string, sep string) string {
 			return strings.Join(arr, sep)
 		},
+		"split": func(s, sep string) []string {
+			return strings.Split(s, sep)
+		},
 		"sampleSize": func(passed, total int) string {
 			return fmt.Sprintf("%d/%d", passed, total)
 		},
 		"lowConfidence": func(total int) bool {
 			return total < 5
+		},
+		"ruleContext": func(ruleID string) string {
+			// Provide brief rule-specific guidance for debugging
+			contexts := map[string]string{
+				"no-cycles":             "Verify no circular edges exist. Check for A→B→...→A patterns.",
+				"max-fanout":            "Check node has ≤6 outgoing edges. Count direct connections.",
+				"max-depth":             "Verify depth ≤4 from root to deepest leaf. Count node levels.",
+				"no-disconnected-nodes": "All nodes except source must have incoming edges.",
+				"no-duplicate-node-ids": "Node IDs must be unique. Check id duplicates.",
+			}
+			if ctx, ok := contexts[ruleID]; ok {
+				return ctx
+			}
+			return "See rule definition for expected behavior."
 		},
 	}
 
@@ -781,6 +809,63 @@ func (r *Runner) generateCSVReport(results *BenchmarkResults) (string, error) {
 	w.Flush()
 	if err := w.Error(); err != nil {
 		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+// generateMarkdownReport generates a markdown report suitable for CI/CD pipeline integration.
+func (r *Runner) generateMarkdownReport(results *BenchmarkResults) (string, error) {
+	var buf bytes.Buffer
+
+	// Summary section
+	buf.WriteString("# Merm8 Benchmark Report\n\n")
+	buf.WriteString(fmt.Sprintf("**Timestamp**: %s  \n", results.Timestamp.Format("2006-01-02 15:04:05")))
+	buf.WriteString(fmt.Sprintf("**Version**: %s  \n", results.Version))
+	buf.WriteString(fmt.Sprintf("**Execution Time**: %.2fs  \n", float64(results.ExecutionTimeMs)/1000.0))
+	buf.WriteString("\n")
+
+	// Overall result
+	passPercentage := float64(results.TotalPassed) / float64(results.TotalCases) * 100
+	buf.WriteString(fmt.Sprintf("## Overall Result\n\n"))
+	buf.WriteString(fmt.Sprintf("**%d/%d** cases passed (**%.1f%%**)\n\n", results.TotalPassed, results.TotalCases, passPercentage))
+
+	// Rule metrics table
+	buf.WriteString("## Rule Metrics\n\n")
+	buf.WriteString("| Rule ID | Passed | Total | Detection Rate | False Positives | Avg Parse (ms) | Avg Lint (ms) |\n")
+	buf.WriteString("|---------|--------|-------|-----------------|-----------------|----------------|---------------|\n")
+
+	// Sort rules by ID
+	var sortedRules []string
+	for ruleID := range results.RuleMetrics {
+		sortedRules = append(sortedRules, ruleID)
+	}
+	sort.Strings(sortedRules)
+
+	// Write rule metrics
+	for _, ruleID := range sortedRules {
+		rm := results.RuleMetrics[ruleID]
+		buf.WriteString(fmt.Sprintf("| `%s` | %d | %d | %.1f%% | %d | %d | %d |\n",
+			rm.RuleID,
+			rm.Passed,
+			rm.TotalCases,
+			rm.DetectionRate*100,
+			rm.FalsePositives,
+			rm.AvgParseTimeMs,
+			rm.AvgLintTimeMs,
+		))
+	}
+	buf.WriteString("\n")
+
+	// Failed cases section
+	if len(results.FailedCases) > 0 {
+		buf.WriteString("## Failed Cases\n\n")
+		for _, fc := range results.FailedCases {
+			buf.WriteString(fmt.Sprintf("### %s\n\n", fc.CaseID))
+			buf.WriteString(fmt.Sprintf("**Expected**: %s  \n", strings.Join(fc.Expected, ", ")))
+			buf.WriteString(fmt.Sprintf("**Actual**: %s  \n", strings.Join(fc.Actual, ", ")))
+			buf.WriteString("\n")
+		}
 	}
 
 	return buf.String(), nil
@@ -1200,6 +1285,13 @@ const htmlReportTemplate = `<!DOCTYPE html>
                 {{if .Issues}}
                 <div><strong>Issues:</strong></div>
                 <pre>{{join .Issues "\n"}}</pre>
+                {{end}}
+                {{if .Expected}}
+                <div style="background: #f7f5f0; border-left: 3px solid #d97706; padding: 10px; margin-top: 10px; font-size: 0.9em;">
+                    <strong>Rule Context:</strong>
+                    {{$firstRule := index (split (index .Expected 0) ":") 0}}
+                    <div style="margin-top: 5px; color: #5a5a5a;">{{ruleContext $firstRule}}</div>
+                </div>
                 {{end}}
             </div>
             {{end}}
