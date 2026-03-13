@@ -102,6 +102,7 @@ func (c *parseCache) putSuccess(key string, diagram *model.Diagram) {
 	if c == nil || diagram == nil {
 		return
 	}
+	c.syntax.Delete(key)
 	if c.success.Set(key, cloneDiagram(diagram)) {
 		c.observe("eviction", "success")
 	}
@@ -111,6 +112,7 @@ func (c *parseCache) putSyntax(key string, syntaxErr *SyntaxError) {
 	if c == nil || syntaxErr == nil {
 		return
 	}
+	c.success.Delete(key)
 	if c.syntax.Set(key, cloneSyntaxError(syntaxErr)) {
 		c.observe("eviction", "syntax")
 	}
@@ -199,6 +201,15 @@ func (c *lruTTLCache[T]) Set(key string, value T) bool {
 	}
 
 	return false
+}
+
+func (c *lruTTLCache[T]) Delete(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if elem, ok := c.entries[key]; ok {
+		c.removeElementLocked(elem)
+	}
 }
 
 func (c *lruTTLCache[T]) evictExpiredLocked(now time.Time) int {
