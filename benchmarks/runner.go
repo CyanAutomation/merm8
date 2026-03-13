@@ -36,6 +36,8 @@ type Runner struct {
 	categoryFilter string
 	verbose        bool
 	parser         *parser.Parser
+	maxParseTimeMs int64
+	maxLintTimeMs  int64
 }
 
 // NewRunner creates a new benchmark runner.
@@ -61,6 +63,8 @@ type RunOptions struct {
 	CompareTo           string  // Path to baseline JSON or ""
 	RegressionThreshold float64 // e.g., 5.0 for 5%
 	OutputFormats       string  // "json,html,csv" (comma-separated, default "json,html")
+	MaxParseTimeMs      int64   // Maximum allowed parse time per case (0 = no limit)
+	MaxLintTimeMs       int64   // Maximum allowed lint time per case (0 = no limit)
 }
 
 // Run executes all benchmark cases and generates reports.
@@ -68,6 +72,8 @@ func (r *Runner) Run(opts RunOptions) error {
 	r.ruleFilter = opts.RuleFilter
 	r.categoryFilter = opts.CategoryFilter
 	r.verbose = opts.Verbose
+	r.maxParseTimeMs = opts.MaxParseTimeMs
+	r.maxLintTimeMs = opts.MaxLintTimeMs
 
 	// Initialize parser once for all cases
 	p, err := parser.New(r.parserScript)
@@ -151,24 +157,15 @@ func (r *Runner) discoverCases() ([]*BenchmarkCase, error) {
 			continue
 		}
 
-		// For flowchart, also check subcategories
-		if dt == "flowchart" {
-			categories := []string{"valid", "violations", "edge-cases"}
-			for _, cat := range categories {
-				catDir := filepath.Join(dtDir, cat)
-				if _, err := os.Stat(catDir); os.IsNotExist(err) {
-					continue
-				}
-
-				entryCases, err := r.discoverCasesInDir(catDir, dt, cat, contentMap)
-				if err != nil {
-					return nil, err
-				}
-				cases = append(cases, entryCases...)
+		// Check subcategories for all diagram types
+		categories := []string{"valid", "violations", "edge-cases"}
+		for _, cat := range categories {
+			catDir := filepath.Join(dtDir, cat)
+			if _, err := os.Stat(catDir); os.IsNotExist(err) {
+				continue
 			}
-		} else {
-			// For other diagram types, scan directory directly
-			entryCases, err := r.discoverCasesInDir(dtDir, dt, "", contentMap)
+
+			entryCases, err := r.discoverCasesInDir(catDir, dt, cat, contentMap)
 			if err != nil {
 				return nil, err
 			}
@@ -244,7 +241,7 @@ func (r *Runner) discoverCasesInDir(dir string, diagramType, category string, co
 				if ruleID != "*" && ruleID != "" {
 					// Determine severity based on rule type
 					severity := "error"
-					if ruleID == "max-depth" || ruleID == "max-fanout" {
+					if ruleID == "max-depth" || ruleID == "max-fanout" || ruleID == "max-inheritance-depth" {
 						severity = "warning"
 					}
 					expectedIssues = append(expectedIssues, ExpectedIssue{
@@ -504,6 +501,16 @@ func (r *Runner) executeCase(bc *BenchmarkCase, eng *engine.Engine, p *parser.Pa
 		result.Issues = append(result.Issues, fmt.Sprintf("expected %v, got %v", expectedIssues, actualIssues))
 	}
 
+	// Check performance thresholds (if configured)
+	if r.maxParseTimeMs > 0 && result.ParseTimeMs > r.maxParseTimeMs {
+		result.Passed = false
+		result.Issues = append(result.Issues, fmt.Sprintf("parse time %dms exceeds threshold %dms", result.ParseTimeMs, r.maxParseTimeMs))
+	}
+	if r.maxLintTimeMs > 0 && result.LintTimeMs > r.maxLintTimeMs {
+		result.Passed = false
+		result.Issues = append(result.Issues, fmt.Sprintf("lint time %dms exceeds threshold %dms", result.LintTimeMs, r.maxLintTimeMs))
+	}
+
 	return result, nil
 }
 
@@ -628,44 +635,44 @@ func (r *Runner) calculateCoverageMetrics(results *BenchmarkResults) CoverageMet
 		FullySupported:         true,
 	}
 
-	// Check rule coverage
+	// Track all cases by diagram type and category
+	casesByDiagram := make(map[string]int)
+	casesByCategory := make(map[string]int)
+	rulesWithViolations := make(map[string]bool)
+
+	// Analyze all cases from rule metrics
 	for ruleID, metrics := range results.RuleMetrics {
+		// Check minimum coverage (5 cases per rule)
 		if metrics.TotalCases < 5 {
 			coverage.LowCoverageRules = append(coverage.LowCoverageRules, fmt.Sprintf("%s (%d cases)", ruleID, metrics.TotalCases))
 			coverage.FullySupported = false
 		}
+
+		// Track if rule has violation cases (for detection rate validation)
+		if metrics.TotalActualIssues > 0 {
+			rulesWithViolations[ruleID] = true
+		}
 	}
 
-	// Check for rules with no violations cases (would require analyzing failed cases by category)
-	// For now, we track if there are failed cases from violations category
-	violationsCasesSeen := make(map[string]bool)
+	// Analyze failed cases to understand coverage gaps
 	for _, failedCase := range results.FailedCases {
-		if strings.Contains(failedCase.CaseID, "-vio-") {
-			parts := strings.Split(failedCase.CaseID, "-")
-			if len(parts) > 0 {
-				for _, rule := range results.RuleMetrics {
-					if strings.HasPrefix(failedCase.CaseID, parts[0]) {
-						violationsCasesSeen[rule.RuleID] = true
-					}
-				}
+		parts := strings.Split(failedCase.CaseID, "-")
+		if len(parts) >= 2 {
+			diagramType := parts[0]
+			casesByDiagram[diagramType]++
+
+			// Track category (val/vio/edge)
+			if len(parts) >= 3 {
+				category := parts[1]
+				casesByCategory[category]++
 			}
 		}
 	}
 
-	// Check diagram type coverage (simplistic: based on file naming convention in failed cases)
-	coveredDiagrams := make(map[string]bool)
-	for failedCase := range results.FailedCases {
-		parts := strings.Split(results.FailedCases[failedCase].CaseID, "-")
-		if len(parts) > 0 {
-			coveredDiagrams[parts[0]] = true
-		}
-	}
-
-	// All rules tested have at least one case (from RuleMetrics), diagram types check is approximate
-	// Since we only have flowchart cases currently
-	expectedDiagrams := []string{"sequence", "class", "er", "state"}
+	// Check diagram type coverage
+	expectedDiagrams := []string{"flowchart", "sequence", "class", "er", "state"}
 	for _, dt := range expectedDiagrams {
-		if !coveredDiagrams[dt] {
+		if casesByDiagram[dt] == 0 {
 			coverage.UncoveredDiagramTypes = append(coverage.UncoveredDiagramTypes, dt)
 			coverage.FullySupported = false
 		}

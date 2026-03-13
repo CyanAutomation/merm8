@@ -1,0 +1,15 @@
+graph TD
+    Hub["Distribution Hub"]
+    
+    Hub --> Out1["Destination 1"]
+    Hub --> Out2["Destination 2"]
+    Hub --> Out3["Destination 3"]
+    Hub --> Out4["Destination 4"]
+    
+    Out1 --> End["Convergence"]
+    Out2 --> End
+    Out3 --> End
+    Out4 --> End
+    
+    %% @rule: max-fanout
+    %% 4 outgoing edges from Hub (under default limit of 5)—should pass

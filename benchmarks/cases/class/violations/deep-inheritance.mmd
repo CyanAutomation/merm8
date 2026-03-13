@@ -15,11 +15,24 @@ classDiagram
         +method()
     }
     
+    class Derived4 {
+        +method()
+    }
+    
+    class Derived5 {
+        +method()
+    }
+    
+    class Derived6 {
+        +method()
+    }
+    
     Base <|-- Derived1
-    Base <|-- Derived2
-    Base <|-- Derived3
     Derived1 <|-- Derived2
     Derived2 <|-- Derived3
+    Derived3 <|-- Derived4
+    Derived4 <|-- Derived5
+    Derived5 <|-- Derived6
     
-    %% @rule: *
-    %% Complex inheritance with potential deep hierarchies
+    %% @rule: max-inheritance-depth
+    %% Deep inheritance chain: Base -> Derived1 -> ... -> Derived6 (depth 6, exceeds default limit of 5)
