@@ -1766,6 +1766,65 @@ func TestAnalyze_LegacyConfigShapesWarnAndStillApplyConfig(t *testing.T) {
 	}
 }
 
+func TestAnalyze_LegacyNestedConfigLenientNormalizesCanonicalRuleIDs(t *testing.T) {
+	diagram := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+	}
+
+	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+		return diagram, nil, nil
+	})
+
+	bodyJSON, _ := json.Marshal(map[string]any{
+		"code": "graph TD\n  A --> B\n  A --> C",
+		"config": map[string]any{
+			"rules": map[string]any{
+				"core/max-fanout": map[string]any{"limit": 1},
+				"unknown-rule":    map[string]any{},
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(bodyJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for legacy nested lenient config, got %d body=%s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Deprecation"); got != "true" {
+		t.Fatalf("expected Deprecation header true, got %q", got)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	warnings, ok := resp["warnings"].([]any)
+	if !ok || len(warnings) == 0 {
+		t.Fatalf("expected warnings array for legacy config with unknown rule, got %#v", resp["warnings"])
+	}
+
+	issues, ok := resp["issues"].([]any)
+	if !ok {
+		t.Fatalf("expected issues array, got %T", resp["issues"])
+	}
+	if len(issues) != 1 {
+		t.Fatalf("expected one max-fanout issue with limit=1, got %d (%#v)", len(issues), issues)
+	}
+	issue, ok := issues[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected issue object, got %#v", issues[0])
+	}
+	if issue["rule-id"] != "max-fanout" {
+		t.Fatalf("expected canonical rule-id max-fanout, got %#v", issue["rule-id"])
+	}
+}
+
 func TestAnalyze_ConfigCanonicalFormatNoDeprecationWarnings(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}, {ID: "B"}}, Edges: []model.Edge{{From: "A", To: "B"}}}, nil, nil
