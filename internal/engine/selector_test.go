@@ -2,22 +2,30 @@ package engine
 
 import "testing"
 
-func TestParseSelector_AcceptsSupportedSelectors(t *testing.T) {
-	for _, raw := range []string{"node:A", "!rule:max-fanout", "subgraph:cluster-1"} {
-		t.Run(raw, func(t *testing.T) {
-			if _, ok := parseSelector(raw); !ok {
-				t.Fatalf("parseSelector(%q) ok=false, want true", raw)
+func TestParseSelector_ValidatesFormatAndSupport(t *testing.T) {
+	tests := []struct {
+		raw   string
+		valid bool
+	}{
+		// Valid selectors
+		{"node:A", true},
+		{"!rule:max-fanout", true},
+		{"subgraph:cluster-1", true},
+		// Malformed or unsupported
+		{"", false},
+		{"node", false},
+		{"node:", false},
+		{"unknown:A", false},
+		{"! unknown:A", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.raw, func(t *testing.T) {
+			_, ok := parseSelector(tc.raw)
+			if ok != tc.valid {
+				t.Fatalf("parseSelector(%q) = ok %v, want %v", tc.raw, ok, tc.valid)
 			}
 		})
 	}
 }
 
-func TestParseSelector_RejectsMalformedOrUnsupportedSelectors(t *testing.T) {
-	for _, raw := range []string{"", "node", "node:", "unknown:A", "! unknown:A"} {
-		t.Run(raw, func(t *testing.T) {
-			if _, ok := parseSelector(raw); ok {
-				t.Fatalf("parseSelector(%q) ok=true, want false", raw)
-			}
-		})
-	}
-}
