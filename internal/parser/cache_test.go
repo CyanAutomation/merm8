@@ -128,3 +128,47 @@ func TestParseCache_GetReturnedDiagramMutationDoesNotAffectCachedDiagram(t *test
 		t.Fatalf("expected edge column to remain 9, got %d", got)
 	}
 }
+
+func TestParseCache_GetReturnsSyntaxAfterSuccessOverwrite(t *testing.T) {
+	cache := newParseCache()
+	const key = "flowchart:success-then-syntax"
+
+	cache.putSuccess(key, &model.Diagram{Nodes: []model.Node{{ID: "A"}}})
+	cache.putSyntax(key, &SyntaxError{Message: "bad token", Line: 3, Column: 7})
+
+	diagram, syntaxErr, ok := cache.get(key)
+	if !ok {
+		t.Fatalf("expected cache hit")
+	}
+	if diagram != nil {
+		t.Fatalf("expected success entry to be replaced by syntax entry")
+	}
+	if syntaxErr == nil {
+		t.Fatalf("expected syntax entry")
+	}
+	if got := syntaxErr.Message; got != "bad token" {
+		t.Fatalf("expected syntax message bad token, got %q", got)
+	}
+}
+
+func TestParseCache_GetReturnsSuccessAfterSyntaxOverwrite(t *testing.T) {
+	cache := newParseCache()
+	const key = "flowchart:syntax-then-success"
+
+	cache.putSyntax(key, &SyntaxError{Message: "old syntax", Line: 1, Column: 1})
+	cache.putSuccess(key, &model.Diagram{Nodes: []model.Node{{ID: "B"}}})
+
+	diagram, syntaxErr, ok := cache.get(key)
+	if !ok {
+		t.Fatalf("expected cache hit")
+	}
+	if syntaxErr != nil {
+		t.Fatalf("expected syntax entry to be replaced by success entry")
+	}
+	if diagram == nil {
+		t.Fatalf("expected success entry")
+	}
+	if got := diagram.Nodes[0].ID; got != "B" {
+		t.Fatalf("expected diagram node ID B, got %q", got)
+	}
+}
