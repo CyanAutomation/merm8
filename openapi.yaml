@@ -62,6 +62,10 @@
           "example": 1450
           "format": "int64"
           "type": "integer"
+        "other":
+          "example": 1
+          "format": "int64"
+          "type": "integer"
         "parser-errors":
           "example": 10
           "format": "int64"
@@ -89,7 +93,7 @@
           "type": "string"
         "config":
           "$ref": "#/components/schemas/RuleConfigSchema"
-          "description": 'Optional lint rule configuration. Canonical format is {"schema-version":"v1","rules":{...}}. Phase 1 accepts legacy flat/nested/snake_case config with deprecation warnings; Phase 2 rejects legacy config with 400 deprecated_config_format.'
+          "description": "Optional lint rule configuration. Canonical format is {\"schema-version\":\"v1\",\"rules\":{...}}. If schema-version is v1 and rules is omitted, the server normalizes rules to {}. Phase 1 accepts legacy flat/nested/snake_case config with deprecation warnings; Phase 2 rejects legacy config with 400 deprecated_config_format."
           "example":
             "rules":
               "max-fanout":
@@ -397,7 +401,7 @@
         "applies-to":
           "$ref": "#/components/schemas/HintAppliesTo"
         "code":
-          "description": "Stable machine-readable hint code."
+          "description": "Machine-readable hint code. See API_GUIDE.md \"Hint codes\" for the current catalog and semantics. Codes are stable for automation (no silent semantic repurposing); clients should treat unknown codes as additive future expansion."
           "example": "graphviz_syntax_detected"
           "type": "string"
         "confidence":
@@ -506,6 +510,9 @@
       "properties":
         "analyze":
           "properties":
+            "other":
+              "format": "int64"
+              "type": "integer"
             "syntax_error":
               "format": "int64"
               "type": "integer"
@@ -515,6 +522,7 @@
           "required":
             - "valid_success"
             - "syntax_error"
+            - "other"
           "type": "object"
         "parser":
           "properties":
@@ -525,6 +533,9 @@
               "format": "int64"
               "type": "integer"
             "internal":
+              "format": "int64"
+              "type": "integer"
+            "other":
               "format": "int64"
               "type": "integer"
             "subprocess":
@@ -539,6 +550,7 @@
             - "decode"
             - "contract"
             - "internal"
+            - "other"
           "type": "object"
       "required":
         - "analyze"
@@ -691,7 +703,7 @@
         "applies-to":
           "$ref": "#/components/schemas/HintAppliesTo"
         "code":
-          "description": "Stable machine-readable hint code."
+          "description": "Machine-readable hint code. See API_GUIDE.md \"Hint codes\" for the current catalog and semantics. Codes are stable for automation (no silent semantic repurposing); clients should treat unknown codes as additive future expansion."
           "example": "graphviz_syntax_detected"
           "type": "string"
         "confidence":
@@ -718,7 +730,8 @@
     "RuleConfigSchema":
       "$schema": "https://json-schema.org/draft/2020-12/schema"
       "oneOf":
-        - "additionalProperties": false
+        -
+          "additionalProperties": false
           "properties":
             "max-depth":
               "additionalProperties": false
@@ -832,7 +845,8 @@
                   "type": "array"
               "type": "object"
           "type": "object"
-        - "$schema": "https://json-schema.org/draft/2020-12/schema"
+        -
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
           "additionalProperties": false
           "properties":
             "rules":
@@ -1500,10 +1514,17 @@
             "application/json":
               "examples":
                 "sequenceDiagram":
-                  "summary": "Parsed sequence diagram (lint currently unsupported)"
+                  "summary": "Valid sequence diagram (lint currently unsupported)"
                   "value":
                     "diagram-type": "sequence"
+                    "error":
+                      "code": "unsupported_diagram_type"
+                      "message": "diagram type is parsed but linting is not supported"
                     "issues":
+                      -
+                        "message": "diagram type \"sequence\" is parsed but lint rules are not available yet"
+                        "rule-id": "unsupported-diagram-type"
+                        "severity": "info"
                     "lint-supported": false
                     "metrics":
                       "diagram-type": "sequence"
@@ -1517,7 +1538,7 @@
                       "max-fanout": 0
                       "node-count": 0
                     "syntax-error": null
-                    "valid": false
+                    "valid": true
                 "syntaxError":
                   "summary": "Syntax error response"
                   "value":
@@ -1565,10 +1586,12 @@
                   "value":
                     "diagram-type": "flowchart"
                     "issues":
-                      - "message": "Node 'D' is not connected to the graph"
+                      -
+                        "message": "Node 'D' is not connected to the graph"
                         "rule-id": "no-disconnected-nodes"
                         "severity": "error"
-                      - "column": 2
+                      -
+                        "column": 2
                         "line": 2
                         "message": "Node 'A' has fanout 6, exceeding limit of 5"
                         "rule-id": "max-fanout"
@@ -1603,7 +1626,7 @@
                 "type": "string"
             "Warning":
               "description": "One or more RFC 7234 warning values (code 299) describing legacy config migration guidance when legacy config is accepted."
-              "example": '299 - "config.schema_version is deprecated; use config.schema-version"'
+              "example": "299 - \"config.schema_version is deprecated; use config.schema-version\""
               "schema":
                 "type": "string"
             "X-RateLimit-Limit":
@@ -1654,6 +1677,30 @@
                       "details":
                         "path": "config.rules.max-fanout.limit"
                       "message": "invalid option value for limit"
+                    "issues":
+                    "lint-supported": false
+                    "metrics":
+                      "diagram-type": "unknown"
+                      "disconnected-node-count": 0
+                      "duplicate-node-count": 0
+                      "edge-count": 0
+                      "issue-counts":
+                        "by-rule":
+                        "by-severity":
+                      "max-fanin": 0
+                      "max-fanout": 0
+                      "node-count": 0
+                    "syntax-error": null
+                    "valid": false
+                "invalidSuppressionSelector":
+                  "summary": "Invalid suppression selector format"
+                  "value":
+                    "error":
+                      "code": "invalid_suppression_selector"
+                      "details":
+                        "hint": "valid formats: rule:*, node:ID, subgraph:NAME, file:*.js, or negation with ! prefix"
+                        "path": "config.rules.max-fanout.suppression-selectors[0]"
+                      "message": "invalid suppression selector format: node:"
                     "issues":
                     "lint-supported": false
                     "metrics":
@@ -2033,6 +2080,10 @@
       "summary": "Analyze and lint a Mermaid diagram"
       "tags":
         - "Linting"
+      "x-operational-env":
+        "required":
+          - "PARSER_CONCURRENCY_LIMIT"
+          - "PARSER_MAX_OLD_SPACE_MB"
   "/v1/analyze/help":
     "get":
       "description": "Returns diagram type templates, common error patterns with fixes, arrow syntax reference, and links to documentation."
@@ -2123,18 +2174,23 @@
                   "value":
                     "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
                     "runs":
-                      - "artifacts":
-                          - "location":
+                      -
+                        "artifacts":
+                          -
+                            "location":
                               "uri": "mermaid://diagram"
                         "invocations":
-                          - "executionSuccessful": false
+                          -
+                            "executionSuccessful": false
                             "properties":
                               "error-code": "syntax_error"
                               "error-message": "Unexpected token at line 4, column 5"
                         "results":
-                          - "level": "error"
+                          -
+                            "level": "error"
                             "locations":
-                              - "physicalLocation":
+                              -
+                                "physicalLocation":
                                   "artifactLocation":
                                     "uri": "mermaid://diagram"
                                   "region":
@@ -2151,11 +2207,14 @@
                   "value":
                     "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
                     "runs":
-                      - "artifacts":
-                          - "location":
+                      -
+                        "artifacts":
+                          -
+                            "location":
                               "uri": "mermaid://diagram"
                         "invocations":
-                          - "executionSuccessful": true
+                          -
+                            "executionSuccessful": true
                             "properties":
                               "request-uri": "/v1/analyze/sarif"
                         "results":
@@ -2169,17 +2228,22 @@
                   "value":
                     "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
                     "runs":
-                      - "artifacts":
-                          - "location":
+                      -
+                        "artifacts":
+                          -
+                            "location":
                               "uri": "mermaid://diagram"
                         "invocations":
-                          - "executionSuccessful": true
+                          -
+                            "executionSuccessful": true
                             "properties":
                               "request-uri": "/v1/analyze/sarif"
                         "results":
-                          - "level": "warning"
+                          -
+                            "level": "warning"
                             "locations":
-                              - "physicalLocation":
+                              -
+                                "physicalLocation":
                                   "artifactLocation":
                                     "uri": "mermaid://diagram"
                                   "region":
@@ -2195,7 +2259,8 @@
                             "informationUri": "https://github.com/CyanAutomation/merm8"
                             "name": "merm8"
                             "rules":
-                              - "id": "max-fanout"
+                              -
+                                "id": "max-fanout"
                                 "name": "max-fanout"
                                 "shortDescription":
                                   "text": "Flags nodes whose outgoing edge count exceeds a configurable limit (default 5)."
@@ -2211,7 +2276,7 @@
                 "type": "string"
             "Warning":
               "description": "One or more RFC 7234 warning values (code 299) describing legacy config migration guidance when legacy config is accepted."
-              "example": '299 - "config.schema_version is deprecated; use config.schema-version"'
+              "example": "299 - \"config.schema_version is deprecated; use config.schema-version\""
               "schema":
                 "type": "string"
         "400":
@@ -2241,6 +2306,10 @@
       "summary": "Analyze and lint a Mermaid diagram (SARIF output)"
       "tags":
         - "Linting"
+      "x-operational-env":
+        "required":
+          - "PARSER_CONCURRENCY_LIMIT"
+          - "PARSER_MAX_OLD_SPACE_MB"
   "/v1/config-versions":
     "get":
       "description": "Returns information about supported config schema versions, deprecation timelines, and API version negotiation details. Use this endpoint to plan config migrations and understand backward compatibility guarantees."
@@ -2282,9 +2351,10 @@
                 "build-time": "2024-03-06T10:00:00Z"
                 "failed-analyses":
                   "internal-errors": 5
+                  "other": 1
                   "parser-errors": 10
                   "parser-timeout": 10
-                  "syntax-errors": 25
+                  "syntax-errors": 24
                   "total": 50
                 "lint-supported":
                   - "flowchart"
@@ -2376,20 +2446,25 @@
                   "summary": "Currently built-in runtime rule metadata"
                   "value":
                     "rules":
-                      - "configurable-options":
-                          - "constraints": "Must be true or false."
+                      -
+                        "configurable-options":
+                          -
+                            "constraints": "Must be true or false."
                             "description": "Enable or disable this rule."
                             "name": "enabled"
                             "type": "boolean"
-                          - "constraints": "Accepted values (canonical): error, warning, info."
+                          -
+                            "constraints": "Accepted values (canonical): error, warning, info."
                             "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                             "name": "severity"
                             "type": "string"
-                          - "constraints": "Each entry must be a string selector."
+                          -
+                            "constraints": "Each entry must be a string selector."
                             "description": "Selectors that suppress matching issues."
                             "name": "suppression-selectors"
                             "type": "array[string]"
-                          - "constraints": "Must be an integer >= 1. Default is 8."
+                          -
+                            "constraints": "Must be an integer >= 1. Default is 8."
                             "description": "Maximum allowed depth for root-to-leaf traversals."
                             "name": "limit"
                             "type": "integer"
@@ -2402,20 +2477,25 @@
                         "id": "max-depth"
                         "severity": "warning"
                         "state": "implemented"
-                      - "configurable-options":
-                          - "constraints": "Must be true or false."
+                      -
+                        "configurable-options":
+                          -
+                            "constraints": "Must be true or false."
                             "description": "Enable or disable this rule."
                             "name": "enabled"
                             "type": "boolean"
-                          - "constraints": "Accepted values (canonical): error, warning, info."
+                          -
+                            "constraints": "Accepted values (canonical): error, warning, info."
                             "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                             "name": "severity"
                             "type": "string"
-                          - "constraints": "Each entry must be a string selector."
+                          -
+                            "constraints": "Each entry must be a string selector."
                             "description": "Selectors that suppress matching issues."
                             "name": "suppression-selectors"
                             "type": "array[string]"
-                          - "constraints": "Must be an integer >= 1. Default is 5."
+                          -
+                            "constraints": "Must be an integer >= 1. Default is 5."
                             "description": "Maximum allowed outgoing edges per node."
                             "name": "limit"
                             "type": "integer"
@@ -2428,20 +2508,25 @@
                         "id": "max-fanout"
                         "severity": "warning"
                         "state": "implemented"
-                      - "configurable-options":
-                          - "constraints": "Must be true or false."
+                      -
+                        "configurable-options":
+                          -
+                            "constraints": "Must be true or false."
                             "description": "Enable or disable this rule."
                             "name": "enabled"
                             "type": "boolean"
-                          - "constraints": "Accepted values (canonical): error, warning, info."
+                          -
+                            "constraints": "Accepted values (canonical): error, warning, info."
                             "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                             "name": "severity"
                             "type": "string"
-                          - "constraints": "Each entry must be a string selector."
+                          -
+                            "constraints": "Each entry must be a string selector."
                             "description": "Selectors that suppress matching issues."
                             "name": "suppression-selectors"
                             "type": "array[string]"
-                          - "constraints": "Must be true or false."
+                          -
+                            "constraints": "Must be true or false."
                             "description": "Allow single-node self-loop cycles without emitting issues."
                             "name": "allow-self-loop"
                             "type": "boolean"
@@ -2454,16 +2539,20 @@
                         "id": "no-cycles"
                         "severity": "error"
                         "state": "implemented"
-                      - "configurable-options":
-                          - "constraints": "Must be true or false."
+                      -
+                        "configurable-options":
+                          -
+                            "constraints": "Must be true or false."
                             "description": "Enable or disable this rule."
                             "name": "enabled"
                             "type": "boolean"
-                          - "constraints": "Accepted values (canonical): error, warning, info."
+                          -
+                            "constraints": "Accepted values (canonical): error, warning, info."
                             "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                             "name": "severity"
                             "type": "string"
-                          - "constraints": "Each entry must be a string selector."
+                          -
+                            "constraints": "Each entry must be a string selector."
                             "description": "Selectors that suppress matching issues."
                             "name": "suppression-selectors"
                             "type": "array[string]"
@@ -2475,16 +2564,20 @@
                         "id": "no-disconnected-nodes"
                         "severity": "error"
                         "state": "implemented"
-                      - "configurable-options":
-                          - "constraints": "Must be true or false."
+                      -
+                        "configurable-options":
+                          -
+                            "constraints": "Must be true or false."
                             "description": "Enable or disable this rule."
                             "name": "enabled"
                             "type": "boolean"
-                          - "constraints": "Accepted values (canonical): error, warning, info."
+                          -
+                            "constraints": "Accepted values (canonical): error, warning, info."
                             "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                             "name": "severity"
                             "type": "string"
-                          - "constraints": "Each entry must be a string selector."
+                          -
+                            "constraints": "Each entry must be a string selector."
                             "description": "Selectors that suppress matching issues."
                             "name": "suppression-selectors"
                             "type": "array[string]"
@@ -2496,17 +2589,21 @@
                         "id": "no-duplicate-node-ids"
                         "severity": "error"
                         "state": "implemented"
-                      - "availability": "Planned for sequence diagram linting expansion."
+                      -
+                        "availability": "Planned for sequence diagram linting expansion."
                         "configurable-options":
-                          - "constraints": "Must be true or false."
+                          -
+                            "constraints": "Must be true or false."
                             "description": "Enable or disable this rule."
                             "name": "enabled"
                             "type": "boolean"
-                          - "constraints": "Accepted values (canonical): error, warning, info."
+                          -
+                            "constraints": "Accepted values (canonical): error, warning, info."
                             "description": "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored)."
                             "name": "severity"
                             "type": "string"
-                          - "constraints": "Each entry must be a string selector."
+                          -
+                            "constraints": "Each entry must be a string selector."
                             "description": "Selectors that suppress matching issues."
                             "name": "suppression-selectors"
                             "type": "array[string]"
@@ -2591,12 +2688,17 @@
       "tags":
         - "Probes"
 "servers":
-  - "description": "Local development server"
+  -
+    "description": "Local development server"
     "url": "http://localhost:8080"
 "tags":
-  - "description": "Mermaid diagram analysis and linting"
+  -
+    "description": "Mermaid diagram analysis and linting"
     "name": "Linting"
-  - "description": "API documentation and specification"
+  -
+    "description": "API documentation and specification"
     "name": "Documentation"
-  - "description": "Liveness and readiness probe endpoints"
+  -
+    "description": "Liveness and readiness probe endpoints"
     "name": "Probes"
+

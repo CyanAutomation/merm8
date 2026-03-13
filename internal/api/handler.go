@@ -125,6 +125,29 @@ type validationError struct {
 	Path      string
 	Message   string
 	Supported []string
+	Hint      string
+}
+
+// extractAllowUnknownRulesFlag checks the allow-unknown-rules setting in the config JSON.
+// Defaults to true (lenient mode) for backward compatibility; set to false for strict mode.
+func extractAllowUnknownRulesFlag(raw json.RawMessage) bool {
+	if raw == nil || len(raw) == 0 {
+		return true // default: lenient mode
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return true // default: lenient mode on parse error
+	}
+	allowUnknown, ok := cfg["allow-unknown-rules"]
+	if !ok {
+		return true // default: lenient mode when flag not present
+	}
+	// If the value is not a bool, treat as true (lenient)
+	boolVal, isBool := allowUnknown.(bool)
+	if !isBool {
+		return true
+	}
+	return boolVal // true for lenient, false for strict
 }
 
 // parseConfig validates config payloads.
@@ -316,6 +339,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 							Code:    "invalid_suppression_selector",
 							Path:    rulePathPrefix + "." + ruleID + ".suppression-selectors",
 							Message: "invalid suppression selector format: " + selector,
+							Hint:    "valid formats: rule:*, node:ID, subgraph:NAME, file:*.js, or negation with ! prefix",
 						}
 					}
 
@@ -444,7 +468,7 @@ type responseHint struct {
 
 func hintForUnsupportedDiagramType(diagramType model.DiagramType) responseHint {
 	return responseHint{
-		Code:       "lint_unsupported_diagram_type",
+		Code:       "unsupported_diagram_type",
 		Message:    "diagram parsed successfully but linting is not available for this Mermaid type yet",
 		Severity:   "info",
 		Confidence: 1.0,
@@ -476,6 +500,22 @@ func hintsForConfigValidationError(validErr *validationError) []responseHint {
 			Severity:   "error",
 			Confidence: 1.0,
 			FixExample: "Remove the unknown key at error.details.path and use one of error.details.supported option names.",
+		}}
+	case "unknown_rule":
+		return []responseHint{{
+			Code:       "config_unknown_rule",
+			Message:    "configuration contains an unknown rule ID",
+			Severity:   "error",
+			Confidence: 1.0,
+			FixExample: "Use one of the supported rule names listed in error.details.supported. See docs/examples/rule-suppressions.md for rule reference.",
+		}}
+	case "invalid_suppression_selector":
+		return []responseHint{{
+			Code:       "config_invalid_suppression_selector",
+			Message:    "configuration contains an invalid suppression selector format",
+			Severity:   "error",
+			Confidence: 1.0,
+			FixExample: "Correct the selector to one of the valid formats shown in error.details.hint. Example: node:MyNodeID or rule:max-fanout.",
 		}}
 	case "unsupported_schema_version":
 		return []responseHint{{
@@ -927,28 +967,11 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/docs", h.ServeSwagger)
 	mux.HandleFunc("GET /v1/benchmark.html", h.ServeBenchmark)
 	mux.HandleFunc("GET /v1/config-versions", h.ConfigVersions)
-
-	// Legacy unversioned compatibility aliases (including probe-friendly root path).
-	mux.HandleFunc("GET /", h.Healthz)
-	mux.HandleFunc("GET /health", h.Healthz)
-	mux.HandleFunc("GET /healthz", h.Healthz)
-	mux.HandleFunc("GET /ready", h.Ready)
 	mux.HandleFunc("GET /v1/version", h.Version)
-	mux.HandleFunc("GET /version", h.Version)
-	mux.HandleFunc("GET /info", h.Info)
-	mux.HandleFunc("GET /metrics", h.Metrics)
-	mux.HandleFunc("GET /internal/metrics", h.InternalMetrics)
-	mux.HandleFunc("GET /rules", h.ListRules)
-	mux.HandleFunc("GET /rules/schema", h.RuleConfigSchema)
-	mux.HandleFunc("GET /diagram-types", h.DiagramTypes)
-	mux.HandleFunc("GET /analyze/help", h.AnalyzeHelp)
-	mux.HandleFunc("POST /analyze", h.Analyze)
-	mux.HandleFunc("POST /analyze/raw", h.AnalyzeRaw)
-	mux.HandleFunc("POST /analyze/sarif", h.AnalyzeSARIF)
-	mux.HandleFunc("GET /spec", h.ServeSpec)
-	mux.HandleFunc("GET /docs", h.ServeSwagger)
-	mux.HandleFunc("GET /benchmark.html", h.ServeBenchmark)
-	mux.HandleFunc("GET /config-versions", h.ConfigVersions)
+
+	// Legacy unversioned routes were removed in v1.0.1+.
+	// All clients must use /v1/* endpoints.
+	// See docs/migration-guide.md for migration steps.
 }
 
 // InternalMetrics handles GET /internal/metrics and returns analyze outcome counters.
@@ -1450,7 +1473,8 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		return
 	}
 
-	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled(), true)
+	lenientMode := extractAllowUnknownRulesFlag(req.Config)
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled(), lenientMode)
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
 		writeConfigValidationError(w, configValidationErr)
@@ -1491,6 +1515,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		h.mu.RUnlock()
 		if metrics != nil {
 			metrics.ObserveParserDuration(outcome, parseDuration)
+			metrics.ObserveParserLatency(outcome, parseDuration)
 		}
 		observeAnalyzeOutcome(outcome)
 		setAnalyzeLogFields(r.Context(), "", outcome, string(model.DiagramTypeUnknown))
@@ -1505,6 +1530,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		h.mu.RUnlock()
 		if metrics != nil {
 			metrics.ObserveParserDuration(telemetry.OutcomeSyntaxError, parseDuration)
+			metrics.ObserveParserLatency(telemetry.OutcomeSyntaxError, parseDuration)
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
@@ -1542,6 +1568,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		h.mu.RUnlock()
 		if metrics != nil {
 			metrics.ObserveParserDuration(telemetry.OutcomeInternalError, parseDuration)
+			metrics.ObserveParserLatency(telemetry.OutcomeInternalError, parseDuration)
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
 		setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeInternalError, string(model.DiagramTypeUnknown))
@@ -1555,6 +1582,7 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 	h.mu.RUnlock()
 	if metrics != nil {
 		metrics.ObserveParserDuration(telemetry.OutcomeLintSuccess, parseDuration)
+		metrics.ObserveParserLatency(telemetry.OutcomeLintSuccess, parseDuration)
 	}
 
 	family := diagram.Type.Family()
@@ -1714,7 +1742,8 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled(), true)
+	lenientMode := extractAllowUnknownRulesFlag(req.Config)
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled(), lenientMode)
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
 		writeConfigValidationError(w, configValidationErr)
@@ -1755,6 +1784,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		h.mu.RUnlock()
 		if metrics != nil {
 			metrics.ObserveParserDuration(outcome, parseDuration)
+			metrics.ObserveParserLatency(outcome, parseDuration)
 		}
 		observeAnalyzeOutcome(outcome)
 		setAnalyzeLogFields(r.Context(), "", outcome, string(model.DiagramTypeUnknown))
@@ -1769,6 +1799,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		h.mu.RUnlock()
 		if metrics != nil {
 			metrics.ObserveParserDuration(telemetry.OutcomeSyntaxError, parseDuration)
+			metrics.ObserveParserLatency(telemetry.OutcomeSyntaxError, parseDuration)
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
@@ -1813,6 +1844,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 		h.mu.RUnlock()
 		if metrics != nil {
 			metrics.ObserveParserDuration(telemetry.OutcomeInternalError, parseDuration)
+			metrics.ObserveParserLatency(telemetry.OutcomeInternalError, parseDuration)
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
 		setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeInternalError, string(model.DiagramTypeUnknown))
@@ -1826,6 +1858,7 @@ func (h *Handler) analyzeRawWithCallback(w http.ResponseWriter, r *http.Request,
 	h.mu.RUnlock()
 	if metrics != nil {
 		metrics.ObserveParserDuration(telemetry.OutcomeLintSuccess, parseDuration)
+		metrics.ObserveParserLatency(telemetry.OutcomeLintSuccess, parseDuration)
 	}
 
 	family := diagram.Type.Family()
@@ -1972,7 +2005,8 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		return
 	}
 
-	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled(), true)
+	lenientMode := extractAllowUnknownRulesFlag(req.Config)
+	cfg, deprecationWarnings, configValidationErr := parseConfig(req.Config, h.engine.KnownRuleIDs(), h.strictConfigSchemaEnabled(), lenientMode)
 	if configValidationErr != nil {
 		observeAnalyzeOutcome(configValidationErr.Code)
 		statusCode := http.StatusBadRequest
@@ -2033,6 +2067,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		h.mu.RUnlock()
 		if metrics != nil {
 			metrics.ObserveParserDuration(outcome, parseDuration)
+			metrics.ObserveParserLatency(outcome, parseDuration)
 		}
 		observeAnalyzeOutcome(outcome)
 		setAnalyzeLogFields(r.Context(), "", outcome, string(model.DiagramTypeUnknown))
@@ -2052,6 +2087,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		h.mu.RUnlock()
 		if metrics != nil {
 			metrics.ObserveParserDuration(telemetry.OutcomeSyntaxError, parseDuration)
+			metrics.ObserveParserLatency(telemetry.OutcomeSyntaxError, parseDuration)
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeSyntaxError)
 		diagramType := defaultDiagramTypeForSyntaxError(req.Code)
@@ -2072,6 +2108,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 		h.mu.RUnlock()
 		if metrics != nil {
 			metrics.ObserveParserDuration(telemetry.OutcomeInternalError, parseDuration)
+			metrics.ObserveParserLatency(telemetry.OutcomeInternalError, parseDuration)
 		}
 		observeAnalyzeOutcome(telemetry.OutcomeInternalError)
 		setAnalyzeLogFields(r.Context(), "", telemetry.OutcomeInternalError, string(model.DiagramTypeUnknown))
@@ -2089,6 +2126,7 @@ func analyzeForSARIF(w http.ResponseWriter, r *http.Request, h *Handler) {
 	h.mu.RUnlock()
 	if metrics != nil {
 		metrics.ObserveParserDuration(telemetry.OutcomeLintSuccess, parseDuration)
+		metrics.ObserveParserLatency(telemetry.OutcomeLintSuccess, parseDuration)
 	}
 
 	family := diagram.Type.Family()
@@ -3211,6 +3249,9 @@ func writeConfigValidationError(w http.ResponseWriter, configValidationErr *vali
 	}
 	if len(configValidationErr.Supported) > 0 {
 		details["supported"] = configValidationErr.Supported
+	}
+	if configValidationErr.Hint != "" {
+		details["hint"] = configValidationErr.Hint
 	}
 	if len(details) == 0 {
 		details = nil

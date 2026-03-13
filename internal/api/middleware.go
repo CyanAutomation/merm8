@@ -499,11 +499,13 @@ func AnalyzeBearerAuthMiddleware(token string, next http.Handler) http.Handler {
 		if r.Method == http.MethodPost && isProtectedAnalyzePath(r.URL.Path) {
 			header := r.Header.Get("Authorization")
 			if !strings.HasPrefix(header, "Bearer ") {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="merm8-api"`)
 				writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
 				return
 			}
 			providedToken := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
 			if subtle.ConstantTimeCompare([]byte(providedToken), []byte(token)) != 1 {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="merm8-api"`)
 				writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
 				return
 			}

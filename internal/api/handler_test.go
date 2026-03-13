@@ -384,7 +384,7 @@ func TestAnalyze_MissingCode(t *testing.T) {
 		return nil, nil, nil
 	})
 	body := `{}`
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -399,7 +399,7 @@ func TestAnalyze_InvalidJSON(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, nil
 	})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader("not json"))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader("not json"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -451,7 +451,7 @@ func TestAnalyze_RequestBodyTooLarge(t *testing.T) {
 	largeCode := strings.Repeat("A", (1<<20)+1024)
 	body, _ := json.Marshal(map[string]string{"code": largeCode})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -471,7 +471,7 @@ func TestAnalyze_ParserFails_Returns500(t *testing.T) {
 		return nil, nil, errors.New("mock parser error")
 	})
 	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -487,7 +487,7 @@ func TestAnalyze_ParserTimeout_Returns504(t *testing.T) {
 		return nil, nil, fmt.Errorf("%w: after 2s", parser.ErrTimeout)
 	})
 	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -519,7 +519,7 @@ func TestAnalyze_ParserSubprocessError_Returns500(t *testing.T) {
 		return nil, nil, fmt.Errorf("%w: exit status 1", parser.ErrSubprocess)
 	})
 	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -535,7 +535,7 @@ func TestAnalyze_ParserDecodeError_Returns500(t *testing.T) {
 		return nil, nil, fmt.Errorf("%w: malformed json", parser.ErrDecode)
 	})
 	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -551,7 +551,7 @@ func TestAnalyze_ParserContractViolation_Returns500(t *testing.T) {
 		return nil, nil, fmt.Errorf("%w: missing ast", parser.ErrContract)
 	})
 	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -570,7 +570,7 @@ func TestAnalyze_ParserReturnsNilDiagram_Returns500(t *testing.T) {
 		return nil, nil, nil
 	})
 	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -642,7 +642,7 @@ func TestAnalyze_ValidDiagram_SuccessPath(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B\n  B-->C"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -727,7 +727,7 @@ func TestAnalyze_SyntaxError_Returns200(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]string{"code": "invalid code"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -776,7 +776,7 @@ func TestAnalyze_SyntaxError_UsesDetectedDiagramTypeForDefaults(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]string{"code": "graph TD\nA-->"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -973,7 +973,7 @@ func TestAnalyze_SyntaxError_SuggestionsGraphvizDetection(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]string{"code": "digraph G {\n  A -> B\n}"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -1015,7 +1015,7 @@ func TestAnalyze_SyntaxError_SuggestionsTabDetection(t *testing.T) {
 
 	codeWithTab := "flowchart TD\n\tA --> B"
 	body, _ := json.Marshal(map[string]string{"code": codeWithTab})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -1043,7 +1043,7 @@ func TestAnalyze_SyntaxError_SuggestionsArrowSyntax(t *testing.T) {
 
 	codeWithWrongArrow := "flowchart TD\n  A -> B"
 	body, _ := json.Marshal(map[string]string{"code": codeWithWrongArrow})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -1071,7 +1071,7 @@ func TestAnalyze_SyntaxError_SuggestionsMissingDiagramType(t *testing.T) {
 
 	unclearCode := "A --> B"
 	body, _ := json.Marshal(map[string]string{"code": unclearCode})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -1371,7 +1371,7 @@ func TestAnalyze_UnsupportedDiagramType_ReturnsStructuredError(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]string{"code": "sequenceDiagram\n  Alice->>Bob: Hi"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -1449,7 +1449,7 @@ func TestAnalyze_UnsupportedDiagramType_IncludesHint(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]string{"code": "sequenceDiagram\n  Alice->>Bob: Hi"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -1463,7 +1463,7 @@ func TestAnalyze_UnsupportedDiagramType_IncludesHint(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	hint := assertResponseHasHintCode(t, resp, "lint_unsupported_diagram_type")
+	hint := assertResponseHasHintCode(t, resp, "unsupported_diagram_type")
 	if severity, _ := hint["severity"].(string); severity != "info" {
 		t.Fatalf("expected hint severity=info, got %#v", hint["severity"])
 	}
@@ -1508,7 +1508,7 @@ func TestAnalyze_ConfigApplied_MaxFanout(t *testing.T) {
 		"config": config,
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -1591,7 +1591,7 @@ func TestAnalyze_ConfigParsing(t *testing.T) {
 				"config": tt.config,
 			})
 
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -1643,7 +1643,7 @@ func TestAnalyze_ConfigLegacySnakeCaseKeysAcceptedWithWarning(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(bodyJSON))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(bodyJSON))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -1710,7 +1710,7 @@ func TestAnalyze_LegacyConfigShapesWarnAndStillApplyConfig(t *testing.T) {
 				"config": tt.config,
 			})
 
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(bodyJSON))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(bodyJSON))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -1773,7 +1773,7 @@ func TestAnalyze_LegacyNestedConfigLenientNormalizesCanonicalRuleIDs(t *testing.
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(bodyJSON))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(bodyJSON))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -1828,7 +1828,7 @@ func TestAnalyze_ConfigCanonicalFormatNoDeprecationWarnings(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(bodyJSON))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(bodyJSON))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -1875,7 +1875,7 @@ func TestAnalyze_LegacyConfigWarningsIncludeStructuredMetadataAndLogHint(t *test
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(bodyJSON))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(bodyJSON))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -1927,7 +1927,7 @@ func TestAnalyze_ConfigLegacySnakeCaseKeysRejectedWhenPhaseFlips(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(bodyJSON))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(bodyJSON))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -1958,7 +1958,7 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 			},
 		})
 
-		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
@@ -1973,7 +1973,7 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 		})
 
 		body := []byte(`{"code":"graph TD; A-->B","config":{"schema-version":"v1"}}`)
-		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
@@ -2006,7 +2006,7 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 			},
 		})
 
-		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
@@ -2031,7 +2031,7 @@ func TestAnalyze_ConfigSchemaVersion_Validation(t *testing.T) {
 			})
 			h.SetStrictConfigSchema(true)
 			body, _ := json.Marshal(map[string]any{"code": "graph TD; A-->B", "config": config})
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -2097,7 +2097,7 @@ func TestAnalyze_ConfigValidationErrors_IncludeStructuredHints(t *testing.T) {
 				"code":   "graph TD; A-->B",
 				"config": tt.config,
 			})
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -2146,7 +2146,7 @@ func TestAnalyze_MultipleRulesAggregate(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B\n  A[A2]"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -2189,7 +2189,7 @@ func TestAnalyze_MetricsExtendedFields(t *testing.T) {
 		return diagram, nil, nil
 	})
 	body, _ := json.Marshal(map[string]string{"code": "graph LR\n  A-->B\n  C-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -2259,7 +2259,7 @@ func TestAnalyze_MetricsDisconnectedNodeUnionIncludesSourceAnalysisOnlyNodes(t *
 	body, _ := json.Marshal(map[string]string{"code": `graph TD
   A-->B
   orphan`})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -2299,7 +2299,7 @@ func TestAnalyze_MetricsDuplicateNodeUnionIncludesSourceAnalysisOnlyNodes(t *tes
 	body, _ := json.Marshal(map[string]string{"code": `graph TD
   A-->B
   ghost`})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -2346,7 +2346,7 @@ func TestAnalyze_LargeDiagram(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]string{"code": "large diagram"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2490,7 +2490,7 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 			})
 
 			body, _ := json.Marshal(map[string]string{"code": "large topology"})
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
@@ -2735,7 +2735,7 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 				}()
 
 				body := sc.buildBody(i)
-				req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+				req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 				req.Header.Set("Content-Type", "application/json")
 				w := httptest.NewRecorder()
 
@@ -2921,7 +2921,7 @@ func TestInternalMetrics_AnalyzeOutcomeCounters(t *testing.T) {
 
 	for _, tc := range testCases {
 		body := []byte(fmt.Sprintf(`{"code":%q}`, tc.code))
-		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
@@ -3009,7 +3009,7 @@ func TestDiagramTypes_ReturnsParserAndLintSupport(t *testing.T) {
 	h := api.NewHandler(&mockParser{}, engine.New())
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/diagram-types", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/diagram-types", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -3041,7 +3041,7 @@ func TestMetrics_ReturnsNotImplementedWhenExporterMissing(t *testing.T) {
 	h := api.NewHandler(&mockParser{}, engine.New())
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/metrics", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -3064,7 +3064,7 @@ func TestMetrics_ExporterExposesPrometheusText(t *testing.T) {
 	}))
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/metrics", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -3089,7 +3089,7 @@ func TestVersion_ReturnsBuildAndParserMetadata(t *testing.T) {
 	h.SetBuildMetadata("abc1234", "2026-03-04T00:00:00Z")
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/version", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/version", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -3120,7 +3120,7 @@ func TestInfo_ReturnsServiceAndParserMetadata(t *testing.T) {
 	h.SetServiceVersion("2.3.4")
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/info", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/info", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -3217,7 +3217,7 @@ func TestReady_OptionallyIncludesVersionMetadata(t *testing.T) {
 	h := api.NewHandler(&mockParser{versionInfo: &parser.VersionInfo{ParserVersion: "1.0.0", MermaidVersion: "11.12.3"}}, engine.New())
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/ready", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -3244,7 +3244,7 @@ func TestReady_ReturnsReadyWhenDependencyHealthy(t *testing.T) {
 	h := api.NewHandler(&mockParser{}, engine.New())
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/ready", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -3266,7 +3266,7 @@ func TestReady_ReturnsUnavailableWhenDependencyUnhealthy(t *testing.T) {
 	h := api.NewHandler(&mockParser{readyError: errors.New("parser script not found")}, engine.New())
 	h.RegisterRoutes(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/ready", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -3302,7 +3302,7 @@ func TestAnalyze_Integration_SingleRuleSuppression(t *testing.T) {
 		"config": {"schema-version":"v1","rules": {"max-fanout": {"limit": 1}}}
 	}`
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3335,7 +3335,7 @@ func TestAnalyze_Integration_GlobalSuppression(t *testing.T) {
 		"config": {"schema-version":"v1","rules": {"max-fanout": {"limit": 1}}}
 	}`
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3383,7 +3383,7 @@ func TestAnalyze_Integration_UnsupportedDiagramTypes(t *testing.T) {
 				t.Fatalf("failed to marshal request: %v", err)
 			}
 
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -3458,7 +3458,7 @@ func TestAnalyze_Integration_IgnoreNextLineSuppressesOnlyTargetLineForMatchingRu
 		"code": "graph TD\n%% merm8-ignore-next-line next-line-probe\nA-->B"
 	}`
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3524,7 +3524,7 @@ setTimeout(() => {
 	mux := newTestMuxWithRealParser(t, scriptPath)
 
 	body := `{"code":"graph TD\nA-->B"}`
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3534,7 +3534,7 @@ setTimeout(() => {
 	}
 	assertExactErrorResponse(t, w.Body.Bytes(), "parser_timeout", "parser timed out while validating Mermaid code")
 
-	healthReq := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	healthReq := httptest.NewRequest(http.MethodGet, "/v1/healthz", nil)
 	healthW := httptest.NewRecorder()
 	mux.ServeHTTP(healthW, healthReq)
 
@@ -3602,7 +3602,7 @@ func TestAnalyze_MalformedConfigObjects_Returns400(t *testing.T) {
 				"config": tt.config,
 			})
 
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -3638,7 +3638,7 @@ func TestAnalyze_InvalidSeverityConfig_Returns400(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3670,7 +3670,7 @@ func TestAnalyze_InvalidUnknownRuleConfigNested_Returns400(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3708,7 +3708,7 @@ func TestAnalyze_InvalidUnknownRuleConfigWithoutSchemaVersion_Returns400(t *test
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3749,7 +3749,7 @@ func TestAnalyze_InvalidUnknownOptionConfig_Returns400(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3780,7 +3780,7 @@ func TestAnalyze_InvalidMaxFanoutLimitConfig_Returns400(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3815,7 +3815,7 @@ func TestAnalyze_DisableRuleViaConfig(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3851,7 +3851,7 @@ func TestAnalyze_SeverityOverride(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3890,7 +3890,7 @@ func TestAnalyze_SeverityOverride_NormalizesCaseAndWhitespace(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3932,7 +3932,7 @@ func TestAnalyze_WarnSeverityAliasRejected_Returns400(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3956,7 +3956,7 @@ func TestAnalyze_Integration_NonMatchingSuppressionDoesNotHideIssue(t *testing.T
 		"config": {"schema-version":"v1","rules": {"max-fanout": {"limit": 1}}}
 	}`
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -3996,7 +3996,7 @@ func TestAnalyze_ParserConcurrencyLimitReached_Returns503(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
 
-	firstReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	firstReq := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	firstReq.Header.Set("Content-Type", "application/json")
 	firstW := httptest.NewRecorder()
 
@@ -4008,7 +4008,7 @@ func TestAnalyze_ParserConcurrencyLimitReached_Returns503(t *testing.T) {
 
 	<-start
 
-	secondReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	secondReq := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	secondReq.Header.Set("Content-Type", "application/json")
 	secondW := httptest.NewRecorder()
 	mux.ServeHTTP(secondW, secondReq)
@@ -4042,7 +4042,7 @@ func TestAnalyzeSARIF_ParserConcurrencyLimitReached_Returns503WithRetryAfter(t *
 
 	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
 
-	firstReq := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	firstReq := httptest.NewRequest(http.MethodPost, "/v1/analyze/sarif", bytes.NewReader(body))
 	firstReq.Header.Set("Content-Type", "application/json")
 	firstW := httptest.NewRecorder()
 
@@ -4054,7 +4054,7 @@ func TestAnalyzeSARIF_ParserConcurrencyLimitReached_Returns503WithRetryAfter(t *
 
 	<-start
 
-	secondReq := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	secondReq := httptest.NewRequest(http.MethodPost, "/v1/analyze/sarif", bytes.NewReader(body))
 	secondReq.Header.Set("Content-Type", "application/json")
 	secondW := httptest.NewRecorder()
 	mux.ServeHTTP(secondW, secondReq)
@@ -4170,7 +4170,7 @@ func TestAnalyze_ParserConcurrencyLimit_HighConcurrencyContention(t *testing.T) 
 			defer wg.Done()
 			<-start
 
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -4243,7 +4243,7 @@ func TestAnalyze_ParserConcurrencyLimit_HighConcurrencyContention(t *testing.T) 
 
 	wg.Wait()
 
-	postReleaseReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	postReleaseReq := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	postReleaseReq.Header.Set("Content-Type", "application/json")
 	postReleaseW := httptest.NewRecorder()
 	mux.ServeHTTP(postReleaseW, postReleaseReq)
@@ -4290,7 +4290,7 @@ func TestAnalyze_ParserConcurrencyLimit_RuntimeUpdates_DoNotCreateParallelLimite
 			defer requestsWG.Done()
 			<-start
 
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -4326,7 +4326,7 @@ func TestAnalyzeBearerAuthMiddleware_RequiresTokenInProduction(t *testing.T) {
 	secured := api.AnalyzeBearerAuthMiddleware("s3cr3t", mux)
 
 	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	secured.ServeHTTP(w, req)
@@ -4345,7 +4345,7 @@ func TestAnalyzeRateLimitMiddleware_Returns429(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
 
-	firstReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	firstReq := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	firstReq.Header.Set("Content-Type", "application/json")
 	firstReq.RemoteAddr = "127.0.0.1:1234"
 	firstW := httptest.NewRecorder()
@@ -4355,7 +4355,7 @@ func TestAnalyzeRateLimitMiddleware_Returns429(t *testing.T) {
 		t.Fatalf("expected first request to pass, got %d", firstW.Code)
 	}
 
-	secondReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	secondReq := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	secondReq.Header.Set("Content-Type", "application/json")
 	secondReq.RemoteAddr = "127.0.0.1:5678"
 	secondW := httptest.NewRecorder()
@@ -4451,7 +4451,7 @@ func TestAnalyzeRateLimitMiddleware_ConcurrentHeadersRemainNonNegativeAndMonoton
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			req.RemoteAddr = "127.0.0.1:1234"
 			w := httptest.NewRecorder()
@@ -4536,7 +4536,7 @@ func TestAnalyzeAuthMiddleware_PrecedesRateLimitQuotaConsumption(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
 
-	unauthorizedReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	unauthorizedReq := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	unauthorizedReq.Header.Set("Content-Type", "application/json")
 	unauthorizedReq.RemoteAddr = "127.0.0.1:1234"
 	unauthorizedW := httptest.NewRecorder()
@@ -4546,7 +4546,7 @@ func TestAnalyzeAuthMiddleware_PrecedesRateLimitQuotaConsumption(t *testing.T) {
 		t.Fatalf("expected unauthorized request to be rejected before rate limiting, got %d", unauthorizedW.Code)
 	}
 
-	authorizedReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	authorizedReq := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	authorizedReq.Header.Set("Content-Type", "application/json")
 	authorizedReq.Header.Set("Authorization", "Bearer s3cr3t")
 	authorizedReq.RemoteAddr = "127.0.0.1:5678"
@@ -4596,7 +4596,7 @@ func TestListRules_ResponseShape(t *testing.T) {
 		return nil, nil, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/rules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/rules", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -4646,7 +4646,7 @@ func TestListRules_ContainsAllBuiltins(t *testing.T) {
 		return nil, nil, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/rules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/rules", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -4675,7 +4675,7 @@ func TestListRules_MetadataConsistencyWithRegistry(t *testing.T) {
 		return nil, nil, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/rules", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/rules", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -4758,7 +4758,7 @@ func TestAnalyze_InvalidMaxDepthLimitConfig_Returns400(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -4789,7 +4789,7 @@ func TestAnalyze_InvalidNoCyclesAllowSelfLoopType_Returns400(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -4811,7 +4811,7 @@ func TestAnalyze_SequenceDiagramSupportedWhenRulesRegistered(t *testing.T) {
 	h.RegisterRoutes(mux)
 
 	body, _ := json.Marshal(map[string]any{"code": "sequenceDiagram\nAlice->>Bob: Hi"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -4848,7 +4848,7 @@ func TestAnalyzeSARIF_SequenceDiagramSupportedWhenRulesRegistered(t *testing.T) 
 	h.RegisterRoutes(mux)
 
 	body, _ := json.Marshal(map[string]any{"code": "sequenceDiagram\nAlice->>Bob: Hi"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/sarif", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -4886,7 +4886,7 @@ func TestAnalyzeSARIF_ReturnsSARIFForValidAnalysis(t *testing.T) {
 	h.RegisterRoutes(mux)
 
 	body, _ := json.Marshal(map[string]any{"code": "graph TD\nA-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/sarif", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -4948,7 +4948,7 @@ func TestAnalyzeSARIF_SeverityMapping(t *testing.T) {
 	h.RegisterRoutes(mux)
 
 	body, _ := json.Marshal(map[string]any{"code": "graph TD\nA-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/sarif", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -4978,7 +4978,7 @@ func TestAnalyzeSARIF_NilURLDoesNotPanic(t *testing.T) {
 	}}, engine.NewWithRules(sarifProbeRule{}))
 
 	body, _ := json.Marshal(map[string]any{"code": "graph TD\nA-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/sarif", bytes.NewReader(body))
 	req.URL = nil
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -5072,7 +5072,7 @@ func TestAnalyze_ConfigSuppressionSelectors_ContractBehavior(t *testing.T) {
 				},
 			})
 
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -5136,7 +5136,7 @@ func TestAnalyze_MetricsIssueCountsReflectUnsuppressedIssuesOnly(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -5207,7 +5207,7 @@ func TestAnalyze_ConfigSuppressionSelectors_MalformedRejected(t *testing.T) {
 			},
 		})
 
-		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
@@ -5240,7 +5240,7 @@ func TestAnalyze_ConfigSuppressionSelectors_MalformedRejected(t *testing.T) {
 			},
 		})
 
-		req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
@@ -5258,7 +5258,7 @@ func TestAnalyze_RequestIDHeaderPropagation(t *testing.T) {
 	})
 	handler := api.RequestIDMiddleware(mux)
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(`{"code":"graph TD;A-->B"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(`{"code":"graph TD;A-->B"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Request-Id", "req-123")
 	w := httptest.NewRecorder()
@@ -5281,24 +5281,24 @@ func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
 		want   int
 	}{
 		{method: http.MethodPost, path: "/v1/analyze", body: `{"code":"graph TD;A-->B"}`, want: http.StatusOK},
-		{method: http.MethodPost, path: "/analyze", body: `{"code":"graph TD;A-->B"}`, want: http.StatusOK},
+		{method: http.MethodPost, path: "/v1/analyze", body: `{"code":"graph TD;A-->B"}`, want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/rules", want: http.StatusOK},
-		{method: http.MethodGet, path: "/rules", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/rules", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/rules/schema", want: http.StatusOK},
 		{method: http.MethodGet, path: "/rules/schema", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/spec", want: http.StatusOK},
-		{method: http.MethodGet, path: "/spec", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/spec", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/docs", want: http.StatusOK},
-		{method: http.MethodGet, path: "/docs", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/docs", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/benchmark.html", want: http.StatusNotFound},
 		{method: http.MethodGet, path: "/benchmark.html", want: http.StatusNotFound},
 		{method: http.MethodGet, path: "/v1/healthz", want: http.StatusOK},
-		{method: http.MethodGet, path: "/healthz", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/healthz", want: http.StatusOK},
 		{method: http.MethodGet, path: "/", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/ready", want: http.StatusOK},
-		{method: http.MethodGet, path: "/ready", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/ready", want: http.StatusOK},
 		{method: http.MethodGet, path: "/v1/version", want: http.StatusOK},
-		{method: http.MethodGet, path: "/version", want: http.StatusOK},
+		{method: http.MethodGet, path: "/v1/version", want: http.StatusOK},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			var reqBody *strings.Reader
@@ -5417,7 +5417,7 @@ func TestServeBenchmark_DoesNotInterfereWithHealthEndpoints(t *testing.T) {
 		t.Fatalf("expected GET / to remain healthy with 200, got %d", healthW.Code)
 	}
 
-	healthzReq := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	healthzReq := httptest.NewRequest(http.MethodGet, "/v1/healthz", nil)
 	healthzW := httptest.NewRecorder()
 	mux.ServeHTTP(healthzW, healthzReq)
 	if healthzW.Code != http.StatusOK {
@@ -5445,8 +5445,8 @@ func TestLegacyAnalyzeAliases_WithLegacyConfigEmitsDeprecationHeaders(t *testing
 		path   string
 		body   string
 	}{
-		{name: "analyze with legacy config", method: http.MethodPost, path: "/analyze", body: `{"code":"graph TD;A-->B","config":{"schema_version":"v1","rules":{}}}`},
-		{name: "analyze sarif with legacy config", method: http.MethodPost, path: "/analyze/sarif", body: `{"code":"graph TD;A-->B","config":{"schema_version":"v1","rules":{}}}`},
+		{name: "analyze with legacy config", method: http.MethodPost, path: "/v1/analyze", body: `{"code":"graph TD;A-->B","config":{"schema_version":"v1","rules":{}}}`},
+		{name: "analyze sarif with legacy config", method: http.MethodPost, path: "/v1/analyze/sarif", body: `{"code":"graph TD;A-->B","config":{"schema_version":"v1","rules":{}}}`},
 	}
 
 	for _, tc := range legacyConfigTests {
@@ -5473,8 +5473,8 @@ func TestLegacyAnalyzeAliases_WithLegacyConfigEmitsDeprecationHeaders(t *testing
 		path   string
 		body   string
 	}{
-		{name: "analyze with canonical config", method: http.MethodPost, path: "/analyze", body: `{"code":"graph TD;A-->B","config":{"schema-version":"v1","rules":{}}}`},
-		{name: "analyze sarif with canonical config", method: http.MethodPost, path: "/analyze/sarif", body: `{"code":"graph TD;A-->B","config":{"schema-version":"v1","rules":{}}}`},
+		{name: "analyze with canonical config", method: http.MethodPost, path: "/v1/analyze", body: `{"code":"graph TD;A-->B","config":{"schema-version":"v1","rules":{}}}`},
+		{name: "analyze sarif with canonical config", method: http.MethodPost, path: "/v1/analyze/sarif", body: `{"code":"graph TD;A-->B","config":{"schema-version":"v1","rules":{}}}`},
 	}
 
 	for _, tc := range canonicalConfigTests {
@@ -5498,9 +5498,9 @@ func TestLegacyAnalyzeAliases_WithLegacyConfigEmitsDeprecationHeaders(t *testing
 		path   string
 		body   string
 	}{
-		{name: "analyze raw", method: http.MethodPost, path: "/analyze/raw", body: `graph TD
+		{name: "analyze raw", method: http.MethodPost, path: "/v1/analyze/raw", body: `graph TD
 A-->B`},
-		{name: "analyze help", method: http.MethodGet, path: "/analyze/help"},
+		{name: "analyze help", method: http.MethodGet, path: "/v1/analyze/help"},
 	}
 
 	for _, tc := range noConfigTests {
@@ -5620,7 +5620,7 @@ func TestAnalyzeBearerAuthMiddleware_RequiresTokenOnProtectedAnalyzeRoutes(t *te
 	})
 	secured := api.AnalyzeBearerAuthMiddleware("s3cr3t", mux)
 
-	for _, path := range []string{"/analyze/raw", "/v1/analyze/raw", "/v1/analyse/raw", "/analyze/sarif", "/v1/analyze/sarif", "/v1/analyse"} {
+	for _, path := range []string{"/v1/analyze/raw", "/v1/analyze/raw", "/v1/analyse/raw", "/v1/analyze/sarif", "/v1/analyze/sarif", "/v1/analyse"} {
 		t.Run(path, func(t *testing.T) {
 			var body string
 			contentType := "application/json"
@@ -5644,7 +5644,7 @@ func TestAnalyzeBearerAuthMiddleware_RequiresTokenOnProtectedAnalyzeRoutes(t *te
 }
 
 func TestAnalyzeRateLimitMiddleware_AppliesOnProtectedAnalyzeRoutes(t *testing.T) {
-	for _, path := range []string{"/analyze/raw", "/v1/analyze/raw", "/v1/analyse/raw", "/analyze/sarif", "/v1/analyze/sarif", "/v1/analyse"} {
+	for _, path := range []string{"/v1/analyze/raw", "/v1/analyze/raw", "/v1/analyse/raw", "/v1/analyze/sarif", "/v1/analyze/sarif", "/v1/analyse"} {
 		t.Run(path, func(t *testing.T) {
 			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 				return &model.Diagram{}, nil, nil
@@ -5689,7 +5689,7 @@ func TestAnalyzeBearerAuthMiddleware_DoesNotProtectAnalyzeHelpRoute(t *testing.T
 	})
 	secured := api.AnalyzeBearerAuthMiddleware("s3cr3t", mux)
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze/help", nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/help", nil)
 	w := httptest.NewRecorder()
 	secured.ServeHTTP(w, req)
 
@@ -5704,7 +5704,7 @@ func TestAnalyzeRateLimitMiddleware_DoesNotProtectAnalyzeHelpRoute(t *testing.T)
 	})
 	limited := api.AnalyzeRateLimitMiddleware(api.NewRateLimiter(1, time.Minute), mux)
 
-	firstReq := httptest.NewRequest(http.MethodPost, "/analyze/help", nil)
+	firstReq := httptest.NewRequest(http.MethodPost, "/v1/analyze/help", nil)
 	firstReq.RemoteAddr = "127.0.0.1:1234"
 	firstW := httptest.NewRecorder()
 	limited.ServeHTTP(firstW, firstReq)
@@ -5713,7 +5713,7 @@ func TestAnalyzeRateLimitMiddleware_DoesNotProtectAnalyzeHelpRoute(t *testing.T)
 		t.Fatalf("expected help route to remain unprotected and return 405 for unsupported POST, got %d", firstW.Code)
 	}
 
-	secondReq := httptest.NewRequest(http.MethodPost, "/analyze/help", nil)
+	secondReq := httptest.NewRequest(http.MethodPost, "/v1/analyze/help", nil)
 	secondReq.RemoteAddr = "127.0.0.1:5678"
 	secondW := httptest.NewRecorder()
 	limited.ServeHTTP(secondW, secondReq)
@@ -5769,7 +5769,7 @@ func TestRuleAdvertisement_OnlyImplementedRulesExposedAndConfigurable(t *testing
 	}}, engine.NewWithRules(rules.NoDuplicateNodeIDs{}, rules.MaxFanout{}))
 	h.RegisterRoutes(mux)
 
-	listReq := httptest.NewRequest(http.MethodGet, "/rules", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/rules", nil)
 	listW := httptest.NewRecorder()
 	mux.ServeHTTP(listW, listReq)
 	if listW.Code != http.StatusOK {
@@ -5831,7 +5831,7 @@ func TestRuleAdvertisement_OnlyImplementedRulesExposedAndConfigurable(t *testing
 			},
 		},
 	})
-	analyzeReq := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	analyzeReq := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	analyzeReq.Header.Set("Content-Type", "application/json")
 	analyzeW := httptest.NewRecorder()
 	mux.ServeHTTP(analyzeW, analyzeReq)
@@ -5875,7 +5875,7 @@ setTimeout(() => {}, 10000);
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B"}`))
+	resp, err := http.Post(server.URL+"/v1/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B"}`))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -5928,7 +5928,7 @@ process.exit(1);
 	defer server.Close()
 
 	code := "graph TD; A-->B"
-	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"`+code+`"}`))
+	resp, err := http.Post(server.URL+"/v1/analyze", "application/json", strings.NewReader(`{"code":"`+code+`"}`))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -5968,7 +5968,7 @@ func TestAnalyze_ParserOverridesAcceptedAndPropagated(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":8,"max_old_space_mb":768}}`))
+	resp, err := http.Post(server.URL+"/v1/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":8,"max_old_space_mb":768}}`))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -5998,7 +5998,7 @@ func TestAnalyze_SourceEnhancementCapabilityEnabledForDefaultRules(t *testing.T)
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B"}`))
+	resp, err := http.Post(server.URL+"/v1/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B"}`))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -6028,7 +6028,7 @@ func TestAnalyze_SourceEnhancementCapabilityPreservesParserSourceEnhancementSett
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B"}`))
+	resp, err := http.Post(server.URL+"/v1/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B"}`))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -6059,7 +6059,7 @@ func TestAnalyze_SourceEnhancementCapabilityDisabledWhenSourceRulesAreDisabled(t
 	defer server.Close()
 
 	payload := `{"code":"graph TD; A-->B","config":{"schema-version":"v1","rules":{"no-disconnected-nodes":{"enabled":false},"no-duplicate-node-ids":{"enabled":false}}}}`
-	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(payload))
+	resp, err := http.Post(server.URL+"/v1/analyze", "application/json", strings.NewReader(payload))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -6088,7 +6088,7 @@ func TestAnalyze_ParserOverridePreservesParserInstanceMemoryWhenOnlyTimeoutProvi
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":8}}`))
+	resp, err := http.Post(server.URL+"/v1/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":8}}`))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -6120,7 +6120,7 @@ func TestAnalyze_ParserOverridePreservesParserInstanceTimeoutWhenOnlyMemoryProvi
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"max_old_space_mb":1024}}`))
+	resp, err := http.Post(server.URL+"/v1/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"max_old_space_mb":1024}}`))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -6152,7 +6152,7 @@ func TestAnalyze_InvalidParserOverrideValidation(t *testing.T) {
 			server := httptest.NewServer(mux)
 			defer server.Close()
 
-			resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(payload))
+			resp, err := http.Post(server.URL+"/v1/analyze", "application/json", strings.NewReader(payload))
 			if err != nil {
 				t.Fatalf("request failed: %v", err)
 			}
@@ -6179,7 +6179,7 @@ func TestAnalyze_ParserOverridesRejectedWhenParserLacksPerRequestConfig(t *testi
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":8}}`))
+	resp, err := http.Post(server.URL+"/v1/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":8}}`))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -6229,7 +6229,7 @@ setTimeout(() => {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	resp, err := http.Post(server.URL+"/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":1}}`))
+	resp, err := http.Post(server.URL+"/v1/analyze", "application/json", strings.NewReader(`{"code":"graph TD; A-->B","parser":{"timeout_seconds":1}}`))
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -6435,7 +6435,7 @@ func TestAnalyzeRaw_ValidDiagram_PlainText(t *testing.T) {
 	})
 
 	rawCode := "graph TD\n  A[Start] --> B[End]"
-	req := httptest.NewRequest(http.MethodPost, "/analyze/raw", strings.NewReader(rawCode))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", strings.NewReader(rawCode))
 	req.Header.Set("Content-Type", "text/plain")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -6479,7 +6479,7 @@ func TestAnalyzeRaw_ValidDiagram_JSON(t *testing.T) {
 	})
 
 	jsonPayload, _ := json.Marshal(map[string]string{"code": "graph LR\n  X[Input] --> Y[Output]"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze/raw", bytes.NewReader(jsonPayload))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", bytes.NewReader(jsonPayload))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -6517,7 +6517,7 @@ func TestAnalyzeRaw_ConfigOverrideChangesOutput(t *testing.T) {
 	baseBody, _ := json.Marshal(map[string]any{
 		"code": "graph TD\n  A-->B\n  A-->C",
 	})
-	baseReq := httptest.NewRequest(http.MethodPost, "/analyze/raw", bytes.NewReader(baseBody))
+	baseReq := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", bytes.NewReader(baseBody))
 	baseReq.Header.Set("Content-Type", "application/json")
 	baseW := httptest.NewRecorder()
 	mux.ServeHTTP(baseW, baseReq)
@@ -6546,7 +6546,7 @@ func TestAnalyzeRaw_ConfigOverrideChangesOutput(t *testing.T) {
 			},
 		},
 	})
-	overrideReq := httptest.NewRequest(http.MethodPost, "/analyze/raw", bytes.NewReader(overrideBody))
+	overrideReq := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", bytes.NewReader(overrideBody))
 	overrideReq.Header.Set("Content-Type", "application/json")
 	overrideW := httptest.NewRecorder()
 	mux.ServeHTTP(overrideW, overrideReq)
@@ -6597,7 +6597,7 @@ func TestAnalyze_ConfigConsistencyAcrossAnalyzeRawAndSARIF(t *testing.T) {
 		},
 	})
 
-	for _, endpoint := range []string{"/analyze", "/analyze/raw", "/analyze/sarif"} {
+	for _, endpoint := range []string{"/v1/analyze", "/v1/analyze/raw", "/v1/analyze/sarif"} {
 		t.Run(endpoint, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
@@ -6608,7 +6608,7 @@ func TestAnalyze_ConfigConsistencyAcrossAnalyzeRawAndSARIF(t *testing.T) {
 				t.Fatalf("expected 200 for %s, got %d body=%s", endpoint, w.Code, w.Body.String())
 			}
 
-			if endpoint == "/analyze/sarif" {
+			if endpoint == "/v1/analyze/sarif" {
 				var report map[string]any
 				if err := json.Unmarshal(w.Body.Bytes(), &report); err != nil {
 					t.Fatalf("decode sarif report: %v", err)
@@ -6648,7 +6648,7 @@ func TestAnalyzeRaw_EmptyRequest(t *testing.T) {
 		return nil, nil, nil
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze/raw", strings.NewReader(""))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", strings.NewReader(""))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -6676,7 +6676,7 @@ func TestAnalyzeRaw_RequestBodyTooLarge(t *testing.T) {
 
 	// Create a body larger than 1 MiB
 	largeBody := strings.Repeat("a", 1<<20+1)
-	req := httptest.NewRequest(http.MethodPost, "/analyze/raw", strings.NewReader(largeBody))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", strings.NewReader(largeBody))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -6757,7 +6757,7 @@ func TestAnalyzeRaw_SequenceDiagram(t *testing.T) {
 	})
 
 	rawCode := "sequenceDiagram\n  Alice ->> Bob: Hello"
-	req := httptest.NewRequest(http.MethodPost, "/analyze/raw", strings.NewReader(rawCode))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", strings.NewReader(rawCode))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -6784,7 +6784,7 @@ func TestAnalyzeRaw_ParserTimeout(t *testing.T) {
 		return nil, nil, parser.ErrTimeout
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/analyze/raw", strings.NewReader("graph TD; A-->B"))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", strings.NewReader("graph TD; A-->B"))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -6869,7 +6869,7 @@ func TestAnalyze_DuplicateNodeDetection(t *testing.T) {
 			})
 
 			body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -7024,7 +7024,7 @@ func TestAnalyze_FanoutLimitExceedance(t *testing.T) {
 			}
 
 			body, _ := json.Marshal(reqBody)
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -7156,7 +7156,7 @@ func TestAnalyze_UnknownRuleAndOptionValidation(t *testing.T) {
 				"code":   "graph TD\n  A-->B",
 				"config": tt.config,
 			})
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -7320,7 +7320,7 @@ func TestAnalyze_SuppressionValidation(t *testing.T) {
 				"code":   "graph TD\n  A-->B",
 				"config": config,
 			})
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -7432,7 +7432,7 @@ func TestAnalyze_DeprecationWarnings(t *testing.T) {
 				"code":   "graph TD\n  A --> B",
 				"config": tt.config,
 			})
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -7549,7 +7549,7 @@ func TestAnalyze_SyntaxErrorResilience(t *testing.T) {
 			})
 
 			body, _ := json.Marshal(map[string]string{"code": "invalid code"})
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -7594,7 +7594,7 @@ func TestAnalyze_ParserMemoryLimitExceeded(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]string{"code": "very large diagram"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -7651,7 +7651,7 @@ func TestAnalyze_ConcurrentRequests(t *testing.T) {
 	for i := 0; i < parserLimit+1; i++ {
 		go func() {
 			<-start
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -7724,7 +7724,7 @@ func TestAnalyze_ConcurrentRequestsWithStrictConfigToggling(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < requestsPerGoroutine; j++ {
-				req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(requestBody))
+				req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(requestBody))
 				req.Header.Set("Content-Type", "application/json")
 				w := httptest.NewRecorder()
 				mux.ServeHTTP(w, req)
@@ -7777,7 +7777,7 @@ func TestAnalyze_SARIFOutputFormat(t *testing.T) {
 	})
 
 	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B\n  A-->C"})
-	req := httptest.NewRequest(http.MethodPost, "/analyze/sarif", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/sarif", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -7991,7 +7991,7 @@ func TestAnalyze_MetricsTracking(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body, _ := json.Marshal(map[string]string{"code": tt.code})
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
@@ -8155,7 +8155,7 @@ func TestAnalyze_MaxDepthViolation(t *testing.T) {
 			}
 
 			body, _ := json.Marshal(reqBody)
-			req := httptest.NewRequest(http.MethodPost, "/analyze", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)

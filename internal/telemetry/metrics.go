@@ -28,6 +28,7 @@ type Metrics struct {
 	requestDuration       *prometheus.HistogramVec
 	analyzeRequests       *prometheus.CounterVec
 	parserDuration        *prometheus.HistogramVec
+	parserLatency         *prometheus.HistogramVec // request latency histogram (alias for clearer metric naming)
 	ruleExecutionTime     *prometheus.HistogramVec
 	ruleIssuesEmitted     *prometheus.CounterVec
 	ruleViolationsBySev   *prometheus.CounterVec   // per-rule violations by severity
@@ -60,6 +61,11 @@ func NewMetrics() *Metrics {
 		parserDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "parser_duration_seconds",
 			Help:    "Duration of parser invocations in seconds by outcome.",
+			Buckets: prometheus.DefBuckets,
+		}, []string{"outcome"}),
+		parserLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "parser_latency_seconds",
+			Help:    "Parser request latency in seconds by outcome.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"outcome"}),
 		ruleExecutionTime: prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -107,6 +113,7 @@ func NewMetrics() *Metrics {
 		m.requestDuration,
 		m.analyzeRequests,
 		m.parserDuration,
+		m.parserLatency,
 		m.ruleExecutionTime,
 		m.ruleIssuesEmitted,
 		m.ruleViolationsBySev,
@@ -148,6 +155,13 @@ func (m *Metrics) ObserveParserDuration(outcome string, duration time.Duration) 
 		return
 	}
 	m.parserDuration.WithLabelValues(CanonicalOutcome(outcome)).Observe(duration.Seconds())
+}
+
+func (m *Metrics) ObserveParserLatency(outcome string, duration time.Duration) {
+	if m == nil {
+		return
+	}
+	m.parserLatency.WithLabelValues(CanonicalOutcome(outcome)).Observe(duration.Seconds())
 }
 
 func (m *Metrics) ObserveRuleExecutionDuration(ruleID string, duration time.Duration) {
