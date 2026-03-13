@@ -1,0 +1,16 @@
+stateDiagram-v2
+    [*] --> Start
+    Start --> Nested
+    
+    state Nested {
+        [*] --> A
+        A --> B
+        B --> C
+        C --> [*]
+    }
+    
+    Nested --> End
+    End --> [*]
+    
+    %% @rule: *
+    %% Nested states with internal transitions - edge case
