@@ -172,3 +172,38 @@ func TestParseCache_GetReturnsSuccessAfterSyntaxOverwrite(t *testing.T) {
 		t.Fatalf("expected diagram node ID B, got %q", got)
 	}
 }
+
+func TestParseCache_ConcurrentOverwritesKeepSingleEntryTypePerKey(t *testing.T) {
+	cache := newParseCache()
+	const key = "flowchart:concurrent-overwrite"
+
+	for i := 0; i < 500; i++ {
+		start := make(chan struct{})
+		done := make(chan struct{}, 2)
+
+		go func(iter int) {
+			<-start
+			cache.putSuccess(key, &model.Diagram{Nodes: []model.Node{{ID: "success"}}})
+			done <- struct{}{}
+		}(i)
+
+		go func(iter int) {
+			<-start
+			cache.putSyntax(key, &SyntaxError{Message: "syntax", Line: iter + 1, Column: 1})
+			done <- struct{}{}
+		}(i)
+
+		close(start)
+		<-done
+		<-done
+
+		cache.entries.RLock()
+		_, successOK, _ := cache.success.Get(key)
+		_, syntaxOK, _ := cache.syntax.Get(key)
+		cache.entries.RUnlock()
+
+		if successOK == syntaxOK {
+			t.Fatalf("expected exactly one cache entry type after concurrent overwrite, got success=%v syntax=%v on iter=%d", successOK, syntaxOK, i)
+		}
+	}
+}

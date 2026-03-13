@@ -23,6 +23,7 @@ type CacheMetricsObserver interface {
 type parseCache struct {
 	success *lruTTLCache[*model.Diagram]
 	syntax  *lruTTLCache[*SyntaxError]
+	entries sync.RWMutex
 
 	metricsMu sync.RWMutex
 	metrics   CacheMetricsObserver
@@ -48,7 +49,9 @@ func (c *parseCache) getSuccess(key string) (*model.Diagram, bool) {
 	if c == nil {
 		return nil, false
 	}
+	c.entries.RLock()
 	v, ok, evicted := c.success.Get(key)
+	c.entries.RUnlock()
 	for i := 0; i < evicted; i++ {
 		c.observe("eviction", "success")
 	}
@@ -64,7 +67,9 @@ func (c *parseCache) getSyntax(key string) (*SyntaxError, bool) {
 	if c == nil {
 		return nil, false
 	}
+	c.entries.RLock()
 	v, ok, evicted := c.syntax.Get(key)
+	c.entries.RUnlock()
 	for i := 0; i < evicted; i++ {
 		c.observe("eviction", "syntax")
 	}
@@ -80,7 +85,9 @@ func (c *parseCache) get(key string) (*model.Diagram, *SyntaxError, bool) {
 	if c == nil {
 		return nil, nil, false
 	}
+	c.entries.RLock()
 	if v, ok, evicted := c.success.Get(key); ok {
+		c.entries.RUnlock()
 		for i := 0; i < evicted; i++ {
 			c.observe("eviction", "success")
 		}
@@ -88,12 +95,14 @@ func (c *parseCache) get(key string) (*model.Diagram, *SyntaxError, bool) {
 		return cloneDiagram(v), nil, true
 	}
 	if v, ok, evicted := c.syntax.Get(key); ok {
+		c.entries.RUnlock()
 		for i := 0; i < evicted; i++ {
 			c.observe("eviction", "syntax")
 		}
 		c.observe("hit", "syntax")
 		return nil, cloneSyntaxError(v), true
 	}
+	c.entries.RUnlock()
 	c.observe("miss", "any")
 	return nil, nil, false
 }
@@ -102,8 +111,11 @@ func (c *parseCache) putSuccess(key string, diagram *model.Diagram) {
 	if c == nil || diagram == nil {
 		return
 	}
+	c.entries.Lock()
 	c.syntax.Delete(key)
-	if c.success.Set(key, cloneDiagram(diagram)) {
+	evicted := c.success.Set(key, cloneDiagram(diagram))
+	c.entries.Unlock()
+	if evicted {
 		c.observe("eviction", "success")
 	}
 }
@@ -112,8 +124,11 @@ func (c *parseCache) putSyntax(key string, syntaxErr *SyntaxError) {
 	if c == nil || syntaxErr == nil {
 		return
 	}
+	c.entries.Lock()
 	c.success.Delete(key)
-	if c.syntax.Set(key, cloneSyntaxError(syntaxErr)) {
+	evicted := c.syntax.Set(key, cloneSyntaxError(syntaxErr))
+	c.entries.Unlock()
+	if evicted {
 		c.observe("eviction", "syntax")
 	}
 }
