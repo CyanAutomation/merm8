@@ -145,7 +145,7 @@ func main() {
 
 	gracefulCtx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
 	defer cancel()
-	
+
 	var shutdownErrs []error
 	if err := server.Shutdown(gracefulCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("graceful shutdown failed", "error", err.Error())
@@ -155,7 +155,7 @@ func main() {
 		logger.Error("parser shutdown failed", "error", err.Error())
 		shutdownErrs = append(shutdownErrs, err)
 	}
-	
+
 	if len(shutdownErrs) > 0 && gracefulCtx.Err() == context.DeadlineExceeded {
 		logger.Warn("shutdown completed with timeout", "shutdown_timeout_seconds", int(defaultShutdownTimeout.Seconds()))
 	}
