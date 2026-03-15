@@ -50,6 +50,16 @@ func (p *workerPool) borrow() (*parserWorker, error) {
 				p.mu.Unlock()
 				return nil, err
 			}
+
+			p.mu.Lock()
+			if p.closing {
+				p.total--
+				p.cond.Signal()
+				p.mu.Unlock()
+				_ = w.close()
+				return nil, fmt.Errorf("worker pool is closing")
+			}
+			p.mu.Unlock()
 			return w, nil
 		}
 		p.cond.Wait()

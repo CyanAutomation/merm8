@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -204,4 +205,77 @@ func TestWorkerPoolCloseUnblocksWaiters(t *testing.T) {
 	}
 
 	pool.release(worker, true)
+}
+
+func TestWorkerPoolBorrowReturnsErrorWhenClosedDuringWorkerCreation(t *testing.T) {
+	newFnStarted := make(chan struct{})
+	allowNewFnReturn := make(chan struct{})
+
+	pool := newWorkerPool(1, func() (*parserWorker, error) {
+		close(newFnStarted)
+		<-allowNewFnReturn
+
+		tw, err := newTrackedProcessWorker(t)
+		if err != nil {
+			return nil, err
+		}
+		unlockWorkerCloseMu(tw)
+		return tw.worker, nil
+	})
+
+	borrowResultCh := make(chan struct {
+		worker *parserWorker
+		err    error
+	}, 1)
+	go func() {
+		worker, err := pool.borrow()
+		borrowResultCh <- struct {
+			worker *parserWorker
+			err    error
+		}{worker: worker, err: err}
+	}()
+
+	select {
+	case <-newFnStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for newFn to start")
+	}
+
+	if err := pool.close(); err != nil {
+		t.Fatalf("close pool: %v", err)
+	}
+
+	close(allowNewFnReturn)
+
+	select {
+	case result := <-borrowResultCh:
+		if result.worker != nil {
+			result.worker.close()
+			t.Fatal("expected no worker to be returned after pool close")
+		}
+		if result.err == nil {
+			t.Fatal("expected borrow error after pool close")
+		}
+		if !strings.Contains(result.err.Error(), "worker pool is closing") {
+			t.Fatalf("expected pool closing error, got: %v", result.err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for borrow result")
+	}
+
+	pool.mu.Lock()
+	if pool.total != 0 {
+		pool.mu.Unlock()
+		t.Fatalf("expected pool total to return to zero, got %d", pool.total)
+	}
+	if gotIdle := len(pool.idle); gotIdle != 0 {
+		pool.mu.Unlock()
+		t.Fatalf("expected idle workers to be empty, got %d", gotIdle)
+	}
+	pool.mu.Unlock()
+
+	if _, err := pool.borrow(); err == nil {
+		t.Fatal("expected subsequent borrow to fail for closed pool")
+	}
+
 }
