@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/CyanAutomation/merm8/internal/telemetry"
@@ -103,4 +104,62 @@ func TestMetricsMiddleware_RecordsMetricsWithoutSideEffects(t *testing.T) {
 		"method": "GET",
 		"status": "201",
 	})
+}
+
+// TestMetricsMiddleware_UsesKnownVersionedRouteLabels validates that actively served /v1 routes
+// are mapped to explicit metric route labels and do not fall back to "unknown".
+// @spec: OBSERVABILITY-004: Versioned API route labels are registered in metrics middleware
+func TestMetricsMiddleware_UsesKnownVersionedRouteLabels(t *testing.T) {
+	tm := telemetry.NewMetrics()
+	routes := map[string]string{
+		"POST /v1/analyze":       "/v1/analyze",
+		"POST /v1/analyze/raw":   "/v1/analyze/raw",
+		"POST /v1/analyze/sarif": "/v1/analyze/sarif",
+		"GET /v1/spec":           "/v1/spec",
+		"GET /v1/docs":           "/v1/docs",
+	}
+
+	mw := MetricsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), routes, tm)
+
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodPost, path: "/v1/analyze"},
+		{method: http.MethodPost, path: "/v1/analyze/raw"},
+		{method: http.MethodPost, path: "/v1/analyze/sarif"},
+		{method: http.MethodGet, path: "/v1/spec"},
+		{method: http.MethodGet, path: "/v1/docs"},
+	} {
+		request := httptest.NewRequest(tc.method, tc.path, nil)
+		response := httptest.NewRecorder()
+		mw.ServeHTTP(response, request)
+	}
+
+	metricsResp := httptest.NewRecorder()
+	tm.Handler().ServeHTTP(metricsResp, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	payload := metricsResp.Body.String()
+
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodPost, path: "/v1/analyze"},
+		{method: http.MethodPost, path: "/v1/analyze/raw"},
+		{method: http.MethodPost, path: "/v1/analyze/sarif"},
+		{method: http.MethodGet, path: "/v1/spec"},
+		{method: http.MethodGet, path: "/v1/docs"},
+	} {
+		assertMetricLabelExists(t, payload, "request_total", map[string]string{
+			"route":  tc.path,
+			"method": tc.method,
+			"status": "200",
+		})
+	}
+
+	if strings.Contains(payload, `request_total{route="unknown"`) {
+		t.Fatalf("expected no unknown route label for covered v1 routes, got payload:\n%s", payload)
+	}
 }

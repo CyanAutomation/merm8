@@ -98,15 +98,27 @@ func main() {
 	}
 
 	routePatterns := map[string]string{
-		"GET /":             "/",
-		"GET /health":       "/health",
-		"GET /healthz":      "/healthz",
-		"GET /ready":        "/ready",
-		"GET /version":      "/version",
-		"GET /info":         "/info",
-		"GET /metrics":      "/metrics",
-		"POST /analyze":     "/analyze",
-		"POST /analyze/raw": "/analyze/raw",
+		"GET /v1/healthz":          "/v1/healthz",
+		"GET /v1/health":           "/v1/health",
+		"GET /v1/health/metrics":   "/v1/health/metrics",
+		"GET /v1/ready":            "/v1/ready",
+		"GET /v1/info":             "/v1/info",
+		"GET /v1/metrics":          "/v1/metrics",
+		"GET /v1/internal/metrics": "/v1/internal/metrics",
+		"GET /v1/rules":            "/v1/rules",
+		"GET /v1/rules/schema":     "/v1/rules/schema",
+		"GET /v1/diagram-types":    "/v1/diagram-types",
+		"GET /v1/analyze/help":     "/v1/analyze/help",
+		"POST /v1/analyze":         "/v1/analyze",
+		"POST /v1/analyse":         "/v1/analyse",
+		"POST /v1/analyze/raw":     "/v1/analyze/raw",
+		"POST /v1/analyse/raw":     "/v1/analyse/raw",
+		"POST /v1/analyze/sarif":   "/v1/analyze/sarif",
+		"GET /v1/spec":             "/v1/spec",
+		"GET /v1/docs":             "/v1/docs",
+		"GET /v1/benchmark.html":   "/v1/benchmark.html",
+		"GET /v1/config-versions":  "/v1/config-versions",
+		"GET /v1/version":          "/v1/version",
 	}
 	rootHandler = api.MetricsMiddleware(rootHandler, routePatterns, metrics)
 	rootHandler = api.AnalyzeLoggingMiddleware(rootHandler, logger)
