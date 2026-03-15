@@ -747,3 +747,39 @@ func TestCORSMiddleware_RejectedOriginLoggingRateLimited(t *testing.T) {
 		t.Fatalf("expected allowlist size in log, got %q", line)
 	}
 }
+
+func TestAnalyzeBearerAuthMiddleware_SchemeHandling(t *testing.T) {
+	token := "secret-token"
+
+	tests := []struct {
+		name          string
+		authorization string
+		wantStatus    int
+	}{
+		{name: "Bearer token accepted", authorization: "Bearer " + token, wantStatus: http.StatusNoContent},
+		{name: "bearer token accepted", authorization: "bearer " + token, wantStatus: http.StatusNoContent},
+		{name: "invalid scheme rejected", authorization: "Basic " + token, wantStatus: http.StatusUnauthorized},
+		{name: "missing token rejected", authorization: "Bearer", wantStatus: http.StatusUnauthorized},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			})
+
+			handler := AnalyzeBearerAuthMiddleware(token, next)
+			req := httptest.NewRequest(http.MethodPost, "/analyze", nil)
+			if tc.authorization != "" {
+				req.Header.Set("Authorization", tc.authorization)
+			}
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if got := rec.Code; got != tc.wantStatus {
+				t.Fatalf("expected status %d, got %d", tc.wantStatus, got)
+			}
+		})
+	}
+}
