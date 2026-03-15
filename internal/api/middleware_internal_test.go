@@ -249,6 +249,28 @@ func TestClientIdentifier_IgnoresXFFForUntrustedProxy(t *testing.T) {
 	}
 }
 
+func TestAcceptsGzipEncoding_RespectsQValues(t *testing.T) {
+	tests := []struct {
+		name           string
+		acceptEncoding string
+		want           bool
+	}{
+		{name: "gzip q zero", acceptEncoding: "gzip;q=0", want: false},
+		{name: "gzip q zero decimal", acceptEncoding: "gzip;q=0.0", want: false},
+		{name: "gzip q zero hundredths", acceptEncoding: "gzip;q=0.00", want: false},
+		{name: "gzip q positive", acceptEncoding: "gzip;q=0.1", want: true},
+		{name: "wildcard q zero", acceptEncoding: "*;q=0", want: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := acceptsGzipEncoding(tc.acceptEncoding); got != tc.want {
+				t.Fatalf("acceptsGzipEncoding(%q) = %v, want %v", tc.acceptEncoding, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestAnalyzeResponseCompressionMiddleware_FlushCommitsBufferedBodyOnce(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
