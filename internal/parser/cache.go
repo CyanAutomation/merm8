@@ -262,6 +262,7 @@ func cloneDiagram(diagram *model.Diagram) *model.Diagram {
 	}
 	copied.Suppressions = append([]model.SuppressionDirective(nil), diagram.Suppressions...)
 	copied.SourceNodeIDs = append([]string(nil), diagram.SourceNodeIDs...)
+	copied.StartStates = append([]string(nil), diagram.StartStates...)
 	copied.DisconnectedNodeIDs = append([]string(nil), diagram.DisconnectedNodeIDs...)
 	copied.DuplicateNodeIDs = append([]string(nil), diagram.DuplicateNodeIDs...)
 	return &copied
