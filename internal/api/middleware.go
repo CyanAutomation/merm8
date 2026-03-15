@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
-strconv
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -498,13 +498,14 @@ func AnalyzeBearerAuthMiddleware(token string, next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && isProtectedAnalyzePath(r.URL.Path) {
-			header := r.Header.Get("Authorization")
-			if !strings.HasPrefix(header, "Bearer ") {
+			header := strings.TrimSpace(r.Header.Get("Authorization"))
+			scheme, providedToken, ok := strings.Cut(header, " ")
+			if !ok || !strings.EqualFold(scheme, "Bearer") {
 				w.Header().Set("WWW-Authenticate", `Bearer realm="merm8-api"`)
 				writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
 				return
 			}
-			providedToken := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
+			providedToken = strings.TrimSpace(providedToken)
 			if subtle.ConstantTimeCompare([]byte(providedToken), []byte(token)) != 1 {
 				w.Header().Set("WWW-Authenticate", `Bearer realm="merm8-api"`)
 				writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
