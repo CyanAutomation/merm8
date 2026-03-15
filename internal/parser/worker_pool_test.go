@@ -263,16 +263,17 @@ func TestWorkerPoolBorrowReturnsErrorWhenClosedDuringWorkerCreation(t *testing.T
 		t.Fatal("timed out waiting for borrow result")
 	}
 
-	pool.mu.Lock()
-	if pool.total != 0 {
-		pool.mu.Unlock()
-		t.Fatalf("expected pool total to return to zero, got %d", pool.total)
-	}
-	if gotIdle := len(pool.idle); gotIdle != 0 {
-		pool.mu.Unlock()
-		t.Fatalf("expected idle workers to be empty, got %d", gotIdle)
-	}
-	pool.mu.Unlock()
+	func() {
+		pool.mu.Lock()
+		defer pool.mu.Unlock()
+
+		if pool.total != 0 {
+			t.Fatalf("expected pool total to return to zero, got %d", pool.total)
+		}
+		if gotIdle := len(pool.idle); gotIdle != 0 {
+			t.Fatalf("expected idle workers to be empty, got %d", gotIdle)
+		}
+	}()
 
 	if _, err := pool.borrow(); err == nil {
 		t.Fatal("expected subsequent borrow to fail for closed pool")
