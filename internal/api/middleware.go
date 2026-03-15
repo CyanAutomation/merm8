@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+strconv
 	"strings"
 	"sync"
 	"time"
@@ -644,18 +645,38 @@ func acceptsGzipEncoding(acceptEncoding string) bool {
 			continue
 		}
 		name := encoding
-		quality := ""
 		if idx := strings.Index(encoding, ";"); idx >= 0 {
 			name = strings.TrimSpace(encoding[:idx])
-			quality = strings.TrimSpace(encoding[idx+1:])
 		}
 		if name != "gzip" && name != "*" {
 			continue
 		}
-		if strings.EqualFold(quality, "q=0") {
+		if hasZeroOrNegativeQValue(encoding) {
 			continue
 		}
 		return true
+	}
+
+	return false
+}
+
+func hasZeroOrNegativeQValue(encoding string) bool {
+	idx := strings.Index(encoding, ";")
+	if idx < 0 {
+		return false
+	}
+
+	params := strings.Split(encoding[idx+1:], ";")
+	for _, param := range params {
+		key, value, ok := strings.Cut(strings.TrimSpace(param), "=")
+		if !ok || !strings.EqualFold(strings.TrimSpace(key), "q") {
+			continue
+		}
+		qValue, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil {
+			return false
+		}
+		return qValue <= 0
 	}
 
 	return false
