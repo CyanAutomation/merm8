@@ -34,6 +34,7 @@ func TestParseCache_GetSuccessReturnedDiagramMutationDoesNotAffectCachedDiagram(
 		Subgraphs:           []model.Subgraph{{ID: "S", Label: "Group", Nodes: []string{"A", "B"}}},
 		Suppressions:        []model.SuppressionDirective{{RuleID: "rule", Scope: "line", Line: 1, TargetLine: 2, SubgraphID: "S"}},
 		SourceNodeIDs:       []string{"A", "B"},
+		StartStates:         []string{"A"},
 		DisconnectedNodeIDs: []string{"B"},
 		DuplicateNodeIDs:    []string{"A"},
 	})
@@ -55,6 +56,7 @@ func TestParseCache_GetSuccessReturnedDiagramMutationDoesNotAffectCachedDiagram(
 	firstRead.Subgraphs[0].Nodes[0] = "mutated-subgraph-node"
 	firstRead.Suppressions[0].RuleID = "mutated-rule"
 	firstRead.SourceNodeIDs[0] = "mutated-source"
+	firstRead.StartStates[0] = "mutated-start"
 	firstRead.DisconnectedNodeIDs[0] = "mutated-disconnected"
 	firstRead.DuplicateNodeIDs[0] = "mutated-duplicate"
 
@@ -89,6 +91,9 @@ func TestParseCache_GetSuccessReturnedDiagramMutationDoesNotAffectCachedDiagram(
 	}
 	if got := secondRead.SourceNodeIDs[0]; got != "A" {
 		t.Fatalf("expected cached source node IDs to remain unchanged, got %q", got)
+	}
+	if got := secondRead.StartStates[0]; got != "A" {
+		t.Fatalf("expected cached start states to remain unchanged, got %q", got)
 	}
 	if got := secondRead.DisconnectedNodeIDs[0]; got != "B" {
 		t.Fatalf("expected cached disconnected node IDs to remain unchanged, got %q", got)
