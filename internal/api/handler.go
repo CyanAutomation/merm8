@@ -3232,7 +3232,7 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 
 	return &helpSuggestion{
 		Title:          "Invalid Mermaid syntax detected",
-		Explanation:    "The parser found Mermaid syntax it could not parse. Check for incomplete edge definitions, unmatched delimiters (`[]`, `()`, `{}`, `||`), or a missing diagram type keyword on the first line.",
+		Explanation:    genericSyntaxHintMessage(syntaxCtx),
 		WrongExample:   "A -->|No Retry\nB[Start",
 		CorrectExample: "flowchart TD\n  A -->|No| Retry\n  B[Start]",
 		DocLink:        "#common-mistakes",
@@ -3241,10 +3241,11 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 }
 
 type syntaxErrorContext struct {
-	line       string
-	excerpt    string
-	lineNumber int
-	column     int
+	line          string
+	excerpt       string
+	lineNumber    int
+	column        int
+	parserMessage string
 }
 
 func syntaxErrorLineContext(code string, syntaxErr *parser.SyntaxError) syntaxErrorContext {
@@ -3252,7 +3253,7 @@ func syntaxErrorLineContext(code string, syntaxErr *parser.SyntaxError) syntaxEr
 		return syntaxErrorContext{}
 	}
 
-	ctx := syntaxErrorContext{lineNumber: syntaxErr.Line}
+	ctx := syntaxErrorContext{lineNumber: syntaxErr.Line, parserMessage: syntaxErr.Message}
 	lines := strings.Split(code, "\n")
 	if syntaxErr.Line <= 0 || syntaxErr.Line > len(lines) {
 		return ctx
@@ -3310,25 +3311,57 @@ func syntaxErrorLineContext(code string, syntaxErr *parser.SyntaxError) syntaxEr
 	return ctx
 }
 
+func classifySyntaxErrorMessageFallback(message string) string {
+	msg := strings.ToLower(message)
+	if msg == "" {
+		return ""
+	}
+
+	switch {
+	case strings.Contains(msg, "brkt"), strings.Contains(msg, "bracket"), strings.Contains(msg, "unexpected ]"), strings.Contains(msg, "unexpected ["):
+		return "The parser token suggests a bracket mismatch; verify [] and () pairs in labels and shapes."
+	case strings.Contains(msg, "unexpected <"), strings.Contains(msg, "unexpected '<'"), strings.Contains(msg, "expecting '<'"), strings.Contains(msg, "unexpected token '<'"):
+		return "The parser flagged '<'; wrap HTML-like label text (for example <br/>) in quotes or remove raw markup."
+	case strings.Contains(msg, "unexpected >"), strings.Contains(msg, "unexpected '>'"), strings.Contains(msg, "expecting '>'"), strings.Contains(msg, "unexpected token '>'"):
+		return "The parser flagged '>'; verify arrow operators (`-->`, `==>`) and close any angle-bracket markup."
+	case strings.Contains(msg, "unexpected {"), strings.Contains(msg, "unexpected }"), strings.Contains(msg, "expecting '{'"), strings.Contains(msg, "expecting '}'"):
+		return "The parser token suggests unmatched braces; ensure each '{' and '}' pair is balanced around decision nodes/blocks."
+	case strings.Contains(msg, "unexpected )"), strings.Contains(msg, "unexpected ("), strings.Contains(msg, "expecting ')'"), strings.Contains(msg, "expecting '('"):
+		return "The parser token suggests parenthesis imbalance; confirm shape delimiters are complete."
+	case strings.Contains(msg, "unexpected |"), strings.Contains(msg, "expecting '|'"):
+		return "The parser token suggests edge-label pipe imbalance; each edge label should use both pipes (`|label|`)."
+	default:
+		return ""
+	}
+}
+
 func genericSyntaxHintMessage(ctx syntaxErrorContext) string {
 	message := "Check for incomplete edge definitions, unclosed |label|, and unmatched brackets."
+	tokenAware := classifySyntaxErrorMessageFallback(ctx.parserMessage)
+	if tokenAware != "" {
+		message = message + " " + tokenAware
+	}
 	if ctx.lineNumber <= 0 || ctx.column <= 0 {
 		return message
 	}
 	if ctx.excerpt != "" {
-		return fmt.Sprintf("%s Check near column %d on line %d: `%s`.", message, ctx.column, ctx.lineNumber, ctx.excerpt)
+		return fmt.Sprintf("%s Reported location: line %d, column %d near `%s`.", message, ctx.lineNumber, ctx.column, ctx.excerpt)
 	}
-	return fmt.Sprintf("%s Check near column %d on line %d.", message, ctx.column, ctx.lineNumber)
+	return fmt.Sprintf("%s Reported location: line %d, column %d.", message, ctx.lineNumber, ctx.column)
 }
 
 func genericSyntaxFixAction(ctx syntaxErrorContext) string {
+	message := "Review the line near the reported syntax-error and correct edge operators, delimiters, and required diagram keywords."
+	if tokenAware := classifySyntaxErrorMessageFallback(ctx.parserMessage); tokenAware != "" {
+		message = message + " " + tokenAware
+	}
 	if ctx.lineNumber <= 0 || ctx.column <= 0 {
-		return "Review the line near the reported syntax-error and correct edge operators, delimiters, and required diagram keywords."
+		return message
 	}
 	if ctx.excerpt != "" {
-		return fmt.Sprintf("Check near column %d on line %d (`%s`) and correct edge operators, delimiters, and required diagram keywords.", ctx.column, ctx.lineNumber, ctx.excerpt)
+		return fmt.Sprintf("%s Check near column %d on line %d (`%s`).", message, ctx.column, ctx.lineNumber, ctx.excerpt)
 	}
-	return fmt.Sprintf("Check near column %d on line %d and correct edge operators, delimiters, and required diagram keywords.", ctx.column, ctx.lineNumber)
+	return fmt.Sprintf("%s Check near column %d on line %d.", message, ctx.column, ctx.lineNumber)
 }
 
 // isDiagramTypeKeyword checks if a line starts with a valid diagram type keyword.

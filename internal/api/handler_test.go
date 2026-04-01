@@ -1187,7 +1187,7 @@ func TestAnalyze_SyntaxError_GenericFallbackContextAndBounds(t *testing.T) {
 			syntaxErr:           &parser.SyntaxError{Message: "Unexpected token", Line: 0, Column: 0},
 			payload:             "flowchart TD\n  A --> B",
 			wantHintContains:    []string{"Check for incomplete edge definitions"},
-			wantHintNotContains: []string{"Check near column"},
+			wantHintNotContains: []string{"Reported location"},
 			wantFixContains:     []string{"Review the line near the reported syntax-error"},
 			wantFixNotContains:  []string{"Check near column"},
 		},
@@ -1195,7 +1195,7 @@ func TestAnalyze_SyntaxError_GenericFallbackContextAndBounds(t *testing.T) {
 			name:             "column out of range is clamped and excerpt included",
 			syntaxErr:        &parser.SyntaxError{Message: "Unexpected token", Line: 2, Column: 999},
 			payload:          "flowchart TD\n  A? B",
-			wantHintContains: []string{"Check near column 6 on line 2", "`  A? B`"},
+			wantHintContains: []string{"Reported location: line 2, column 6", "`  A? B`"},
 			wantFixContains:  []string{"Check near column 6 on line 2", "`  A? B`"},
 		},
 		{
@@ -1212,9 +1212,23 @@ func TestAnalyze_SyntaxError_GenericFallbackContextAndBounds(t *testing.T) {
 			syntaxErr:           &parser.SyntaxError{Message: "Unexpected token", Line: 99, Column: 3},
 			payload:             "flowchart TD\n  A --> B",
 			wantHintContains:    []string{"Check for incomplete edge definitions"},
-			wantHintNotContains: []string{"Check near column"},
+			wantHintNotContains: []string{"Reported location"},
 			wantFixContains:     []string{"Review the line near the reported syntax-error"},
 			wantFixNotContains:  []string{"Check near column"},
+		},
+		{
+			name:             "token aware generic message for unexpected angle bracket",
+			syntaxErr:        &parser.SyntaxError{Message: "Unexpected token '<'", Line: 2, Column: 14},
+			payload:          "flowchart TD\n  A --> B",
+			wantHintContains: []string{"parser flagged '<'", "Reported location: line 2, column 9", "`  A --> B`"},
+			wantFixContains:  []string{"parser flagged '<'", "Check near column 9 on line 2", "`  A --> B`"},
+		},
+		{
+			name:             "token aware generic message for BRKT",
+			syntaxErr:        &parser.SyntaxError{Message: "Expecting BRKT, got EOF", Line: 2, Column: 11},
+			payload:          "flowchart TD\n  A --> B",
+			wantHintContains: []string{"bracket mismatch", "Reported location: line 2, column 9", "`  A --> B`"},
+			wantFixContains:  []string{"bracket mismatch", "Check near column 9 on line 2", "`  A --> B`"},
 		},
 	}
 
