@@ -2293,6 +2293,9 @@ type syntaxInputSignals struct {
 	hasUnterminatedQuotedLabel  bool
 	unterminatedQuoteLine       int
 	unterminatedQuoteColumn     int
+	hasUnquotedHTMLLabelMarkup  bool
+	htmlLabelMarkupLine         int
+	htmlLabelMarkupColumn       int
 	hasNonMermaidPreamble       bool
 }
 
@@ -2496,6 +2499,104 @@ func hasUnterminatedQuotedLabel(code string) (int, int, bool) {
 	return 0, 0, false
 }
 
+func isWrappedInMatchingQuotes(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if len(trimmed) < 2 {
+		return false
+	}
+	if (trimmed[0] == '"' && trimmed[len(trimmed)-1] == '"') || (trimmed[0] == '\'' && trimmed[len(trimmed)-1] == '\'') {
+		return true
+	}
+	return false
+}
+
+func angleMarkupIndex(value string) int {
+	lower := strings.ToLower(value)
+	if idx := strings.Index(lower, "<br>"); idx >= 0 {
+		return idx
+	}
+	if idx := strings.Index(lower, "<br/>"); idx >= 0 {
+		return idx
+	}
+
+	for i := 0; i < len(value); i++ {
+		if value[i] != '<' {
+			continue
+		}
+		closing := strings.IndexByte(value[i+1:], '>')
+		if closing < 0 {
+			continue
+		}
+		token := strings.TrimSpace(value[i+1 : i+1+closing])
+		if token == "" {
+			continue
+		}
+		first := token[0]
+		if (first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z') || first == '/' {
+			return i
+		}
+	}
+	return -1
+}
+
+func detectFlowchartUnquotedHTMLLabelMarkup(code string) (int, int, bool) {
+	lines := strings.Split(code, "\n")
+	if len(lines) == 0 {
+		return 0, 0, false
+	}
+
+	firstLine := strings.TrimSpace(strings.ToLower(lines[0]))
+	if !(strings.HasPrefix(firstLine, "flowchart") || strings.HasPrefix(firstLine, "graph")) {
+		return 0, 0, false
+	}
+
+	type labelDelim struct {
+		open  byte
+		close byte
+	}
+	delimiters := []labelDelim{{open: '[', close: ']'}, {open: '{', close: '}'}}
+
+	for lineIdx, line := range lines {
+		for _, delim := range delimiters {
+			for i := 0; i < len(line); i++ {
+				if line[i] != delim.open {
+					continue
+				}
+
+				depth := 1
+				end := -1
+				for j := i + 1; j < len(line); j++ {
+					if line[j] == delim.open {
+						depth++
+					}
+					if line[j] == delim.close {
+						depth--
+						if depth == 0 {
+							end = j
+							break
+						}
+					}
+				}
+				if end <= i+1 {
+					continue
+				}
+
+				label := strings.TrimSpace(line[i+1 : end])
+				if isWrappedInMatchingQuotes(label) {
+					i = end
+					continue
+				}
+				if rel := angleMarkupIndex(label); rel >= 0 {
+					return lineIdx + 1, i + 1 + rel + 1, true
+				}
+				i = end
+			}
+		}
+	}
+
+	return 0, 0, false
+}
+
 func scanSmartPunctuation(code string) (int, int, bool, bool) {
 	for idx, line := range strings.Split(code, "\n") {
 		for col, r := range line {
@@ -2657,6 +2758,7 @@ func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInput
 	smartLine, smartColumn, hasSmartQuotes, hasUnicodeArrowDash := scanSmartPunctuation(code)
 	unterminatedEdgeLabelLine, unterminatedEdgeLabelColumn, hasUnterminatedEdgeLabel := hasFlowchartUnterminatedEdgeLabel(code)
 	unterminatedQuoteLine, unterminatedQuoteColumn, hasUnterminatedQuotedLabel := hasUnterminatedQuotedLabel(code)
+	htmlLabelMarkupLine, htmlLabelMarkupColumn, hasUnquotedHTMLLabelMarkup := detectFlowchartUnquotedHTMLLabelMarkup(code)
 
 	return syntaxInputSignals{
 		trimmedCode:                 trimmed,
@@ -2688,6 +2790,9 @@ func analyzeInputSignals(code string, syntaxErr *parser.SyntaxError) syntaxInput
 		hasUnterminatedQuotedLabel:  hasUnterminatedQuotedLabel,
 		unterminatedQuoteLine:       unterminatedQuoteLine,
 		unterminatedQuoteColumn:     unterminatedQuoteColumn,
+		hasUnquotedHTMLLabelMarkup:  hasUnquotedHTMLLabelMarkup,
+		htmlLabelMarkupLine:         htmlLabelMarkupLine,
+		htmlLabelMarkupColumn:       htmlLabelMarkupColumn,
 		hasNonMermaidPreamble:       hasProseBeforeFirstDiagramHeader(lines, firstDiagramLine),
 	}
 }
@@ -2844,6 +2949,16 @@ func hintsForSyntaxError(syntaxErr *parser.SyntaxError, code string) []responseH
 			Confidence: 0.95,
 			AppliesTo:  appliesToFromLocation(signals.unterminatedQuoteLine, signals.unterminatedQuoteColumn, syntaxErr, diagramType),
 			FixExample: "A[\"Start\"] --> B\nA -->|\"Yes\"| B",
+		})
+	}
+	if signals.hasUnquotedHTMLLabelMarkup {
+		hints = append(hints, responseHint{
+			Code:       "html_label_markup_detected",
+			Message:    "Node labels with HTML-like markup (for example <br/> or <tag>) should be wrapped in quotes.",
+			Severity:   "warning",
+			Confidence: 0.97,
+			AppliesTo:  appliesToFromLocation(signals.htmlLabelMarkupLine, signals.htmlLabelMarkupColumn, syntaxErr, diagramType),
+			FixExample: "flowchart TD\n  C2{\"Has it been<br/>~15 days?\"}",
 		})
 	}
 
@@ -3011,6 +3126,16 @@ func helpForSyntaxError(syntaxErr *parser.SyntaxError, code string) *helpSuggest
 			CorrectExample: "flowchart TD\n  A[\"Start\"] --> B\n  A -->|\"Yes\"| B",
 			DocLink:        "#common-mistakes",
 			FixAction:      "Close each opening double quote in node labels and edge text, keeping escaped quotes as \\\" when needed",
+		}
+	}
+	if signals.hasUnquotedHTMLLabelMarkup {
+		return &helpSuggestion{
+			Title:          "Quote labels containing HTML-like markup",
+			Explanation:    "Flowchart node labels that include markup such as <br> or <br/> should be wrapped in quotes inside brackets/braces.",
+			WrongExample:   "flowchart TD\n  C2{Has it been<br/>~15 days?}",
+			CorrectExample: "flowchart TD\n  C2{\"Has it been<br/>~15 days?\"}",
+			DocLink:        "#common-mistakes",
+			FixAction:      "Wrap the full label text containing <...> in quotes (for example C2{\"Has it been<br/>~15 days?\"})",
 		}
 	}
 
