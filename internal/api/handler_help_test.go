@@ -227,6 +227,17 @@ func TestAnalyzeRaw_SyntaxError_HintMapping(t *testing.T) {
 			expectedAppliesToLine:   2,
 		},
 		{
+			name:                    "unquoted html-like markup in flowchart label maps to dedicated hint and help",
+			syntaxErr:               &parser.SyntaxError{Message: "Parse error on line 2", Line: 2, Column: 8},
+			code:                    "flowchart TD\n  C2{Has it been<br/>~15 days?} --> D",
+			expectedHintCode:        "html_label_markup_detected",
+			expectedHintMessage:     "wrapped in quotes",
+			expectHelpSuggestion:    true,
+			expectedHelpTitle:       "html-like markup",
+			expectedHelpExplanation: "wrapped in quotes",
+			expectedAppliesToLine:   2,
+		},
+		{
 			name:                    "unknown syntax falls back to generic hint",
 			syntaxErr:               &parser.SyntaxError{Message: "Parse failure near token", Line: 3, Column: 8},
 			code:                    "flowchart TD\n  A --> B\n  note right of A",
@@ -878,4 +889,30 @@ func TestAnalyzeRaw_SyntaxError_NonStructuralBracketTextDoesNotTriggerMalformedL
 	}
 
 	assertHintCodeAbsent(t, resp, "malformed_label_brackets")
+}
+
+func TestAnalyzeRaw_SyntaxError_QuotedHTMLLikeLabelDoesNotTriggerHTMLLabelHint(t *testing.T) {
+	t.Parallel()
+
+	syntaxErr := &parser.SyntaxError{Message: "Parse error on line 2", Line: 2, Column: 10}
+	mux := newTestMux(func(string) (*model.Diagram, *parser.SyntaxError, error) {
+		return nil, syntaxErr, nil
+	})
+
+	code := "flowchart TD\n  C2{\"Has it been<br/>~15 days?\"} -> D"
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze/raw", bytes.NewReader([]byte(code)))
+	req.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	assertHintCodeAbsent(t, resp, "html_label_markup_detected")
 }
