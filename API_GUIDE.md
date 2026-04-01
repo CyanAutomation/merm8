@@ -540,6 +540,7 @@ These hints are generated when Mermaid syntax parsing fails (`valid=false` and `
 | `flowchart_reserved_end_keyword` | Flowchart appears to use reserved keyword `end` as a node identifier/label. | `warning` | Rename `end` node identifiers/labels (for example `EndNode`). |
 | `generic_syntax_error` | Parser returned a syntax error but no specific higher-confidence hint signal matched. | `warning` | Review the parser location and correct nearby Mermaid syntax (headers, arrows, brackets, indentation). |
 | `graphviz_syntax_detected` | Input looks like Graphviz (`digraph`, `->`, braces, etc.) rather than Mermaid. | `warning` | Rewrite as Mermaid (for example start with `flowchart TD` and Mermaid arrow syntax). |
+| `html_label_markup_detected` | Flowchart/graph node label appears to contain HTML-like markup (for example `<br>` / `<br/>`) without surrounding quotes in label delimiters (`[...]` / `{...}`). | `warning` | Wrap the full label text in quotes (for example `C2{"Has it been<br/>~15 days?"}`). |
 | `malformed_label_brackets` | Unbalanced node label brackets detected (for example missing `]`). | `warning` | Ensure every opening label delimiter has a matching closing delimiter. |
 | `markdown_fence_detected` | Markdown code fences (```) were detected in submitted diagram text. | `warning` | Remove markdown fences and submit raw Mermaid only. |
 | `missing_diagram_type_keyword` | Diagram likely omitted the required Mermaid diagram type header. | `warning` | Start line 1 with a valid diagram type keyword (for example `flowchart TD`, `sequenceDiagram`). |
