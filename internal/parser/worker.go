@@ -110,8 +110,8 @@ func (w *parserWorker) do(req workerRequestEnvelope) (*workerResponseEnvelope, e
 func (w *parserWorker) close() error {
 	w.opMu.Lock()
 	w.closeMu.Lock()
-	defer w.closeMu.Unlock()
 	defer w.opMu.Unlock()
+	defer w.closeMu.Unlock()
 
 	if w.isClosed {
 		return nil
