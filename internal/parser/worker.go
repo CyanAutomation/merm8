@@ -79,6 +79,13 @@ func (w *parserWorker) do(req workerRequestEnvelope) (*workerResponseEnvelope, e
 	w.opMu.Lock()
 	defer w.opMu.Unlock()
 
+	w.closeMu.Lock()
+	if w.isClosed {
+		w.closeMu.Unlock()
+		return nil, fmt.Errorf("%w: worker is closed", ErrSubprocess)
+	}
+	w.closeMu.Unlock()
+
 	payload, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: failed to encode parser request: %w", ErrDecode, err)
@@ -110,6 +117,10 @@ func (w *parserWorker) close() error {
 		return nil
 	}
 	w.isClosed = true
+
+	// Ensure no new operations start while we are shutting down.
+	w.opMu.Lock()
+	defer w.opMu.Unlock()
 
 	var errs []error
 	if w.cmd.Process != nil {
