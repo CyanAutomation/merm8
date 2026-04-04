@@ -650,15 +650,14 @@ func (l *parserConcurrencyLimiter) Release() {
 }
 
 type analyzeOutcomeCounters struct {
-	mu                  sync.RWMutex
-	validSuccess        uint64
-	syntaxError         uint64
-	other               uint64
-	parserTimeout       uint64
-	parserSubprocess    uint64
-	parserDecode        uint64
-	parserContract      uint64
-	parserInternalError uint64
+	validSuccess        atomic.Uint64
+	syntaxError         atomic.Uint64
+	other               atomic.Uint64
+	parserTimeout       atomic.Uint64
+	parserSubprocess    atomic.Uint64
+	parserDecode        atomic.Uint64
+	parserContract      atomic.Uint64
+	parserInternalError atomic.Uint64
 }
 
 type analyzeOutcomeSnapshot struct {
@@ -673,42 +672,36 @@ type analyzeOutcomeSnapshot struct {
 }
 
 func (c *analyzeOutcomeCounters) Snapshot() analyzeOutcomeSnapshot {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	return analyzeOutcomeSnapshot{
-		validSuccess:        c.validSuccess,
-		syntaxError:         c.syntaxError,
-		other:               c.other,
-		parserTimeout:       c.parserTimeout,
-		parserSubprocess:    c.parserSubprocess,
-		parserDecode:        c.parserDecode,
-		parserContract:      c.parserContract,
-		parserInternalError: c.parserInternalError,
+		validSuccess:        c.validSuccess.Load(),
+		syntaxError:         c.syntaxError.Load(),
+		other:               c.other.Load(),
+		parserTimeout:       c.parserTimeout.Load(),
+		parserSubprocess:    c.parserSubprocess.Load(),
+		parserDecode:        c.parserDecode.Load(),
+		parserContract:      c.parserContract.Load(),
+		parserInternalError: c.parserInternalError.Load(),
 	}
 }
 
 func (c *analyzeOutcomeCounters) Increment(outcome string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	switch outcome {
 	case telemetry.OutcomeLintSuccess:
-		c.validSuccess++
+		c.validSuccess.Add(1)
 	case telemetry.OutcomeSyntaxError:
-		c.syntaxError++
+		c.syntaxError.Add(1)
 	case telemetry.OutcomeParserTimeout:
-		c.parserTimeout++
+		c.parserTimeout.Add(1)
 	case telemetry.OutcomeParserSubprocessErr:
-		c.parserSubprocess++
+		c.parserSubprocess.Add(1)
 	case telemetry.OutcomeParserDecodeErr:
-		c.parserDecode++
+		c.parserDecode.Add(1)
 	case telemetry.OutcomeParserContractErr:
-		c.parserContract++
+		c.parserContract.Add(1)
 	case telemetry.OutcomeInternalError:
-		c.parserInternalError++
+		c.parserInternalError.Add(1)
 	case telemetry.OutcomeOther:
-		c.other++
+		c.other.Add(1)
 	}
 }
 
