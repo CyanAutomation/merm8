@@ -3626,48 +3626,43 @@ func writeErrorWithDetailsAndContext(w http.ResponseWriter, r *http.Request, sta
 
 func (h *Handler) parseWithRequestSettings(req analyzeRequest, normalizedCfg rules.Config) (*model.Diagram, *parser.SyntaxError, error) {
 	needSourceEnhancement := requiresSourceEnhancement(normalizedCfg)
-	if req.Parser == nil {
-		if parserWithConfig, supportsConfig := h.parser.(ParserWithConfig); supportsConfig {
-			cfg := parser.DefaultConfig().EffectiveConfig()
-			if configProvider, ok := h.parser.(ParserConfigProvider); ok {
-				cfg = configProvider.ParserConfig().EffectiveConfig()
-			}
-			cfg.NeedSourceEnhancement = needSourceEnhancement
-			return parserWithConfig.ParseWithConfig(req.Code, cfg)
-		}
-		return h.parser.Parse(req.Code)
-	}
-	hasOverride := req.Parser.TimeoutSeconds != nil || req.Parser.MaxOldSpaceMB != nil
+	hasOverride := req.Parser != nil && (req.Parser.TimeoutSeconds != nil || req.Parser.MaxOldSpaceMB != nil)
 	parserWithConfig, supportsConfig := h.parser.(ParserWithConfig)
-	cfg := parser.Config{}
+
 	if hasOverride && !supportsConfig {
 		return nil, nil, fmt.Errorf("%w: per-request parser settings are unsupported by the configured parser", errInvalidRequest)
 	}
+
+	cfg := parser.DefaultConfig().EffectiveConfig()
 	if configProvider, ok := h.parser.(ParserConfigProvider); ok {
 		cfg = configProvider.ParserConfig().EffectiveConfig()
-	} else {
-		cfg = parser.DefaultConfig().EffectiveConfig()
 	}
+
 	minTimeout, maxTimeout, minMem, maxMem := parser.LimitBounds()
-	if req.Parser.TimeoutSeconds != nil {
-		// Validate timeout is in allowed range
-		if *req.Parser.TimeoutSeconds < int(minTimeout.Seconds()) || *req.Parser.TimeoutSeconds > int(maxTimeout.Seconds()) {
-			return nil, nil, fmt.Errorf("%w: parser.timeout_seconds must be an integer between %d and %d seconds; got %d", errInvalidRequest, int(minTimeout.Seconds()), int(maxTimeout.Seconds()), *req.Parser.TimeoutSeconds)
+	if req.Parser != nil {
+		if req.Parser.TimeoutSeconds != nil {
+			// Validate timeout is in allowed range
+			if *req.Parser.TimeoutSeconds < int(minTimeout.Seconds()) || *req.Parser.TimeoutSeconds > int(maxTimeout.Seconds()) {
+				return nil, nil, fmt.Errorf("%w: parser.timeout_seconds must be an integer between %d and %d seconds; got %d", errInvalidRequest, int(minTimeout.Seconds()), int(maxTimeout.Seconds()), *req.Parser.TimeoutSeconds)
+			}
+			cfg.Timeout = time.Duration(*req.Parser.TimeoutSeconds) * time.Second
 		}
-		timeout := time.Duration(*req.Parser.TimeoutSeconds) * time.Second
-		cfg.Timeout = timeout
-	}
-	if req.Parser.MaxOldSpaceMB != nil {
-		// Validate memory limit is in allowed range
-		if *req.Parser.MaxOldSpaceMB < minMem || *req.Parser.MaxOldSpaceMB > maxMem {
-			return nil, nil, fmt.Errorf("%w: parser.max_old_space_mb must be an integer between %d and %d MiB; got %d", errInvalidRequest, minMem, maxMem, *req.Parser.MaxOldSpaceMB)
+		if req.Parser.MaxOldSpaceMB != nil {
+			// Validate memory limit is in allowed range
+			if *req.Parser.MaxOldSpaceMB < minMem || *req.Parser.MaxOldSpaceMB > maxMem {
+				return nil, nil, fmt.Errorf("%w: parser.max_old_space_mb must be an integer between %d and %d MiB; got %d", errInvalidRequest, minMem, maxMem, *req.Parser.MaxOldSpaceMB)
+			}
+			cfg.NodeMaxOldSpaceMB = *req.Parser.MaxOldSpaceMB
 		}
-		cfg.NodeMaxOldSpaceMB = *req.Parser.MaxOldSpaceMB
 	}
+
 	cfg.NeedSourceEnhancement = needSourceEnhancement
+
 	if supportsConfig {
 		return parserWithConfig.ParseWithConfig(req.Code, cfg)
 	}
+
+	// Fallback to default parser if per-request config is not supported
 	return h.parser.Parse(req.Code)
 }
 
