@@ -143,10 +143,18 @@ type stderrWriter struct {
 func (sw stderrWriter) Write(p []byte) (int, error) {
 	sw.worker.errMu.Lock()
 	defer sw.worker.errMu.Unlock()
-	sw.worker.stderr = append(sw.worker.stderr, p...)
-	if len(sw.worker.stderr) > maxWorkerStderrBytes {
-		copy(sw.worker.stderr, sw.worker.stderr[len(sw.worker.stderr)-maxWorkerStderrBytes:])
-		sw.worker.stderr = sw.worker.stderr[:maxWorkerStderrBytes]
+
+	if len(p) >= maxWorkerStderrBytes {
+		sw.worker.stderr = append(sw.worker.stderr[:0], p[len(p)-maxWorkerStderrBytes:]...)
+		return len(p), nil
 	}
+
+	overflow := len(sw.worker.stderr) + len(p) - maxWorkerStderrBytes
+	if overflow > 0 {
+		copy(sw.worker.stderr, sw.worker.stderr[overflow:])
+		sw.worker.stderr = sw.worker.stderr[:len(sw.worker.stderr)-overflow]
+	}
+
+	sw.worker.stderr = append(sw.worker.stderr, p...)
 	return len(p), nil
 }

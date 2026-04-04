@@ -190,7 +190,7 @@ func (l *corsRejectLogger) Log(origin, path string, allowlistSize int) {
 	l.lastLog = now
 	l.mu.Unlock()
 
-	l.logger.Warn("cors origin rejected",
+	go l.logger.Warn("cors origin rejected",
 		"origin", origin,
 		"path", path,
 		"allowlist_size", allowlistSize,

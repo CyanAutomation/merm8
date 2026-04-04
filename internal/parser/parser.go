@@ -532,7 +532,16 @@ func (p *Parser) cacheKey(code string, cfg Config) (string, bool) {
 	if cfg.SourceEnhancement != nil {
 		sourceEnhancement = *cfg.SourceEnhancement
 	}
-	payload := strings.Join([]string{code, cfg.Timeout.String(), strconv.Itoa(cfg.NodeMaxOldSpaceMB), strconv.FormatBool(sourceEnhancement), strconv.FormatBool(cfg.NeedSourceEnhancement), version}, "\x00")
+
+	codeDigest := sha256.Sum256([]byte(code))
+	payload := strings.Join([]string{
+		hex.EncodeToString(codeDigest[:]),
+		cfg.Timeout.String(),
+		strconv.Itoa(cfg.NodeMaxOldSpaceMB),
+		strconv.FormatBool(sourceEnhancement),
+		strconv.FormatBool(cfg.NeedSourceEnhancement),
+		version,
+	}, "\x00")
 	hash := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(hash[:]), true
 }
