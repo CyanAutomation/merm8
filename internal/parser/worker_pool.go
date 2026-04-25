@@ -73,7 +73,7 @@ func (p *workerPool) release(w *parserWorker, healthy bool) {
 	p.mu.Lock()
 	if p.closing || !healthy {
 		p.mu.Unlock()
-		_ = w.close()
+		_ = w.abort()
 
 		p.mu.Lock()
 		p.total--

@@ -684,7 +684,7 @@ func (p *Parser) parseWithWorkerPool(mermaidCode string, cfg Config) (*model.Dia
 	select {
 	case <-timer.C:
 		close(timedOut)
-		pool.release(worker, false)
+		go pool.release(worker, false)
 		return nil, nil, &parserExecutionError{err: fmt.Errorf("%w: after %s", ErrTimeout, cfg.Timeout), metadata: ErrorMetadata{Suggestion: "reduce diagram size or increase PARSER_TIMEOUT_SECONDS", Limit: cfg.Timeout.String()}}
 	case reqErr := <-errCh:
 		pool.release(worker, false)
