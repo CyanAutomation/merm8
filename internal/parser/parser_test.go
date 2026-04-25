@@ -578,7 +578,6 @@ func TestParser_ASTExtractionFailureAndContractMapping(t *testing.T) {
 		scriptBody       string
 		wantErrSubstr    string
 		wantSyntaxSubstr string
-		wantSyntaxNil    bool
 	}{
 		{
 			name: "ast extraction style syntax failure",
@@ -605,7 +604,7 @@ process.exit(0);
 process.stdout.write(JSON.stringify({ valid: false }) + "\n");
 process.exit(0);
 `,
-			wantSyntaxNil: true,
+			wantErrSubstr: "invalid result missing error for valid=false",
 		},
 	}
 
@@ -646,13 +645,6 @@ process.exit(0);
 				t.Fatalf("expected nil diagram, got %+v", diagram)
 			}
 
-			if tt.wantSyntaxNil {
-				if syntaxErr != nil {
-					t.Fatalf("expected nil syntaxErr for missing error payload, got %+v", syntaxErr)
-				}
-				return
-			}
-
 			if syntaxErr == nil {
 				t.Fatal("expected syntaxErr, got nil")
 			}
@@ -660,6 +652,51 @@ process.exit(0);
 				t.Fatalf("expected syntaxErr containing %q, got %q", tt.wantSyntaxSubstr, syntaxErr.Message)
 			}
 		})
+	}
+}
+
+func TestParser_WorkerPoolValidFalseWithoutErrorReturnsContractError(t *testing.T) {
+	t.Setenv("PARSER_MODE", "pool")
+	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
+
+	tempDir := repoTempDir(t)
+	script := filepath.Join(tempDir, "parse.mjs")
+	scriptBody := `#!/usr/bin/env node
+if (!process.argv.includes("--worker")) {
+  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:"oneshot"}],edges:[],subgraphs:[],suppressions:[]}})+"\n");
+  process.exit(0);
+}
+
+import readline from "readline";
+const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
+for await (const line of rl) {
+  const req = JSON.parse(line);
+  process.stdout.write(JSON.stringify({
+    id: req.id,
+    result: { valid: false }
+  }) + "\n");
+}
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write test parser script: %v", err)
+	}
+
+	p, err := parser.NewWithConfig(script, parser.Config{Timeout: 10 * time.Second})
+	if err != nil {
+		t.Fatalf("failed to construct parser: %v", err)
+	}
+	diagram, syntaxErr, err := p.Parse("graph TD\nA-->B")
+	if err == nil {
+		t.Fatal("expected contract error, got nil")
+	}
+	if !errors.Is(err, parser.ErrContract) {
+		t.Fatalf("expected contract category error, got %v", err)
+	}
+	if !contains(err.Error(), "invalid result missing error for valid=false") {
+		t.Fatalf("expected missing-error contract message, got %q", err.Error())
+	}
+	if diagram != nil || syntaxErr != nil {
+		t.Fatalf("expected nil diagram/syntaxErr for malformed worker envelope, got diagram=%v syntaxErr=%v", diagram, syntaxErr)
 	}
 }
 
