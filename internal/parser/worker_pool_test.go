@@ -14,11 +14,11 @@ import (
 )
 
 type trackedWorker struct {
-	worker      *parserWorker
-	closeMuHeld atomic.Bool
+	worker   *parserWorker
+	opMuHeld atomic.Bool
 }
 
-func TestWorkerPoolUnhealthyReleaseWaitsForCloseBeforeReturningCapacity(t *testing.T) {
+func TestWorkerPoolUnhealthyReleaseDoesNotWaitForInFlightOperation(t *testing.T) {
 	const (
 		poolSize   = 1
 		iterations = 8
@@ -48,6 +48,8 @@ func TestWorkerPoolUnhealthyReleaseWaitsForCloseBeforeReturningCapacity(t *testi
 			t.Fatalf("borrow worker: %v", err)
 		}
 		tw := findTrackedWorker(t, &trackedMu, tracked, worker)
+		tw.worker.opMu.Lock()
+		tw.opMuHeld.Store(true)
 
 		releaseDone := make(chan struct{})
 		go func() {
@@ -55,40 +57,21 @@ func TestWorkerPoolUnhealthyReleaseWaitsForCloseBeforeReturningCapacity(t *testi
 			close(releaseDone)
 		}()
 
-		borrowDone := make(chan *parserWorker, 1)
-		go func() {
-			next, borrowErr := pool.borrow()
-			if borrowErr != nil {
-				borrowDone <- nil
-				return
-			}
-			borrowDone <- next
-			borrowDone <- next
-		}()
-
 		select {
-		case <-borrowDone:
-			t.Fatalf("borrow unexpectedly succeeded before unhealthy worker close finished")
-		case <-time.After(150 * time.Millisecond):
+		case <-releaseDone:
+		case <-time.After(250 * time.Millisecond):
+			t.Fatalf("unhealthy release blocked while operation lock was held")
 		}
 
 		if live := liveWorkerProcessCount(&trackedMu, tracked); live > poolSize {
 			t.Fatalf("live worker process count exceeded pool cap: got %d, cap %d", live, poolSize)
 		}
 
-		unlockWorkerCloseMu(tw)
+		unlockWorkerOpMu(tw)
 
-		select {
-		case <-releaseDone:
-		case <-time.After(2 * time.Second):
-			t.Fatalf("unhealthy release did not complete after allowing close")
-		}
-
-		var replacement *parserWorker
-		select {
-		case replacement = <-borrowDone:
-		case <-time.After(2 * time.Second):
-			t.Fatalf("borrow did not complete after unhealthy close released pool capacity")
+		replacement, err := pool.borrow()
+		if err != nil {
+			t.Fatalf("borrow replacement worker: %v", err)
 		}
 
 		pool.release(replacement, true)
@@ -99,7 +82,7 @@ func TestWorkerPoolUnhealthyReleaseWaitsForCloseBeforeReturningCapacity(t *testi
 		cleanup := append([]*trackedWorker(nil), tracked...)
 		trackedMu.Unlock()
 		for _, tw := range cleanup {
-			unlockWorkerCloseMu(tw)
+			unlockWorkerOpMu(tw)
 			tw.worker.close()
 		}
 	})
@@ -123,8 +106,6 @@ func newTrackedProcessWorker(t *testing.T) (*trackedWorker, error) {
 
 	w := &parserWorker{cmd: cmd, stdin: stdin, stdout: bufio.NewReader(stdout)}
 	tw := &trackedWorker{worker: w}
-	w.closeMu.Lock()
-	tw.closeMuHeld.Store(true)
 	return tw, nil
 }
 
@@ -163,11 +144,11 @@ func processAlive(proc *os.Process) bool {
 	return err == nil || !errors.Is(err, os.ErrProcessDone)
 }
 
-func unlockWorkerCloseMu(tw *trackedWorker) {
-	if tw == nil || !tw.closeMuHeld.CompareAndSwap(true, false) {
+func unlockWorkerOpMu(tw *trackedWorker) {
+	if tw == nil || !tw.opMuHeld.CompareAndSwap(true, false) {
 		return
 	}
-	tw.worker.closeMu.Unlock()
+	tw.worker.opMu.Unlock()
 }
 
 func TestWorkerPoolCloseUnblocksWaiters(t *testing.T) {
@@ -176,7 +157,6 @@ func TestWorkerPoolCloseUnblocksWaiters(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		unlockWorkerCloseMu(tw)
 		return tw.worker, nil
 	})
 
@@ -219,7 +199,6 @@ func TestWorkerPoolBorrowReturnsErrorWhenClosedDuringWorkerCreation(t *testing.T
 		if err != nil {
 			return nil, err
 		}
-		unlockWorkerCloseMu(tw)
 		return tw.worker, nil
 	})
 
