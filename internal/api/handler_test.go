@@ -7216,6 +7216,110 @@ func TestAnalyze_UnknownRuleAndOptionValidation(t *testing.T) {
 	}
 }
 
+func TestAnalyze_AllowUnknownRulesControlKey(t *testing.T) {
+	baseCode := "graph TD\n  A-->B"
+	tests := []struct {
+		name            string
+		config          map[string]any
+		expectedStatus  int
+		expectedErrCode string
+		expectWarnings  bool
+	}{
+		{
+			name: "versioned config accepts allow-unknown-rules false control key",
+			config: map[string]any{
+				"schema-version":      "v1",
+				"allow-unknown-rules": false,
+				"rules":               map[string]any{"max-fanout": map[string]any{"limit": 1}},
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "flat config consumes allow-unknown-rules control key before rule normalization",
+			config: map[string]any{
+				"allow-unknown-rules": false,
+				"max-fanout":          map[string]any{"limit": 1},
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "allow-unknown-rules true keeps unknown rules as warnings",
+			config: map[string]any{
+				"schema-version":      "v1",
+				"allow-unknown-rules": true,
+				"rules":               map[string]any{"fake-rule": map[string]any{}},
+			},
+			expectedStatus: http.StatusOK,
+			expectWarnings: true,
+		},
+		{
+			name: "allow-unknown-rules false rejects unknown rules",
+			config: map[string]any{
+				"schema-version":      "v1",
+				"allow-unknown-rules": false,
+				"rules":               map[string]any{"fake-rule": map[string]any{}},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedErrCode: "unknown_rule",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+				return &model.Diagram{
+					Type:  model.DiagramTypeFlowchart,
+					Nodes: []model.Node{{ID: "A"}, {ID: "B"}},
+					Edges: []model.Edge{{From: "A", To: "B"}},
+				}, nil, nil
+			})
+
+			body, _ := json.Marshal(map[string]any{
+				"code":   baseCode,
+				"config": tt.config,
+			})
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+
+			if w.Code != tt.expectedStatus {
+				t.Fatalf("expected status %d, got %d body=%s", tt.expectedStatus, w.Code, w.Body.String())
+			}
+
+			var resp map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			if tt.expectedErrCode != "" {
+				errObj, ok := resp["error"].(map[string]any)
+				if !ok {
+					t.Fatalf("expected error object, got %#v", resp["error"])
+				}
+				if got := errObj["code"]; got != tt.expectedErrCode {
+					t.Fatalf("expected error.code=%q, got %#v", tt.expectedErrCode, got)
+				}
+				return
+			}
+
+			if valid, ok := resp["valid"].(bool); !ok || !valid {
+				t.Fatalf("expected valid=true, got %#v", resp["valid"])
+			}
+			_, hasError := resp["error"]
+			if hasError {
+				t.Fatalf("expected no error object for successful request, got %#v", resp["error"])
+			}
+			warnings, hasWarnings := resp["warnings"].([]any)
+			if tt.expectWarnings {
+				if !hasWarnings || len(warnings) == 0 {
+					t.Fatalf("expected warnings for lenient unknown rule, got %#v", resp["warnings"])
+				}
+			}
+		})
+	}
+}
+
 // TestAnalyze_SuppressionValidation tests suppression selectors targeting rules.
 func TestAnalyze_SuppressionValidation(t *testing.T) {
 	tests := []struct {
