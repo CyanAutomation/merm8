@@ -944,6 +944,61 @@ for await (const line of rl) {
 	}
 }
 
+func TestParser_WorkerPoolTimeoutReturnsPromptlyWhenWorkerNeverWritesNewline(t *testing.T) {
+	t.Setenv("PARSER_MODE", "pool")
+	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
+
+	tempDir := repoTempDir(t)
+	script := filepath.Join(tempDir, "parse.mjs")
+	scriptBody := `#!/usr/bin/env node
+if (!process.argv.includes("--worker")) {
+  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:"oneshot"}],edges:[],subgraphs:[],suppressions:[]}})+"\n");
+  process.exit(0);
+}
+
+import readline from "readline";
+const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
+for await (const line of rl) {
+  const req = JSON.parse(line);
+  if (String(req.code || "").includes("NO_NEWLINE")) {
+    process.stdout.write("{\"id\":\"" + req.id + "\",\"result\":{\"valid\":true}");
+    setInterval(() => {}, 1000);
+    continue;
+  }
+  process.stdout.write(JSON.stringify({
+    id: req.id,
+    result: {
+      valid: true,
+      diagram_type: "flowchart",
+      ast: { type: "flowchart", direction: "TD", nodes: [{ id: "ok", label: "ok" }], edges: [], subgraphs: [], suppressions: [] }
+    }
+  }) + "\n");
+}
+`
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatalf("failed to write test parser script: %v", err)
+	}
+
+	timeout := time.Second
+	p, err := parser.NewWithConfig(script, parser.Config{Timeout: timeout, NodeMaxOldSpaceMB: 256})
+	if err != nil {
+		t.Fatalf("failed to construct parser: %v", err)
+	}
+
+	start := time.Now()
+	diagram, syntaxErr, err := p.ParseWithConfig("graph TD\nNO_NEWLINE", parser.Config{Timeout: timeout, NodeMaxOldSpaceMB: 256})
+	elapsed := time.Since(start)
+	if err == nil || !errors.Is(err, parser.ErrTimeout) {
+		t.Fatalf("expected timeout from worker without newline response, got %v", err)
+	}
+	if diagram != nil || syntaxErr != nil {
+		t.Fatalf("expected nil diagram/syntaxErr on timeout, got diagram=%v syntaxErr=%v", diagram, syntaxErr)
+	}
+	if elapsed > timeout+700*time.Millisecond {
+		t.Fatalf("expected timeout return near configured bound, elapsed=%s timeout=%s", elapsed, timeout)
+	}
+}
+
 // Helper to check if string contains substring (Go 1.24 doesn't have strings.Contains in all contexts)
 func contains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {

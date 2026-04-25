@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 )
 
 const maxWorkerStderrBytes = 64 * 1024
@@ -39,7 +40,7 @@ type parserWorker struct {
 	stderr   []byte
 	opMu     sync.Mutex
 	closeMu  sync.Mutex
-	isClosed bool
+	isClosed atomic.Bool
 }
 
 func startParserWorker(scriptPath string, nodeArgs []string) (*parserWorker, error) {
@@ -79,7 +80,7 @@ func (w *parserWorker) do(req workerRequestEnvelope) (*workerResponseEnvelope, e
 	w.opMu.Lock()
 	defer w.opMu.Unlock()
 
-	if w.isClosed {
+	if w.isClosed.Load() {
 		return nil, fmt.Errorf("%w: worker is closed", ErrSubprocess)
 	}
 
@@ -88,11 +89,17 @@ func (w *parserWorker) do(req workerRequestEnvelope) (*workerResponseEnvelope, e
 		return nil, fmt.Errorf("%w: failed to encode parser request: %w", ErrDecode, err)
 	}
 	if _, err := w.stdin.Write(append(payload, '\n')); err != nil {
+		if w.isClosed.Load() {
+			return nil, fmt.Errorf("%w: worker is closed", ErrSubprocess)
+		}
 		return nil, fmt.Errorf("%w: %w (stderr: %s)", ErrSubprocess, err, w.stderrString())
 	}
 
 	line, err := w.stdout.ReadBytes('\n')
 	if err != nil {
+		if w.isClosed.Load() {
+			return nil, fmt.Errorf("%w: worker is closed", ErrSubprocess)
+		}
 		return nil, fmt.Errorf("%w: %w (stderr: %s)", ErrSubprocess, err, w.stderrString())
 	}
 
@@ -108,15 +115,20 @@ func (w *parserWorker) do(req workerRequestEnvelope) (*workerResponseEnvelope, e
 }
 
 func (w *parserWorker) close() error {
-	w.opMu.Lock()
+	return w.closeWithMode(true)
+}
+
+func (w *parserWorker) abort() error {
+	return w.closeWithMode(false)
+}
+
+func (w *parserWorker) closeWithMode(waitForOperation bool) error {
 	w.closeMu.Lock()
-	defer w.opMu.Unlock()
 	defer w.closeMu.Unlock()
 
-	if w.isClosed {
+	if !w.isClosed.CompareAndSwap(false, true) {
 		return nil
 	}
-	w.isClosed = true
 
 	var errs []error
 	if w.cmd.Process != nil {
@@ -126,6 +138,10 @@ func (w *parserWorker) close() error {
 	}
 	if err := w.stdin.Close(); err != nil {
 		errs = append(errs, err)
+	}
+	if waitForOperation {
+		w.opMu.Lock()
+		w.opMu.Unlock()
 	}
 	if err := w.cmd.Wait(); err != nil {
 		var exitErr *exec.ExitError
