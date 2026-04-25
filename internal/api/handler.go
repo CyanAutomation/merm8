@@ -169,6 +169,10 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 	if !ok {
 		return rules.Config{}, nil, &validationError{Code: "invalid_option", Path: "config", Message: "config must be object"}
 	}
+	// Treat allow-unknown-rules as a control key, not a rule ID.
+	// It is consumed up front so both versioned and legacy/flat payloads
+	// can include it without triggering unknown-option or rule-shape errors.
+	delete(asMap, "allow-unknown-rules")
 
 	rulePathPrefix := "config"
 	deprecations := make([]string, 0, 2)
@@ -217,7 +221,7 @@ func parseConfig(raw json.RawMessage, knownRuleIDs map[string]struct{}, strict b
 					Code:      "unknown_option",
 					Path:      "config." + topLevelKey,
 					Message:   "unknown option: " + topLevelKey,
-					Supported: []string{"schema-version", "rules"},
+					Supported: []string{"schema-version", "rules", "allow-unknown-rules"},
 				}
 			}
 		}
