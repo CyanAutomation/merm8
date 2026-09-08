@@ -5,4 +5,7 @@ compatibility_date = "2024-09-08"
 [observability]
 enabled = true
 
+[vars]
+REST_ALLOWED_ORIGINS = "https://merm8-splash.vercel.app"
+
 # Configure with: wrangler secret put API_KEY
