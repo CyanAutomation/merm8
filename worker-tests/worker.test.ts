@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import worker from "../worker/index.js";
+import { parseMermaid } from "../src/parser/parse.js";
 
-const env = { API_KEY: "test-key", MCP_ALLOWED_HOSTNAMES: "example.test" };
+const env = { API_KEY: "test-key" };
 
 test("serves Worker-native health and discovery endpoints", async () => {
   const health = await worker.fetch(new Request("https://example.test/v1/healthz"), env);
@@ -36,4 +37,34 @@ test("protects MCP and exposes the analysis tool through Streamable HTTP", async
   const wire = await response.text();
   const body = JSON.parse(wire.match(/^data: (.+)$/m)?.[1] ?? "{}") as { result: { structuredContent: { valid: boolean } } };
   assert.equal(body.result.structuredContent.valid, true);
+});
+
+test("authorizes MCP with credentials instead of the client-controlled hostname", async () => {
+  const response = await worker.fetch(new Request("https://spoofed.example/mcp", {
+    method: "POST", headers: { authorization: "Bearer test-key", "content-type": "application/json", accept: "application/json, text/event-stream" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" })
+  }), env);
+  assert.equal(response.status, 200);
+});
+
+test("reports each repeated edge endpoint at its actual column", () => {
+  const result = parseMermaid("flowchart LR\n  A --> B --> A\n  A --> A");
+  assert.ok(result.diagram);
+  assert.deepEqual(result.diagram.nodes.map(node => [node.id, node.line, node.column]), [
+    ["A", 2, 3],
+    ["B", 2, 9]
+  ]);
+  assert.deepEqual(result.diagram.sourceNodeIds, ["A", "B", "A", "A"]);
+});
+
+test("logs malformed JSON details while returning a generic client error", async (t) => {
+  const errors: unknown[][] = [];
+  t.mock.method(console, "error", (...args: unknown[]) => { errors.push(args); });
+  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+    method: "POST", headers: { "content-type": "application/json" }, body: "{"
+  }), env);
+  assert.equal(response.status, 400);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0][0], "JSON parse error:");
+  assert.ok(errors[0][1] instanceof Error);
 });

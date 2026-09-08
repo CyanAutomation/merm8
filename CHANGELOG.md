@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Removed spoofable request-hostname checks from MCP authorization; MCP access now relies on the configured API key.
+- Corrected Worker compatibility-date configuration, repeated-node source columns, and malformed JSON error logging.
+
 ### Benchmark Suite Enhancements (Phase 1)
 
 - **False Positive Rate Tracking**: Benchmark suite now calculates and reports `false_positive_rate` (actual issues reported / total actual issues) per rule. Exposed in JSON, HTML, and CSV reports.

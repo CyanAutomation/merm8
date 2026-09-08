@@ -376,8 +376,9 @@ fetch('https://api.example.com/v1/analyze', {...})
 #### Cloudflare Worker
 
 Set `REST_ALLOWED_ORIGINS` as a Worker secret when browser clients need a
-restricted CORS allowlist. Set `API_KEY` and `MCP_ALLOWED_HOSTNAMES` before
-enabling the `/mcp` endpoint.
+restricted CORS allowlist. Set `API_KEY` before enabling the `/mcp` endpoint;
+the API key, rather than a client-controlled request hostname, authorizes MCP
+requests.
 
 ---
 
