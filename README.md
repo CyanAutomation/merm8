@@ -74,7 +74,9 @@ The Worker is a deliberately smaller, Worker-safe implementation. It recognizes
 flowchart, sequence, class, ER, and state diagrams, and currently lints
 flowcharts. Its self-describing contract is available from `/v1/spec`; use
 `/v1/diagram-types` and `/v1/rules` to discover runtime capabilities. The
-deployment SHA is returned in the `X-Merm8-Build` response header.
+deployment SHA is returned in the `X-Merm8-Build` response header. See the
+[Worker API reference](docs/worker-api.md) before integrating with a deployed
+Worker: its contract is intentionally smaller than the local Go server API.
 
 ## CLI (`cmd/merm8-cli`)
 
