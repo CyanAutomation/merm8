@@ -31,6 +31,9 @@ export function parseMermaid(source: string): { diagram?: Diagram; error?: { cod
     if (type === "flowchart" && /(?:-->|---|--|\.\.>|==>)\s*(?:-->|---|--|\.\.>|==>)/.test(line)) {
       return { error: { code: "syntax_error", message: "Malformed flowchart relation", line: number, column: 1 } };
     }
+    if (type === "flowchart" && /(?:-->|---|--|\.\.>|==>)\s*$/.test(line)) {
+      return { error: { code: "syntax_error", message: "Flowchart relation is missing a destination node", line: number, column: 1 } };
+    }
     const relation = type === "sequence" ? /^\s*([\w.-]+).*?(?:--?>|-->>|->>)\s*([\w.-]+)/ : /^\s*([^\s\[{(<-]+).*?(?:-->|---|--|\.\.>|==>)\s*([^\s\[{(<:]+)/;
     const match = line.match(relation);
     if (match) { const from = match[1].trim(); const to = match[2].trim(); const fromCol = line.indexOf(from) + 1; const toCol = line.indexOf(to, fromCol) + 1; add(from, number, fromCol, isExplicitDeclaration(line, from, fromCol)); add(to, number, toCol, isExplicitDeclaration(line, to, toCol)); edges.push({ from, to, line: number, column: fromCol }); continue; }

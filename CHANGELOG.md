@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Removed spoofable request-hostname checks from MCP authorization; MCP access now relies on the configured API key.
 - Corrected Worker compatibility-date configuration, repeated-node source columns, and malformed JSON error logging.
+- Worker flowchart validation now rejects relations without a destination node, matching Mermaid preview behavior.
+
+### Documentation
+
+- Distinguished the deployed Cloudflare Worker API contract from the larger local Go server API, including a dedicated Worker reference.
 
 ### Benchmark Suite Enhancements (Phase 1)
 
