@@ -247,7 +247,7 @@ PARSER_CONCURRENCY_LIMIT=2
 ./merm8-cli diagram1.mmd diagram2.mmd
 ```
 
-### Production (Cloud Run, Kubernetes)
+### Legacy container production
 
 ```bash
 # Balanced for scale, memory controlled, concurrency tuned to CPU
@@ -324,7 +324,7 @@ action: Increase PARSER_CONCURRENCY_LIMIT or add more instances
 
 ## Performance Benchmarks
 
-### Measured on: 4-core, 8GB RAM machine (Cloud Run)
+### Measured on: 4-core, 8GB RAM machine
 
 | Diagram Type        | Nodes | Edges | Depth | Timeout=5s | Timeout=10s | Notes                   |
 | ------------------- | ----- | ----- | ----- | ---------- | ----------- | ----------------------- |
