@@ -1,16 +1,3 @@
-Docs available at: <https://merm8-api-482194634678.europe-west1.run.app/docs>
-Reminder:
-
-```bash
-gcloud run deploy merm8-api-482194634678
---region=europe-west1
---image=europe-west1-docker.pkg.dev/motion-in-ocean-demo-webcam/merm8/merm8:latest
---update-env-vars MERM8_API_URL=https://merm8-api-482194634678.europe-west1.run.app,ALLOWED_ORIGINS=https://merm8-splash.vercel.app
---allow-unauthenticated
-```
-
-Keep `ALLOWED_ORIGINS` pinned to `https://merm8-splash.vercel.app` here and in `cloudbuild.yaml` to avoid deploy-time drift.
-
 # merm8 — mermaid-lint
 
 A **deterministic Mermaid static analysis engine** — no AI, no LLMs, pure static analysis.
@@ -76,24 +63,12 @@ go build -o mermaid-lint ./cmd/server
 PARSER_SCRIPT=./parser-node/parse.mjs ./mermaid-lint
 ```
 
-### Docker
+### Cloudflare Worker
 
-```bash
-docker compose up --build
-```
-
-The service listens on **port 8080**.
-
-#### Benchmark artifact requirement in container builds
-
-- Local/default Docker builds keep developer ergonomics: if `benchmark.html` is missing, the image build generates a placeholder report.
-- CI/deploy builds should enable strict mode so production images only ship with a real benchmark report:
-
-```bash
-docker build --build-arg REQUIRE_BENCHMARK_HTML=true .
-```
-
-`cloudbuild.yaml` is configured to use strict mode for Cloud Run image builds.
+The hosted REST API and MCP server run as a Cloudflare Worker. Configure the
+`API_KEY` and `MCP_ALLOWED_HOSTNAMES` secrets with Wrangler, then deploy with
+`npm run deploy`. REST analysis is served at `/v1/analyze`; authenticated
+Streamable HTTP MCP is served at `/mcp`.
 
 ## CLI (`cmd/merm8-cli`)
 
@@ -577,7 +552,7 @@ readinessProbe:
     port: 8080
 ```
 
-- **Cloud Run / ALB / other HTTP health checks:** point to `/v1/healthz` (or `/` if required by the platform) and keep readiness checks, when available, on `/v1/ready`.
+- **Cloudflare health checks:** point to `/v1/healthz`; `/v1/ready` remains available for application diagnostics.
 
 ### Security-related environment variables
 
