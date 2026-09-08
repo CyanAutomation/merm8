@@ -5,6 +5,27 @@ import { parseMermaid } from "../src/parser/parse.js";
 
 const env = { API_KEY: "test-key" };
 
+test("serves the splash origin with CORS headers and handles preflight", async () => {
+  const corsEnv = { ...env, REST_ALLOWED_ORIGINS: "https://merm8-splash.vercel.app" };
+  const preflight = await worker.fetch(new Request("https://example.test/v1/analyze", {
+    method: "OPTIONS",
+    headers: {
+      origin: "https://merm8-splash.vercel.app",
+      "access-control-request-method": "POST",
+      "access-control-request-headers": "content-type",
+    },
+  }), corsEnv);
+
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), "https://merm8-splash.vercel.app");
+  assert.match(preflight.headers.get("access-control-allow-methods") ?? "", /POST/);
+
+  const health = await worker.fetch(new Request("https://example.test/v1/healthz", {
+    headers: { origin: "https://merm8-splash.vercel.app" },
+  }), corsEnv);
+  assert.equal(health.headers.get("access-control-allow-origin"), "https://merm8-splash.vercel.app");
+});
+
 test("serves Worker-native health and discovery endpoints", async () => {
   const health = await worker.fetch(new Request("https://example.test/v1/healthz"), env);
   assert.equal(health.status, 200);
@@ -12,6 +33,10 @@ test("serves Worker-native health and discovery endpoints", async () => {
 
   const types = await worker.fetch(new Request("https://example.test/v1/diagram-types"), env);
   assert.deepEqual((await types.json() as { "lint-supported": string[] })["lint-supported"], ["flowchart"]);
+
+  const rules = await worker.fetch(new Request("https://example.test/v1/rules"), env);
+  const payload = await rules.json() as { rules: Array<{ id: string; description: string; severity: string }> };
+  assert.ok(payload.rules.some(rule => rule.id === "no-cycles" && rule.description && rule.severity === "error"));
 });
 
 test("analyses a flowchart without a process or container", async () => {
@@ -23,6 +48,25 @@ test("analyses a flowchart without a process or container", async () => {
   const result = await response.json() as { valid: boolean; issues: Array<{ "rule-id": string }> };
   assert.equal(result.valid, true);
   assert.ok(result.issues.some(issue => issue["rule-id"] === "no-cycles"));
+});
+
+test("honours splash nested rule configuration", async () => {
+  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      code: "flowchart TD\nA --> B\nB --> A\nX",
+      config: {
+        "schema-version": "v1",
+        rules: {
+          "no-cycles": { enabled: false },
+          "no-disconnected-nodes": { enabled: false },
+        },
+      },
+    }),
+  }), env);
+  const result = await response.json() as { issues: Array<{ "rule-id": string }> };
+  assert.ok(!result.issues.some(issue => issue["rule-id"] === "no-cycles"));
+  assert.ok(!result.issues.some(issue => issue["rule-id"] === "no-disconnected-nodes"));
 });
 
 test("protects MCP and exposes the analysis tool through Streamable HTTP", async () => {
