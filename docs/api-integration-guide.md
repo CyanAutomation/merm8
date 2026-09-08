@@ -373,27 +373,11 @@ fetch('https://api.example.com/v1/analyze', {...})
 
 ### Deployment Configuration
 
-#### Docker Compose (Local Development)
+#### Cloudflare Worker
 
-```yaml
-services:
-  mermaid-lint:
-    environment:
-      ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3001"
-```
-
-#### Cloud Run (GCP)
-
-```bash
-gcloud run deploy merm8-api \
-  --set-env-vars ALLOWED_ORIGINS=https://your-vercel-domain.vercel.app
-```
-
-#### Dockerfile
-
-```dockerfile
-ENV ALLOWED_ORIGINS=https://merm8-splash-nazb4dydy-cyanautomations-projects.vercel.app
-```
+Set `REST_ALLOWED_ORIGINS` as a Worker secret when browser clients need a
+restricted CORS allowlist. Set `API_KEY` and `MCP_ALLOWED_HOSTNAMES` before
+enabling the `/mcp` endpoint.
 
 ---
 

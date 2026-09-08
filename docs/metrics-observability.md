@@ -176,10 +176,10 @@ For isolated dev/staging deployments, disable alerting or increase all threshold
 
 `placeholder` is emitted when the HTML contains the signature text `benchmark.html was not pre-generated`, which means benchmark generation did not complete for that revision.
 
-### Monitoring suggestions (Cloud Run / uptime checks)
+### Monitoring suggestions (Cloudflare / uptime checks)
 
 - Add an uptime check (or synthetic probe) for `/benchmark.html` that fails if the response header equals `placeholder`.
-- For Cloud Run log-based alerting, create a logs-based metric filtered by this header and alert when count > 0 for recent windows (for example 5m).
+- Use Cloudflare Observability or Workers Logs to alert when this header equals `placeholder`.
 - Keep `/healthz` and `/ready` focused on service availability; use this benchmark signal specifically for deployment quality.
 
 ## Doc maintenance guard (drift detection)
