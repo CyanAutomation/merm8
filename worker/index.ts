@@ -1,5 +1,6 @@
 import { analyzeMermaid } from "../src/engine/analyze.js";
 import { mcpHandler } from "../src/mcp/server.js";
+import { workerOpenApi } from "./openapi.js";
 
 export interface Env { API_KEY?: string; REST_ALLOWED_ORIGINS?: string; BUILD_VERSION?: string; BUILD_SHA?: string }
 const json = (body: unknown, status = 200, headers: HeadersInit = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", ...headers } });
@@ -24,8 +25,13 @@ function corsHeaders(request: Request, env: Env): HeadersInit {
   };
 }
 
-function withCors(response: Response, headers: HeadersInit): Response {
+function withCors(response: Response, headers: HeadersInit, env: Env): Response {
   const merged = new Headers(response.headers);
+  merged.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
+  merged.set("referrer-policy", "no-referrer");
+  merged.set("x-content-type-options", "nosniff");
+  merged.set("x-frame-options", "DENY");
+  merged.set("x-merm8-build", env.BUILD_SHA ?? env.BUILD_VERSION ?? "development");
   new Headers(headers).forEach((value, name) => merged.set(name, value));
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers: merged });
 }
@@ -45,10 +51,12 @@ export default {
     const url = new URL(request.url); const path = url.pathname;
     const cors = corsHeaders(request, env);
     if (request.method === "OPTIONS") {
-      return new Response(null, { status: Object.keys(cors).length ? 204 : 403, headers: cors });
+      return withCors(new Response(null, { status: Object.keys(cors).length ? 204 : 403, headers: cors }), cors, env);
     }
     const response = await (async (): Promise<Response> => {
-      if (path === "/" || path === "/v1/docs") return Response.redirect(`${url.origin}/v1/spec`, 302);
+      if (path === "/") return json({ status: "ok" });
+      if (path === "/v1/docs") return Response.redirect(`${url.origin}/v1/spec`, 302);
+      if (path === "/v1/spec") return json(workerOpenApi);
       if (path === "/v1/healthz" || path === "/v1/health") return json({ status: "ok" });
       if (path === "/v1/ready") return json({ status: "ready", parser: "worker-native" });
       if (path === "/v1/diagram-types") return json({ "parser-recognized": ["flowchart", "sequence", "class", "er", "state"], "lint-supported": ["flowchart"] });
@@ -62,6 +70,6 @@ export default {
       }
       return json({ error: { code: "not_found", message: "Not found" } }, 404);
     })();
-    return withCors(response, cors);
+    return withCors(response, cors, env);
   }
 };
