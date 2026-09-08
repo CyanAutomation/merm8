@@ -28,7 +28,7 @@ export function parseMermaid(source: string): { diagram?: Diagram; error?: { cod
     if (!trimmed || trimmed.startsWith("%%") || /^(flowchart|graph|sequenceDiagram|classDiagram|erDiagram|stateDiagram)/i.test(trimmed)) return;
     const relation = type === "sequence" ? /^\s*([\w.-]+).*?(?:--?>|-->>|->>)\s*([\w.-]+)/ : /^\s*([^\s\[{(<-]+).*?(?:-->|---|--|\.\.>|==>)\s*([^\s\[{(<:]+)/;
     const match = line.match(relation);
-    if (match) { const from = match[1].trim(); const to = match[2].trim(); add(from, number, line.indexOf(from) + 1); add(to, number, line.lastIndexOf(to) + 1); edges.push({ from, to, line: number, column: line.indexOf(from) + 1 }); return; }
+    if (match) { const from = match[1].trim(); const to = match[2].trim(); const fromCol = line.indexOf(from) + 1; const toCol = line.indexOf(to, fromCol) + 1; add(from, number, fromCol); add(to, number, toCol); edges.push({ from, to, line: number, column: fromCol }); return; }
     if (type === "flowchart") {
       const standalone = line.match(/^\s*([A-Za-z0-9_.-]+)\s*(?:\[|\(|\{|$)/);
       if (standalone) add(standalone[1], number, line.indexOf(standalone[1]) + 1);
