@@ -2,6 +2,13 @@
 
 This guide walks you through interacting with the merm8 API, using both the interactive Swagger UI and direct HTTP requests.
 
+> **Scope:** This is the reference for the local Go server. The hosted
+> Cloudflare Worker intentionally exposes a smaller API; obtain its exact,
+> deployment-specific contract from `GET /v1/spec` and see
+> [docs/worker-api.md](docs/worker-api.md). Do not assume Worker support for
+> Go-server-only endpoints such as `/v1/analyze/raw`, `/v1/analyze/sarif`, or
+> `/metrics`.
+
 ---
 
 ## Quick Start: Using Swagger UI
