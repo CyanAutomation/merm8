@@ -5,7 +5,7 @@ A **deterministic Mermaid static analysis engine** — no AI, no LLMs, pure stat
 This is intended to be a Mermaid linting service that:
 
 1. Accepts Mermaid code via HTTP POST
-2. Uses official Mermaid parser (Node) to validate syntax
+2. Uses the official Mermaid parser in the local Go service to validate syntax
 3. Returns structured syntax errors if invalid
 4. If valid:
    - Convert parsed AST into internal Go diagram model
@@ -69,6 +69,12 @@ The hosted REST API and MCP server run as a Cloudflare Worker. Configure the
 `API_KEY` and `MCP_ALLOWED_HOSTNAMES` secrets with Wrangler, then deploy with
 `npm run deploy`. REST analysis is served at `/v1/analyze`; authenticated
 Streamable HTTP MCP is served at `/mcp`.
+
+The Worker is a deliberately smaller, Worker-safe implementation. It recognizes
+flowchart, sequence, class, ER, and state diagrams, and currently lints
+flowcharts. Its self-describing contract is available from `/v1/spec`; use
+`/v1/diagram-types` and `/v1/rules` to discover runtime capabilities. The
+deployment SHA is returned in the `X-Merm8-Build` response header.
 
 ## CLI (`cmd/merm8-cli`)
 
