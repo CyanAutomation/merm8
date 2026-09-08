@@ -48,6 +48,8 @@ test("serves a usable OpenAPI document and secure response headers", async () =>
   const document = await spec.json() as { openapi: string; paths: Record<string, unknown> };
   assert.equal(document.openapi, "3.0.3");
   assert.ok("/v1/analyze" in document.paths);
+  assert.ok(!("/v1/analyze/raw" in document.paths));
+  assert.ok(!("/v1/analyze/sarif" in document.paths));
 
   const root = await worker.fetch(new Request("https://example.test/"), env);
   assert.equal(root.status, 200);
@@ -110,6 +112,17 @@ test("rejects malformed flowchart relations", async () => {
   const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ code: "flowchart TD\n  A --> --> B" }),
+  }), env);
+  const result = await response.json() as { valid: boolean; error?: { code: string; line: number } };
+  assert.equal(result.valid, false);
+  assert.equal(result.error?.code, "syntax_error");
+  assert.equal(result.error?.line, 2);
+});
+
+test("rejects a flowchart relation without a destination node", async () => {
+  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: "graph TD\n  A -->" }),
   }), env);
   const result = await response.json() as { valid: boolean; error?: { code: string; line: number } };
   assert.equal(result.valid, false);

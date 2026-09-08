@@ -6,6 +6,11 @@ Complete guide to merm8 documentation, organized by use case.
 
 ## Quick Navigation
 
+### For Cloudflare Worker Users
+
+1. Start here: [Worker API Reference](worker-api.md) - deployed Worker endpoints and limitations
+2. Discover at runtime: `GET /v1/spec` - authoritative contract for a specific deployment
+
 ### For New Users
 
 1. Start here: [API Integration Guide](api-integration-guide.md) - Complete integration walkthrough
