@@ -37,8 +37,78 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  system_status:
+    name: Kaseki System Status
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL || 'https://kaseki-tunnel.scheimann.xyz' }}
+    steps:
+      - name: Verify controller health
+        shell: bash
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
+            --connect-timeout 10 --max-time 20 \
+            --output "$response_file" \
+            "$KASEKI_BASE_URL/health"
+          jq -e '.status == "healthy"' "$response_file" >/dev/null
+          jq . "$response_file"
+
+  readiness:
+    name: Kaseki System Readiness
+    needs: system_status
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL || 'https://kaseki-tunnel.scheimann.xyz' }}
+    steps:
+      - name: Verify controller readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
+            --connect-timeout 10 --max-time 20 \
+            --output "$response_file" \
+            "$KASEKI_BASE_URL/ready"
+          jq -e '.status == "ready"' "$response_file" >/dev/null
+          jq . "$response_file"
+
+  api_connection:
+    name: Kaseki API Status
+    needs: readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL || 'https://kaseki-tunnel.scheimann.xyz' }}
+      KASEKI_API_TOKEN: ${{ secrets.KASEKI_API_TOKEN }}
+    steps:
+      - name: Verify gateway connectivity and authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${KASEKI_API_TOKEN:?KASEKI_API_TOKEN is not configured}"
+
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
+            --connect-timeout 10 --max-time 60 \
+            --output "$response_file" \
+            --header "Authorization: Bearer $KASEKI_API_TOKEN" \
+            "$KASEKI_BASE_URL/api/gateway-test?stage=1"
+          jq -e '.status == "ok"' "$response_file" >/dev/null
+          jq . "$response_file"
+
   dispatch:
     name: Submit Kaseki documentation sweep
+    needs: api_connection
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
