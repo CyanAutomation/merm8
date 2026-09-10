@@ -21,3 +21,9 @@ Thumbs.db
 
 # Benchmark reports (generated)
 benchmarks/reports/
+
+# Local backup and test-output artifacts
+*.bak
+*.bak[0-9]
+test-output*.log
+test-output*.txt

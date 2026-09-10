@@ -45,9 +45,15 @@ test("serves a usable OpenAPI document and secure response headers", async () =>
   assert.equal(spec.headers.get("x-content-type-options"), "nosniff");
   assert.equal(spec.headers.get("content-security-policy"), "default-src 'none'; frame-ancestors 'none'");
   assert.equal(spec.headers.get("x-merm8-build"), "development");
-  const document = await spec.json() as { openapi: string; paths: Record<string, unknown> };
+  const document = await spec.json() as {
+    openapi: string;
+    paths: Record<string, { post?: { responses: Record<string, unknown> } }>;
+  };
   assert.equal(document.openapi, "3.0.3");
   assert.ok("/v1/analyze" in document.paths);
+  const analyze = document.paths["/v1/analyze"];
+  assert.ok(analyze?.post);
+  assert.ok("413" in analyze.post!.responses);
   assert.ok(!("/v1/analyze/raw" in document.paths));
   assert.ok(!("/v1/analyze/sarif" in document.paths));
 
@@ -172,4 +178,17 @@ test("logs malformed JSON details while returning a generic client error", async
   assert.equal(errors.length, 1);
   assert.equal(errors[0][0], "JSON parse error:");
   assert.ok(errors[0][1] instanceof Error);
+});
+
+test("rejects oversized analysis requests before parsing them", async () => {
+  const oversizedCode = `flowchart TD\n${" ".repeat(1_048_576)}`;
+  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: oversizedCode }),
+  }), env);
+
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), {
+    error: { code: "payload_too_large", message: "request body must not exceed 1 MiB" },
+  });
 });

@@ -21,7 +21,7 @@ export const workerOpenApi = {
       post: {
         summary: "Validate Mermaid source and lint supported diagrams",
         requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["code"], properties: { code: { type: "string" }, config: { type: "object" } } } } } },
-        responses: { "200": { description: "Analysis result" }, "400": errorResponse },
+        responses: { "200": { description: "Analysis result" }, "400": errorResponse, "413": { description: "Request body exceeds the 1 MiB limit" } },
       },
     },
   },
