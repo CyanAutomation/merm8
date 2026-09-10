@@ -21,6 +21,16 @@ specific deployment.
 The Worker recognizes flowchart, sequence, class, ER, and state diagrams. It
 currently lints flowcharts only.
 
+## Request limits
+
+`POST /v1/analyze` accepts JSON request bodies up to 1 MiB. Larger requests
+receive `413` with the `payload_too_large` error code. Clients should split
+larger diagrams before sending them for analysis.
+
+For public deployments, also configure a Cloudflare WAF rate-limiting rule for
+`POST /v1/analyze`. Rate-limiting rules are account-level Cloudflare settings,
+so they are intentionally not embedded in the Worker source.
+
 ## Important differences from the Go server
 
 The Worker does **not** expose the Go server's raw-analysis, SARIF, metrics,
