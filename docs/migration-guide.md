@@ -66,7 +66,7 @@ curl -X POST http://localhost:8080/analyze \
 
 ```bash
 curl -X POST http://localhost:8080/v1/analyze \
-  -H "Content-Type": "application/json" \
+  -H "Content-Type: application/json" \
   -d '{"code":"graph TD\n  A --> B"}'
 ```
 ## Legacy Formats Still Accepted
