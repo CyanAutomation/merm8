@@ -1,10 +1,66 @@
-# Enhanced Error Hints Implementation - Testing & Verification Guide
+# Implementation Guide — merm8 Mermaid Lint
 
-## Summary
+This guide covers the internal implementation of the merm8 service, including build process, runtime configuration, and integration details for contributors and maintainers.
+
+## Project Structure
+
+The merm8 service follows a Go modular architecture:
+
+- **`cmd/server/`** — Main entry point for the HTTP API server; wires up handler, parser, engine, middleware, and config from environment variables.
+- **`cmd/merm8-cli/`** — CLI binary for local/offline analysis or server-mode execution.
+- **`internal/api/`** — HTTP handlers (`handler.go`), middleware (auth, rate limiting, CORS, metrics), and OpenAPI spec generation.
+- **`internal/parser/`** — Node.js subprocess bridge; manages worker pool or subprocess mode, timeouts, memory limits, and source enhancement.
+- **`internal/engine/`** — Rule execution engine; iterates registered rules against parsed diagram model, collects issues and rule metrics.
+- **`internal/rules/`** — Rule interface definition, built-in implementations per diagram family, config registry, and JSON schema generation.
+- **`internal/model/`** — Shared types: `Diagram`, `Node`, `Edge`, `Issue`, `DiagramType`, `DiagramFamily`.
+- **`internal/output/sarif/`** — SARIF 2.1.0 transformation from lint results.
+- **`internal/telemetry/`** — Prometheus metric collection and handler exposure.
+- **`parser-node/`** — Node.js Mermaid parser script (`parse.mjs`) with dependencies.
+
+## Build Process
+
+### Prerequisites
+
+- Go 1.24+
+- Node.js 20+ and npm
+
+### Building
+
+```bash
+# Install Node parser dependencies
+cd parser-node && npm install && cd ..
+
+# Build server
+go build -o mermaid-lint ./cmd/server
+
+# Build CLI
+go build -o merm8-cli ./cmd/merm8-cli
+```
+
+### Running Tests
+
+```bash
+# All unit tests
+go test ./...
+
+# Parser integration tests (requires PARSER_SCRIPT env var)
+PARSER_SCRIPT=./parser-node/parse.mjs go test ./internal/parser/...
+go test ./internal/api/...
+
+# Coverage
+go test -cover ./...
+
+# Race detector on core packages
+go test -race ./internal/api ./internal/engine ./internal/parser
+```
+
+
+
+## Enhanced Error Hints Implementation
 
 This document describes the comprehensive error hints implementation that provides users with structured remediation guidance including before/after code examples for syntax and config errors.
 
-## Files Modified
+### Files Modified
 
 1. **internal/api/handler.go** - Core implementation
    - Added `helpSuggestion` struct (type definition for structured help)
@@ -45,7 +101,7 @@ This document describes the comprehensive error hints implementation that provid
    - Runs all test suites
    - Provides comprehensive test coverage
 
-## Changes Breakdown
+### Changes Breakdown
 
 ### Response Structure
 
@@ -103,7 +159,7 @@ HelpSuggestion *helpSuggestion `json:"help-suggestion,omitempty"`
 6. **Invalid suppression selector**
    - Shows correct selector syntax
 
-## Testing
+### Testing
 
 ### Quick Validation
 
@@ -161,7 +217,7 @@ go test ./internal/api -count=1 -run TestAnalyzeRaw_SyntaxError_GraphvizDetectio
 go test ./internal/api -count=1 -run TestAnalyze_ConfigError -v
 ```
 
-## Manual Testing with Live Server
+### Manual Testing with Live Server
 
 ### Start Server
 
@@ -238,7 +294,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 - Correct rule ID format
 - Link to `/v1/rules` endpoint
 
-## Backward Compatibility
+### Backward Compatibility
 
 ✅ **Fully backward compatible**:
 
@@ -247,7 +303,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 - HTTP status codes unchanged
 - No breaking changes to request/response structure
 
-## Response Examples
+### Response Examples
 
 ### Syntax Error Response
 
@@ -295,7 +351,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 }
 ```
 
-## Key Features
+### Key Features
 
 ✨ **User Benefits**:
 
@@ -314,7 +370,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 - 🧪 Comprehensive test coverage
 - 📝 Well-documented implementation
 
-## Future Enhancements
+### Future Enhancements
 
 Planned for Phase 2:
 
@@ -324,7 +380,7 @@ Planned for Phase 2:
 - [ ] Video/animation links for common mistakes
 - [ ] SARIF format support for help suggestions
 
-## Integration Points
+### Integration Points
 
 - ✅ `/v1/analyze` endpoint
 - ✅ `/v1/analyze/raw` endpoint
@@ -332,7 +388,7 @@ Planned for Phase 2:
 - ✅ OpenAPI schema documentation
 - ✅ Web UI (Swagger) rendering
 
-## Error Coverage
+### Error Coverage
 
 | Error Type           | Detection | Example                     |
 | -------------------- | --------- | --------------------------- |
@@ -346,7 +402,7 @@ Planned for Phase 2:
 | Schema-version       | ✅        | Invalid or missing field    |
 | Suppression selector | ✅        | Invalid selector syntax     |
 
-## Validation Checklist
+### Validation Checklist
 
 - ✅ Code compiles without errors
 - ✅ New structs defined correctly

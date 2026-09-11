@@ -38,12 +38,19 @@ Content-Type: application/json
     "warnings": []
   },
   "metrics": {
-    "parser-duration-ms": 18,
-    "lint-duration-ms": 2,
-    "total-duration-ms": 20
+    "node-count": 2,
+    "edge-count": 1,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 1,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
   }
-}
-```
 
 ---
 
@@ -106,10 +113,18 @@ Accept-Version: 1.0
     "warnings": []
   },
   "metrics": {
-    "parser-duration-ms": 22,
-    "lint-duration-ms": 5,
-    "total-duration-ms": 27,
-    "rules-checked": 1
+    "node-count": 4,
+    "edge-count": 3,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 3,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {"warning": 1},
+      "by-rule": {"max-fanout": 1}
+    }
   }
 }
 ```
@@ -190,13 +205,17 @@ Content-Type: application/json
   ],
   "warnings": [],
   "metrics": {
-    "parser-duration-ms": 25,
-    "lint-duration-ms": 12,
-    "total-duration-ms": 37,
-    "rules-checked": 3,
-    "issues-by-severity": {
-      "error": 1,
-      "warning": 1
+    "node-count": 4,
+    "edge-count": 3,
+    "disconnected-node-count": 1,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 1,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {"error": 2},
+      "by-rule": {"no-cycles": 1, "no-disconnected-nodes": 1}
     }
   }
 }
@@ -246,19 +265,19 @@ Content-Type: application/json
     "warnings": []
   },
   "metrics": {
-    "parser-duration-ms": 20,
-    "lint-duration-ms": 8,
-    "total-duration-ms": 28,
-    "suppressions-applied": [
-      {
-        "rule-id": "max-fanout",
-        "selector": "node:A",
-        "matched-nodes": 1
-      }
-    ]
+    "node-count": 6,
+    "edge-count": 5,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 5,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
   }
-}
-```
 
 ---
 
@@ -306,7 +325,17 @@ flowchart TD
   "issues": [],
   "error": null,
   "metrics": {
-    "parser-duration-ms": 15
+    "node-count": 0,
+    "edge-count": 0,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 0,
+    "diagram-type": "flowchart",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
   }
 }
 ```
@@ -433,10 +462,6 @@ Content-Type: application/json
     "kind": "timeout"
   },
   "request-id": "bb0e8400-e29b-41d4-a716-446655440006",
-  "timestamp": 1678123456600,
-  "metrics": {
-    "parser-duration-ms": 2001
-  }
 }
 ```
 
@@ -591,23 +616,19 @@ Content-Type: application/json
   "suggestions": [],
   "warnings": [],
   "metrics": {
-    "parser-duration-ms": 35,
-    "lint-duration-ms": 18,
-    "total-duration-ms": 53,
-    "diagram-stats": {
-      "node-count": 13,
-      "edge-count": 11,
-      "max-fanin": 2,
-      "max-fanout": 4,
-      "max-depth": 3,
-      "cycles": 0,
-      "subgraphs": 3,
-      "disconnected-nodes": 0
-    },
-    "rules-checked": 4,
-    "issues-by-severity": {}
+    "node-count": 8,
+    "edge-count": 8,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 2,
+    "max-fanout": 4,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
   }
-}
 ```
 
 ---
@@ -700,9 +721,7 @@ When analyzing a diagram type that the parser recognizes but which doesn't have 
     "disconnected-node-count": 0,
     "duplicate-node-count": 0,
     "max-fanin": 0,
-    "max-fanout": 0,
     "diagram-type": "sequence",
-    "direction": null,
     "issue-counts": {
       "by-severity": {},
       "by-rule": {}
@@ -746,20 +765,6 @@ When the config references a rule ID that is not implemented or recognized, the 
   "diagram-type": "unknown",
   "lint-supported": false,
   "syntax-error": null,
-  "issues": [],
-  "metrics": {
-    "node-count": 0,
-    "edge-count": 0,
-    "disconnected-node-count": 0,
-    "duplicate-node-count": 0,
-    "max-fanin": 0,
-    "max-fanout": 0,
-    "diagram-type": "unknown",
-    "direction": null,
-    "issue-counts": {
-      "by-severity": {},
-      "by-rule": {}
-    }
   },
   "error": {
     "code": "unknown_rule",
@@ -811,21 +816,6 @@ When a suppression selector in the config has invalid syntax, the server returns
   "lint-supported": false,
   "syntax-error": null,
   "issues": [],
-  "metrics": {
-    "node-count": 0,
-    "edge-count": 0,
-    "disconnected-node-count": 0,
-    "duplicate-node-count": 0,
-    "max-fanin": 0,
-    "max-fanout": 0,
-    "diagram-type": "unknown",
-    "direction": null,
-    "issue-counts": {
-      "by-severity": {},
-      "by-rule": {}
-    }
-  },
-  "error": {
     "code": "invalid_suppression_selector",
     "message": "invalid suppression selector format: node:",
     "details": {
@@ -869,21 +859,6 @@ When the parser concurrency limit is reached (default 8 concurrent requests), th
   "lint-supported": false,
   "syntax-error": null,
   "issues": [],
-  "metrics": {
-    "node-count": 0,
-    "edge-count": 0,
-    "disconnected-node-count": 0,
-    "duplicate-node-count": 0,
-    "max-fanin": 0,
-    "max-fanout": 0,
-    "diagram-type": "unknown",
-    "direction": null,
-    "issue-counts": {
-      "by-severity": {},
-      "by-rule": {}
-    }
-  },
-  "error": {
     "code": "server_busy",
     "message": "parser concurrency limit reached; try again"
   }
