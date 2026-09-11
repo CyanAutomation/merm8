@@ -115,9 +115,9 @@ For production stability:
 
 ## Endpoint versioning and deprecation
 
-Canonical endpoints are versioned under `/v1`. Legacy unversioned routes are still served as migration aliases and are deprecated, with planned removal in **v1.2.0 (Q2 2026)**.
+All API endpoints use the `/v1/*` prefix. Legacy bare-path aliases were removed in v1.0.1+; only the British-English spelling aliases `POST /v1/analyse` and `POST /v1/analyse/raw` remain active and emit deprecation headers.
 
-Use `/v1/analyze`, `/v1/analyze/raw`, and `/v1/analyze/sarif` for all new integrations. British-English spelling aliases (`/v1/analyse`, `/v1/analyse/raw`) and legacy unversioned analyze routes (`/analyze`, `/analyze/raw`, `/analyze/sarif`) are deprecated compatibility aliases only.
+Use `/v1/analyze`, `/v1/analyze/raw`, and `/v1/analyze/sarif` for all new integrations. British-English spelling aliases (`POST /v1/analyse`, `POST /v1/analyse/raw`) remain active as temporary compatibility routes and emit deprecation headers; migrate to `POST /v1/analyze`*.
 
 ## Interactive API Testing with Swagger UI
 
@@ -125,14 +125,14 @@ Use `/v1/analyze`, `/v1/analyze/raw`, and `/v1/analyze/sarif` for all new integr
 
 The Swagger UI provides:
 
-- **Left sidebar** — List of all available endpoints (now `/v1/healthz`, `/v1/ready`, `/v1/rules`, `/v1/analyze`, `/v1/analyze/sarif`, `/v1/spec`, `/v1/docs` (with deprecated unversioned aliases))
+- **Left sidebar** — List of all available endpoints (now `/v1/healthz`, `/v1/ready`, `/v1/rules`, `/v1/analyze`, `/v1/analyze/sarif`, `/v1/spec`, `/v1/docs` (with British-English spelling alias /v1/analyse))
 - **Main panel** — Detailed endpoint documentation with parameters and response schemas
 - **Try it out button** — Execute requests directly from the browser
 - **Example requests** — Pre-filled request templates for common scenarios
 
 ### Scraping Service Metrics (`GET /metrics`)
 
-The API exposes Prometheus metrics at `GET /metrics` in text exposition format.
+The API exposes Prometheus metrics at `GET /v1/metrics` in text exposition format.
 
 Exported metric families and labels:
 
@@ -151,7 +151,7 @@ Notes:
 Example:
 
 ```bash
-curl -s http://localhost:8080/metrics
+curl -s http://localhost:8080/v1/metrics
 ```
 
 ### Inspecting Internal Outcome Counters (`GET /v1/internal/metrics`)
@@ -205,7 +205,7 @@ Example interpretation:
 
 ### Discovering Rules with `/rules`
 
-Use **`GET /rules`** to discover the rule metadata catalog at runtime.
+Use **`GET /v1/rules`** to discover the rule metadata catalog at runtime.
 
 The response includes:
 
@@ -218,7 +218,7 @@ The response includes:
 
 Interpretation guidance:
 
-- `implemented` rules are currently enforced by the runtime engine and can be configured under `config.rules` for `/analyze`.
+- `implemented` rules are currently enforced by the runtime engine and can be configured under `config.rules` for `/v1/analyze`.
 - `planned` rules are forward-looking metadata for upcoming rule families and are **not** enforced yet.
 - Planned entries may include `availability` notes to help clients decide whether to show roadmap badges, “coming soon” labels, or hide non-actionable controls.
 
@@ -264,7 +264,7 @@ Runtime registration is deterministic by design:
 
 See also: `docs/rule-id-namespaces.md` and `docs/migration-guide.md`.
 
-### Testing the `/analyze` Endpoint
+### Testing the `/v1/analyze` Endpoint
 
 #### Step 1: Click "Try it out"
 
@@ -349,7 +349,7 @@ The API gracefully handles rule configuration requests that include rules not ap
   - Includes deprecation warnings in the response (`warnings` array)
   - Proceeds with analysis using only the applicable rules
 
-**Example:** Sending a config with both flowchart-specific rules (`max-fanout`) and cross-diagram rules (`sequence-max-participants`) to a flowchart analyzer:
+**Example:** Sending a config with both flowchart-specific rules (`max-fanout`) and cross-diagram rules (`max-nesting-depth`) to a flowchart analyzer:
 
 ```json
 {
@@ -358,7 +358,7 @@ The API gracefully handles rule configuration requests that include rules not ap
     "schema-version": "v1",
     "rules": {
       "max-fanout": { "limit": 2 },
-      "sequence-max-participants": { "limit": 10 }
+      "max-nesting-depth": { "limit": 10 }
     }
   }
 }
@@ -372,7 +372,7 @@ The API gracefully handles rule configuration requests that include rules not ap
   "syntax-error": null,
   "issues": [...],
   "warnings": [
-    "rule 'sequence-max-participants' is not recognized and will be ignored; ensure it is a valid rule ID or applies to the diagram type being analyzed"
+    "rule 'max-nesting-depth' is not recognized and will be ignored; ensure it is a valid rule ID or applies to the diagram type being analyzed"
   ]
 }
 ```
@@ -686,19 +686,15 @@ curl -X POST http://localhost:8080/v1/analyze \
   -d '{"code": "graph TD\n  A --> B"}' | jq .
 ```
 
-#### Legacy analyze aliases (deprecated)
+#### Legacy spelling aliases (deprecated)
 
-Legacy unversioned analyze routes remain available for migration only and are deprecated:
+British-English spelling aliases remain active as temporary compatibility routes:
 
-- `POST /v1/analyse`
-- `POST /v1/analyse/raw`
-- `POST /analyze`
-- `POST /analyze/raw`
-- `POST /analyze/sarif`
+- `POST /v1/analyse` — aliases to `POST /v1/analyze`
+- `POST /v1/analyse/raw` — aliases to `POST /v1/analyze/raw`
 
-These aliases emit deprecation headers and are scheduled for removal in **v1.2.0 (Q2 2026)**.
+These emit deprecation headers and are scheduled for removal in **v1.2.0 (Q2 2026)**. Bare unversioned paths (`/analyze`, `/analyze/raw`, `/analyze/sarif`) were never registered on the Go server.
 
-### Using Other HTTP Clients
 
 #### Postman
 
@@ -832,20 +828,19 @@ for (const issue of data.issues) {
 
 ## API Endpoints Reference
 
-### GET `/healthz` (canonical probe) and aliases `/health`, `/`
+### GET `/v1/healthz` (canonical)
 
-**Description:** Liveness-only endpoint for process-up probes. `/` is provided as a minimal alias for platforms that require root health checks.  
-**Response:** JSON status payload (`{"status":"ok"}`)  
+**Description:** Liveness-only endpoint for process-up probes.
+**Response:** JSON status payload (`{"status":"ok"}`)
 **Usage:**
 
 ```bash
-curl http://localhost:8080/healthz
-curl http://localhost:8080/
+curl http://localhost:8080/v1/healthz
 ```
 
-### GET `/ready`
+### GET `/v1/ready`
 
-**Description:** Dependency/readiness-only endpoint for critical dependencies (parser runtime/script checks when available). This endpoint may return `503` when dependencies are not ready.  
+**Description:** Dependency/readiness-only endpoint for critical dependencies (parser runtime/script checks when available). This endpoint may return `503` when dependencies are not ready.
 **Response:**
 
 - `200` with `{"status":"ready"}` when ready
@@ -854,23 +849,23 @@ curl http://localhost:8080/
 **Usage:**
 
 ```bash
-curl -i http://localhost:8080/ready
+curl -i http://localhost:8080/v1/ready
 ```
 
-### GET `/version`
+### GET `/v1/version`
 
-**Description:** Informational-only endpoint for service/build metadata (service version, build commit/time, parser/runtime versions when available). This endpoint is stable and unauthenticated for probe tooling and diagnostics, but should not be used as readiness gating.  
+**Description:** Informational-only endpoint for service/build metadata (service version, build commit/time, parser/runtime versions when available). This endpoint is stable and unauthenticated for probe tooling and diagnostics, but should not be used as readiness gating.
 **Response:** JSON object of string metadata fields (keys present when values are configured).
 
 **Usage:**
 
 ```bash
-curl http://localhost:8080/version
+curl http://localhost:8080/v1/version
 ```
 
-### GET `/info`
+### GET `/v1/info`
 
-**Description:** Service capability metadata endpoint. Canonical response fields use **kebab-case** (`parser-recognized`, `lint-supported`, `supported-rules`), and deprecated snake_case aliases are temporarily included for backward compatibility.  
+**Description:** Service capability metadata endpoint. Canonical response fields use **kebab-case** (`parser-recognized`, `lint-supported`, `supported-rules`), and deprecated snake_case aliases are temporarily included for backward compatibility.
 **Response:** JSON object with parser/runtime metadata, recognized/supported diagram families, and supported lint rule IDs.
 
 **Example response:**
@@ -906,20 +901,20 @@ curl http://localhost:8080/version
 }
 ```
 
-### GET `/docs`
+### GET `/v1/docs`
 
-**Description:** Interactive Swagger UI dashboard for API exploration  
-**Response:** HTML page that loads Swagger UI from CDN  
+**Description:** Interactive Swagger UI dashboard for API exploration
+**Response:** HTML page that loads Swagger UI from CDN
 **Usage:** Open in browser: `http://localhost:8080/v1/docs`
 
-### GET `/spec`
+### GET `/v1/spec`
 
-**Description:** Returns the full OpenAPI 3.0 specification as JSON  
-**Response:** OpenAPI specification object  
+**Description:** Returns the full OpenAPI 3.0 specification as JSON
+**Response:** OpenAPI specification object
 **Usage:** For code generation, API documentation tools, or external integrations
 
 ```bash
-curl http://localhost:8080/spec | jq .
+curl http://localhost:8080/v1/spec | jq .
 ```
 
 ### POST `/v1/analyze` (canonical)
@@ -937,7 +932,7 @@ You can suppress lint findings directly in Mermaid source using comment directiv
 
 `all` suppresses every rule. Rule-specific suppressions only affect matching `rule-id` values.
 
-**Description:** Validate and lint a Mermaid diagram  
+**Description:** Validate and lint a Mermaid diagram
 **Request body:**
 
 ```json
@@ -953,20 +948,20 @@ You can suppress lint findings directly in Mermaid source using comment directiv
 
 Recommended defaults for common platforms:
 
-- Liveness: `GET /healthz` (or `GET /` for platforms that only support root probes)
-- Readiness: `GET /ready`
-- Informational metadata: `GET /version` (diagnostics only; not a readiness/liveness signal)
+- Liveness: `GET /v1/healthz`
+- Readiness: `GET /v1/ready`
+- Informational metadata: `GET /v1/version` (diagnostics only; not a readiness/liveness signal)
 
 Kubernetes example:
 
 ```yaml
 livenessProbe:
   httpGet:
-    path: /healthz
+    path: /v1/healthz
     port: 8080
 readinessProbe:
   httpGet:
-    path: /ready
+    path: /v1/ready
     port: 8080
 ```
 
@@ -1220,7 +1215,7 @@ Key changes:
 
 Use `POST /v1/analyze/sarif` with the same request body as `/v1/analyze` to receive SARIF 2.1.0 (`Content-Type: application/sarif+json`) for valid analyses.
 
-Legacy aliases `POST /analyze` and `POST /analyze/sarif` are deprecated and scheduled for removal in v1.2.0 (Q2 2026).
+British-English spelling aliases `POST /v1/analyse` and `POST /v1/analyse/raw` remain active as temporary compatibility routes and emit deprecation headers; migrate to `POST /v1/analyze`* and `POST /v1/analyze/sarif`.
 
 Canonical severity mapping is defined in code at `internal/output/sarif` and used by API docs:
 
@@ -1230,14 +1225,14 @@ Canonical severity mapping is defined in code at `internal/output/sarif` and use
 
 Unsupported versions are rejected with `400 unsupported_schema_version` and include a `supported` list.
 
-### Pre-validate Config with `GET /rules/schema`
+### Pre-validate Config with `GET /v1/rules/schema`
 
 Fetch the generated JSON Schema and validate `config` in your client before calling `/v1/analyze`.
 
 For pinned tooling/CI usage, use the versioned artifact in this repo: `schemas/config.v1.json`.
 
 ```bash
-curl -s http://localhost:8080/rules/schema | jq '.schema'
+curl -s http://localhost:8080/v1/rules/schema | jq '.schema'
 ```
 
 Example (Node + Ajv):
@@ -1246,7 +1241,7 @@ Example (Node + Ajv):
 import Ajv from "ajv";
 
 const ajv = new Ajv();
-const schemaResp = await fetch("http://localhost:8080/rules/schema").then(r => r.json());
+const schemaResp = await fetch("http://localhost:8080/v1/rules/schema").then(r => r.json());
 const validate = ajv.compile(schemaResp.schema);
 
 const config = {
@@ -1401,7 +1396,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 
 ### "Connection refused" Error
 
-**Problem:** Server isn't running or listening on the wrong port  
+**Problem:** Server isn't running or listening on the wrong port
 **Solution:**
 
 ```bash
@@ -1415,12 +1410,12 @@ PARSER_SCRIPT=./parser-node/parse.mjs go run ./cmd/server
 
 ### "/docs" Returns 404
 
-**Problem:** Swagger UI endpoint not registered  
+**Problem:** Swagger UI endpoint not registered
 **Solution:** Ensure you have the latest code that includes the Swagger endpoints
 
 ### "Invalid JSON" Error in Response
 
-**Problem:** Request body is malformed  
+**Problem:** Request body is malformed
 **Solution:**
 
 - Ensure all JSON strings use double quotes: `"code": "..."`
@@ -1492,7 +1487,7 @@ done
 
 ## Additional Resources
 
-- **OpenAPI Specification:** Available at `http://localhost:8080/spec`
+- **OpenAPI Specification:** Available at `http://localhost:8080/v1/spec`
 - **GitHub Repository:** <https://github.com/CyanAutomation/merm8>
 - **Mermaid Documentation:** <https://mermaid.js.org/>
 

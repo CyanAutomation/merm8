@@ -19,7 +19,7 @@ This is intended to be a Mermaid linting service that:
 ```
 ┌─────────────────────────────────────────────────┐
 │                  HTTP Client                    │
-│          POST /analyze  (JSON body)             │
+│          POST /v1/analyze  (JSON body)             │
 └───────────────────┬─────────────────────────────┘
                     │
                     ▼
@@ -95,7 +95,7 @@ go build -o merm8-cli ./cmd/merm8-cli
 ### Modes
 
 - **Local mode (default):** parses/lints in-process using the existing parser + engine (offline/CI friendly).
-- **Server mode:** pass `--url` to send each input to `POST /analyze`.
+- **Server mode:** pass `--url` to send each input to `POST /v1/analyze`.
 
 ```bash
 cat diagram.mmd | ./merm8-cli --stdin --url http://localhost:8080
@@ -174,11 +174,8 @@ For migration details, see [docs/migration-guide.md](docs/migration-guide.md) an
 
 Canonical API endpoints are now versioned under `/v1` (for example: `/v1/analyze`, `/v1/rules`, `/v1/rules/schema`, `/v1/spec`, `/v1/docs`, `/v1/healthz`, `/v1/ready`, `/v1/version`).
 
-Unversioned endpoints remain available as compatibility aliases during migration and are **deprecated**. Planned removal is **v1.2.0 (Q2 2026)**.
-
-### `GET /v1/healthz` (canonical) and legacy aliases `GET /healthz`, `GET /health`, `GET /`
-
-Liveness-only endpoints for process-up checks. `GET /healthz` is the canonical probe path. `GET /` is available as a minimal unauthenticated alias for platforms that expect a root probe path.
+### `GET /v1/healthz` (canonical)
+Liveness-only endpoint for process-up checks. A `GET /v1/health` route also exists as a convenience alias on the same handler.
 
 **Response**
 
@@ -186,7 +183,7 @@ Liveness-only endpoints for process-up checks. `GET /healthz` is the canonical p
 { "status": "ok" }
 ```
 
-### `GET /v1/ready` (canonical) and legacy alias `GET /ready`
+### `GET /v1/ready` (canonical)
 
 Dependency/readiness-only endpoint (including parser runtime/script availability when supported). This endpoint may return `503` when dependencies are not ready.
 
@@ -202,7 +199,7 @@ Dependency/readiness-only endpoint (including parser runtime/script availability
 { "status": "not_ready", "error": "..." }
 ```
 
-### `GET /v1/version` (canonical) and legacy alias `GET /version`
+### `GET /v1/version` (canonical)
 
 Informational-only endpoint for app/build metadata (for example deploy version, build commit/time, parser/runtime versions). This endpoint is intentionally unauthenticated and stable for external diagnostics, but **must not** be used as a readiness signal.
 
@@ -218,7 +215,7 @@ Informational-only endpoint for app/build metadata (for example deploy version, 
 }
 ```
 
-### `GET /v1/info` (canonical) and legacy alias `GET /info`
+### `GET /v1/info` (canonical)
 
 Service capability metadata endpoint. Uses kebab-case field names as canonical JSON contract, with temporary snake_case compatibility aliases retained during deprecation.
 
@@ -255,7 +252,7 @@ Service capability metadata endpoint. Uses kebab-case field names as canonical J
 }
 ```
 
-### `GET /metrics`
+### `GET /v1/metrics`
 
 Prometheus-compatible metrics endpoint in text exposition format.
 
@@ -277,7 +274,7 @@ The server exports Prometheus metric families:
 Example scrape:
 
 ```bash
-curl -s http://localhost:8080/metrics
+curl -s http://localhost:8080/v1/metrics
 ```
 
 Example Prometheus `scrape_configs` entry:
@@ -290,13 +287,13 @@ scrape_configs:
       - targets: ["localhost:8080"]
 ```
 
-### `GET /internal/metrics`
+### `GET /v1/internal/metrics`
 
 Internal JSON counters for analyze/parser outcomes (fixed key set, no labels). Intended for internal troubleshooting and compatibility workflows.
 
 In production, this endpoint should be restricted at network/ingress layers.
 
-### `GET /v1/rules` (canonical) and legacy alias `GET /rules`
+### `GET /v1/rules` (canonical)
 
 Live discovery endpoint for enforceable lint rules and their metadata.
 
@@ -304,9 +301,9 @@ Returns each rule's `id`, default `severity`, description, `default-config`, and
 
 Use this endpoint to power UI/docs so runtime and documentation remain in sync.
 
-### `GET /v1/rules/schema` (canonical) and legacy alias `GET /rules/schema`
+### `GET /v1/rules/schema` (canonical)
 
-Returns a generated JSON Schema for the `config` object accepted by `POST /analyze`.
+Returns a generated JSON Schema for the `config` object accepted by `POST /v1/analyze`.
 
 The schema includes:
 
@@ -315,15 +312,15 @@ The schema includes:
 - option types/constraints (e.g. `max-fanout.limit` must be an integer `>= 1`), and
 - canonical versioned format only (`{"schema-version":"v1","rules": {"rule-id": {...}}}`).
 
-You can use this endpoint so clients pre-validate config before calling `/analyze`.
+You can use this endpoint so clients pre-validate config before sending requests to `/v1/analyze`.
 
 A versioned schema artifact is also published at `schemas/config.v1.json` for tooling and CI workflows.
 
 ```bash
-curl -s http://localhost:8080/rules/schema | jq '.schema'
+curl -s http://localhost:8080/v1/rules/schema | jq '.schema'
 ```
 
-### `POST /v1/analyze` (canonical) with compatibility aliases `POST /v1/analyse` and legacy `POST /analyze`
+### `POST /v1/analyze` (canonical) with British-English alias `POST /v1/analyse`
 
 **Request body**
 
@@ -350,11 +347,11 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 >
 > Unknown rule IDs in config are rejected with machine-readable `400 unknown_rule`. Unsupported versions are rejected with `400 unsupported_schema_version` and `supported: ["v1"]`.
 >
-> Tip: fetch `GET /rules/schema` and validate config client-side before sending requests.
+> Tip: fetch `GET /v1/rules/schema` and validate config client-side before sending requests.
 
 > Request body size limit: **1 MiB**. Oversized payloads return `413` with the same unified `AnalyzeResponse` shape (`valid=false`, `lint-supported=false`, `syntax-error=null`, `issues=[]`, and populated `error`).
 
-**Response-mode matrix (`POST /v1/analyze`, `POST /v1/analyse`, and `POST /analyze`)**
+**Response-mode matrix (`POST /v1/analyze`, `POST /v1/analyse`)**
 
 > Spelling note: `analyze` is canonical. The British-English aliases `/v1/analyse` and `/v1/analyse/raw` are temporary compatibility routes and emit deprecation `Warning` headers; migrate to `/v1/analyze*`.
 
@@ -475,17 +472,17 @@ curl -s http://localhost:8080/rules/schema | jq '.schema'
 
 ```bash
 # Valid flowchart
-curl -s -X POST http://localhost:8080/analyze \
+curl -s -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d '{"code": "graph TD\n  A-->B\n  B-->C"}'
 
 # Invalid diagram
-curl -s -X POST http://localhost:8080/analyze \
+curl -s -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d '{"code": "this is not valid mermaid"}'
 
 # Fan-out warning-level issue with custom limit
-curl -s -X POST http://localhost:8080/analyze \
+curl -s -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "code": "graph TD\n  A-->B\n  A-->C\n  A-->D",
@@ -495,14 +492,14 @@ curl -s -X POST http://localhost:8080/analyze \
 
 ### Interactive API Documentation
 
-**Swagger UI** is available at `http://localhost:8080/v1/docs` (legacy alias: `/docs`) when the server is running. This provides:
+**Swagger UI** is available at `http://localhost:8080/v1/docs` when the server is running. This provides:
 
 - Interactive API explorer with schema documentation
 - "Try it out" feature to test endpoints directly
 - Request/response examples for each operation
 - Full OpenAPI specification browsing
 
-**OpenAPI Specification** is available at `http://localhost:8080/v1/spec` (legacy alias: `/spec`) in JSON format, useful for code generation and API tooling integration.
+**OpenAPI Specification** is available at `http://localhost:8080/v1/spec` in JSON format, useful for code generation and API tooling integration.
 
 **For detailed usage instructions**, see [API_GUIDE.md](API_GUIDE.md) which covers:
 
@@ -520,17 +517,17 @@ curl -s -X POST http://localhost:8080/analyze \
 This service accepts untrusted Mermaid source text and executes a Node.js parser subprocess for each analysis request. The key risks are:
 
 - **Resource exhaustion / DoS**: very large payloads, many concurrent requests, or parser-heavy inputs can consume memory and CPU.
-- **Abuse of public endpoints**: anonymous users can repeatedly call `/analyze` unless guarded by authentication and rate limits.
+- **Abuse of public endpoints**: anonymous users can repeatedly call `/v1/analyze` unless guarded by authentication and rate limits.
 - **Operational misconfiguration**: running without limits in production can allow a single tenant to degrade service for others.
 
 ### Built-in controls
 
-- **Request size limit**: `/analyze` request body is capped at **1 MiB**.
+- **Request size limit**: `/v1/analyze` request body is capped at **1 MiB**.
 - **Parser wall-clock timeout**: each parser subprocess is bounded by a Go context timeout.
 - **Node heap cap**: parser subprocesses run with `--max-old-space-size=<MB>` (default `512` MB, configurable with `PARSER_MAX_OLD_SPACE_MB`).
 - **Parser concurrency cap**: concurrent parser invocations are limited (default `8`, configurable with `PARSER_CONCURRENCY_LIMIT`).
-- **Auth middleware**: in `DEPLOYMENT_MODE=production`, `ANALYZE_AUTH_TOKEN` is required and `POST /analyze` requires `Authorization: Bearer <token>`.
-- **Optional rate limiting middleware**: in `DEPLOYMENT_MODE=production`, requests to `POST /analyze` are rate limited per client (default `120/min`, configurable via `ANALYZE_RATE_LIMIT_PER_MINUTE`).
+- **Auth middleware**: in `DEPLOYMENT_MODE=production`, `ANALYZE_AUTH_TOKEN` is required and `POST /v1/analyze` requires `Authorization: Bearer <token>`.
+- **Optional rate limiting middleware**: in `DEPLOYMENT_MODE=production`, requests to `POST /v1/analyze` are rate limited per client (default `120/min`, configurable via `ANALYZE_RATE_LIMIT_PER_MINUTE`).
 
 ### Recommended production controls
 
@@ -544,9 +541,9 @@ At deployment time, use the built-in limits plus infrastructure-level controls:
 
 ### Health probe configuration (common platforms)
 
-- **Liveness path:** `/v1/healthz` (or `/` where only root probes are supported).
+- **Liveness path:** `/v1/healthz`.
 - **Readiness path:** `/v1/ready`.
-- **Do not use `/version` for readiness/liveness decisions**; treat it as informational only.
+- **Do not use `/v1/version` for readiness/liveness decisions**; treat it as informational only.
 - **Kubernetes example:**
 
 ```yaml
@@ -569,8 +566,8 @@ readinessProbe:
 | `PARSER_MAX_OLD_SPACE_MB`       | `512`                                   | Caps Node.js V8 old-space heap for parser subprocesses.                               |
 | `PARSER_CONCURRENCY_LIMIT`      | `8`                                     | Maximum concurrent parser invocations in the API process.                             |
 | `DEPLOYMENT_MODE`               | `development`                           | Enables production-oriented defaults when set to `production`.                        |
-| `ANALYZE_RATE_LIMIT_PER_MINUTE` | `0` in development, `120` in production | Per-client fixed-window limit for `POST /analyze`.                                    |
-| `ANALYZE_AUTH_TOKEN`            | _unset_                                 | Required in production; bearer token required by auth middleware for `POST /analyze`. |
+| `ANALYZE_RATE_LIMIT_PER_MINUTE` | `0` in development, `120` in production | Per-client fixed-window limit for `POST /v1/analyze`.                                    |
+| `ANALYZE_AUTH_TOKEN`            | _unset_                                 | Required in production; bearer token required by auth middleware for `POST /v1/analyze`. |
 
 ## Rule System
 
@@ -601,15 +598,31 @@ Compatibility migration for existing plugins:
 
 ### Built-in Rules
 
-| Rule ID                 | Severity | Description                                          |
-| ----------------------- | -------- | ---------------------------------------------------- |
-| `no-duplicate-node-ids` | error    | Each node ID (case-sensitive) must be unique within the diagram. |
-| `no-disconnected-nodes` | error    | Every node must participate in at least one edge.    |
-| `max-fanout`            | warning  | No node may have more outgoing edges than the limit. |
+The following built-in rules are registered automatically via family functions (`FlowchartRules()`, `SequenceRules()`, etc.) in `internal/rules/rule_groups.go`. All implemented rules are listed below.
+
+| Rule ID                  | Diagram Family | Severity | Description                                                       |
+| ------------------------ | -------------- | -------- | ----------------------------------------------------------------- |
+| `no-duplicate-node-ids`  | flowchart      | error    | Each node ID (case-sensitive) must be unique within the diagram.  |
+| `no-disconnected-nodes`  | flowchart      | error    | Every node must participate in at least one edge.                 |
+| `max-fanout`             | flowchart      | warning  | No node may have more outgoing edges than the limit (default: 5). |
+| `no-cycles`              | flowchart      | error    | Flags directed cycles in flowcharts.                              |
+| `max-depth`              | flowchart      | warning  | Flags root-to-leaf traversals whose depth exceeds a configurable limit (default: 8). |
+| `no-undefined-actors`    | sequence       | error    | Flags actor references that do not match any declared participant. |
+| `no-duplicate-actors`    | sequence       | error    | Flags duplicate actor declarations in sequence diagrams.          |
+| `max-nesting-depth`      | sequence       | warning  | Flags nesting depth exceeding the configured limit (default: 4).  |
+| `no-circular-inheritance`| class          | error    | Flags circular inheritance chains in class diagrams.              |
+| `no-duplicate-classes`   | class          | error    | Flags duplicate class declarations in class diagrams.             |
+| `max-inheritance-depth`  | class          | warning  | Flags inheritance depth exceeding the configured limit (default: 4). |
+| `no-circular-chain`      | er             | error    | Flags circular entity relationship chains.                        |
+| `no-self-referential`    | er             | error    | Flags entities referencing themselves through relationships.      |
+| `no-circular-transitions`| state          | error    | Flags circular state transitions.                                 |
+| `no-unreachable-state`   | state          | error    | Flags states unreachable from any initial state.                  |
+| `max-transitions`        | state          | warning  | Flags total transition count exceeding a configurable limit.      |
 
 Severity values are canonicalized to `error`, `warning`, and `info`. The legacy `warn` value is still accepted in config and normalized to `warning`.
 
 Default `max-fanout` limit: **5**.
+Default `max-depth` limit: **8**.
 
 ### Suppressing lint issues in diagram source
 
@@ -689,7 +702,7 @@ import "github.com/CyanAutomation/merm8/internal/model"
 
 type MyRule struct{}
 
-func (r MyRule) ID() string { return "custom/acme/my-rule" }
+func (r MyRule) ID() string { return "core/my-rule" }
 
 func (r MyRule) Run(d *model.Diagram, cfg Config) []model.Issue {
     // your logic here
@@ -697,18 +710,22 @@ func (r MyRule) Run(d *model.Diagram, cfg Config) []model.Issue {
 }
 ```
 
-1. Register it in `internal/engine/engine.go`:
+2. Add it to the appropriate family function in `internal/rules/rule_groups.go`:
 
 ```go
-rules: []rules.Rule{
-    rules.NoDuplicateNodeIDs{},
-    rules.NoDisconnectedNodes{},
-    rules.MaxFanout{},
-    rules.MyRule{},    // ← add here
-},
+func FlowchartRules() []Rule {
+    return []Rule{
+        NoDuplicateNodeIDs{},
+        NoDisconnectedNodes{},
+        MaxFanout{},
+        NoCycles{},
+        MaxDepth{},
+        MyRule{},    // ← add here
+    }
+}
 ```
 
-That's it — no registration maps, no config files.
+Rules are loaded automatically into the engine at startup via these family functions — no additional registration is needed.
 
 ---
 
@@ -716,7 +733,7 @@ That's it — no registration maps, no config files.
 
 ```
 /cmd/server          Go entry point (main.go)
-/internal/api        HTTP handler (POST /analyze)
+/internal/api        HTTP handler (handles /v1/* routes)
 /internal/parser     Go ↔ Node subprocess bridge
 /internal/model      Shared diagram types (Diagram, Node, Edge, Issue)
 /internal/rules      Rule interface + built-in rule implementations
@@ -871,17 +888,23 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Environment Variables
 
-| Variable                        | Default                      | Description                                                         |
-| ------------------------------- | ---------------------------- | ------------------------------------------------------------------- |
-| `PORT`                          | `8080`                       | TCP port the HTTP server listens on                                 |
-| `PARSER_SCRIPT`                 | `/app/parser-node/parse.mjs` | Path to the Node.js parser script                                   |
-| `PARSER_TIMEOUT_SECONDS`        | `5`                          | Parser timeout in seconds (1–60); configurable for complex diagrams |
-| `PARSER_CONCURRENCY_LIMIT`      | `8`                          | Max in-flight parser subprocesses; excess requests get 503          |
-| `PARSER_MAX_OLD_SPACE_MB`       | `512`                        | Node.js V8 old-space heap size in MB                                |
-| `ANALYZE_RATE_LIMIT_PER_MINUTE` | `120`                        | Rate limit for `/analyze` endpoint (0 = unlimited)                  |
-| `DEPLOYMENT_MODE`               | `development`                | `production` or `development`; controls rate limiting and auth      |
-| `ANALYZE_AUTH_ENABLED`          | `false`                      | Enable bearer token authentication on `/analyze`                    |
-
+| Variable                        | Default                                       | Description                                                                                                         |
+| ------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                          | `8080`                                        | TCP port the HTTP server listens on                                                                                 |
+| `PARSER_SCRIPT`                 | `/app/parser-node/parse.mjs`                  | Path to the Node.js parser script                                                                                   |
+| `PARSER_TIMEOUT_SECONDS`        | `5`                                           | Parser wall-clock timeout in seconds (1-60); configurable for complex diagrams                                      |
+| `PARSER_CONCURRENCY_LIMIT`      | `8`                                           | Maximum concurrent parser invocations; excess requests receive 503                                                  |
+| `PARSER_MAX_OLD_SPACE_MB`       | `512`                                         | Node.js V8 old-space heap cap per parser subprocess                                                                 |
+| `PARSER_MODE`                  | `pool`                                      | Parser execution mode. `pool` reuses long-lived Node workers; set `subprocess` for one-parse-per-process behavior.      |
+| `PARSER_WORKER_POOL_SIZE`       | `4`                                         | Maximum number of long-lived parser workers when PARSER_MODE=pool (bounded to 1-64).                                   |
+| `PARSER_SOURCE_ENHANCEMENT`     | `true`                                      | Enables source-level AST enhancement for flowchart rules. Set `false` to disable.                                       |
+| `DEPLOYMENT_MODE`               | `development`                                 | `production` enables production-oriented defaults for rate limiting and auth                                        |
+| `ANALYZE_RATE_LIMIT_PER_MINUTE` | `120` in production, `0` otherwise            | Per-client rate limit for `POST /v1/analyze` (0 disables rate limiting)                                             |
+| `ANALYZE_AUTH_TOKEN`            | _unset_                                       | Bearer token required in production mode for `POST /v1/analyze` requests                                            |
+| `ALLOWED_ORIGINS`               | `https://merm8-splash.vercel.app`             | CORS allowed origins header value; defaults to https://merm8-splash.vercel.app when unset                            |
+| `STRICT_CONFIG_SCHEMA`          | _unset_ (`false`)                             | When set to `true` or `1`, rejects legacy config formats instead of accepting with deprecation warnings              |
+| `MERM8_BENCHMARK_HTML_PATH`     | `/app/benchmark.html`                         | Filepath for the benchmark result HTML page served at `GET /v1/benchmark.html`                                      |
+| `ANALYZE_TRUSTED_PROXY_CIDRS`   | _unset_                                       | Comma-separated list of CIDRs/IPs whose traffic is trusted for client IP via `X-Forwarded-For`                       |
 ---
 
 ## Future Roadmap
@@ -891,7 +914,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 - [x] `max-depth` rule
 - [x] Per-rule suppression comments in diagram source
 - [x] Configurable rule severity overrides
-- [x] SARIF output format for CI integration (`POST /analyze/sarif`)
-- [x] Liveness endpoints (`GET /healthz` canonical, `GET /health` alias)
-- [x] Dependency readiness endpoint (`GET /ready`, returns `503` when not ready)
+- [x] SARIF output format for CI integration (`POST /v1/analyze/sarif`)
+- [x] Liveness endpoints (`GET /v1/healthz` canonical, `GET /v1/health` alias)
+- [x] Dependency readiness endpoint (`GET /v1/ready`, returns `503` when not ready)
 - [x] Metrics endpoint (Prometheus-compatible)

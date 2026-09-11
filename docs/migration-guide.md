@@ -34,61 +34,41 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 
 ## Deprecated API Endpoints
 
-In addition to config schema deprecation, the API surface has been simplified by removing legacy endpoint aliases.
+All API endpoints use the `/v1/*` prefix. Only British-English spelling aliases for analyze operations (`POST /v1/analyse`, `POST /v1/analyse/raw`) remain active as temporary compatibility routes; they emit deprecation headers and are scheduled for removal in v1.2.0 (Q2 2026).
 
-### Removed Unversioned Endpoints (v1.0.1+)
+### Legacy Spelling Aliases
 
-The following **unversioned** endpoint aliases have been removed from v1.0.1 onwards. Use the canonical **`/v1/*`** endpoints instead.
-
-| Legacy Path | Canonical Path | Last version |
+| Alias | Canonical | Status |
 |---|---|---|
-| `POST /analyze` | `POST /v1/analyze` | v1.0.0 |
-| `POST /analyze/raw` | `POST /v1/analyze/raw` | v1.0.0 |
-| `POST /analyse` (British spelling) | `POST /v1/analyze` | v1.0.0 |
-| `POST /analyse/raw` (British spelling) | `POST /v1/analyze/raw` | v1.0.0 |
-| `GET /health` | `GET /v1/healthz` | v1.0.0 |
-| `GET /healthz` | `GET /v1/healthz` | v1.0.0 |
-| `GET /ready` | `GET /v1/ready` | v1.0.0 |
-| `GET /version` | `GET /v1/version` | v1.0.0 |
-| `GET /info` | `GET /v1/info` | v1.0.0 |
-| `GET /rules` | `GET /v1/rules` | v1.0.0 |
-| `GET /rules/schema` | `GET /v1/rules/schema` | v1.0.0 |
-| `GET /diagram-types` | `GET /v1/diagram-types` | v1.0.0 |
-| `GET /metrics` | `GET /v1/metrics` | v1.0.0 |
-| `GET /internal/metrics` | `GET /v1/internal/metrics` | v1.0.0 |
-| `GET /config-versions` | `GET /v1/config-versions` | v1.0.0 |
-| `GET /analyze/help` | `GET /v1/analyze/help` | v1.0.0 |
-| `GET /spec` | `GET /v1/spec` | v1.0.0 |
-| `GET /docs` | `GET /v1/docs` | v1.0.0 |
-| `GET /` (root) | `GET /v1/healthz` | v1.0.0 |
+| `POST /v1/analyse` | `POST /v1/analyze` | Active with deprecation header |
+| `POST /v1/analyse/raw` | `POST /v1/analyze/raw` | Active with deprecation header |
+
+Note: Bare unversioned paths (for example `/analyze`, `/healthz`, `/ready`) were never registered on the server. Clients must always use `/v1/*` paths.
 
 ### Migration Steps
 
-1. **Search your codebase** for HTTP requests to unversioned endpoints (e.g., `/analyze`, `/health`)
+1. **Search your codebase** for any HTTP requests to non-v1 paths (e.g., `/analyze`, `/healthz`, `/ready`)
 2. **Replace with canonical paths** prefixed with `/v1/` (e.g., `/v1/analyze`, `/v1/healthz`)
 3. **Update documentation and examples** to reference `/v1/*` paths
 4. **Check client libraries** for hardcoded endpoint paths
 
 ### Example: Update Endpoint URLs
 
-**Before (v1.0.0 and earlier)**:
+**Never supported in v1+ (bare paths do not exist)**:
 
 ```bash
 curl -X POST http://localhost:8080/analyze \
-  -H "Content-Type: application/json" \
+  -H "Content-Type": "application/json" \
   -d '{"code":"graph TD\n  A --> B"}'
 ```
 
-**After (v1.0.1+)**:
+**Correct**:
 
 ```bash
 curl -X POST http://localhost:8080/v1/analyze \
-  -H "Content-Type: application/json" \
+  -H "Content-Type": "application/json" \
   -d '{"code":"graph TD\n  A --> B"}'
 ```
-
----
-
 ## Legacy Formats Still Accepted
 
 1. **Flat config shape** - Rules at root level instead of under `config.rules`
@@ -412,11 +392,11 @@ curl -X POST http://localhost:8080/v1/analyze \
   "config": {
     "schema-version": "v1",
     "rules": {
-      "core/max-fanout": {
+      "max-fanout": {
         "limit": 3,
         "severity": "error"
       },
-      "core/no-cycles": {
+      "no-cycles": {
         "allow-self-loop": true
       }
     }
@@ -447,7 +427,7 @@ curl -X POST http://localhost:8080/v1/analyze \
   "config": {
     "schema-version": "v1",
     "rules": {
-      "core/max-fanout": {
+      "max-fanout": {
         "suppression-selectors": ["node:HubNode", "node:Gateway"]
       }
     }
@@ -484,10 +464,10 @@ curl -X POST http://localhost:8080/v1/analyze \
   "config": {
     "schema-version": "v1",
     "rules": {
-      "core/max-fanout": { "limit": 4 },
-      "core/max-depth": { "limit": 5 },
-      "core/no-cycles": {},
-      "core/no-disconnected-nodes": {
+      "max-fanout": { "limit": 4 },
+      "max-depth": { "limit": 5 },
+      "no-cycles": {},
+      "no-disconnected-nodes": {
         "suppression-selectors": ["node:Deprecated"]
       }
     }
