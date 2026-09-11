@@ -1,21 +1,15 @@
 # Metrics & Observability Guide
 
 This service exposes two metrics-style endpoints:
-
-- `GET /metrics` (Prometheus text exposition, canonical scrape target)
-- `GET /internal/metrics` (JSON counters for quick debugging / compatibility)
-
-Versioned aliases are also available:
-
-- `GET /v1/metrics`
-- `GET /v1/internal/metrics`
+- `GET /v1/metrics` (Prometheus text exposition, canonical scrape target)
+- `GET /v1/internal/metrics` (JSON counters for quick debugging / compatibility)
 
 ## Endpoint audience and access model
 
 | Endpoint            | Format                     | Intended audience                                                   | Access control in app                                                                                    | Recommended exposure                                                                       |
 | ------------------- | -------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `/metrics`          | Prometheus text exposition | SRE / platform monitoring systems (Prometheus, Grafana Agent, etc.) | No endpoint-specific auth in app; only `POST /analyze` auth/rate-limit middleware is enforced by default | May be scraped from shared monitoring networks; prefer network policy + ingress allow-list |
-| `/internal/metrics` | JSON                       | Operators and developers troubleshooting analyze/parser outcomes    | No endpoint-specific auth in app; same global behavior as other non-analyze GET endpoints                | Treat as internal-only endpoint; restrict at ingress/load balancer/service mesh            |
+| `/v1/metrics`        | Prometheus text exposition | SRE / platform monitoring systems (Prometheus, Grafana Agent, etc.) | No endpoint-specific auth in app; only `POST /analyze` auth/rate-limit middleware is enforced by default | May be scraped from shared monitoring networks; prefer network policy + ingress allow-list |
+| `/v1/internal/metrics` | JSON                       | Operators and developers troubleshooting analyze/parser outcomes    | No endpoint-specific auth in app; same global behavior as other non-analyze GET endpoints                | Treat as internal-only endpoint; restrict at ingress/load balancer/service mesh            |
 
 > Note: when `DEPLOYMENT_MODE=production`, built-in bearer auth applies to `POST /analyze` paths, not to metrics endpoints.
 
@@ -30,7 +24,7 @@ Versioned aliases are also available:
 | `analyze_requests_total`   | Counter   | `outcome`                   | requests | `outcome` is bounded enum: `syntax_error`, `lint_success`, `parser_timeout`, `parser_subprocess_error`, `parser_decode_error`, `parser_contract_violation`, `internal_error` |
 | `parser_duration_seconds`  | Histogram | `outcome`                   | seconds  | Same bounded `outcome` enum as above; default buckets                                                                                                                        |
 
-### `/internal/metrics` (JSON payload)
+### `/v1/internal/metrics` (JSON payload)
 
 Example shape:
 
@@ -84,7 +78,7 @@ Recommended baseline:
 ```yaml
 scrape_configs:
   - job_name: merm8
-    metrics_path: /metrics
+    metrics_path: /v1/metrics
     scrape_interval: 15s
     scrape_timeout: 5s
     static_configs:
@@ -169,22 +163,23 @@ For isolated dev/staging deployments, disable alerting or increase all threshold
 
 ## Benchmark artifact quality signal
 
-`GET /benchmark.html` and `GET /v1/benchmark.html` now expose a response header that marks whether the benchmark page is a pre-generated report or deployment placeholder:
+`GET /v1/benchmark.html` exposes a response header that marks whether the benchmark page is a pre-generated report or deployment placeholder:
 
 - `X-Merm8-Benchmark-Status: generated`
 - `X-Merm8-Benchmark-Status: placeholder`
+
 
 `placeholder` is emitted when the HTML contains the signature text `benchmark.html was not pre-generated`, which means benchmark generation did not complete for that revision.
 
 ### Monitoring suggestions (Cloudflare / uptime checks)
 
-- Add an uptime check (or synthetic probe) for `/benchmark.html` that fails if the response header equals `placeholder`.
+- Add an uptime check (or synthetic probe) for `/v1/benchmark.html` that fails if the response header equals `placeholder`.
 - Use Cloudflare Observability or Workers Logs to alert when this header equals `placeholder`.
-- Keep `/healthz` and `/ready` focused on service availability; use this benchmark signal specifically for deployment quality.
+- Keep `/v1/healthz` and `/v1/ready` focused on service availability; use this benchmark signal specifically for deployment quality.
 
 ## Doc maintenance guard (drift detection)
 
-A test enforces that this document still references all currently exported metric names and `/internal/metrics` keys.
+A test enforces that this document still references all currently exported metric names and `/v1/internal/metrics` keys.
 
 - Test: `go test ./internal/api -run TestMetricsDocsContainCurrentNames`
 - If metrics are renamed or added, update this guide in the same PR.
