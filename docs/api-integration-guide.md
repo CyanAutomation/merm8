@@ -420,9 +420,18 @@ Accept-Version: 1.0
     "warnings": []
   },
   "metrics": {
-    "parser-duration-ms": 45,
-    "lint-duration-ms": 12,
-    "total-duration-ms": 57
+    "node-count": 2,
+    "edge-count": 1,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 1,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
   }
 }
 ```
@@ -446,7 +455,7 @@ Content-Type: application/json
 ```json
 {
   "valid": false,
-  "diagram-type": null,
+  "diagram-type": "flowchart",
   "lint-supported": false,
   "request-id": "abc12345...",
   "timestamp": 1678123456789,
@@ -458,9 +467,18 @@ Content-Type: application/json
   },
   "issues": [],
   "metrics": {
-    "parser-duration-ms": 23
+    "node-count": 0,
+    "edge-count": 0,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 0,
+    "diagram-type": "flowchart",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
   }
-}
 ```
 
 ### 3. Diagram with Lint Issues
@@ -507,9 +525,19 @@ Content-Type: application/json
     }
   ],
   "metrics": {
-    "parser-duration-ms": 18,
-    "lint-duration-ms": 8,
-    "total-duration-ms": 26
+    "node-count": 7,
+    "edge-count": 7,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 6,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {"error": 1},
+      "by-rule": {"core/max-fanout": 1}
+    }
+  }
   }
 }
 ```
@@ -538,9 +566,6 @@ Content-Type: application/json
     "message": "Parser timeout after 2 seconds",
     "details": "Diagram too complex for configured timeout"
   },
-  "metrics": {
-    "parser-duration-ms": 2001
-  }
 }
 ```
 
