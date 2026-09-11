@@ -58,7 +58,7 @@ Note: Bare unversioned paths (for example `/analyze`, `/healthz`, `/ready`) were
 
 ```bash
 curl -X POST http://localhost:8080/analyze \
-  -H "Content-Type": "application/json" \
+  -H "Content-Type: application/json" \
   -d '{"code":"graph TD\n  A --> B"}'
 ```
 
