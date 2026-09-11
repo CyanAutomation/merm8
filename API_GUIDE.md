@@ -38,7 +38,8 @@ For deployment sizing and overload behavior, the parser runtime exposes key env 
 
 | Variable                   | Default | Behavior                                                                                                                                                                                                                                                                                                                          |
 | -------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PARSER_TIMEOUT_SECONDS`   | `5`     | Timeout for each parse operation in seconds. Valid range: 1–60. Increase for complex diagrams, decrease to prioritize responsiveness. Exposed via `GET /info` canonical response field `parser-timeout-seconds` (legacy alias `parser_timeout_seconds` is temporarily retained for compatibility and is deprecated).              |
+| `PARSER_TIMEOUT_SECONDS`   | `5`     | Timeout for each parse operation in seconds. Valid range: 1–60. Increase for complex diagrams, decrease to prioritize responsiveness. Exposed via `GET /v1/info` canonical response field `parser-timeout-seconds`.`      |
+
 | `PARSER_CONCURRENCY_LIMIT` | `8`     | Caps in-flight parser subprocesses. When the limit is reached, the server does **not queue indefinitely**; additional `POST /v1/analyze` requests are rejected with `503` and `error.code=server_busy` (`parser concurrency limit reached; try again`) and include `Retry-After: 1` to signal the minimum retry delay in seconds. |
 | `PARSER_MAX_OLD_SPACE_MB`  | `512`   | Sets the Node.js parser subprocess V8 old-space heap cap (`--max-old-space-size=<MB>`), limiting parser memory growth per parse process.                                                                                                                                                                                          |
 | `PARSER_MODE`              | `pool` | Parser execution mode. `pool` (and compatibility alias `auto`) reuses long-lived Node workers and isolates stuck requests by recycling only the timed-out worker; set `subprocess` to preserve one-parse-per-process behavior. |
@@ -230,7 +231,7 @@ To keep rule discovery and configuration stable as plugin support expands, use t
 
 #### Rule ID namespace policy
 
-- **Built-in rules** are canonicalized under the `core/` namespace (for example `core/no-cycles`, `core/max-fanout`).
+- **Built-in rules** are registered as bare names and returned from `GET /v1/rules` (for example `no-cycles`, `max-fanout`). Config inputs may optionally use the `core/<id>` prefix, which normalizes to the bare name at validation time.
 - Existing built-in IDs without namespace (for example `no-cycles`) are still accepted as compatibility aliases in config inputs.
 - **Plugin rules** must use a vendor/provider namespace under `custom/<provider>/<id>` (for example `custom/acme/no-cross-team-calls`).
 - Rule ID segments must match `[a-z0-9][a-z0-9-]*`.
@@ -716,7 +717,7 @@ The response has the same structure as `/v1/analyze`:
 - Lint violations (if linting is supported for the diagram type)
 - Syntax error details
 
-**Note:** Since `/v1/analyze/raw` does not accept configuration, all lint rules use their defaults.
+Config is supported when the request body is valid JSON (a `"code"` field triggers full `parseConfig` validation matching POST `/v1/analyze`). Plain text mode has no config support.
 
 ---
 
@@ -938,7 +939,7 @@ curl http://localhost:8080/v1/version
 
 ### GET `/v1/info`
 
-**Description:** Service capability metadata endpoint. Canonical response fields use **kebab-case** (`parser-recognized`, `lint-supported`, `supported-rules`), and deprecated snake_case aliases are temporarily included for backward compatibility.
+**Description:** Service capability metadata endpoint. Returns kebab-case field names as the canonical JSON contract.
 **Response:** JSON object with parser/runtime metadata, recognized/supported diagram families, and supported lint rule IDs.
 
 **Example response:**
@@ -952,19 +953,6 @@ curl http://localhost:8080/v1/version
   "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
   "lint-supported": ["flowchart"],
   "supported-rules": [
-    "max-depth",
-    "max-fanout",
-    "no-cycles",
-    "no-disconnected-nodes",
-    "no-duplicate-node-ids"
-  ],
-  "service_version": "1.2.3",
-  "parser_version": "1.0.0",
-  "mermaid_version": "11.12.3",
-  "parser_timeout_seconds": 5,
-  "parser_recognized": ["flowchart", "sequence", "class", "er", "state"],
-  "lint_supported": ["flowchart"],
-  "supported_rules": [
     "max-depth",
     "max-fanout",
     "no-cycles",
@@ -1140,7 +1128,7 @@ Concrete examples:
 
 ### Available Rules
 
-The merm8 engine currently includes five built-in lint rules:
+The merm8 engine includes sixteen implemented rules across five diagram families (flowchart, sequence, class, ER, state). `GET /v1/rules` currently returns metadata for five flowchart-family rules; metadata for other families is tracked in the registry.
 
 #### `no-duplicate-node-ids`
 
@@ -1294,11 +1282,10 @@ Accepted canonical format (versioned contract):
 
 | Legacy input                                                                                                                                                                     | Accepted since | Warn since | Remove in                |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- | ------------------------ |
-| `config.schema_version` (snake_case)                                                                                                                                             | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
-| Unversioned nested config (`config.rules` without `config.schema-version`)                                                                                                       | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
-| Flat config shape (`config.{rule-id}` at root)                                                                                                                                   | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
-| Snake_case option keys under a rule (for example `suppression_selectors`)                                                                                                        | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
-| `/info` snake_case response aliases (`service_version`, `parser_version`, `mermaid_version`, `parser_timeout_seconds`, `parser_recognized`, `lint_supported`, `supported_rules`) | v1.0.0         | v1.0.0     | Next major version (TBD) |
+| `config.schema_version` (snake_case)                                                                                                                                             | v1.0.0         | v1.0.0     | 2026-09-30 |
+| Unversioned nested config (`config.rules` without `config.schema-version`)                                                                                                       | v1.0.0         | v1.0.0     | 2026-12-31 |
+| Flat config shape (`config.{rule-id}` at root)                                                                                                                                   | v1.0.0         | v1.0.0     | 2026-12-31 |
+| Snake_case option keys under a rule (for example `suppression_selectors`)                                                                                                        | v1.0.0         | v1.0.0     | 2026-09-30 |
 
 **Deprecation signals (runtime):**
 

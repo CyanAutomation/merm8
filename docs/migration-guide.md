@@ -18,7 +18,7 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 | ------- | ------- | ------- | ------------------------- |
 | v1.0.0  | 2026-03 | Current | ✅ Accepted with warnings |
 | v1.1.0  | 2026-06 | Planned | ✅ Accepted with warnings |
-| v1.2.0  | 2026-12 | Planned | ❌ **Removed**            |
+| v1.2.0  | 2026-Q2 | Planned | Route aliases removed; config sunset dates apply             |
 
 ### Sunset Dates by Format
 
@@ -28,7 +28,6 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 | Unversioned nested (`config.rules` without `schema-version`) | v1.0.0     | 2026-12-31   | **URGENT** - Migrate now  |
 | Snake_case `schema_version`                                  | v1.0.0     | 2026-09-30   | Migrate by Sept 2026      |
 | Snake_case option keys                                       | v1.0.0     | 2026-09-30   | Migrate by Sept 2026      |
-| Unnamespaced rule IDs (`max-fanout` vs `core/max-fanout`)    | v1.0.0     | 2026-12-31   | **Recommended** to update |
 
 ---
 
@@ -75,7 +74,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 2. **Unversioned nested config** - `config.rules` exists but `schema-version` is missing
 3. **Snake_case `schema_version`** - Use `schema_version` instead of `schema-version`
 4. **Snake_case option keys** - Use `suppression_selectors` instead of `suppression-selectors`
-5. **Unnamespaced rule IDs** - Use `max-fanout` instead of `core/max-fanout`
+5. **Unnamespaced rule IDs** - `max-fanout` is what `GET /v1/rules` returns; `core/` prefix in config is normalized to the bare ID at validation time.
 
 ## Before/after examples
 
@@ -219,23 +218,12 @@ Recommended client posture:
 
 ---
 
-## Response Field Deprecation: Underscore Aliases
+## Response Field Contract
 
-The API returned response fields have underscore variants for backward compatibility. These will be removed in **v1.2.0 (Q2 2026)**.
+The API exclusively returns **kebab-case** field names in all JSON responses (for example: `diagram-type`, `lint-supported`, `node-count`). No snake_case alias variants are emitted by any endpoint.
 
-| Response Field           | Deprecated Alias         | Location                | Status                                |
-| ------------------------ | ------------------------ | ----------------------- | ------------------------------------- |
-| `diagram-type`           | `diagram_type`           | AnalyzeResponse.metrics | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `lint-supported`         | `lint_supported`         | AnalyzeResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `parser-timeout-seconds` | `parser_timeout_seconds` | InfoResponse            | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `node-count`             | `node_count`             | metricsResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `edge-count`             | `edge_count`             | metricsResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `max-fanin`              | `max_fanin`              | metricsResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `max-fanout`             | `max_fanout`             | metricsResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `syntax-error`           | `syntax_error`           | AnalyzeResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
-| `issue-counts`           | `issue_counts`           | metricsResponse         | ⚠️ Deprecated in v1.0, removal v1.2.0 |
+Clients should use kebab-case field names consistently. Code examples that reference underscore variants (`diagram_type`, `lint_supported`) will fail against the live API.
 
----
 
 ## Step-by-Step Migration
 
@@ -358,7 +346,7 @@ curl -X POST http://localhost:8080/v1/analyze \
 - [ ] **Test** converted config with `/v1/analyze` endpoint
 - [ ] **Verify** no warnings in response
 - [ ] **Update** your codebase/infrastructure with new config
-- [ ] **Review** API response fields for underscore aliases - update client code
+- [ ] **Verify** response field names are kebab-case (no underscores: diagram-type, lint-supported, node-count)
 - [ ] **Deploy** before v1.2.0 sunset date
 
 ---
@@ -477,36 +465,19 @@ curl -X POST http://localhost:8080/v1/analyze \
 
 ---
 
-## Response Field Migration
+## Response Field Contract Note
 
-Check your code for usage of underscore response fields:
+All API responses exclusively use **kebab-case** field names. No snake_case or underscore variants exist in any endpoint response. The following sections of this guide that reference underscore aliases as deprecated or removable are incorrect and should be disregarded.
+
+Correct client code example:
 
 ```javascript
-// ❌ OLD - Using underscore aliases (deprecated)
-if (response.diagram_type === "flowchart") {
-  // Use diagram_type
-}
-
-// ✅ NEW - Using canonical field names (required v1.2.0+)
+// All fields are kebab-case - no underscore aliases exist
 if (response["diagram-type"] === "flowchart") {
-  // Use diagram-type
+  // correct: use diagram-type from response
 }
 ```
 
-### Maps of Field Changes
-
-| Old Field                | New Field                | Location      | Action             |
-| ------------------------ | ------------------------ | ------------- | ------------------ |
-| `diagram_type`           | `diagram-type`           | metrics       | Update client code |
-| `lint_supported`         | `lint-supported`         | response      | Update client code |
-| `parser_timeout_seconds` | `parser-timeout-seconds` | info response | Update client code |
-| `node_count`             | `node-count`             | metrics       | Update client code |
-| `edge_count`             | `edge-count`             | metrics       | Update client code |
-| `max_fanin`              | `max-fanin`              | metrics       | Update client code |
-| `max_fanout`             | `max-fanout`             | metrics       | Update client code |
-| `syntax_error`           | `syntax-error`           | response      | Update client code |
-
----
 
 ## Verification Tools
 
@@ -550,9 +521,11 @@ for file in *.json; do
 done
 ```
 
-### How to Detect Which You're Using
+### Response Field Format
 
-**Canonical (kebab-case)**: Required from v1.2.0 onward
+All API responses use **kebab-case** field names exclusively. No snake_case or underscore variants are emitted.
+
+**Correct format example:**
 
 ```json
 {
@@ -565,54 +538,17 @@ done
 }
 ```
 
-**Legacy (snake_case)**: Still accepted in v1.0–v1.1, but logged as warnings
+Use these kebab-case field names in all client code. There are no deprecated underscore aliases to migrate from.
 
-```json
-{
-  "diagram_type": "flowchart",
-  "lint_supported": true,
-  "metrics": {
-    "node_count": 5,
-    "edge_count": 4
-  }
-}
-```
+### Legacy Spelling Alias Deprecation
 
-### Migration Timeline
-
-| Timeline                | Action                                                                                                    |
-| ----------------------- | --------------------------------------------------------------------------------------------------------- |
-| **v1.0–v1.1** (current) | Underscore aliases returned alongside canonical names in some responses; server logs deprecation warnings |
-| **v1.2.0 (Q2 2026)**    | Underscore aliases completely removed; clients using old names will see errors                            |
-
-### Recommended Action
-
-**Update your client code now** to use canonical kebab-case field names:
-
-**Before**
-
-```python
-diagram_type = response['diagram_type']
-node_count = response['metrics']['node_count']
-lint_supported = response['lint_supported']
-```
-
-**After**
-
-```python
-diagram_type = response['diagram-type']
-node_count = response['metrics']['node-count']
-lint_supported = response['lint-supported']
-```
-
-### Backward-Compatibility Headers
-
-The API may emit `Deprecation: true` and `Sunset: <date>` headers when underscore aliases are used:
+The British-English spelling aliases (`POST /v1/analyse`, `POST /v1/analyse/raw`) emit deprecation headers:
 
 ```
 Deprecation: true
+Warning: 299 - "POST /v1/analyse is deprecated; use POST /v1/analyze. Planned removal in v1.2.0 (Q2 2026)."
 Sunset: Tue, 30 Jun 2026 23:59:59 GMT
 Link: </v1/docs#/Linting/post_v1_analyze>; rel="successor-version"
 ```
 
-Applications should monitor these headers and plan upgrades accordingly.
+These headers appear when requests hit the `/v1/analyse*` endpoints specifically, not related to response field naming. Migrate all HTTP calls from `/v1/analyse` to `/v1/analyze` before June 30, 2026.
