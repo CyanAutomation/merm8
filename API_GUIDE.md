@@ -367,13 +367,32 @@ The API gracefully handles rule configuration requests that include rules not ap
 **Response** (HTTP 200):
 
 ```json
+```json
 {
   "valid": true,
+  "diagram-type": "flowchart",
+  "lint-supported": true,
+  "request-id": "req-ghi789",
+  "timestamp": 1709600000000,
   "syntax-error": null,
   "issues": [...],
   "warnings": [
     "rule 'max-nesting-depth' is not recognized and will be ignored; ensure it is a valid rule ID or applies to the diagram type being analyzed"
-  ]
+  ],
+  "metrics": {
+    "node-count": 2,
+    "edge-count": 1,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 1,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
+  }
 }
 ```
 
@@ -410,16 +429,28 @@ This feature is particularly useful for frontend clients that maintain a univers
   "metrics": {
     "node-count": 3,
     "edge-count": 2,
-    "max-fanout": 1
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 1,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
   }
 }
 ```
 
 **Response with lint issues:**
-
 ```json
 {
   "valid": true,
+  "diagram-type": "flowchart",
+  "lint-supported": true,
+  "request-id": "req-def456",
+  "timestamp": 1709600000000,
   "syntax-error": null,
   "issues": [
     {
@@ -431,10 +462,21 @@ This feature is particularly useful for frontend clients that maintain a univers
   "metrics": {
     "node-count": 3,
     "edge-count": 2,
-    "max-fanout": 1
+    "disconnected-node-count": 1,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 1,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {"error": 1},
+      "by-rule": {"no-disconnected-nodes": 1}
+    }
   }
 }
 ```
+
+**Syntax error response:**
 
 **Syntax error response:**
 
@@ -456,13 +498,31 @@ This feature is particularly useful for frontend clients that maintain a univers
 ```json
 {
   "valid": false,
+  "diagram-type": "unknown",
   "lint-supported": false,
+  "request-id": "req-jkl012",
+  "timestamp": 1709600000000,
   "syntax-error": null,
   "issues": [],
   "error": {
     "code": "invalid_json",
     "message": "invalid JSON body"
+  },
+  "metrics": {
+    "node-count": 0,
+    "edge-count": 0,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 0,
+    "diagram-type": "unknown",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
   }
+}
+```
 }
 ```
 
@@ -522,7 +582,20 @@ Add jitter (for example ±20% randomization) per attempt to avoid synchronized r
 - **`metrics`** — Statistics about the diagram structure (also populated for parsed-but-unsupported families and syntax-error responses)
   - `node-count` — Total nodes in the diagram
   - `edge-count` — Total connections/edges
+  - `disconnected-node-count` — Nodes not connected by any edge
+  - `duplicate-node-count` — Node IDs appearing more than once
+  - `max-fanin` — Maximum incoming edges to any single node
   - `max-fanout` — Maximum outgoing edges from any single node
+  - `diagram-type` — Normalized diagram type from parser output
+  - `direction` — Flow direction (for example TD, LR); omitted when not applicable
+  - `issue-counts` — Distribution of lint issues by severity (`by-severity`) and rule (`by-rule`); omitted when no issues exist
+
+- **`request-id`** — Unique request identifier for traceability (omitted when not generated).
+- **`timestamp`** — Server timestamp in Unix milliseconds when analysis completed (omitted when not set).
+- **`hints[]`** — Structured, machine-readable syntax remediation hints with fields: `code`, `message`, `severity`, `confidence`, `applies-to` (`line`, `column`, `diagram-type`), and `fix-example`.
+- **`help-suggestion`** — Structured remediation guidance with fields: `title`, `explanation`, `wrong-example`, `correct-example`, `doc-link`, and `fix-action`.
+- **`warnings[]`** — Deprecation warnings as string messages for legacy config formats or unknown rule IDs.
+- **`meta`** — Structured warning metadata containing `warnings[]` entries with `code`, `message`, and `replacement` per-warning details.
 
 ### Hint codes
 
@@ -917,6 +990,69 @@ curl http://localhost:8080/v1/version
 curl http://localhost:8080/v1/spec | jq .
 ```
 
+
+### GET `/v1/health/metrics`
+
+**Description:** Extended health status with operational metrics. Returns uptime, parser readiness, analyze outcome counters, and latency percentiles.
+**Response:** JSON object with `status`, `timestamp`, `uptime-seconds`, `build-commit`, `build-time`, `parser-ready`, `parser-version`, `lint-supported`, `total-requests`, `successful-analyses`, `failed-analyses`, `median-parser-latency-ms`, and `p95-parser-latency-ms`.
+
+**Example response:**
+```json
+{
+  "status": "ok",
+  "timestamp": 1709600000000,
+  "uptime-seconds": 3600.5,
+  "build-commit": "abc1234",
+  "build-time": "2026-03-04T00:00:00Z",
+  "parser-ready": true,
+  "parser-version": "1.0.0",
+  "lint-supported": ["flowchart"],
+  "total-requests": 500,
+  "successful-analyses": {"total": 480, "lint-success": 480},
+  "failed-analyses": {"total": 20, "syntax-errors": 10, "other": 5, "parser-timeout": 3, "parser-errors": 2, "internal-errors": 0},
+  "median-parser-latency-ms": 0,
+  "p95-parser-latency-ms": 0
+}
+```
+
+### GET `/v1/diagram-types`
+
+**Description:** Parser-recognized diagram types and lint-supported diagram families for runtime capability discovery.
+**Response:** JSON object with `parser-recognized` array and `lint-supported` array of diagram families.
+
+**Example response:**
+```json
+{
+  "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
+  "lint-supported": ["flowchart"]
+}
+```
+
+### GET `/v1/analyze/help`
+
+**Description:** Diagram templates, common error patterns, arrow syntax references, and documentation links for interactive guidance.
+**Response:** JSON object with `diagram-types`, `common-errors`, `arrow-syntax`, and `resources` sections.
+
+### GET `/v1/benchmark.html`
+
+**Description:** Serves a benchmark result HTML page at the configured path (`MERM8_BENCHMARK_HTML_PATH`).
+**Response:** HTML content or placeholder when no pre-generated file is available.
+Returns header `X-Merm8-Benchmark-Status: generated` when file exists, `placeholder` when not configured.
+
+### GET `/v1/config-versions`
+
+**Description:** Config schema version compatibility information, deprecation details, and migration guidance.
+**Response:** JSON object with `current` schema version, `supported` versions list, `deprecations` with sunset dates and migration notes, and `compatibility` metadata.
+
+### POST `/v1/analyze/raw`
+
+**Description:** Accepts raw Mermaid text (plain text or JSON). Same response shape as `/v1/analyze` but does not support rule configuration.
+**Usage:** Send plain Mermaid code directly without JSON wrapping.
+
+### POST `/v1/analyze/sarif`
+
+**Description:** Same request body as `/v1/analyze`; returns SARIF 2.1.0 (`Content-Type: application/sarif+json`) for valid analyses.
+
 ### POST `/v1/analyze` (canonical)
 
 > Spelling note: `analyze` is canonical. `/v1/analyse` and `/v1/analyse/raw` are temporary compatibility aliases that emit deprecation `Warning` headers and are planned for removal in v1.2.0 (Q2 2026).
@@ -1289,7 +1425,16 @@ curl -X POST http://localhost:8080/v1/analyze \
   "metrics": {
     "node-count": 3,
     "edge-count": 2,
-    "max-fanout": 1
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 1,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
   }
 }
 ```
@@ -1308,10 +1453,11 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 **Response:**
-
 ```json
 {
   "valid": true,
+  "diagram-type": "flowchart",
+  "lint-supported": true,
   "syntax-error": null,
   "issues": [
     {
@@ -1325,7 +1471,16 @@ curl -X POST http://localhost:8080/v1/analyze \
   "metrics": {
     "node-count": 7,
     "edge-count": 6,
-    "max-fanout": 6
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 6,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {"warning": 1},
+      "by-rule": {"max-fanout": 1}
+    }
   }
 }
 ```
@@ -1347,6 +1502,8 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```json
 {
   "valid": true,
+  "diagram-type": "flowchart",
+  "lint-supported": true,
   "syntax-error": null,
   "issues": [
     {
@@ -1358,9 +1515,19 @@ curl -X POST http://localhost:8080/v1/analyze \
   "metrics": {
     "node-count": 4,
     "edge-count": 2,
-    "max-fanout": 1
+    "disconnected-node-count": 1,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 1,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {"error": 1},
+      "by-rule": {"no-disconnected-nodes": 1}
+    }
   }
 }
+```
 ```
 
 ### Example 4: Syntax Error
@@ -1376,17 +1543,43 @@ curl -X POST http://localhost:8080/v1/analyze \
 ```
 
 **Response:**
-
 ```json
 {
   "valid": false,
+  "diagram-type": "unknown",
   "lint-supported": false,
+  "request-id": "req-abc123",
+  "timestamp": 1709600000000,
+  "hints": [
+    {
+      "code": "missing_diagram_type_keyword",
+      "message": "Diagram likely omitted the required Mermaid diagram type header",
+      "severity": "warning",
+      "confidence": 1.0,
+      "fix-example": "Start line 1 with a valid diagram type keyword (for example flowchart TD, sequenceDiagram)."
+    }
+  ],
   "syntax-error": {
     "message": "No diagram type detected",
     "line": 0,
     "column": 0
   },
-  "issues": []
+  "issues": [],
+  "metrics": {
+    "node-count": 0,
+    "edge-count": 0,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 0,
+    "diagram-type": "unknown",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
+  }
+}
+```
 }
 ```
 
