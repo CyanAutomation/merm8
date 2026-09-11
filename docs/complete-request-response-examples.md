@@ -64,7 +64,7 @@ Accept-Version: 1.0
   "config": {
     "schema-version": "v1",
     "rules": {
-      "core/max-fanout": {
+      "max-fanout": {
         "limit": 2
       }
     }
@@ -85,7 +85,7 @@ Accept-Version: 1.0
   "syntax-error": null,
   "issues": [
     {
-      "rule-id": "core/max-fanout",
+      "rule-id": "max-fanout",
       "rule-type": "structural",
       "severity": "warning",
       "message": "Node 'A' has 3 outgoing edges, exceeds limit of 2",
@@ -132,13 +132,13 @@ Content-Type: application/json
   "config": {
     "schema-version": "v1",
     "rules": {
-      "core/no-cycles": {
+      "no-cycles": {
         "severity": "error"
       },
-      "core/no-disconnected-nodes": {
+      "no-disconnected-nodes": {
         "severity": "warning"
       },
-      "core/max-depth": {
+      "max-depth": {
         "limit": 2
       }
     }
@@ -158,7 +158,7 @@ Content-Type: application/json
   "syntax-error": null,
   "issues": [
     {
-      "rule-id": "core/no-cycles",
+      "rule-id": "no-cycles",
       "rule-type": "structural",
       "severity": "error",
       "message": "Cycle detected: A → B → C → A",
@@ -172,7 +172,7 @@ Content-Type: application/json
       }
     },
     {
-      "rule-id": "core/no-disconnected-nodes",
+      "rule-id": "no-disconnected-nodes",
       "rule-type": "structural",
       "severity": "warning",
       "message": "Node 'D' is disconnected from main graph",
@@ -220,7 +220,7 @@ Content-Type: application/json
   "config": {
     "schema-version": "v1",
     "rules": {
-      "core/max-fanout": {
+      "max-fanout": {
         "limit": 3,
         "suppression-selectors": ["node:A"]
       }
@@ -251,7 +251,7 @@ Content-Type: application/json
     "total-duration-ms": 28,
     "suppressions-applied": [
       {
-        "rule-id": "core/max-fanout",
+        "rule-id": "max-fanout",
         "selector": "node:A",
         "matched-nodes": 1
       }
@@ -519,7 +519,7 @@ Content-Type: application/json
   "syntax-error": null,
   "issues": [
     {
-      "rule-id": "core/max-fanout",
+      "rule-id": "max-fanout",
       "severity": "warning",
       "message": "Node 'A' has 5 outgoing edges, exceeds limit of 3",
       "node-id": "A"
@@ -558,18 +558,18 @@ Content-Type: application/json
   "config": {
     "schema-version": "v1",
     "rules": {
-      "core/max-fanout": {
+      "max-fanout": {
         "limit": 4,
         "severity": "warning"
       },
-      "core/max-depth": {
+      "max-depth": {
         "limit": 3,
         "severity": "warning"
       },
-      "core/no-cycles": {
+      "no-cycles": {
         "severity": "error"
       },
-      "core/no-duplicate-node-ids": {
+      "no-duplicate-node-ids": {
         "severity": "error"
       }
     }
@@ -628,7 +628,7 @@ Content-Type: application/json
   "config": {
     "schema-version": "v1",
     "rules": {
-      "core/max-fanout": {"limit": 3}
+      "max-fanout": {"limit": 3}
     }
   }
 }
@@ -646,7 +646,7 @@ Content-Type: application/json
   "syntax-error": null,
   "issues": [
     {
-      "rule-id": "core/max-fanout",
+      "rule-id": "max-fanout",
       "severity": "warning",
       "message": "Node 'A' has 6 outgoing edges, exceeds limit of 3",
       "node-id": "A",
