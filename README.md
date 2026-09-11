@@ -208,10 +208,10 @@ Informational-only endpoint for app/build metadata (for example deploy version, 
 ```json
 {
   "version": "1.2.3",
-  "build_commit": "abc1234",
-  "build_time": "2026-03-04T00:00:00Z",
-  "parser_version": "1.0.0",
-  "mermaid_version": "11.12.3"
+  "build-commit": "abc1234",
+  "build-time": "2026-03-04T00:00:00Z",
+  "parser-version": "1.0.0",
+  "mermaid-version": "11.12.3"
 }
 ```
 
@@ -237,8 +237,8 @@ Service capability metadata endpoint. Uses kebab-case field names as canonical J
     "no-duplicate-node-ids"
   ],
   "service_version": "1.2.3",
-  "parser_version": "1.0.0",
-  "mermaid_version": "11.12.3",
+  "parser-version": "1.0.0",
+  "mermaid-version": "11.12.3",
   "parser_timeout_seconds": 5,
   "parser_recognized": ["flowchart", "sequence", "class", "er", "state"],
   "lint_supported": ["flowchart"],
@@ -320,6 +320,124 @@ A versioned schema artifact is also published at `schemas/config.v1.json` for to
 curl -s http://localhost:8080/v1/rules/schema | jq '.schema'
 ```
 
+### `GET /v1/health/metrics`
+Extended health status with operational metrics.
+
+**Response**
+
+```json
+{
+  "status": "ok",
+  "timestamp": 1709600000000,
+  "uptime-seconds": 3600.5,
+  "build-commit": "abc1234",
+  "build-time": "2026-03-04T00:00:00Z",
+  "parser-ready": true,
+  "parser-version": "1.0.0",
+  "lint-supported": ["flowchart"],
+  "total-requests": 500,
+  "successful-analyses": {
+    "total": 480,
+    "lint-success": 480
+  },
+  "failed-analyses": {
+    "total": 20,
+    "syntax-errors": 10,
+    "other": 5,
+    "parser-timeout": 3,
+    "parser-errors": 2,
+    "internal-errors": 0
+  },
+  "median-parser-latency-ms": 0,
+  "p95-parser-latency-ms": 0
+}
+```
+
+`median-parser-latency-ms` and `p95-parser-latency-ms` are currently zero; populate from histogram metrics when available.
+
+### `GET /v1/diagram-types`
+Returns parser-recognized diagram types and lint-supported diagram families.
+
+**Response**
+
+```json
+{
+  "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
+  "lint-supported": ["flowchart"]
+}
+```
+
+### `GET /v1/analyze/help`
+Returns diagram type templates, common error patterns, arrow syntax references, and documentation links.
+
+**Response**
+
+```json
+{
+  "diagram-types": {
+    "flowchart": {"description": "Directed acyclic graph for processes, workflows, and decision trees", "example": "flowchart TD\n    Start([Start]) --> Process[Do Something]\n    Process --> End([End])"},
+    "sequence": {"description": "Interactions between participants over time", "example": "sequenceDiagram\n    Alice->>Bob: Hello!\n    Bob-->>Alice: Hi there!"},
+    "class": {"description": "Object-oriented class hierarchy and relationships", "example": "classDiagram\n    class Animal {\n        +String name\n        +eat()\n    }"},
+    "er": {"description": "Entity-relationship diagrams for data models", "example": "erDiagram\n    CUSTOMER ||--o{ ORDER : places\n    ORDER ||--|{ ITEM : contains"},
+    "state": {"description": "State machines and workflows with state transitions", "example": "stateDiagram-v2\n    [*] --> Active\n    Active --> Inactive\n    Inactive --> [*]"}
+  },
+  "common-errors": [
+    {"pattern": "No diagram type detected", "fix": "Start your diagram with a type keyword: flowchart, sequenceDiagram, classDiagram, erDiagram, or stateDiagram-v2", "example": "flowchart TD\n  A[Start] --> B[End]"},
+    {"pattern": "Looks like Graphviz syntax", "fix": "Use Mermaid syntax instead. Replace 'digraph' with 'flowchart TD' and '->' with '-->'", "example": "flowchart TD\n  A --> B"},
+    {"pattern": "Unexpected token", "fix": "Check syntax: correct arrow operators, bracket matching, and indentation (use spaces, not tabs)", "example": "flowchart TD\n  A[Valid Label] --> B[Another]"},
+    {"pattern": "Tab indentation detected", "fix": "Replace tabs with spaces (2-4 spaces per indentation level)", "example": "flowchart TD\n    A --> B"}
+  ],
+  "arrow-syntax": {
+    "flowchart": "-->, -..-, -.->, or ===",
+    "sequence": "->, -->, ->>, ->>",
+    "class": "<|--, *--, o--",
+    "er": "||, |o, o|, ||"
+  },
+  "resources": {
+    "documentation": "https://mermaid.js.org/intro/",
+    "syntax-guide": "https://mermaid.js.org/syntax/flowchart.html"
+  }
+}
+```
+
+### `GET /v1/benchmark.html`
+Serves a benchmark result HTML page at the configured path (`MERM8_BENCHMARK_HTML_PATH`, default `/app/benchmark.html`). Returns `X-Merm8-Benchmark-Status: generated` when the file exists and `X-Merm8-Benchmark-Status: placeholder` with a signature message when no pre-generated file is configured.
+
+### `GET /v1/config-versions`
+Returns config schema version compatibility information, deprecation details, and migration guidance.
+
+**Response**
+
+```json
+{
+  "current": "v1",
+  "supported": ["v1"],
+  "deprecations": [
+    {
+      "version": "unversioned",
+      "status": "deprecated",
+      "sunset-date": "2026-12-31T23:59:59Z",
+      "replacement": "Use config.schema-version: v1 with config.rules structure",
+      "migration-notes": "Legacy flat config shapes and unversioned config structures must be migrated to the v1 schema."
+    },
+    {
+      "version": "schema_version (underscore)",
+      "status": "deprecated",
+      "sunset-date": "2026-09-30T23:59:59Z",
+      "replacement": "Use config.schema-version (hyphenated) instead",
+      "migration-notes": "The underscore variant config.schema_version is deprecated; migrate to config.schema-version."
+    }
+  ],
+  "compatibility": {
+    "api-version": "1.0",
+    "accepts-accept-version": true,
+    "version-negotiation": "Use Accept-Version header to request specific API versions. Response includes Content-Version header.",
+    "rate-limiting": "Rate limit info available in X-RateLimit-* response headers."
+  }
+}
+```
+
+
 ### `POST /v1/analyze` (canonical) with British-English alias `POST /v1/analyse`
 
 **Request body**
@@ -367,6 +485,13 @@ curl -s http://localhost:8080/v1/rules/schema | jq '.schema'
 - `issues[].fingerprint` is required and is a deterministic SHA-256 hash over the normalized issue signature for CI tracking and dedupe.
 - `issues[].context` is optional grouping metadata for node-scoped findings; when present for subgraphs it includes `subgraph-id` and `subgraph-label`, and it is omitted when no grouping applies.
 
+- `request-id` is a unique request identifier for traceability.
+- `timestamp` is the server timestamp (Unix milliseconds) when the analysis completed.
+- `hints[]` provides structured, machine-readable syntax remediation hints with fields: `code`, `message`, `severity`, `confidence`, `applies-to` (line, column, diagram-type), and `fix-example`.
+- `help-suggestion` provides structured remediation guidance with fields: `title`, `explanation`, `wrong-example`, `correct-example`, `doc-link`, and `fix-action`.
+- `warnings[]` lists deprecation warnings as strings for legacy config formats or unknown rule IDs.
+- `meta` contains structured warning metadata: `warnings[]` with `code`, `message`, and `replacement` per-warning info.
+
 **Response — valid diagram**
 
 ```json
@@ -379,7 +504,16 @@ curl -s http://localhost:8080/v1/rules/schema | jq '.schema'
   "metrics": {
     "node-count": 3,
     "edge-count": 2,
-    "max-fanout": 1
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 1,
+    "diagram-type": "flowchart",
+    "direction": "TD",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
   }
 }
 ```
@@ -509,6 +643,22 @@ curl -s -X POST http://localhost:8080/v1/analyze \
 - Integration tips and troubleshooting
 
 ---
+
+### `POST /v1/analyze/raw`
+Accepts raw Mermaid text (plain text or JSON). The response shape mirrors `/v1/analyze`. Use this endpoint for quick testing without config support.
+
+```bash
+curl -X POST http://localhost:8080/v1/analyze/raw \
+  -H "Content-Type: text/plain" \
+  -d 'graph TD
+  A --> B'
+```
+
+### `POST /v1/analyze/sarif`
+Same request body as `/v1/analyze`; returns SARIF 2.1.0 (`application/sarif+json`) for valid analyses. Unsupported diagram types are rejected with HTTP 400.
+
+---
+
 
 ## Security & Production Hardening
 
