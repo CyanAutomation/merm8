@@ -161,10 +161,10 @@ Canonical config format is `{"schema-version":"v1","rules":{...}}` and canonical
 
 | Legacy input                                                        | Accepted since | Warn since | Remove in                |
 | ------------------------------------------------------------------- | -------------- | ---------- | ------------------------ |
-| `config.schema_version`                                             | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
-| Unversioned nested config (`config.rules` without `schema-version`) | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
-| Flat config (`config.{rule-id}`)                                    | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
-| Snake_case rule option keys (for example `suppression_selectors`)   | v1.0.0         | v1.0.0     | v1.2.0 (Q2 2026 planned) |
+| `config.schema_version`                                             | v1.0.0         | v1.0.0     | 2026-09-30               |
+| Unversioned nested config (`config.rules` without `schema-version`) | v1.0.0         | v1.0.0     | 2026-12-31               |
+| Flat config (`config.{rule-id}`)                                    | v1.0.0         | v1.0.0     | 2026-12-31               |
+| Snake_case rule option keys (for example `suppression_selectors`)   | v1.0.0         | v1.0.0     | 2026-09-30               |
 
 Phase-1 runtime signals include `Deprecation` + `Warning` headers, response `warnings`, and structured `meta.warnings` metadata.
 
@@ -217,7 +217,7 @@ Informational-only endpoint for app/build metadata (for example deploy version, 
 
 ### `GET /v1/info` (canonical)
 
-Service capability metadata endpoint. Uses kebab-case field names as canonical JSON contract, with temporary snake_case compatibility aliases retained during deprecation.
+Service capability metadata endpoint. Returns kebab-case field names as the canonical JSON contract.
 
 **Response (example)**
 
@@ -230,19 +230,6 @@ Service capability metadata endpoint. Uses kebab-case field names as canonical J
   "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
   "lint-supported": ["flowchart"],
   "supported-rules": [
-    "max-depth",
-    "max-fanout",
-    "no-cycles",
-    "no-disconnected-nodes",
-    "no-duplicate-node-ids"
-  ],
-  "service_version": "1.2.3",
-  "parser-version": "1.0.0",
-  "mermaid-version": "11.12.3",
-  "parser_timeout_seconds": 5,
-  "parser_recognized": ["flowchart", "sequence", "class", "er", "state"],
-  "lint_supported": ["flowchart"],
-  "supported_rules": [
     "max-depth",
     "max-fanout",
     "no-cycles",
@@ -645,7 +632,7 @@ curl -s -X POST http://localhost:8080/v1/analyze \
 ---
 
 ### `POST /v1/analyze/raw`
-Accepts raw Mermaid text (plain text or JSON). The response shape mirrors `/v1/analyze`. Use this endpoint for quick testing without config support.
+Accepts raw Mermaid text (plain text or JSON). When the request body is JSON (with a `"code"` field), full config validation applies; plain text mode has no config support. The response shape mirrors `/v1/analyze`.
 
 ```bash
 curl -X POST http://localhost:8080/v1/analyze/raw \
@@ -734,7 +721,7 @@ type Rule interface {
 
 Rule IDs now follow a namespace policy at registration time:
 
-- Built-in rules use the `core/<id>` namespace (for example `core/max-fanout`).
+- Built-in rule IDs are returned as bare names from `GET /v1/rules` (for example `max-fanout`). Config inputs may optionally use the `core/<id>` prefix, which is normalized to the bare ID at validation time.
 - External/plugin rules must use `custom/<provider>/<id>` (for example `custom/acme/max-depth-guard`).
 - The `core/` prefix is reserved and rejected for non-built-in IDs.
 - Unknown namespace prefixes (for example `vendor/<id>`) are rejected.
@@ -749,6 +736,8 @@ Compatibility migration for existing plugins:
 ### Built-in Rules
 
 The following built-in rules are registered automatically via family functions (`FlowchartRules()`, `SequenceRules()`, etc.) in `internal/rules/rule_groups.go`. All implemented rules are listed below.
+
+> **Note:** `GET /v1/rules` currently returns metadata for only 5 of these rules (the flowchart family). Metadata entries for sequence, class, ER, and state diagram rules are tracked in the rule registry but not yet surfaced by this endpoint.
 
 | Rule ID                  | Diagram Family | Severity | Description                                                       |
 | ------------------------ | -------------- | -------- | ----------------------------------------------------------------- |
