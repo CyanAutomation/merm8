@@ -1,4 +1,4 @@
-[![OpenAPI Sync](https://github.com/CyanAutomation/merm8/actions/workflows/openapi-sync.yml/badge.svg?branch=main)](https://github.com/CyanAutomation/merm8/actions/workflows/openapi-sync.yml)
+[![CI](https://github.com/CyanAutomation/merm8/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/CyanAutomation/merm8/actions/workflows/ci.yml) [![OpenAPI Sync](https://github.com/CyanAutomation/merm8/actions/workflows/openapi-sync.yml/badge.svg?branch=main)](https://github.com/CyanAutomation/merm8/actions/workflows/openapi-sync.yml)
 
 # merm8 — mermaid-lint
 
