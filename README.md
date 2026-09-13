@@ -1,3 +1,5 @@
+[![OpenAPI Sync](https://github.com/CyanAutomation/merm8/actions/workflows/openapi-sync.yml/badge.svg?branch=main)](https://github.com/CyanAutomation/merm8/actions/workflows/openapi-sync.yml)
+
 # merm8 — mermaid-lint
 
 A **deterministic Mermaid static analysis engine** — no AI, no LLMs, pure static analysis.
