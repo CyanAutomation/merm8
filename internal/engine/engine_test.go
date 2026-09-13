@@ -1,6 +1,8 @@
 package engine_test
 
 import (
+	"bytes"
+	"log"
 	"reflect"
 	"strings"
 	"sync"
@@ -138,6 +140,31 @@ func TestEngine_CleanDiagram(t *testing.T) {
 	}
 }
 
+func TestEngine_NormalizeConfig_NamespacedBuiltInDoesNotWarn(t *testing.T) {
+	e := engine.NewWithRules(rules.MaxFanout{})
+
+	var logs bytes.Buffer
+	previousWriter := log.Writer()
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(previousWriter) })
+
+	normalized, err := e.NormalizeConfig(rules.Config{
+		"core/max-fanout": {"limit": 2},
+	})
+	if err != nil {
+		t.Fatalf("expected normalization to succeed, got %v", err)
+	}
+	if _, ok := normalized["core/max-fanout"]; ok {
+		t.Fatal("expected namespaced config key to be converted to the internal rule ID")
+	}
+	if got := normalized["max-fanout"]["limit"]; got != 2 {
+		t.Fatalf("expected internal max-fanout entry with limit 2, got %#v", normalized)
+	}
+	if logs.Len() != 0 {
+		t.Fatalf("expected canonical namespaced config not to emit a legacy warning, got %q", logs.String())
+	}
+}
+
 func TestEngine_DuplicateAndDisconnected(t *testing.T) {
 	d := &model.Diagram{
 		Type:  model.DiagramTypeFlowchart,
@@ -157,7 +184,7 @@ func TestEngine_StableOrderingAcrossRuns(t *testing.T) {
 		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}, {ID: "D"}},
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}},
 	}
-	cfg := rules.Config{"max-fanout": map[string]any{"limit": 1}}
+	cfg := rules.Config{"core/max-fanout": map[string]any{"limit": 1}}
 	e := engine.New()
 
 	first := e.Run(d, cfg)
@@ -175,7 +202,7 @@ func TestEngine_StableOrderingAcrossRuleRegistrationOrder(t *testing.T) {
 		Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "C"}, {ID: "D"}},
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}},
 	}
-	cfg := rules.Config{"max-fanout": map[string]any{"limit": 1}}
+	cfg := rules.Config{"core/max-fanout": map[string]any{"limit": 1}}
 
 	defaultOrder := engine.NewWithRules(
 		rules.NoDuplicateNodeIDs{},
@@ -582,7 +609,7 @@ func TestEngine_ConfigSuppressionSelectors_Node(t *testing.T) {
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "A", To: "D"}},
 	}
 
-	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"node:A"}}})
+	issues := e.Run(d, rules.Config{"core/max-fanout": {"limit": 1, "suppression-selectors": []string{"node:A"}}})
 	if len(issues) != 0 {
 		t.Fatalf("expected node selector to suppress max-fanout issue, got %#v", issues)
 	}
@@ -595,7 +622,7 @@ func TestEngine_ConfigSuppressionSelectors_RuleAndSubgraph(t *testing.T) {
 		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
 	}
-	issues := eRule.Run(dRule, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:max-fanout"}}})
+	issues := eRule.Run(dRule, rules.Config{"core/max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:max-fanout"}}})
 	if len(issues) != 0 {
 		t.Fatalf("expected rule selector to suppress issue, got %#v", issues)
 	}
@@ -616,7 +643,7 @@ func TestEngine_ConfigSuppressionSelectors_MalformedRejectsConfig(t *testing.T) 
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
 	}
 
-	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"", "node", "node:", "unknown:A"}}})
+	issues := e.Run(d, rules.Config{"core/max-fanout": {"limit": 1, "suppression-selectors": []string{"", "node", "node:", "unknown:A"}}})
 	if len(issues) != 0 {
 		t.Fatalf("expected malformed selectors to fail config validation and produce no issues, got %#v", issues)
 	}
@@ -630,7 +657,7 @@ func TestEngine_ConfigSuppressionSelectors_NegationRequiresInclude(t *testing.T)
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
 	}
 
-	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"!rule:max-fanout"}}})
+	issues := e.Run(d, rules.Config{"core/max-fanout": {"limit": 1, "suppression-selectors": []string{"!rule:max-fanout"}}})
 	if len(issues) != 1 {
 		t.Fatalf("expected negation-only selectors to keep issue, got %#v", issues)
 	}
@@ -644,7 +671,7 @@ func TestEngine_ConfigSuppressionSelectors_NegationOverridesInclude(t *testing.T
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}, {From: "D", To: "E"}, {From: "D", To: "F"}},
 	}
 
-	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"node:A", "!node:D"}}})
+	issues := e.Run(d, rules.Config{"core/max-fanout": {"limit": 1, "suppression-selectors": []string{"node:A", "!node:D"}}})
 	if len(issues) != 1 {
 		t.Fatalf("expected mixed selectors to suppress node A issue and keep node D issue, got %#v", issues)
 	}
@@ -661,7 +688,7 @@ func TestEngine_ConfigSuppressionSelectors_NegatedRuleSelectorBehavior(t *testin
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
 	}
 
-	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:max-fanout", "!rule:max-fanout"}}})
+	issues := e.Run(d, rules.Config{"core/max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:max-fanout", "!rule:max-fanout"}}})
 	if len(issues) != 1 {
 		t.Fatalf("expected negated rule selector to override matching include rule selector, got %#v", issues)
 	}
@@ -675,7 +702,7 @@ func TestEngine_ConfigSuppressionSelectors_MalformedNegationRejectsConfig(t *tes
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
 	}
 
-	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:max-fanout", "! node:A", "!", "!\tnode:A"}}})
+	issues := e.Run(d, rules.Config{"core/max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:max-fanout", "! node:A", "!", "!\tnode:A"}}})
 	if len(issues) != 0 {
 		t.Fatalf("expected malformed negated selectors to fail config validation and produce no issues, got %#v", issues)
 	}
@@ -689,7 +716,7 @@ func TestEngine_ConfigSuppressionSelectors_WhitespaceInSelectorRejectsConfig(t *
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
 	}
 
-	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"node: A", "subgraph:payments team"}}})
+	issues := e.Run(d, rules.Config{"core/max-fanout": {"limit": 1, "suppression-selectors": []string{"node: A", "subgraph:payments team"}}})
 	if len(issues) != 0 {
 		t.Fatalf("expected whitespace-containing selectors to fail config validation and produce no issues, got %#v", issues)
 	}
@@ -703,7 +730,7 @@ func TestEngine_ConfigSuppressionSelectors_UnknownRuleSelectorDoesNotMatch(t *te
 		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
 	}
 
-	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:unknown-rule"}}})
+	issues := e.Run(d, rules.Config{"core/max-fanout": {"limit": 1, "suppression-selectors": []string{"rule:unknown-rule"}}})
 	if len(issues) != 1 {
 		t.Fatalf("expected unknown rule selector value to not suppress issue, got %#v", issues)
 	}
@@ -718,7 +745,7 @@ func TestEngine_ConfigSuppressionSelectors_NodeIDContainingColon(t *testing.T) {
 		Edges: []model.Edge{{From: "team:alpha", To: "B"}, {From: "team:alpha", To: "C"}, {From: "team:alpha", To: "D"}},
 	}
 
-	issues := e.Run(d, rules.Config{"max-fanout": {"limit": 1, "suppression-selectors": []string{`node:team:alpha`}}})
+	issues := e.Run(d, rules.Config{"core/max-fanout": {"limit": 1, "suppression-selectors": []string{`node:team:alpha`}}})
 	if len(issues) != 0 {
 		t.Fatalf("expected selector containing colon in value to suppress node issue, got %#v", issues)
 	}
