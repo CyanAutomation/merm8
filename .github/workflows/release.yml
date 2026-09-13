@@ -72,9 +72,10 @@ jobs:
             printf 'Release %s\n' "$version" > "$notes_file"
           fi
 
-          prerelease_args=()
           if [[ "$version" == *-* ]]; then
-            prerelease_args+=(--prerelease)
+            gh release create "$version" --verify-tag --title "$version" \
+              --notes-file "$notes_file" --prerelease
+          else
+            gh release create "$version" --verify-tag --title "$version" \
+              --notes-file "$notes_file"
           fi
-          gh release create "$version" --verify-tag --title "$version" \
-            --notes-file "$notes_file" "${prerelease_args[@]}"
