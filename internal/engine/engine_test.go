@@ -118,9 +118,20 @@ func TestEngine_DiagramFamilies_FromRegisteredRules(t *testing.T) {
 	got := e.DiagramFamilies()
 	want := []model.DiagramFamily{
 		model.DiagramFamilyFlowchart,
+		model.DiagramFamilySequence,
+		model.DiagramFamilyClass,
+		model.DiagramFamilyER,
+		model.DiagramFamilyState,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("expected diagram families %v, got %v", want, got)
+	}
+
+	customEngine := engine.NewWithRules(supportedRule{})
+	customGot := customEngine.DiagramFamilies()
+	customWant := []model.DiagramFamily{model.DiagramFamilyFlowchart}
+	if !reflect.DeepEqual(customGot, customWant) {
+		t.Fatalf("expected custom diagram families %v, got %v", customWant, customGot)
 	}
 }
 
