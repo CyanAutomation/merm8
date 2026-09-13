@@ -27,7 +27,7 @@ on:
         type: string
 
 run-name: >-
-  Docs sweep · ${{ github.repository }}@${{ inputs.ref }}
+  Docs sweep · ${{ github.repository }}@${{ inputs.ref || github.event.repository.default_branch }}
 
 permissions:
   contents: read
@@ -117,10 +117,11 @@ jobs:
 
       # Automatically targets the repository containing this workflow.
       REPO_URL: ${{ github.server_url }}/${{ github.repository }}
-      REF: ${{ inputs.ref }}
-      TASK_DESCRIPTION: ${{ inputs.task_description }}
-      ALLOWLIST: ${{ inputs.allowlist }}
-      VALIDATION_COMMAND: ${{ inputs.validation_command }}
+      # Scheduled workflows do not populate workflow_dispatch inputs.
+      REF: ${{ inputs.ref || github.event.repository.default_branch }}
+      TASK_DESCRIPTION: ${{ inputs.task_description || 'Keep README.md and docs/ accurate against the current implementation.' }}
+      ALLOWLIST: ${{ inputs.allowlist || 'README.md,docs/**/*.md' }}
+      VALIDATION_COMMAND: ${{ github.event_name == 'schedule' && 'npm test' || inputs.validation_command }}
 
     steps:
       - name: Check Kaseki availability
