@@ -1380,9 +1380,12 @@ func TestAnalyzeRaw_SyntaxError_IncludesSuggestions(t *testing.T) {
 func TestAnalyze_UnsupportedDiagramType_ReturnsStructuredError(t *testing.T) {
 	diagram := &model.Diagram{Type: model.DiagramTypeSequence}
 
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+	mockP := &mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return diagram, nil, nil
-	})
+	}}
+	mux := http.NewServeMux()
+	h := api.NewHandler(mockP, engine.NewWithRules(rules.NoDuplicateNodeIDs{}))
+	h.RegisterRoutes(mux)
 
 	body, _ := json.Marshal(map[string]string{"code": "sequenceDiagram\n  Alice->>Bob: Hi"})
 	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
@@ -1458,9 +1461,12 @@ func TestAnalyze_UnsupportedDiagramType_ReturnsStructuredError(t *testing.T) {
 func TestAnalyze_UnsupportedDiagramType_IncludesHint(t *testing.T) {
 	diagram := &model.Diagram{Type: model.DiagramTypeSequence}
 
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
+	mockP := &mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return diagram, nil, nil
-	})
+	}}
+	mux := http.NewServeMux()
+	h := api.NewHandler(mockP, engine.NewWithRules(rules.NoDuplicateNodeIDs{}))
+	h.RegisterRoutes(mux)
 
 	body, _ := json.Marshal(map[string]string{"code": "sequenceDiagram\n  Alice->>Bob: Hi"})
 	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
@@ -3044,7 +3050,7 @@ func TestDiagramTypes_ReturnsParserAndLintSupport(t *testing.T) {
 		t.Fatalf("expected parser-recognized=%v, got %v", wantParser, resp.ParserRecognized)
 	}
 
-	wantLint := []string{"flowchart"}
+	wantLint := []string{"flowchart", "sequence", "class", "er", "state"}
 	if !reflect.DeepEqual(resp.LintSupported, wantLint) {
 		t.Fatalf("expected lint-supported=%v, got %v", wantLint, resp.LintSupported)
 	}
@@ -3369,7 +3375,7 @@ func TestAnalyze_Integration_GlobalSuppression(t *testing.T) {
 	}
 }
 
-func TestAnalyze_Integration_UnsupportedDiagramTypes(t *testing.T) {
+func TestAnalyze_Integration_SupportedDiagramFamilies(t *testing.T) {
 	scriptPath := getParserScriptPath(t)
 	mux := newTestMuxWithRealParser(t, scriptPath)
 
@@ -3387,6 +3393,16 @@ func TestAnalyze_Integration_UnsupportedDiagramTypes(t *testing.T) {
 			name:         "sequence diagram",
 			code:         "sequenceDiagram\nAlice->>Bob: Hi",
 			expectedType: "sequence",
+		},
+		{
+			name:         "ER diagram",
+			code:         "erDiagram\nCUSTOMER ||--o{ ORDER : places",
+			expectedType: "er",
+		},
+		{
+			name:         "state diagram",
+			code:         "stateDiagram-v2\n[*] --> Ready\nReady --> [*]",
+			expectedType: "state",
 		},
 	}
 
@@ -3414,8 +3430,8 @@ func TestAnalyze_Integration_UnsupportedDiagramTypes(t *testing.T) {
 			if valid, ok := resp["valid"].(bool); !ok || !valid {
 				t.Fatalf("expected valid=true for parsed diagrams, got %#v", resp["valid"])
 			}
-			if lintSupported, ok := resp["lint-supported"].(bool); !ok || lintSupported {
-				t.Fatalf("expected lint-supported=false, got %#v", resp["lint-supported"])
+			if lintSupported, ok := resp["lint-supported"].(bool); !ok || !lintSupported {
+				t.Fatalf("expected lint-supported=true, got %#v", resp["lint-supported"])
 			}
 			if diagramType, ok := resp["diagram-type"].(string); !ok || diagramType != tt.expectedType {
 				t.Fatalf("expected diagram-type=%s, got %#v", tt.expectedType, resp["diagram-type"])
@@ -3426,19 +3442,14 @@ func TestAnalyze_Integration_UnsupportedDiagramTypes(t *testing.T) {
 				t.Fatalf("expected issues array, got %#v", resp["issues"])
 			}
 
-			foundUnsupportedIssue := false
 			for _, issue := range issues {
 				issueMap, ok := issue.(map[string]interface{})
 				if !ok {
 					continue
 				}
 				if ruleID, ok := issueMap["rule-id"].(string); ok && ruleID == "unsupported-diagram-type" {
-					foundUnsupportedIssue = true
-					break
+					t.Fatalf("did not expect unsupported-diagram-type for %s, got %#v", tt.expectedType, issues)
 				}
-			}
-			if !foundUnsupportedIssue {
-				t.Fatalf("expected issues to contain rule-id=unsupported-diagram-type, got %#v", issues)
 			}
 
 			metrics, ok := resp["metrics"].(map[string]interface{})
@@ -3447,18 +3458,6 @@ func TestAnalyze_Integration_UnsupportedDiagramTypes(t *testing.T) {
 			}
 			if diagramType, ok := metrics["diagram-type"].(string); !ok || diagramType != tt.expectedType {
 				t.Fatalf("expected metrics.diagram-type=%s, got %#v", tt.expectedType, metrics["diagram-type"])
-			}
-			for _, key := range []string{
-				"node-count",
-				"edge-count",
-				"disconnected-node-count",
-				"duplicate-node-count",
-				"max-fanin",
-				"max-fanout",
-			} {
-				if got, ok := metrics[key].(float64); !ok || got != 0 {
-					t.Fatalf("expected metrics.%s=0, got %#v", key, metrics[key])
-				}
 			}
 		})
 	}
@@ -6751,6 +6750,7 @@ func TestAnalyzeRaw_SequenceDiagram(t *testing.T) {
 			{ID: "Alice", Label: "Alice"},
 			{ID: "Bob", Label: "Bob"},
 		},
+		Edges: []model.Edge{{From: "Alice", To: "Carol"}},
 	}
 
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
@@ -6777,8 +6777,16 @@ func TestAnalyzeRaw_SequenceDiagram(t *testing.T) {
 	if diagramType, ok := resp["diagram-type"].(string); !ok || diagramType != "sequence" {
 		t.Errorf("expected diagram-type=sequence, got %v", resp["diagram-type"])
 	}
-	if lintSupported, ok := resp["lint-supported"].(bool); !ok || lintSupported {
-		t.Errorf("expected lint-supported=false for sequence diagram, got %v", resp["lint-supported"])
+	if lintSupported, ok := resp["lint-supported"].(bool); !ok || !lintSupported {
+		t.Errorf("expected lint-supported=true for sequence diagram, got %v", resp["lint-supported"])
+	}
+	issues, ok := resp["issues"].([]interface{})
+	if !ok || len(issues) != 1 {
+		t.Fatalf("expected one sequence-rule issue, got %#v", resp["issues"])
+	}
+	issue, ok := issues[0].(map[string]interface{})
+	if !ok || issue["rule-id"] != "no-undefined-actors" {
+		t.Fatalf("expected no-undefined-actors issue, got %#v", issues[0])
 	}
 }
 

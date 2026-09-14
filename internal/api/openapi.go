@@ -1884,7 +1884,7 @@ var openapi = map[string]interface{}{
 							"type": "string",
 							"enum": []string{"flowchart", "sequence", "class", "er", "state"},
 						},
-						"example": []string{"flowchart"},
+						"example": []string{"flowchart", "sequence", "class", "er", "state"},
 					},
 					"total-requests": map[string]interface{}{
 						"type":    "integer",
@@ -1958,7 +1958,7 @@ var openapi = map[string]interface{}{
 					"parser-version":     "1.0.0",
 					"mermaid-version":    "11.12.3",
 					"parser-recognized":  []string{"flowchart", "sequence", "class", "er", "state"},
-					"lint-supported":     []string{"flowchart"},
+					"lint-supported":     []string{"flowchart", "sequence", "class", "er", "state"},
 					"supported-rules":    []string{"no-cycles", "no-disconnected-nodes"},
 					"supported-rule-ids": []string{"flowchart/no-cycles", "flowchart/no-disconnected-nodes"},
 				},
