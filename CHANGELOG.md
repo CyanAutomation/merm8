@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The default Go lint engine now reports flowchart, sequence, class, ER, and state diagrams as lint-supported and runs each family's registered rules.
+
 ### Fixed
 
 - Removed spoofable request-hostname checks from MCP authorization; MCP access now relies on the configured API key.
