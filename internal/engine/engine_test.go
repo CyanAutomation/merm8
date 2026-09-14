@@ -176,6 +176,28 @@ func TestEngine_NormalizeConfig_NamespacedBuiltInDoesNotWarn(t *testing.T) {
 	}
 }
 
+func TestEngine_NormalizeConfig_LegacyBuiltInWarns(t *testing.T) {
+	e := engine.NewWithRules(rules.MaxFanout{})
+
+	var logs bytes.Buffer
+	previousWriter := log.Writer()
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(previousWriter) })
+
+	normalized, err := e.NormalizeConfig(rules.Config{
+		"max-fanout": {"limit": 2},
+	})
+	if err != nil {
+		t.Fatalf("expected normalization to succeed, got %v", err)
+	}
+	if got := normalized["max-fanout"]["limit"]; got != 2 {
+		t.Fatalf("expected internal max-fanout entry with limit 2, got %#v", normalized)
+	}
+	if got := logs.String(); !strings.Contains(got, `legacy built-in rule id "max-fanout"`) || !strings.Contains(got, "prefer core/max-fanout") {
+		t.Fatalf("expected legacy rule deprecation warning, got %q", got)
+	}
+}
+
 func TestEngine_DuplicateAndDisconnected(t *testing.T) {
 	d := &model.Diagram{
 		Type:  model.DiagramTypeFlowchart,
