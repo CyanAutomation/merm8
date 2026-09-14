@@ -951,7 +951,7 @@ curl http://localhost:8080/v1/version
   "mermaid-version": "11.12.3",
   "parser-timeout-seconds": 5,
   "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
-  "lint-supported": ["flowchart"],
+  "lint-supported": ["flowchart", "sequence", "class", "er", "state"],
   "supported-rules": [
     "max-depth",
     "max-fanout",
@@ -994,7 +994,7 @@ curl http://localhost:8080/v1/spec | jq .
   "build-time": "2026-03-04T00:00:00Z",
   "parser-ready": true,
   "parser-version": "1.0.0",
-  "lint-supported": ["flowchart"],
+  "lint-supported": ["flowchart", "sequence", "class", "er", "state"],
   "total-requests": 500,
   "successful-analyses": {"total": 480, "lint-success": 480},
   "failed-analyses": {"total": 20, "syntax-errors": 10, "other": 5, "parser-timeout": 3, "parser-errors": 2, "internal-errors": 0},
@@ -1012,7 +1012,7 @@ curl http://localhost:8080/v1/spec | jq .
 ```json
 {
   "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
-  "lint-supported": ["flowchart"]
+  "lint-supported": ["flowchart", "sequence", "class", "er", "state"]
 }
 ```
 

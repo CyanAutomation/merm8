@@ -34,12 +34,9 @@ The API response includes two fields that control how you should interpret analy
 {
   "valid": true,                    // Syntax is correct
   "diagram-type": "sequence",       // Type was successfully identified
-  "lint-supported": false,          // Linting rules are not available
+  "lint-supported": true,           // Sequence rules are available
   "syntax-error": null,             // No syntax errors
-  "error": {
-    "code": "unsupported_diagram_type",
-    "message": "diagram type is parsed but linting is not supported"
-  }
+  "issues": []
 }
 ```
 
@@ -57,18 +54,18 @@ The API response includes two fields that control how you should interpret analy
 | Valid flowchart, no issues | true | true | null | [] | Success; diagram is valid and passes all rules |
 | Valid flowchart, has issues | true | true | null | [{rule-id: ..., }] | Success; diagram is valid but has lint violations |
 | Syntax error | false | true | {msg...} | [] | Failure; diagram syntax is invalid |
-| Valid sequence diagram | true | false | null | [{rule-id: "unsupported-diagram-type", ...}] | **Success**; diagram parses but linting is unavailable |
+| Valid sequence diagram | true | true | null | [] or family-specific issues | Success; sequence rules were evaluated |
 | Unsupported diagram (gantt/pie) | false | false | {msg...} | [] | Failure; diagram type not recognized by parser |
 
 ---
 
 ## Key Takeaway
 
-**If you see `valid=true` with `lint-supported=false`, this is NOT an error**. It means:
+**If you see `valid=true` with `lint-supported=false`, the active engine has no registered rules for that family.** It means:
 
 - ✅ Diagram syntax is **correct**
-- ℹ️ Linting is **not available** for this diagram type (yet)
-- ℹ️ Consult the roadmap below to see when rules will be available
+- ℹ️ Linting is **not available in this engine configuration**
+- ℹ️ Query `/v1/diagram-types` to discover the registered families
 
 ---
 
@@ -77,10 +74,10 @@ The API response includes two fields that control how you should interpret analy
 | Diagram Type                 | Parser-Recognized | Lint-Supported | Rules Available                                                                | Status           | Notes                                |
 | ---------------------------- | ----------------- | -------------- | ------------------------------------------------------------------------------ | ---------------- | ------------------------------------ |
 | **flowchart** (aka graph)    | ✅                | ✅             | max-fanout, max-depth, no-cycles, no-disconnected-nodes, no-duplicate-node-ids | ✅ Stable        | Primary use case; all rules active   |
-| **sequence**                 | ✅                | ❌ (planned)   | —                                                                              | 🔜 Planned       | Valid Mermaid; no lint rules yet     |
-| **class**                    | ✅                | ❌ (planned)   | —                                                                              | 🔜 Planned       | Valid Mermaid; no lint rules yet     |
-| **state**                    | ✅                | ❌ (planned)   | —                                                                              | 🔜 Planned       | Valid Mermaid; no lint rules yet     |
-| **er** (entity-relationship) | ✅                | ❌ (planned)   | —                                                                              | 🔜 Planned       | Valid Mermaid; no lint rules yet     |
+| **sequence**                 | ✅                | ✅             | no-undefined-actors, no-duplicate-actors, max-nesting-depth                     | ✅ Supported     | Sequence rules active                |
+| **class**                    | ✅                | ✅             | no-circular-inheritance, no-duplicate-classes, max-inheritance-depth            | ✅ Supported     | Class rules active                   |
+| **state**                    | ✅                | ✅             | no-circular-transitions, no-unreachable-state, max-transitions                   | ✅ Supported     | State rules active                   |
+| **er** (entity-relationship) | ✅                | ✅             | no-circular-chain, no-self-referential                                           | ✅ Supported     | ER rules active                      |
 | **gantt**                    | ❌                | ❌             | —                                                                              | ❌ Not supported | Parser rejects; returns syntax error |
 | **pie**                      | ❌                | ❌             | —                                                                              | ❌ Not supported | Parser rejects; returns syntax error |
 
@@ -148,143 +145,24 @@ All 5 implemented rules run on flowchart diagrams:
 
 ---
 
-## Sequence Diagram (Parser-Recognized, Not Yet Lint-Supported)
+## Sequence Diagram (Lint-Supported)
 
-Valid Mermaid syntax but no rules available yet.
+The default engine evaluates `no-undefined-actors`, `no-duplicate-actors`, and
+`max-nesting-depth`. Successful responses report `"lint-supported": true`.
 
-### Example
+## Class Diagram (Lint-Supported)
 
-```mermaid
-sequenceDiagram
-    participant Alice
-    participant Bob
-    Alice->>John: Hello John, how are you?
-    loop HealthCheck
-        John->>John: Fight against hypochondria
-    end
-    Note right of John: Rational thoughts<br/>prevail...
-    John-->>Alice: Great!
-    John->>Bob: How about you?
-    Bob-->>John: Jolly good!
-```
+The default engine evaluates `no-circular-inheritance`, `no-duplicate-classes`,
+and `max-inheritance-depth`.
 
-### Example Request/Response
+## State Diagram (Lint-Supported)
 
-**Request**:
+The default engine evaluates `no-circular-transitions`, `no-unreachable-state`,
+and `max-transitions`.
 
-```json
-{
-  "code": "sequenceDiagram\n  participant A\n  participant B\n  A->>B: Hello"
-}
-```
+## ER Diagram (Lint-Supported)
 
-**Response** (HTTP 200 OK):
-
-```json
-{
-  "valid": true,
-  "diagram-type": "sequence",
-  "lint-supported": false,
-  "issues": [],
-  "metrics": {
-    "diagram-type": "sequence"
-  }
-}
-```
-
-**Note**: `lint-supported=false` indicates syntax is valid but linting was skipped because no rules are available for this diagram type.
-
----
-
-## Class Diagram (Parser-Recognized, Not Yet Lint-Supported)
-
-Valid Mermaid syntax but no rules available yet.
-
-### Example
-
-```mermaid
-classDiagram
-    class Animal {
-        +String name
-        +int age
-        +makeSound()
-    }
-    class Dog {
-        +bark()
-    }
-    Animal <|-- Dog
-```
-
-### Example Request/Response
-
-**Response** (HTTP 200 OK):
-
-```json
-{
-  "valid": true,
-  "diagram-type": "class",
-  "lint-supported": false,
-  "issues": []
-}
-```
-
----
-
-## State Diagram (Parser-Recognized, Not Yet Lint-Supported)
-
-Valid Mermaid syntax but no rules available yet.
-
-### Example
-
-```mermaid
-stateDiagram-v2
-    [*] --> Still
-    Still --> Moving
-    Moving --> Still
-    Moving --> Crash
-    Crash --> [*]
-```
-
-### Example Request/Response
-
-**Response** (HTTP 200 OK):
-
-```json
-{
-  "valid": true,
-  "diagram-type": "state",
-  "lint-supported": false,
-  "issues": []
-}
-```
-
----
-
-## ER Diagram (Parser-Recognized, Not Yet Lint-Supported)
-
-Valid Mermaid syntax but no rules available yet.
-
-### Example
-
-```mermaid
-erDiagram
-    CUSTOMER ||--o{ ORDER : places
-    ORDER ||--|{ LINE-ITEM : contains
-    CUSTOMER }o--|| INVOICE : "sent"
-```
-
-### Example Request/Response
-
-**Response** (HTTP 200 OK):
-
-```json
-{
-  "valid": true,
-  "diagram-type": "er",
-  "lint-supported": false,
-  "issues": []
-}
-```
+The default engine evaluates `no-circular-chain` and `no-self-referential`.
 
 ---
 
@@ -325,25 +203,11 @@ The following Mermaid diagram types are **not currently supported** and will ret
 
 ---
 
-## Roadmap: Future Lint Support
+## Future Rule Expansion
 
-### Phase 2 (Q3 2026): Sequence Diagram Rules
-
-Planned rules for sequence diagrams:
-
-- **sequence-max-participants**: Limit number of actors (prevent overwhelming diagrams)
-- **sequence-message-ordering**: Ensure messages don't violate actor interaction order
-
-### Phase 3 (Q4 2026): Class Diagram Rules
-
-Planned rules for class diagrams:
-
-- **class-no-orphan-classes**: Ensure all classes are connected to inheritance hierarchy
-- **class-max-depth**: Limit inheritance depth to prevent overly complex hierarchies
-
-### Phase 4 (beyond 2026): ER & State Diagrams
-
-Rules for entity-relationship and state diagrams for completeness.
+All parser-recognized families have an initial rule set. Additional rules may be
+added without changing the family-level capability contract. Query `/v1/rules`
+for the rule IDs registered by a deployment.
 
 ---
 
@@ -377,10 +241,11 @@ for diagram in *.mmd; do
     -d "{\"code\":\"$(cat $diagram)\"}" \
     | jq -r '.diagram-type')
 
-  if [ "$type" == "flowchart" ]; then
+  supported=$(curl -s /v1/diagram-types | jq --arg type "$type" '."lint-supported" | index($type) != null')
+  if [ "$supported" = true ]; then
     echo "✅ $diagram is linted"
   else
-    echo "⚠️  $diagram is recognized but not linted"
+    echo "⚠️  $diagram is recognized but not linted by this engine"
   fi
 done
 ```
@@ -410,7 +275,7 @@ You can configure different rules based on diagram type detected:
 }
 ```
 
-Currently this applies to **all lint-supported diagrams** (flowchart). Once sequence/class rules are available, the same config structure will extend to those types.
+This configuration structure applies to every lint-supported family. Rule IDs are family-specific; query `/v1/rules` for the active registry.
 
 ---
 
@@ -418,11 +283,11 @@ Currently this applies to **all lint-supported diagrams** (flowchart). Once sequ
 
 **Q: My diagram is valid but `lint-supported=false`. Is something wrong?**
 
-A: No, it's working as expected. Parser recognized the diagram type (syntax valid), but no lint rules are available yet for that type. File GitHub issue if you'd like rules for that diagram type.
+A: The parser recognized the syntax, but the active engine has no rules registered for that family. The default Go engine supports flowchart, sequence, class, ER, and state; custom engines may support fewer families.
 
 **Q: Can I lint sequence diagrams now?**
 
-A: No, sequence diagram rules are planned for Q3 2026. For now, sequence diagrams are recognized but not linted.
+A: Yes. The default Go engine includes sequence-specific rules; check `/v1/rules` for the exact active set.
 
 **Q: What if I have a flowchart with mixed subgraph types?**
 
