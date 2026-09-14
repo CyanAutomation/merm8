@@ -230,7 +230,7 @@ Service capability metadata endpoint. Returns kebab-case field names as the cano
   "mermaid-version": "11.12.3",
   "parser-timeout-seconds": 5,
   "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
-  "lint-supported": ["flowchart"],
+  "lint-supported": ["flowchart", "sequence", "class", "er", "state"],
   "supported-rules": [
     "max-depth",
     "max-fanout",
@@ -323,7 +323,7 @@ Extended health status with operational metrics.
   "build-time": "2026-03-04T00:00:00Z",
   "parser-ready": true,
   "parser-version": "1.0.0",
-  "lint-supported": ["flowchart"],
+  "lint-supported": ["flowchart", "sequence", "class", "er", "state"],
   "total-requests": 500,
   "successful-analyses": {
     "total": 480,
@@ -352,7 +352,7 @@ Returns parser-recognized diagram types and lint-supported diagram families.
 ```json
 {
   "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
-  "lint-supported": ["flowchart"]
+  "lint-supported": ["flowchart", "sequence", "class", "er", "state"]
 }
 ```
 

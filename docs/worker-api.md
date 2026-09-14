@@ -18,8 +18,10 @@ specific deployment.
 | `GET` | `/v1/rules` | Available lint rules |
 | `POST` | `/v1/analyze` | Validate Mermaid source and lint supported diagrams |
 
-The Worker recognizes flowchart, sequence, class, ER, and state diagrams. It
-currently lints flowcharts only.
+The Worker recognizes flowchart, sequence, class, ER, and state diagrams. Unlike the
+Go server, whose default engine lints all five families, this smaller Worker runtime
+currently provides only the flowchart rule set. Use `/v1/diagram-types` to discover
+the capabilities of the deployment you are calling.
 
 ## Request limits
 
