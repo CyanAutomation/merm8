@@ -423,7 +423,11 @@
           },
           "lint-supported": {
             "example": [
-              "flowchart"
+              "flowchart",
+              "sequence",
+              "class",
+              "er",
+              "state"
             ],
             "items": {
               "enum": [
@@ -593,7 +597,11 @@
       "InfoResponse": {
         "example": {
           "lint-supported": [
-            "flowchart"
+            "flowchart",
+            "sequence",
+            "class",
+            "er",
+            "state"
           ],
           "mermaid-version": "11.12.3",
           "parser-recognized": [
