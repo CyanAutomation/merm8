@@ -6,6 +6,9 @@ on:
       - "cmd/server/**"
       - "internal/**"
       - "parser-node/**"
+      - "third_party/prometheus/**"
+      - "go.mod"
+      - "go.sum"
       - ".github/workflows/integration-contract-tests.yml"
   push:
     branches: [main]
@@ -13,10 +16,17 @@ on:
       - "cmd/server/**"
       - "internal/**"
       - "parser-node/**"
+      - "third_party/prometheus/**"
+      - "go.mod"
+      - "go.sum"
       - ".github/workflows/integration-contract-tests.yml"
 
 permissions:
   contents: read
+
+concurrency:
+  group: integration-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   contract-integration:
