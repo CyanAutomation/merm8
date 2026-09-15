@@ -44,7 +44,9 @@ jobs:
         run: npm test
 
       - name: Verify Go formatting
-        run: test -z "$(gofmt -l ./cmd ./internal ./benchmarks scripts/*.go)"
+        run: |
+          unformatted_files="$(git ls-files -z -- '*.go' ':!third_party/**' | xargs -0 -r gofmt -l)"
+          test -z "$unformatted_files"
 
       - name: Verify Go modules are tidy
         run: |
