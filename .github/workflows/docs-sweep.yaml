@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 2
     environment: kaseki-docs
     env:
-      KASEKI_BASE_URL: ${{ secrets.KASEKI_BASE_URL }}
+      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
     steps:
       - name: Verify controller health
         shell: bash
@@ -46,7 +46,7 @@ jobs:
     timeout-minutes: 2
     environment: kaseki-docs
     env:
-      KASEKI_BASE_URL: ${{ secrets.KASEKI_BASE_URL }}
+      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
     steps:
       - name: Verify controller readiness
         shell: bash
@@ -70,7 +70,7 @@ jobs:
     timeout-minutes: 2
     environment: kaseki-docs
     env:
-      KASEKI_BASE_URL: ${{ secrets.KASEKI_BASE_URL }}
+      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
       KASEKI_API_TOKEN: ${{ secrets.KASEKI_API_TOKEN }}
     steps:
       - name: Verify gateway connectivity and authentication
@@ -100,7 +100,7 @@ jobs:
     environment: kaseki-docs
     env:
       # Configure this only as a secret in the protected kaseki-docs environment.
-      KASEKI_BASE_URL: ${{ secrets.KASEKI_BASE_URL }}
+      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
 
       # Automatically targets the repository containing this workflow.
       REPO_URL: ${{ github.server_url }}/${{ github.repository }}
