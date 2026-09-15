@@ -170,10 +170,10 @@ bash validate_implementation.sh
 
 ### Running Tests
 
-#### Compile Test Only
+#### Verify Compilation
 
 ```bash
-go test ./internal/api -count=1 -run Compile -v
+go build ./cmd/server
 ```
 
 #### Run Specific Test Suite
@@ -198,7 +198,7 @@ go test ./internal/api -count=1 -timeout 120s -v
 #### Run Specific Test File
 
 ```bash
-go test ./internal/api -count=1 -run handler_help_test.go -v
+go test ./internal/api/handler_help_test.go -count=1 -v
 ```
 
 ### Example Test Commands
