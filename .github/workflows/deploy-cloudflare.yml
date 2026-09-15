@@ -47,7 +47,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - run: npx wrangler deploy --var BUILD_VERSION:$BUILD_SHA --var BUILD_SHA:$BUILD_SHA
+      - run: npx wrangler deploy --var "BUILD_VERSION:$BUILD_SHA" --var "BUILD_SHA:$BUILD_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.cloudflare_api_token || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.cloudflare_account_id || secrets.CLOUDFLARE_ACCOUNT_ID }}
