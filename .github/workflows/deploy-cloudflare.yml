@@ -1,11 +1,24 @@
 name: Deploy Cloudflare Worker
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
+  workflow_call:
+    inputs:
+      build_sha:
+        description: Commit SHA verified by CI and approved for deployment
+        required: true
+        type: string
+    secrets:
+      cloudflare_api_token:
+        required: true
+      cloudflare_account_id:
+        required: true
   workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: Confirm deployment of the selected release tag to production
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -17,29 +30,31 @@ concurrency:
 jobs:
   deploy:
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      github.event_name == 'workflow_call' ||
+      (inputs.confirm_production && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
       name: production
       url: https://merm8.scheimann.workers.dev
     env:
-      BUILD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      BUILD_SHA: ${{ inputs.build_sha || github.sha }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.build_sha || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npx wrangler deploy --var BUILD_VERSION:$BUILD_SHA --var BUILD_SHA:$BUILD_SHA
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.cloudflare_api_token || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.cloudflare_account_id || secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Smoke test deployed Worker
         env:
           MERM8_API_URL: https://merm8.scheimann.workers.dev
+          MERM8_EXPECTED_BUILD_SHA: ${{ inputs.build_sha || github.sha }}
         run: |
           for attempt in 1 2 3 4 5; do
             if node scripts/smoke-worker.mjs; then

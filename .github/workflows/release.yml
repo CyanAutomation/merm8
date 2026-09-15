@@ -12,30 +12,30 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ inputs.version || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  create-release:
+  validate-release-tag:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment:
-      name: production
-    env:
-      VERSION_INPUT: ${{ inputs.version }}
-      GH_TOKEN: ${{ github.token }}
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.release.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Resolve and validate release tag
         id: release
         shell: bash
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
@@ -61,21 +61,70 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+  verify-and-release:
+    needs: validate-release-tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.validate-release-tag.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      PARSER_SCRIPT: ./parser-node/parse.mjs
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.VERSION }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm --prefix parser-node ci
+
+      - name: Verify release tag
+        run: |
+          npm test
+          go vet ./...
+          go test ./... -count=1
+          ./scripts/check_openapi_generated.sh
+          go build ./cmd/server ./cmd/merm8-cli
+
       - name: Create GitHub Release
         shell: bash
         run: |
           set -euo pipefail
-          version="${{ steps.release.outputs.version }}"
           notes_file="$(mktemp)"
-          git for-each-ref "refs/tags/$version" --format='%(contents)' > "$notes_file"
+          trap 'rm -f "$notes_file"' EXIT
+          git for-each-ref "refs/tags/$VERSION" --format='%(contents)' > "$notes_file"
           if [[ ! -s "$notes_file" ]]; then
-            printf 'Release %s\n' "$version" > "$notes_file"
+            printf 'Release %s\n' "$VERSION" > "$notes_file"
           fi
 
-          if [[ "$version" == *-* ]]; then
-            gh release create "$version" --verify-tag --title "$version" \
-              --notes-file "$notes_file" --prerelease
-          else
-            gh release create "$version" --verify-tag --title "$version" \
-              --notes-file "$notes_file"
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "GitHub Release $VERSION already exists; leaving it unchanged."
+            exit 0
           fi
+
+          prerelease_args=()
+          if [[ "$VERSION" == *-* ]]; then
+            prerelease_args+=(--prerelease)
+          fi
+          gh release create "$VERSION" --verify-tag --title "$VERSION" \
+            --notes-file "$notes_file" ${prerelease_args[@]+"${prerelease_args[@]}"}
