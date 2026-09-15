@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Manual production deployments can now use a selected branch or tag after explicit confirmation.
 - Removed spoofable request-hostname checks from MCP authorization; MCP access now relies on the configured API key.
 - Corrected Worker compatibility-date configuration, repeated-node source columns, and malformed JSON error logging.
 - Worker flowchart validation now rejects relations without a destination node, matching Mermaid preview behavior.
