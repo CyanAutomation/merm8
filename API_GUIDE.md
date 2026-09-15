@@ -131,7 +131,7 @@ The Swagger UI provides:
 - **Try it out button** — Execute requests directly from the browser
 - **Example requests** — Pre-filled request templates for common scenarios
 
-### Scraping Service Metrics (`GET /metrics`)
+### Scraping Service Metrics (`GET /v1/metrics`)
 
 The API exposes Prometheus metrics at `GET /v1/metrics` in text exposition format.
 
@@ -143,11 +143,26 @@ Exported metric families and labels:
 | `request_duration_seconds` | Histogram | `route`, `method`           | End-to-end HTTP request duration in seconds, measured in middleware with default Prometheus histogram buckets.                                                                                                         |
 | `analyze_requests_total`   | Counter   | `outcome`                   | Analyze request outcomes. Outcome label values are: `lint_success`, `syntax_error`, `parser_timeout`, `parser_subprocess_error`, `parser_decode_error`, `parser_contract_violation`, `internal_error`.                 |
 | `parser_duration_seconds`  | Histogram | `outcome`                   | Parser invocation duration in seconds by parse/lint outcome (same `outcome` values as above) with default Prometheus histogram buckets.                                                                                |
+| `parser_latency_seconds`       | Histogram | `outcome`                   | Parser request latency in seconds by outcome, with default Prometheus histogram buckets.                                                                                                                       |
+| `rule_execution_duration_seconds` | Histogram | `rule_id`                 | Duration of individual rule executions in seconds, bucketed with default Prometheus histograms.                                                                                                                |
+| `rule_issues_emitted_total`    | Counter   | `rule_id`                   | Total number of issues emitted by each linting rule.                                                                                                                                                           |
+| `rule_violations_by_severity_total` | Counter | `rule_id`, `severity`     | Total violations by rule ID and severity (`error`, `warning`, `info`).                                                                                                                                         |
+| `rule_suppressions_total`      | Counter   | `rule_id`                   | Total suppressions applied per rule.                                                                                                                                                                           |
+| `analysis_latency_seconds`     | Histogram | `diagram_type`              | End-to-end analysis latency in seconds (from parse to linting complete), bucketed with default Prometheus histograms.                                                                                          |
+| `diagram_type_analyzed_total`  | Counter   | `diagram_type`              | Total diagrams analyzed by type.                                                                                                                                                                               |
+| `lint_support_check_total`     | Counter   | `diagram_type`, `result`    | Total lint-support checks by diagram type and result (`supported` or `unsupported`).                                                                                                                           |
+| `cors_rejected_total`          | Counter   | —                           | Total CORS requests rejected because origin is not in the allowlist.                                                                                                                                           |
+| `parser_cache_events_total`    | Counter   | `result`, `entry_type`      | Parser cache events grouped by result (`hit`, `miss`, `eviction`) and entry type (`success`, `syntax`, `any`).                                                                                                 |
 
 Notes:
 
 - `request_*` metrics are emitted for all routes wrapped by API metrics middleware, not only analyze endpoints.
-- `analyze_requests_total` and `parser_duration_seconds` are emitted only from analyze code paths.
+- `analyze_requests_total`, `parser_duration_seconds`, and `parser_latency_seconds` are emitted only from analyze code paths.
+- `rule_*` metrics are emitted per-rule during lint execution.
+- `analysis_latency_seconds` and `diagram_type_analyzed_total` are emitted per analysis request.
+- `lint_support_check_total` is emitted for every diagram type check against the lint capability list.
+- `cors_rejected_total` is emitted whenever a CORS preflight or request is rejected due to disallowed origin.
+- `parser_cache_events_total` is emitted on parser cache hits, misses, and evictions.
 
 Example:
 
@@ -572,7 +587,7 @@ Add jitter (for example ±20% randomization) per attempt to avoid synchronized r
 - **`issues`** — Array of lint rule violations found (always present, empty when there are no issues)
   - `rule-id` — The lint rule that triggered
   - `severity` — One of: `error`, `warning`, `info`
-    - Deprecated alias: `warn` is accepted for backwards compatibility and normalized to `warning`.
+    - Only `error`, `warning`, and `info` are valid; any other value is rejected.
   - `message` — Description of the issue
   - `line` / `column` — Optional location in the diagram code (omitted when unknown)
 - **`issues`** can include findings both with source locations (`line`/`column`) and without them when exact positions are unavailable.
@@ -952,6 +967,13 @@ curl http://localhost:8080/v1/version
   "parser-timeout-seconds": 5,
   "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
   "lint-supported": ["flowchart", "sequence", "class", "er", "state"],
+  "supported-rule-ids": [
+    "max-depth",
+    "max-fanout",
+    "no-cycles",
+    "no-disconnected-nodes",
+    "no-duplicate-node-ids"
+  ],
   "supported-rules": [
     "max-depth",
     "max-fanout",
