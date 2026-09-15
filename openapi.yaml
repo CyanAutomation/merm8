@@ -319,6 +319,10 @@
         "lint-supported":
           "example":
             - "flowchart"
+            - "sequence"
+            - "class"
+            - "er"
+            - "state"
           "items":
             "enum":
               - "flowchart"
@@ -447,6 +451,10 @@
       "example":
         "lint-supported":
           - "flowchart"
+          - "sequence"
+          - "class"
+          - "er"
+          - "state"
         "mermaid-version": "11.12.3"
         "parser-recognized":
           - "flowchart"
