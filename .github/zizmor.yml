@@ -4,4 +4,4 @@
 rules:
   self-repository:
     ignore:
-      - ci.yml:66
+      - ci.yml:68
