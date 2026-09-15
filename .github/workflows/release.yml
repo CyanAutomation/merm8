@@ -127,4 +127,4 @@ jobs:
             prerelease_args+=(--prerelease)
           fi
           gh release create "$VERSION" --verify-tag --title "$VERSION" \
-            --notes-file "$notes_file" "${prerelease_args[@]}"
+            --notes-file "$notes_file" ${prerelease_args[@]+"${prerelease_args[@]}"}
