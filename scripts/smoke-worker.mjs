@@ -1,11 +1,16 @@
 const endpoint = (process.env.MERM8_API_URL ?? "").replace(/\/$/, "");
+const expectedBuildSha = process.env.MERM8_EXPECTED_BUILD_SHA ?? "";
+const requestTimeoutMs = 10_000;
 
 if (!endpoint) {
   throw new Error("MERM8_API_URL is required");
 }
 
 async function request(path, init) {
-  const response = await fetch(`${endpoint}${path}`, init);
+  const response = await fetch(`${endpoint}${path}`, {
+    ...init,
+    signal: AbortSignal.timeout(requestTimeoutMs),
+  });
   if (!response.ok) {
     throw new Error(`${path} returned ${response.status}: ${await response.text()}`);
   }
@@ -15,7 +20,11 @@ async function request(path, init) {
 const health = await request("/v1/healthz");
 const healthPayload = await health.json();
 if (healthPayload.status !== "ok") throw new Error("healthz did not report ok");
-if (!health.headers.get("x-merm8-build")) throw new Error("missing deployment provenance header");
+const deployedBuildSha = health.headers.get("x-merm8-build");
+if (!deployedBuildSha) throw new Error("missing deployment provenance header");
+if (expectedBuildSha && deployedBuildSha !== expectedBuildSha) {
+  throw new Error(`deployment provenance mismatch: expected ${expectedBuildSha}, got ${deployedBuildSha}`);
+}
 
 const spec = await request("/v1/spec");
 const specPayload = await spec.json();

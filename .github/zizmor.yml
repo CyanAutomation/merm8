@@ -1,0 +1,7 @@
+# actionlint v1.7.10 does not yet support GitHub's $/ self-repository syntax for
+# reusable workflows. Keep the locally supported ./ reference until actionlint
+# adds support, and suppress only this compatibility finding.
+rules:
+  self-repository:
+    ignore:
+      - ci.yml:66

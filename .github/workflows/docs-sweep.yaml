@@ -4,30 +4,9 @@ on:
   schedule:
     - cron: "0 6 * * 4"
   workflow_dispatch:
-    inputs:
-      ref:
-        description: Git ref to inspect
-        required: true
-        default: main
-        type: string
-      task_description:
-        description: What Kaseki should do
-        required: true
-        default: Keep README.md and docs/ accurate against the current implementation.
-        type: string
-      allowlist:
-        description: Permitted changed-file patterns, comma-separated
-        required: true
-        default: README.md,docs/**/*.md
-        type: string
-      validation_command:
-        description: Validation command to run (leave blank for none)
-        required: false
-        default: npm run check
-        type: string
 
 run-name: >-
-  Docs sweep · ${{ github.repository }}@${{ inputs.ref || github.event.repository.default_branch }}
+  Docs sweep · ${{ github.repository }}@${{ github.event.repository.default_branch }}
 
 permissions:
   contents: read
@@ -42,12 +21,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
-      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL || 'https://kaseki-tunnel.scheimann.xyz' }}
+      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
     steps:
       - name: Verify controller health
         shell: bash
         run: |
           set -euo pipefail
+          : "${KASEKI_BASE_URL:?KASEKI_BASE_URL is not configured}"
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
@@ -64,12 +44,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
-      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL || 'https://kaseki-tunnel.scheimann.xyz' }}
+      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
     steps:
       - name: Verify controller readiness
         shell: bash
         run: |
           set -euo pipefail
+          : "${KASEKI_BASE_URL:?KASEKI_BASE_URL is not configured}"
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
@@ -86,13 +67,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
-      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL || 'https://kaseki-tunnel.scheimann.xyz' }}
+      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
       KASEKI_API_TOKEN: ${{ secrets.KASEKI_API_TOKEN }}
     steps:
       - name: Verify gateway connectivity and authentication
         shell: bash
         run: |
           set -euo pipefail
+          : "${KASEKI_BASE_URL:?KASEKI_BASE_URL is not configured}"
           : "${KASEKI_API_TOKEN:?KASEKI_API_TOKEN is not configured}"
 
           response_file="$(mktemp)"
@@ -113,19 +95,22 @@ jobs:
     timeout-minutes: 10
     env:
       # Create this as a repository or organization Actions variable.
-      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL || 'https://kaseki-tunnel.scheimann.xyz' }}
+      KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
 
       # Automatically targets the repository containing this workflow.
       REPO_URL: ${{ github.server_url }}/${{ github.repository }}
-      # Scheduled workflows do not populate workflow_dispatch inputs.
-      REF: ${{ inputs.ref || github.event.repository.default_branch }}
-      TASK_DESCRIPTION: ${{ inputs.task_description || 'Keep README.md and docs/ accurate against the current implementation.' }}
-      ALLOWLIST: ${{ inputs.allowlist || 'README.md,docs/**/*.md' }}
-      VALIDATION_COMMAND: ${{ github.event_name == 'schedule' && 'npm test' || inputs.validation_command }}
+      # Keep scheduled and manually dispatched sweeps within the same fixed scope.
+      REF: ${{ github.event.repository.default_branch }}
+      TASK_DESCRIPTION: Keep README.md and docs/ accurate against the current implementation.
+      ALLOWLIST: README.md,docs/**/*.md
+      VALIDATION_COMMAND: npm test
+      IDEMPOTENCY_KEY: docs-sweep-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Check Kaseki availability
         run: |
+          set -euo pipefail
+          : "${KASEKI_BASE_URL:?KASEKI_BASE_URL is not configured}"
           curl --fail --silent --show-error --max-time 20 \
             "$KASEKI_BASE_URL/ready"
 
@@ -135,6 +120,7 @@ jobs:
           KASEKI_API_TOKEN: ${{ secrets.KASEKI_API_TOKEN }}
         run: |
           set -euo pipefail
+          : "${KASEKI_BASE_URL:?KASEKI_BASE_URL is not configured}"
           : "${KASEKI_API_TOKEN:?KASEKI_API_TOKEN is not configured}"
 
           payload="$(
@@ -144,9 +130,11 @@ jobs:
               --arg taskDescription "$TASK_DESCRIPTION" \
               --arg validationCommand "$VALIDATION_COMMAND" \
               --arg allowlist "$ALLOWLIST" \
+              --arg idempotencyKey "$IDEMPOTENCY_KEY" \
               '{
                 repoUrl: $repoUrl,
                 ref: $ref,
+                idempotencyKey: $idempotencyKey,
                 taskMode: "patch",
                 timeoutSeconds: 10800,
                 changedFilesAllowlist: (
@@ -181,6 +169,7 @@ jobs:
           )"
           
           response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
 
           http_status="$(
             curl --silent --show-error \
@@ -195,29 +184,24 @@ jobs:
 
           if [[ ! "$http_status" =~ ^2 ]]; then
             echo "::error title=Kaseki submission failed::Kaseki returned HTTP $http_status"
-            echo "Kaseki response (HTTP $http_status):"
-            cat "$response_file"
 
             {
               echo "## Kaseki submission failed"
               echo
               echo "Kaseki returned HTTP \`$http_status\`."
               echo
-              echo "### Response"
-              echo '```json'
-              jq . "$response_file" 2>/dev/null || cat "$response_file"
-              echo '```'
+              echo "The controller response was withheld from logs and the job summary."
             } >> "$GITHUB_STEP_SUMMARY"
 
             exit 1
           fi
 
-          response="$(<"$response_file")"
-          echo "$response" | jq .
-          run_id="$(echo "$response" | jq -er '.id')"
+          run_id="$(jq -er '.id' "$response_file")"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
       - name: Publish submission details
+        env:
+          KASEKI_RUN_ID: ${{ steps.submit.outputs.run_id }}
         run: |
           {
             echo "## Kaseki submission"
@@ -228,20 +212,17 @@ jobs:
             echo "| Ref | \`$REF\` |"
             echo "| Mode | \`patch\` |"
             echo "| Timeout | 3 hours |"
-            echo "| Kaseki run | \`${{ steps.submit.outputs.run_id }}\` |"
+            echo "| Kaseki run | \`$KASEKI_RUN_ID\` |"
             echo
             echo "### Allowed paths"
             echo '```text'
             echo "$ALLOWLIST" | tr ',' '\n'
             echo '```'
             echo
-            echo "### Task description"
-            echo "$TASK_DESCRIPTION"
-            echo
             echo "### Validation"
             echo '```text'
             echo "${VALIDATION_COMMAND:-No validation command configured}"
             echo '```'
             echo
-            echo "Monitor the run: $KASEKI_BASE_URL/ui"
+            echo "Monitor the run in the configured Kaseki controller UI."
           } >> "$GITHUB_STEP_SUMMARY"
