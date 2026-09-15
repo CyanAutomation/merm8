@@ -260,7 +260,7 @@ jobs:
             sleep 60
           done
 
-          echo "::error title=Kaseki documentation sweep timed out::The controller did not report a terminal result within 185 minutes."
+          echo "::error title=Kaseki documentation sweep timed out::The controller did not report a terminal result within 189 minutes."
           exit 1
 
       - name: Publish submission details
