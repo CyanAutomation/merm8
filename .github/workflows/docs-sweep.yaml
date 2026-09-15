@@ -221,7 +221,7 @@ jobs:
           run_id_uri="$(jq -rn --arg runId "$KASEKI_RUN_ID" '$runId | @uri')"
           response_file=""
           trap 'rm -f "${response_file:-}"' EXIT
-          deadline=$((SECONDS + 11100))
+          deadline=$((SECONDS + 11340))
           while (( SECONDS < deadline )); do
             response_file="$(mktemp)"
             http_status="$(
