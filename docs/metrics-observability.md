@@ -15,7 +15,7 @@ This service exposes two metrics-style endpoints:
 
 ## Metric inventory
 
-### `/metrics` (Prometheus)
+### `GET /v1/metrics` (Prometheus)
 
 | Metric family              | Type      | Labels                      | Unit     | Cardinality notes                                                                                                                                                            |
 | -------------------------- | --------- | --------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -23,6 +23,16 @@ This service exposes two metrics-style endpoints:
 | `request_duration_seconds` | Histogram | `route`, `method`           | seconds  | Same bounded `route` and `method` dimensions; bucket count uses Prometheus default buckets                                                                                   |
 | `analyze_requests_total`   | Counter   | `outcome`                   | requests | `outcome` is bounded enum: `syntax_error`, `lint_success`, `parser_timeout`, `parser_subprocess_error`, `parser_decode_error`, `parser_contract_violation`, `internal_error` |
 | `parser_duration_seconds`  | Histogram | `outcome`                   | seconds  | Same bounded `outcome` enum as above; default buckets                                                                                                                        |
+| `parser_latency_seconds`       | Histogram | `outcome`                   | seconds  | Same bounded outcome enum as above; default buckets                                                                                                                          |
+| `rule_execution_duration_seconds` | Histogram | `rule_id`                 | seconds  | One label per registered rule ID; cardinality grows with custom rules                                                            |
+| `rule_issues_emitted_total`    | Counter   | `rule_id`                   | events   | One label per registered rule ID                                                                                               |
+| `rule_violations_by_severity_total` | Counter | `rule_id`, `severity`     | events   | Three severity labels (`error`, `warning`, `info`) cross-product with rule IDs                                                |
+| `rule_suppressions_total`      | Counter   | `rule_id`                   | events   | One label per registered rule ID                                                                                               |
+| `analysis_latency_seconds`     | Histogram | `diagram_type`              | seconds  | Five diagram type labels; default buckets                                                                  |
+| `diagram_type_analyzed_total`  | Counter   | `diagram_type`              | events   | Five diagram type labels                                                                                            |
+| `lint_support_check_total`     | Counter   | `diagram_type`, `result`    | checks   | Cross-product of diagram types and result (`supported` or `unsupported`)                                                       |
+| `cors_rejected_total`          | Counter   | —                           | requests | No dynamic labels; count of total rejections                                                                                         |
+| `parser_cache_events_total`    | Counter   | `result`, `entry_type`      | events   | Result is one of `hit`, `miss`, `eviction`; entry type is `success`, `syntax`, or `any`                                          |
 
 ### `/v1/internal/metrics` (JSON payload)
 

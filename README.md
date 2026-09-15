@@ -231,6 +231,13 @@ Service capability metadata endpoint. Returns kebab-case field names as the cano
   "parser-timeout-seconds": 5,
   "parser-recognized": ["flowchart", "sequence", "class", "er", "state"],
   "lint-supported": ["flowchart", "sequence", "class", "er", "state"],
+  "supported-rule-ids": [
+    "max-depth",
+    "max-fanout",
+    "no-cycles",
+    "no-disconnected-nodes",
+    "no-duplicate-node-ids"
+  ],
   "supported-rules": [
     "max-depth",
     "max-fanout",
@@ -760,7 +767,7 @@ The following built-in rules are registered automatically via family functions (
 | `no-unreachable-state`   | state          | error    | Flags states unreachable from any initial state.                  |
 | `max-transitions`        | state          | warning  | Flags total transition count exceeding a configurable limit.      |
 
-Severity values are canonicalized to `error`, `warning`, and `info`. The legacy `warn` value is still accepted in config and normalized to `warning`.
+Severity values are canonicalized to `error`, `warning`, and `info`. Invalid severity values (including `warn`) are rejected as unsupported.
 
 Default `max-fanout` limit: **5**.
 Default `max-depth` limit: **8**.
