@@ -92,6 +92,36 @@ test("honours splash nested rule configuration", async () => {
   assert.ok(!result.issues.some(issue => issue["rule-id"] === "no-disconnected-nodes"));
 });
 
+test("reports when a recognized diagram type has no Worker lint rules", async () => {
+  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: "sequenceDiagram\nAlice->>Bob: Hello" }),
+  }), env);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    valid: true,
+    "diagram-type": "sequence",
+    "lint-supported": false,
+    issues: [],
+  });
+});
+
+test("rejects malformed max-fanout configuration instead of silently using defaults", async () => {
+  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      code: "flowchart TD\nA --> B",
+      config: { rules: { "max-fanout": { limit: "five" } } },
+    }),
+  }), env);
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: { code: "invalid_option", message: "max-fanout.limit must be a non-negative integer" },
+  });
+});
+
 test("does not confuse edge references with duplicate node declarations", async () => {
   const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
