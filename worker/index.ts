@@ -12,6 +12,7 @@ const ruleMetadata = [
   { id: "no-disconnected-nodes", description: "Disallow nodes that have no connections.", severity: "error" },
   { id: "no-duplicate-node-ids", description: "Disallow repeated node IDs.", severity: "error" },
 ] as const;
+const supportedRuleIds = new Set<string>(ruleMetadata.map(rule => rule.id));
 
 function corsHeaders(request: Request, env: Env): HeadersInit {
   const origin = request.headers.get("origin");
@@ -45,6 +46,42 @@ function ruleConfig(value: unknown): Record<string, Record<string, unknown>> {
     return nestedRules as Record<string, Record<string, unknown>>;
   }
   return config as Record<string, Record<string, unknown>>;
+}
+
+function validateRuleConfig(value: unknown): { code: string; message: string } | null {
+  if (value === undefined) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { code: "invalid_request", message: "config must be an object" };
+  }
+
+  const config = value as Record<string, unknown>;
+  const candidate = "rules" in config ? config.rules : config;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return { code: "invalid_request", message: "config.rules must be an object" };
+  }
+
+  for (const [ruleId, options] of Object.entries(candidate as Record<string, unknown>)) {
+    if (candidate === config && ruleId === "schema-version") continue;
+    if (!supportedRuleIds.has(ruleId)) {
+      return { code: "unknown_rule", message: `unknown rule: ${ruleId}` };
+    }
+    if (!options || typeof options !== "object" || Array.isArray(options)) {
+      return { code: "invalid_option", message: `${ruleId} configuration must be an object` };
+    }
+    const optionRecord = options as Record<string, unknown>;
+    if ("enabled" in optionRecord && typeof optionRecord.enabled !== "boolean") {
+      return { code: "invalid_option", message: `${ruleId}.enabled must be a boolean` };
+    }
+    if ("severity" in optionRecord && !["error", "warning", "info"].includes(String(optionRecord.severity))) {
+      return { code: "invalid_option", message: `${ruleId}.severity must be error, warning, or info` };
+    }
+    if (ruleId === "max-fanout" && "limit" in optionRecord &&
+      (!Number.isInteger(optionRecord.limit) || (optionRecord.limit as number) < 0)) {
+      return { code: "invalid_option", message: "max-fanout.limit must be a non-negative integer" };
+    }
+  }
+
+  return null;
 }
 
 async function parseAnalyzeBody(request: Request): Promise<{ body?: { code?: unknown; config?: unknown }; response?: Response }> {
@@ -88,6 +125,8 @@ export default {
         if (parsed.response) return parsed.response;
         const body = parsed.body!;
         if (typeof body.code !== "string") return json({ error: { code: "invalid_request", message: "code must be a string" } }, 400);
+        const configError = validateRuleConfig(body.config);
+        if (configError) return json({ error: configError }, 400);
         return json(analyzeMermaid(body.code, ruleConfig(body.config)));
       }
       return json({ error: { code: "not_found", message: "Not found" } }, 404);
