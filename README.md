@@ -459,7 +459,9 @@ Returns config schema version compatibility information, deprecation details, an
 >
 > During Phase 1, legacy flat/nested shapes and snake_case keys are still accepted with deprecation signals (`Deprecation`/`Warning` headers and response `warnings`).
 >
-> Unknown rule IDs in config are rejected with machine-readable `400 unknown_rule`. Unsupported versions are rejected with `400 unsupported_schema_version` and `supported: ["v1"]`.
+> **Lenient (default):** Unknown or cross-diagram-type rules are silently skipped; the response includes deprecation warnings in `warnings[]`. Clients can send universal rule configs without diagram-specific filtering.
+
+> **Strict opt-in:** Set `STRICT_CONFIG_SCHEMA=true` (or `1`) for strict validation. Under strict mode, unknown rule IDs return HTTP 400 with `error.code = unknown_rule` and `hints[]` with suggested corrections. Unsupported schema versions return `400 unsupported_schema_version` with `supported: ["v1"]`.
 >
 > Tip: fetch `GET /v1/rules/schema` and validate config client-side before sending requests.
 
@@ -1057,7 +1059,9 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Future Roadmap
 
-- [~] Incrementally roll out family-specific rules for sequence/class/ER/state diagrams
+- [x] Sequence, class, ER, and state rule families implemented (16 total rules across 5 families)
+  - `/v1/rules` currently surfaces metadata only for the 5 flowchart-family rules; other families tracked in registry
+  - Engine runs all registered rules against recognized diagram types at runtime
 - [x] `no-cycles` rule for flowcharts
 - [x] `max-depth` rule
 - [x] Per-rule suppression comments in diagram source
