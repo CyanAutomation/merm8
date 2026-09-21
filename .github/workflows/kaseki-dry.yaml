@@ -2,8 +2,7 @@ name: Kaseki DRY Sweep
 
 on:
   schedule:
-    # Run weekly on Thursday at 06:00 UTC.
-    - cron: "0 6 * * 4"
+    - cron: "0 6 * * 5"
   workflow_dispatch:
 
 run-name: >-
