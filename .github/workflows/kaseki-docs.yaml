@@ -97,7 +97,7 @@ jobs:
     runs-on: ubuntu-latest
     # Kaseki accepts a three-hour task budget; leave time to observe its terminal result.
     timeout-minutes: 190
-    environment: kaseki-docs
+    environment: kaseki-agent
     env:
       # Configure this only as a secret in the protected kaseki-docs environment.
       KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
