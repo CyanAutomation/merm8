@@ -265,7 +265,7 @@ jobs:
                 ;;
 
               queued|running)
-                echo "Kaseki status: $status"
+                echo "Kaseki status: $status (attempt $attempt/185)"
                 sleep 60
                 ;;
 
