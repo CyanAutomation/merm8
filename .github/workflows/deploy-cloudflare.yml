@@ -28,10 +28,66 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A called workflow inherits its caller's github.event_name, so build_sha
+  # identifies a reusable-workflow invocation regardless of the caller event.
+  verify-deploy-commit:
+    if: >-
+      inputs.build_sha != '' ||
+      (github.event_name == 'workflow_dispatch' && inputs.confirm_production)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    env:
+      BUILD_SHA: ${{ inputs.build_sha || github.sha }}
+      IS_REUSABLE_CALL: ${{ inputs.build_sha != '' }}
+    steps:
+      - name: Checkout requested commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.BUILD_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify commit and manual CI status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$BUILD_SHA" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
+            echo "Deployment input must be a full commit SHA." >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$BUILD_SHA"
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$BUILD_SHA" origin/main; then
+            echo "Deployment commit is not reachable from main." >&2
+            exit 1
+          fi
+
+          if [[ "$IS_REUSABLE_CALL" != "true" ]]; then
+            if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+              echo "Manual production deployments must be dispatched from main." >&2
+              exit 1
+            fi
+
+            runs="$(gh run list --workflow ci.yml --commit "$BUILD_SHA" \
+              --json headSha,headBranch,event,status,conclusion --limit 100)"
+            if ! jq -e --arg sha "$BUILD_SHA" \
+              'any(.[]; .headSha == $sha and .headBranch == "main" and .event == "push" and .status == "completed" and .conclusion == "success")' \
+              <<< "$runs" >/dev/null; then
+              echo "No successful CI push run was found for $BUILD_SHA; refusing to deploy." >&2
+              exit 1
+            fi
+          fi
+
   deploy:
     if: >-
-      github.event_name == 'workflow_call' ||
+      inputs.build_sha != '' ||
       (github.event_name == 'workflow_dispatch' && inputs.confirm_production)
+    needs: verify-deploy-commit
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:

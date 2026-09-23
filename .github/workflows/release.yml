@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       version: ${{ steps.release.outputs.version }}
+      commit: ${{ steps.release.outputs.commit }}
     steps:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -60,25 +61,24 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$tag_commit" >> "$GITHUB_OUTPUT"
 
-  verify-and-release:
+  verify-release:
     needs: validate-release-tag
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment:
-      name: production
     permissions:
-      contents: write
+      contents: read
     env:
       VERSION: ${{ needs.validate-release-tag.outputs.version }}
-      GH_TOKEN: ${{ github.token }}
+      RELEASE_COMMIT: ${{ needs.validate-release-tag.outputs.commit }}
       PARSER_SCRIPT: ./parser-node/parse.mjs
     steps:
-      - name: Checkout release tag
+      - name: Checkout validated commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ env.VERSION }}
-          fetch-depth: 0
+          ref: ${{ env.RELEASE_COMMIT }}
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Set up Node
@@ -100,14 +100,54 @@ jobs:
 
       - name: Verify release tag
         run: |
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
           npm test
           go vet ./...
           go test ./... -count=1
           ./scripts/check_openapi_generated.sh
           go build ./cmd/server ./cmd/merm8-cli
 
+  publish-release:
+    needs: [validate-release-tag, verify-release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: production
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.validate-release-tag.outputs.version }}
+      RELEASE_COMMIT: ${{ needs.validate-release-tag.outputs.commit }}
+    steps:
+      - name: Checkout validated commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.RELEASE_COMMIT }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Revalidate tag before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
+          git fetch --force origin "refs/tags/$VERSION:refs/tags/$VERSION"
+          tag_commit="$(git rev-list -n 1 "refs/tags/$VERSION")"
+          if [[ "$tag_commit" != "$RELEASE_COMMIT" ]]; then
+            echo "Release tag $VERSION moved after verification; refusing to publish." >&2
+            exit 1
+          fi
+
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main; then
+            echo "Release commit is no longer reachable from main; refusing to publish." >&2
+            exit 1
+          fi
+
       - name: Create GitHub Release
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           notes_file="$(mktemp)"
