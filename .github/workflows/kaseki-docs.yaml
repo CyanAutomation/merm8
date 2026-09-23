@@ -24,6 +24,11 @@ jobs:
     env:
       KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate Kaseki URL
+        run: node scripts/validate-kaseki-url.mjs
       - name: Verify controller health
         shell: bash
         run: |
@@ -32,7 +37,7 @@ jobs:
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
-          curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
+          curl --proto '=https' --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
             --connect-timeout 10 --max-time 20 \
             --output "$response_file" \
             "$KASEKI_BASE_URL/health"
@@ -48,6 +53,11 @@ jobs:
     env:
       KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate Kaseki URL
+        run: node scripts/validate-kaseki-url.mjs
       - name: Verify controller readiness
         shell: bash
         run: |
@@ -56,7 +66,7 @@ jobs:
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
-          curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
+          curl --proto '=https' --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
             --connect-timeout 10 --max-time 20 \
             --output "$response_file" \
             "$KASEKI_BASE_URL/ready"
@@ -71,10 +81,16 @@ jobs:
     environment: kaseki-agent
     env:
       KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
-      KASEKI_API_TOKEN: ${{ secrets.KASEKI_API_TOKEN }}
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate Kaseki URL
+        run: node scripts/validate-kaseki-url.mjs
       - name: Verify gateway connectivity and authentication
         shell: bash
+        env:
+          KASEKI_API_TOKEN: ${{ secrets.KASEKI_API_TOKEN }}
         run: |
           set -euo pipefail
           : "${KASEKI_BASE_URL:?KASEKI_BASE_URL is not configured}"
@@ -83,7 +99,7 @@ jobs:
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
-          curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
+          curl --proto '=https' --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
             --connect-timeout 10 --max-time 60 \
             --output "$response_file" \
             --header "Authorization: Bearer $KASEKI_API_TOKEN" \
@@ -111,11 +127,16 @@ jobs:
       VALIDATION_COMMAND: npm test
 
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate Kaseki URL
+        run: node scripts/validate-kaseki-url.mjs
       - name: Check Kaseki availability
         run: |
           set -euo pipefail
           : "${KASEKI_BASE_URL:?KASEKI_BASE_URL is not configured}"
-          curl --fail --silent --show-error --max-time 20 \
+          curl --proto '=https' --fail --silent --show-error --max-time 20 \
             "$KASEKI_BASE_URL/ready"
 
       - name: Submit documentation sweep
@@ -225,7 +246,7 @@ jobs:
           while (( SECONDS < deadline )); do
             response_file="$(mktemp)"
             http_status="$(
-              curl --silent --show-error \
+              curl --proto '=https' --silent --show-error \
                 --connect-timeout 10 --max-time 30 \
                 --output "$response_file" \
                 --write-out '%{http_code}' \

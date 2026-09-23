@@ -26,12 +26,11 @@ jobs:
     timeout-minutes: 200
 
     # Configure KASEKI_API_TOKEN as a secret and KASEKI_BASE_URL as an
-    # environment variable.
+    # environment variable. Any valid HTTPS endpoint may be used.
     environment: kaseki-agent
 
     env:
       KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
-      KASEKI_API_TOKEN: ${{ secrets.KASEKI_API_TOKEN }}
 
       REPO_URL: ${{ github.server_url }}/${{ github.repository }}
       REF: ${{ github.event.repository.default_branch }}
@@ -45,23 +44,12 @@ jobs:
       VALIDATION_COMMAND: npm run check
 
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
       - name: Validate Kaseki configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          : "${KASEKI_BASE_URL:?Configure KASEKI_BASE_URL as an environment variable}"
-          : "${KASEKI_API_TOKEN:?Configure KASEKI_API_TOKEN as an environment secret}"
-
-          if [[ ! "$KASEKI_BASE_URL" =~ ^https:// ]]; then
-            echo "::error title=Invalid Kaseki URL::KASEKI_BASE_URL must use HTTPS"
-            exit 1
-          fi
-
-          if [[ "$KASEKI_BASE_URL" =~ [@[:space:]] ]]; then
-            echo "::error title=Invalid Kaseki URL::KASEKI_BASE_URL must not contain credentials or whitespace"
-            exit 1
-          fi
+        run: node scripts/validate-kaseki-url.mjs
 
       - name: Verify controller health
         shell: bash
@@ -71,7 +59,7 @@ jobs:
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
-          curl --fail-with-body --silent --show-error \
+          curl --proto '=https' --fail-with-body --silent --show-error \
             --retry 3 --retry-all-errors \
             --connect-timeout 10 --max-time 20 \
             --output "$response_file" \
@@ -89,7 +77,7 @@ jobs:
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
-          curl --fail-with-body --silent --show-error \
+          curl --proto '=https' --fail-with-body --silent --show-error \
             --retry 3 --retry-all-errors \
             --connect-timeout 10 --max-time 20 \
             --output "$response_file" \
@@ -101,13 +89,16 @@ jobs:
 
       - name: Verify gateway connectivity and authentication
         shell: bash
+        env:
+          KASEKI_API_TOKEN: ${{ secrets.KASEKI_API_TOKEN }}
         run: |
           set -euo pipefail
+          : "${KASEKI_API_TOKEN:?Configure KASEKI_API_TOKEN as an environment secret}"
 
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
-          curl --fail-with-body --silent --show-error \
+          curl --proto '=https' --fail-with-body --silent --show-error \
             --retry 3 --retry-all-errors \
             --connect-timeout 10 --max-time 60 \
             --output "$response_file" \
@@ -121,8 +112,11 @@ jobs:
       - name: Submit DRY sweep
         id: submit
         shell: bash
+        env:
+          KASEKI_API_TOKEN: ${{ secrets.KASEKI_API_TOKEN }}
         run: |
           set -euo pipefail
+          : "${KASEKI_API_TOKEN:?Configure KASEKI_API_TOKEN as an environment secret}"
 
           idempotency_key="$(
             tr '[:upper:]' '[:lower:]' < /proc/sys/kernel/random/uuid
@@ -140,6 +134,7 @@ jobs:
                 repoUrl: $repoUrl,
                 ref: $ref,
                 taskMode: "patch",
+                publishMode: "pr",
                 timeoutSeconds: 10800,
                 idempotencyKey: $idempotencyKey,
 
@@ -237,6 +232,7 @@ jobs:
         shell: bash
         env:
           RUN_ID: ${{ steps.submit.outputs.run_id }}
+          KASEKI_API_TOKEN: ${{ secrets.KASEKI_API_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -246,7 +242,7 @@ jobs:
           # Kaseki can run for up to three hours. Poll a little longer so a
           # terminal result created near that limit is still observed.
           for attempt in $(seq 1 185); do
-            curl --fail-with-body --silent --show-error \
+            curl --proto '=https' --fail-with-body --silent --show-error \
               --retry 3 --retry-all-errors \
               --connect-timeout 10 --max-time 60 \
               --output "$response_file" \
@@ -269,7 +265,7 @@ jobs:
                 ;;
 
               queued|running)
-                echo "Kaseki status: $status"
+                echo "Kaseki status: $status (attempt $attempt/185)"
                 sleep 60
                 ;;
 
