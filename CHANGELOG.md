@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Escaped newline characters in Prometheus metric label values.
 - Worker analysis now reports `lint-supported=false` for recognized diagram types
   without Worker rules, and rejects malformed rule configuration instead of silently
   falling back to defaults.

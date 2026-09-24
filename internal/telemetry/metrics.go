@@ -3,11 +3,10 @@ package telemetry
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/CyanAutomation/merm8/internal/engine"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
@@ -22,93 +21,43 @@ const (
 )
 
 type Metrics struct {
-	registry *prometheus.Registry
+	collectors []prometheusMetric
 
-	requestTotal          *prometheus.CounterVec
-	requestDuration       *prometheus.HistogramVec
-	analyzeRequests       *prometheus.CounterVec
-	parserDuration        *prometheus.HistogramVec
-	parserLatency         *prometheus.HistogramVec // request latency histogram (alias for clearer metric naming)
-	ruleExecutionTime     *prometheus.HistogramVec
-	ruleIssuesEmitted     *prometheus.CounterVec
-	ruleViolationsBySev   *prometheus.CounterVec   // per-rule violations by severity
-	ruleSuppressions      *prometheus.CounterVec   // per-rule suppression counts
-	analysisLatency       *prometheus.HistogramVec // analysis end-to-end latency
-	diagramTypeAnalyzed   *prometheus.CounterVec   // analyses by diagram type
-	lintSupportCheckCount *prometheus.CounterVec   // count of lint-support checks by result
-	corsRejectedTotal     *prometheus.CounterVec   // total rejected CORS origins
-	parserCacheEvents     *prometheus.CounterVec   // parser cache events by result and entry type
+	requestTotal          *counterVec
+	requestDuration       *histogramVec
+	analyzeRequests       *counterVec
+	parserDuration        *histogramVec
+	parserLatency         *histogramVec // request latency histogram (alias for clearer metric naming)
+	ruleExecutionTime     *histogramVec
+	ruleIssuesEmitted     *counterVec
+	ruleViolationsBySev   *counterVec   // per-rule violations by severity
+	ruleSuppressions      *counterVec   // per-rule suppression counts
+	analysisLatency       *histogramVec // analysis end-to-end latency
+	diagramTypeAnalyzed   *counterVec   // analyses by diagram type
+	lintSupportCheckCount *counterVec   // count of lint-support checks by result
+	corsRejectedTotal     *counterVec   // total rejected CORS origins
+	parserCacheEvents     *counterVec   // parser cache events by result and entry type
 }
 
 func NewMetrics() *Metrics {
-	registry := prometheus.NewRegistry()
-
 	m := &Metrics{
-		registry: registry,
-		requestTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "request_total",
-			Help: "Total number of HTTP requests by route, method, and status.",
-		}, []string{"route", "method", "status"}),
-		requestDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "request_duration_seconds",
-			Help:    "Duration of HTTP requests in seconds by route and method.",
-			Buckets: prometheus.DefBuckets,
-		}, []string{"route", "method"}),
-		analyzeRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "analyze_requests_total",
-			Help: "Total analyze requests by outcome.",
-		}, []string{"outcome"}),
-		parserDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "parser_duration_seconds",
-			Help:    "Duration of parser invocations in seconds by outcome.",
-			Buckets: prometheus.DefBuckets,
-		}, []string{"outcome"}),
-		parserLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "parser_latency_seconds",
-			Help:    "Parser request latency in seconds by outcome.",
-			Buckets: prometheus.DefBuckets,
-		}, []string{"outcome"}),
-		ruleExecutionTime: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "rule_execution_duration_seconds",
-			Help:    "Duration of individual rule executions in seconds.",
-			Buckets: prometheus.DefBuckets,
-		}, []string{"rule_id"}),
-		ruleIssuesEmitted: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "rule_issues_emitted_total",
-			Help: "Total number of issues emitted by each linting rule.",
-		}, []string{"rule_id"}),
-		ruleViolationsBySev: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "rule_violations_by_severity_total",
-			Help: "Total violations by rule ID and severity (error, warning, info).",
-		}, []string{"rule_id", "severity"}),
-		ruleSuppressions: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "rule_suppressions_total",
-			Help: "Total suppressions applied by rule ID.",
-		}, []string{"rule_id"}),
-		analysisLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "analysis_latency_seconds",
-			Help:    "End-to-end analysis latency in seconds (from parse to linting complete).",
-			Buckets: prometheus.DefBuckets,
-		}, []string{"diagram_type"}),
-		diagramTypeAnalyzed: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "diagram_type_analyzed_total",
-			Help: "Total diagrams analyzed by type.",
-		}, []string{"diagram_type"}),
-		lintSupportCheckCount: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "lint_support_check_total",
-			Help: "Total lint-support checks by result (supported or unsupported).",
-		}, []string{"diagram_type", "result"}),
-		corsRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "cors_rejected_total",
-			Help: "Total CORS requests rejected because origin is not in the allowlist.",
-		}, []string{}),
-		parserCacheEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "parser_cache_events_total",
-			Help: "Parser cache events grouped by result (hit/miss/eviction) and entry type.",
-		}, []string{"result", "entry_type"}),
+		requestTotal:          newCounterVec("request_total", "Total number of HTTP requests by route, method, and status.", "route", "method", "status"),
+		requestDuration:       newHistogramVec("request_duration_seconds", "Duration of HTTP requests in seconds by route and method.", "route", "method"),
+		analyzeRequests:       newCounterVec("analyze_requests_total", "Total analyze requests by outcome.", "outcome"),
+		parserDuration:        newHistogramVec("parser_duration_seconds", "Duration of parser invocations in seconds by outcome.", "outcome"),
+		parserLatency:         newHistogramVec("parser_latency_seconds", "Parser request latency in seconds by outcome.", "outcome"),
+		ruleExecutionTime:     newHistogramVec("rule_execution_duration_seconds", "Duration of individual rule executions in seconds.", "rule_id"),
+		ruleIssuesEmitted:     newCounterVec("rule_issues_emitted_total", "Total number of issues emitted by each linting rule.", "rule_id"),
+		ruleViolationsBySev:   newCounterVec("rule_violations_by_severity_total", "Total violations by rule ID and severity (error, warning, info).", "rule_id", "severity"),
+		ruleSuppressions:      newCounterVec("rule_suppressions_total", "Total suppressions applied by rule ID.", "rule_id"),
+		analysisLatency:       newHistogramVec("analysis_latency_seconds", "End-to-end analysis latency in seconds (from parse to linting complete).", "diagram_type"),
+		diagramTypeAnalyzed:   newCounterVec("diagram_type_analyzed_total", "Total diagrams analyzed by type.", "diagram_type"),
+		lintSupportCheckCount: newCounterVec("lint_support_check_total", "Total lint-support checks by result (supported or unsupported).", "diagram_type", "result"),
+		corsRejectedTotal:     newCounterVec("cors_rejected_total", "Total CORS requests rejected because origin is not in the allowlist."),
+		parserCacheEvents:     newCounterVec("parser_cache_events_total", "Parser cache events grouped by result (hit/miss/eviction) and entry type.", "result", "entry_type"),
 	}
 
-	registry.MustRegister(
+	m.collectors = []prometheusMetric{
 		m.requestTotal,
 		m.requestDuration,
 		m.analyzeRequests,
@@ -123,7 +72,7 @@ func NewMetrics() *Metrics {
 		m.lintSupportCheckCount,
 		m.corsRejectedTotal,
 		m.parserCacheEvents,
-	)
+	}
 	return m
 }
 
@@ -131,7 +80,14 @@ func (m *Metrics) Handler() http.Handler {
 	if m == nil {
 		return http.NotFoundHandler()
 	}
-	return promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{})
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		var payload strings.Builder
+		for _, collector := range m.collectors {
+			collector.appendPrometheus(&payload)
+		}
+		_, _ = w.Write([]byte(payload.String()))
+	})
 }
 
 func (m *Metrics) ObserveHTTPRequest(route, method string, status int, duration time.Duration) {
@@ -139,36 +95,36 @@ func (m *Metrics) ObserveHTTPRequest(route, method string, status int, duration 
 		return
 	}
 	statusLabel := strconv.Itoa(status)
-	m.requestTotal.WithLabelValues(route, method, statusLabel).Inc()
-	m.requestDuration.WithLabelValues(route, method).Observe(duration.Seconds())
+	m.requestTotal.inc(route, method, statusLabel)
+	m.requestDuration.observe(duration.Seconds(), route, method)
 }
 
 func (m *Metrics) ObserveAnalyzeOutcome(outcome string) {
 	if m == nil {
 		return
 	}
-	m.analyzeRequests.WithLabelValues(CanonicalOutcome(outcome)).Inc()
+	m.analyzeRequests.inc(CanonicalOutcome(outcome))
 }
 
 func (m *Metrics) ObserveParserDuration(outcome string, duration time.Duration) {
 	if m == nil {
 		return
 	}
-	m.parserDuration.WithLabelValues(CanonicalOutcome(outcome)).Observe(duration.Seconds())
+	m.parserDuration.observe(duration.Seconds(), CanonicalOutcome(outcome))
 }
 
 func (m *Metrics) ObserveParserLatency(outcome string, duration time.Duration) {
 	if m == nil {
 		return
 	}
-	m.parserLatency.WithLabelValues(CanonicalOutcome(outcome)).Observe(duration.Seconds())
+	m.parserLatency.observe(duration.Seconds(), CanonicalOutcome(outcome))
 }
 
 func (m *Metrics) ObserveRuleExecutionDuration(ruleID string, duration time.Duration) {
 	if m == nil {
 		return
 	}
-	m.ruleExecutionTime.WithLabelValues(ruleID).Observe(duration.Seconds())
+	m.ruleExecutionTime.observe(duration.Seconds(), ruleID)
 }
 
 func (m *Metrics) ObserveRuleIssuesEmitted(ruleID string, count int) {
@@ -176,7 +132,7 @@ func (m *Metrics) ObserveRuleIssuesEmitted(ruleID string, count int) {
 		return
 	}
 	for i := 0; i < count; i++ {
-		m.ruleIssuesEmitted.WithLabelValues(ruleID).Inc()
+		m.ruleIssuesEmitted.inc(ruleID)
 	}
 }
 
@@ -199,7 +155,7 @@ func (m *Metrics) ObserveRuleViolationBySeverity(ruleID, severity string) {
 	// Validate severity to prevent label cardinality explosion
 	switch severity {
 	case "error", "warning", "info":
-		m.ruleViolationsBySev.WithLabelValues(ruleID, severity).Inc()
+		m.ruleViolationsBySev.inc(ruleID, severity)
 	}
 }
 
@@ -208,7 +164,7 @@ func (m *Metrics) ObserveRuleSuppression(ruleID string) {
 	if m == nil {
 		return
 	}
-	m.ruleSuppressions.WithLabelValues(ruleID).Inc()
+	m.ruleSuppressions.inc(ruleID)
 }
 
 // ObserveAnalysisLatency records the end-to-end analysis latency by diagram type.
@@ -216,7 +172,7 @@ func (m *Metrics) ObserveAnalysisLatency(diagramType string, duration time.Durat
 	if m == nil {
 		return
 	}
-	m.analysisLatency.WithLabelValues(diagramType).Observe(duration.Seconds())
+	m.analysisLatency.observe(duration.Seconds(), diagramType)
 }
 
 // ObserveDiagramTypeAnalyzed records that a diagram of the given type was analyzed.
@@ -224,7 +180,7 @@ func (m *Metrics) ObserveDiagramTypeAnalyzed(diagramType string) {
 	if m == nil {
 		return
 	}
-	m.diagramTypeAnalyzed.WithLabelValues(diagramType).Inc()
+	m.diagramTypeAnalyzed.inc(diagramType)
 }
 
 // ObserveLintSupportCheck records the result of a lint-support check.
@@ -236,7 +192,7 @@ func (m *Metrics) ObserveLintSupportCheck(diagramType string, supported bool) {
 	if supported {
 		result = "supported"
 	}
-	m.lintSupportCheckCount.WithLabelValues(diagramType, result).Inc()
+	m.lintSupportCheckCount.inc(diagramType, result)
 }
 
 // ObserveCORSRejectedOrigin records a rejected CORS request due to disallowed origin.
@@ -244,7 +200,7 @@ func (m *Metrics) ObserveCORSRejectedOrigin() {
 	if m == nil {
 		return
 	}
-	m.corsRejectedTotal.WithLabelValues().Inc()
+	m.corsRejectedTotal.inc()
 }
 
 // ObserveParserCacheEvent records parser cache hit/miss/eviction events.
@@ -262,5 +218,5 @@ func (m *Metrics) ObserveParserCacheEvent(result, entryType string) {
 	default:
 		entryType = "any"
 	}
-	m.parserCacheEvents.WithLabelValues(result, entryType).Inc()
+	m.parserCacheEvents.inc(result, entryType)
 }
