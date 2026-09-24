@@ -74,3 +74,43 @@ func TestObserveParserCacheEvent_NormalizesLabels(t *testing.T) {
 		t.Fatalf("expected parser cache fallback metric, got %q", body)
 	}
 }
+
+func TestMetricsHandlerEscapesNewlinesInLabelValues(t *testing.T) {
+	metrics := NewMetrics()
+	metrics.ObserveRuleExecutionDuration("rule\nline", 500*time.Millisecond)
+
+	response := httptest.NewRecorder()
+	metrics.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+
+	want := "rule_execution_duration_seconds_bucket{rule_id=\"rule\\nline\",le=\"0.5\"} 1\n"
+	if !strings.Contains(response.Body.String(), want) {
+		t.Fatalf("expected escaped histogram label line %q, got body:\n%s", want, response.Body.String())
+	}
+}
+
+func TestMetricsHandlerExportsCountersAndHistogramSummaries(t *testing.T) {
+	metrics := NewMetrics()
+	metrics.ObserveHTTPRequest("/v1/analyze", "POST", 200, 1500*time.Millisecond)
+
+	response := httptest.NewRecorder()
+	metrics.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+
+	if got := response.Header().Get("Content-Type"); got != "text/plain; version=0.0.4; charset=utf-8" {
+		t.Fatalf("unexpected metrics content type %q", got)
+	}
+
+	body := response.Body.String()
+	for _, want := range []string{
+		"# HELP request_total Total number of HTTP requests by route, method, and status.\n",
+		"# TYPE request_total counter\n",
+		"request_total{route=\"/v1/analyze\",method=\"POST\",status=\"200\"} 1\n",
+		"# TYPE request_duration_seconds histogram\n",
+		"request_duration_seconds_bucket{route=\"/v1/analyze\",method=\"POST\",le=\"+Inf\"} 1\n",
+		"request_duration_seconds_sum{route=\"/v1/analyze\",method=\"POST\"} 1.5\n",
+		"request_duration_seconds_count{route=\"/v1/analyze\",method=\"POST\"} 1\n",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("expected metrics output to contain %q, got body:\n%s", want, body)
+		}
+	}
+}
