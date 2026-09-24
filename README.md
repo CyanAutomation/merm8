@@ -1,4 +1,5 @@
 [![CI](https://github.com/CyanAutomation/merm8/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/CyanAutomation/merm8/actions/workflows/ci.yml) [![Workflow Lint](https://github.com/CyanAutomation/merm8/actions/workflows/workflow-lint.yml/badge.svg?branch=main)](https://github.com/CyanAutomation/merm8/actions/workflows/workflow-lint.yml) [![OpenAPI Sync](https://github.com/CyanAutomation/merm8/actions/workflows/openapi-sync.yml/badge.svg?branch=main)](https://github.com/CyanAutomation/merm8/actions/workflows/openapi-sync.yml) [![Deploy Cloudflare Worker](https://github.com/CyanAutomation/merm8/actions/workflows/deploy-cloudflare.yml/badge.svg?branch=main)](https://github.com/CyanAutomation/merm8/actions/workflows/deploy-cloudflare.yml)
+[![integration-contract-tests](https://github.com/CyanAutomation/merm8/actions/workflows/integration-contract-tests.yml/badge.svg)](https://github.com/CyanAutomation/merm8/actions/workflows/integration-contract-tests.yml)
 
 # merm8 — mermaid-lint
 
