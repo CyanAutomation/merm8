@@ -50,11 +50,9 @@ func (c *parseCache) getSuccess(key string) (*model.Diagram, bool) {
 		return nil, false
 	}
 	c.entries.RLock()
-	v, ok, evicted := c.success.Get(key)
+	v, ok, removed := c.success.Get(key)
 	c.entries.RUnlock()
-	for i := 0; i < evicted; i++ {
-		c.observe("eviction", "success")
-	}
+	c.observeRemovals(removed, "success")
 	if !ok {
 		c.observe("miss", "success")
 		return nil, false
@@ -68,23 +66,24 @@ func (c *parseCache) get(key string) (*model.Diagram, *SyntaxError, bool) {
 		return nil, nil, false
 	}
 	c.entries.RLock()
-	if v, ok, evicted := c.success.Get(key); ok {
+	v, successOK, successRemoved := c.success.Get(key)
+	if successOK {
 		c.entries.RUnlock()
-		for i := 0; i < evicted; i++ {
-			c.observe("eviction", "success")
-		}
+		c.observeRemovals(successRemoved, "success")
 		c.observe("hit", "success")
 		return cloneDiagram(v), nil, true
 	}
-	if v, ok, evicted := c.syntax.Get(key); ok {
+	syntaxErr, syntaxOK, syntaxRemoved := c.syntax.Get(key)
+	if syntaxOK {
 		c.entries.RUnlock()
-		for i := 0; i < evicted; i++ {
-			c.observe("eviction", "syntax")
-		}
+		c.observeRemovals(successRemoved, "success")
+		c.observeRemovals(syntaxRemoved, "syntax")
 		c.observe("hit", "syntax")
-		return nil, cloneSyntaxError(v), true
+		return nil, cloneSyntaxError(syntaxErr), true
 	}
 	c.entries.RUnlock()
+	c.observeRemovals(successRemoved, "success")
+	c.observeRemovals(syntaxRemoved, "syntax")
 	c.observe("miss", "any")
 	return nil, nil, false
 }
@@ -95,11 +94,9 @@ func (c *parseCache) putSuccess(key string, diagram *model.Diagram) {
 	}
 	c.entries.Lock()
 	c.syntax.Delete(key)
-	evicted := c.success.Set(key, cloneDiagram(diagram))
+	removed := c.success.Set(key, cloneDiagram(diagram))
 	c.entries.Unlock()
-	if evicted {
-		c.observe("eviction", "success")
-	}
+	c.observeRemovals(removed, "success")
 }
 
 func (c *parseCache) putSyntax(key string, syntaxErr *SyntaxError) {
@@ -108,10 +105,14 @@ func (c *parseCache) putSyntax(key string, syntaxErr *SyntaxError) {
 	}
 	c.entries.Lock()
 	c.success.Delete(key)
-	evicted := c.syntax.Set(key, cloneSyntaxError(syntaxErr))
+	removed := c.syntax.Set(key, cloneSyntaxError(syntaxErr))
 	c.entries.Unlock()
-	if evicted {
-		c.observe("eviction", "syntax")
+	c.observeRemovals(removed, "syntax")
+}
+
+func (c *parseCache) observeRemovals(removed int, entryType string) {
+	for i := 0; i < removed; i++ {
+		c.observe("eviction", entryType)
 	}
 }
 
@@ -130,6 +131,7 @@ type lruTTLCache[T any] struct {
 	maxSize int
 	entries map[string]*list.Element
 	order   *list.List
+	now     func() time.Time
 }
 
 type lruTTLCacheEntry[T any] struct {
@@ -144,6 +146,7 @@ func newLRUTTLCache[T any](maxSize int, ttl time.Duration) *lruTTLCache[T] {
 		maxSize: maxSize,
 		entries: make(map[string]*list.Element),
 		order:   list.New(),
+		now:     time.Now,
 	}
 }
 
@@ -153,7 +156,8 @@ func (c *lruTTLCache[T]) Get(key string) (T, bool, int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	evicted := c.evictExpiredLocked(time.Now())
+	now := c.now()
+	evicted := c.evictExpiredLocked(now)
 
 	elem, ok := c.entries[key]
 	if !ok {
@@ -161,7 +165,7 @@ func (c *lruTTLCache[T]) Get(key string) (T, bool, int) {
 	}
 
 	entry := elem.Value.(*lruTTLCacheEntry[T])
-	if time.Now().After(entry.expiresAt) {
+	if now.After(entry.expiresAt) {
 		c.removeElementLocked(elem)
 		return zero, false, evicted + 1
 	}
@@ -170,19 +174,19 @@ func (c *lruTTLCache[T]) Get(key string) (T, bool, int) {
 	return entry.value, true, evicted
 }
 
-func (c *lruTTLCache[T]) Set(key string, value T) bool {
+func (c *lruTTLCache[T]) Set(key string, value T) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	now := time.Now()
-	c.evictExpiredLocked(now)
+	now := c.now()
+	removed := c.evictExpiredLocked(now)
 
 	if elem, ok := c.entries[key]; ok {
 		entry := elem.Value.(*lruTTLCacheEntry[T])
 		entry.value = value
 		entry.expiresAt = now.Add(c.ttl)
 		c.order.MoveToFront(elem)
-		return false
+		return removed
 	}
 
 	entry := &lruTTLCacheEntry[T]{key: key, value: value, expiresAt: now.Add(c.ttl)}
@@ -193,11 +197,11 @@ func (c *lruTTLCache[T]) Set(key string, value T) bool {
 		oldest := c.order.Back()
 		if oldest != nil {
 			c.removeElementLocked(oldest)
-			return true
+			removed++
 		}
 	}
 
-	return false
+	return removed
 }
 
 func (c *lruTTLCache[T]) Delete(key string) {
