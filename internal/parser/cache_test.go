@@ -1,10 +1,100 @@
 package parser
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/CyanAutomation/merm8/internal/model"
 )
+
+type recordingCacheMetrics struct {
+	events map[string]int
+}
+
+func (m *recordingCacheMetrics) ObserveParserCacheEvent(result, entryType string) {
+	m.events[fmt.Sprintf("%s:%s", result, entryType)]++
+}
+
+func newTestParseCache(now *time.Time, successSize, syntaxSize int, ttl time.Duration) (*parseCache, *recordingCacheMetrics) {
+	clock := func() time.Time { return *now }
+	metrics := &recordingCacheMetrics{events: make(map[string]int)}
+	cache := &parseCache{
+		success: newLRUTTLCache[*model.Diagram](successSize, ttl),
+		syntax:  newLRUTTLCache[*SyntaxError](syntaxSize, ttl),
+	}
+	cache.success.now = clock
+	cache.syntax.now = clock
+	cache.setMetrics(metrics)
+	return cache, metrics
+}
+
+func assertCacheEvents(t *testing.T, metrics *recordingCacheMetrics, expected map[string]int) {
+	t.Helper()
+	if len(metrics.events) != len(expected) {
+		t.Fatalf("unexpected cache events: got %v, want %v", metrics.events, expected)
+	}
+	for event, count := range expected {
+		if got := metrics.events[event]; got != count {
+			t.Errorf("unexpected count for %s: got %d, want %d (all events: %v)", event, got, count, metrics.events)
+		}
+	}
+}
+
+func TestParseCache_GetObservesExpirationsDuringMissByEntryType(t *testing.T) {
+	now := time.Unix(1_000, 0)
+	cache, metrics := newTestParseCache(&now, 4, 4, time.Second)
+	cache.putSuccess("expired-success", &model.Diagram{})
+	cache.putSyntax("expired-syntax", &SyntaxError{Message: "expired"})
+
+	now = now.Add(2 * time.Second)
+	if diagram, syntaxErr, ok := cache.get("missing"); ok || diagram != nil || syntaxErr != nil {
+		t.Fatalf("expected miss, got diagram=%v syntaxErr=%v ok=%v", diagram, syntaxErr, ok)
+	}
+
+	assertCacheEvents(t, metrics, map[string]int{
+		"eviction:success": 1,
+		"eviction:syntax":  1,
+		"miss:any":         1,
+	})
+}
+
+func TestParseCache_GetSuccessObservesExpirationDuringMiss(t *testing.T) {
+	now := time.Unix(2_000, 0)
+	cache, metrics := newTestParseCache(&now, 4, 4, time.Second)
+	cache.putSuccess("expired", &model.Diagram{})
+
+	now = now.Add(2 * time.Second)
+	if diagram, ok := cache.getSuccess("missing"); ok || diagram != nil {
+		t.Fatalf("expected miss, got diagram=%v ok=%v", diagram, ok)
+	}
+
+	assertCacheEvents(t, metrics, map[string]int{
+		"eviction:success": 1,
+		"miss:success":     1,
+	})
+}
+
+func TestParseCache_PutObservesEveryExpirationDuringSet(t *testing.T) {
+	now := time.Unix(3_000, 0)
+	cache, metrics := newTestParseCache(&now, 4, 4, time.Second)
+	cache.putSyntax("first", &SyntaxError{Message: "first"})
+	cache.putSyntax("second", &SyntaxError{Message: "second"})
+
+	now = now.Add(2 * time.Second)
+	cache.putSyntax("replacement", &SyntaxError{Message: "replacement"})
+
+	assertCacheEvents(t, metrics, map[string]int{"eviction:syntax": 2})
+}
+
+func TestParseCache_PutObservesCapacityEviction(t *testing.T) {
+	now := time.Unix(4_000, 0)
+	cache, metrics := newTestParseCache(&now, 1, 1, time.Hour)
+	cache.putSuccess("first", &model.Diagram{})
+	cache.putSuccess("second", &model.Diagram{})
+
+	assertCacheEvents(t, metrics, map[string]int{"eviction:success": 1})
+}
 
 func TestParseCache_GetSuccessReturnedDiagramMutationDoesNotAffectCachedDiagram(t *testing.T) {
 	cache := newParseCache()
