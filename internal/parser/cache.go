@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"container/heap"
 	"container/list"
 	"sync"
 	"time"
@@ -125,13 +126,39 @@ type lruTTLCache[T any] struct {
 	maxSize int
 	entries map[string]*list.Element
 	order   *list.List
+	expiry  expirationHeap
 	now     func() time.Time
 }
 
 type lruTTLCacheEntry[T any] struct {
-	key       string
-	value     T
-	expiresAt time.Time
+	key        string
+	value      T
+	expiresAt  time.Time
+	generation uint64
+}
+
+// expirationRecord is deliberately separate from the LRU list. Records are
+// immutable; when an entry is updated or deleted, its old record is discarded
+// lazily after the generation no longer matches the live entry.
+type expirationRecord struct {
+	key        string
+	expiresAt  time.Time
+	generation uint64
+}
+
+type expirationHeap []expirationRecord
+
+func (h expirationHeap) Len() int           { return len(h) }
+func (h expirationHeap) Less(i, j int) bool { return h[i].expiresAt.Before(h[j].expiresAt) }
+func (h expirationHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *expirationHeap) Push(value any)    { *h = append(*h, value.(expirationRecord)) }
+func (h *expirationHeap) Pop() any {
+	old := *h
+	last := len(old) - 1
+	value := old[last]
+	old[last] = expirationRecord{}
+	*h = old[:last]
+	return value
 }
 
 func newLRUTTLCache[T any](maxSize int, ttl time.Duration) *lruTTLCache[T] {
@@ -185,13 +212,16 @@ func (c *lruTTLCache[T]) Set(key string, value T) int {
 		entry := elem.Value.(*lruTTLCacheEntry[T])
 		entry.value = value
 		entry.expiresAt = now.Add(c.ttl)
+		entry.generation++
+		heap.Push(&c.expiry, expirationRecord{key: key, expiresAt: entry.expiresAt, generation: entry.generation})
 		c.order.MoveToFront(elem)
 		return removed
 	}
 
-	entry := &lruTTLCacheEntry[T]{key: key, value: value, expiresAt: now.Add(c.ttl)}
+	entry := &lruTTLCacheEntry[T]{key: key, value: value, expiresAt: now.Add(c.ttl), generation: 1}
 	elem := c.order.PushFront(entry)
 	c.entries[key] = elem
+	heap.Push(&c.expiry, expirationRecord{key: key, expiresAt: entry.expiresAt, generation: entry.generation})
 
 	if c.order.Len() > c.maxSize {
 		oldest := c.order.Back()
@@ -215,14 +245,18 @@ func (c *lruTTLCache[T]) Delete(key string) {
 
 func (c *lruTTLCache[T]) evictExpiredLocked(now time.Time) int {
 	evicted := 0
-	for elem := c.order.Back(); elem != nil; {
-		prev := elem.Prev()
-		entry := elem.Value.(*lruTTLCacheEntry[T])
-		if now.After(entry.expiresAt) {
-			c.removeElementLocked(elem)
-			evicted++
+	for c.expiry.Len() > 0 && now.After(c.expiry[0].expiresAt) {
+		record := heap.Pop(&c.expiry).(expirationRecord)
+		elem, ok := c.entries[record.key]
+		if !ok {
+			continue
 		}
-		elem = prev
+		entry := elem.Value.(*lruTTLCacheEntry[T])
+		if entry.generation != record.generation || !entry.expiresAt.Equal(record.expiresAt) {
+			continue
+		}
+		c.removeElementLocked(elem)
+		evicted++
 	}
 	return evicted
 }
