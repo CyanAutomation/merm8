@@ -19,7 +19,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-workflow-ref:
+    name: Validate workflow ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      contents: none
+    steps:
+      - name: Require manual dispatch from main
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Manual releases must be dispatched from main." >&2
+            exit 1
+          fi
+
   validate-release-tag:
+    needs: validate-workflow-ref
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -109,6 +126,9 @@ jobs:
 
   publish-release:
     needs: [validate-release-tag, verify-release]
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment:
