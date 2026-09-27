@@ -1049,6 +1049,10 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 | `PARSER_MODE`                  | `pool`                                      | Parser execution mode. `pool` reuses long-lived Node workers; set `subprocess` for one-parse-per-process behavior.      |
 | `PARSER_WORKER_POOL_SIZE`       | `4`                                         | Maximum number of long-lived parser workers when PARSER_MODE=pool (bounded to 1-64).                                   |
 | `PARSER_SOURCE_ENHANCEMENT`     | `true`                                      | Enables source-level AST enhancement for flowchart rules. Set `false` to disable.                                       |
+| `PARSER_CACHE_SUCCESS_CAPACITY` | `256`                                       | Maximum cached successful parses (0 disables; valid range 0-10,000)                                                     |
+| `PARSER_CACHE_SUCCESS_TTL_SECONDS` | `30`                                     | Successful-parse cache lifetime in seconds (0 disables; valid range 0-86,400)                                           |
+| `PARSER_CACHE_SYNTAX_CAPACITY`  | `256`                                       | Maximum cached syntax errors (0 disables; valid range 0-10,000)                                                         |
+| `PARSER_CACHE_SYNTAX_TTL_SECONDS` | `15`                                      | Syntax-error cache lifetime in seconds (0 disables; valid range 0-86,400)                                               |
 | `DEPLOYMENT_MODE`               | `development`                                 | `production` enables production-oriented defaults for rate limiting and auth                                        |
 | `ANALYZE_RATE_LIMIT_PER_MINUTE` | `120` in production, `0` otherwise            | Per-client rate limit for `POST /v1/analyze` (0 disables rate limiting)                                             |
 | `ANALYZE_AUTH_TOKEN`            | _unset_                                       | Bearer token required in production mode for `POST /v1/analyze` requests                                            |
@@ -1056,6 +1060,11 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 | `STRICT_CONFIG_SCHEMA`          | _unset_ (`false`)                             | When set to `true` or `1`, rejects legacy config formats instead of accepting with deprecation warnings              |
 | `MERM8_BENCHMARK_HTML_PATH`     | `/app/benchmark.html`                         | Filepath for the benchmark result HTML page served at `GET /v1/benchmark.html`                                      |
 | `ANALYZE_TRUSTED_PROXY_CIDRS`   | _unset_                                       | Comma-separated list of CIDRs/IPs whose traffic is trusted for client IP via `X-Forwarded-For`                       |
+
+Cache capacities are entry counts, not byte limits. Larger values can retain
+substantially more diagram data in the Go heap; size them from observed diagram
+sizes and available memory. Invalid, negative, or out-of-range cache environment
+values fall back to their defaults.
 ---
 
 ## Future Roadmap
