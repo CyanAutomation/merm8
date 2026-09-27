@@ -188,6 +188,39 @@ go run ./cmd/server
 ```
 
 ---
+
+### 6. Parser result caches
+
+Successful parses and syntax errors use separate bounded caches so deployments
+can tune their different workloads independently.
+
+| Environment variable | Default | Valid range |
+| --- | ---: | ---: |
+| `PARSER_CACHE_SUCCESS_CAPACITY` | 256 entries | 0-10,000 |
+| `PARSER_CACHE_SUCCESS_TTL_SECONDS` | 30 seconds | 0-86,400 |
+| `PARSER_CACHE_SYNTAX_CAPACITY` | 256 entries | 0-10,000 |
+| `PARSER_CACHE_SYNTAX_TTL_SECONDS` | 15 seconds | 0-86,400 |
+
+A capacity **or** TTL of `0` disables that cache. Invalid, negative, and
+out-of-range environment values safely fall back to the documented default.
+
+Capacities limit entry counts rather than bytes. Successful entries retain a
+copy of the parsed diagram, so their memory cost grows with diagram size;
+syntax entries are usually smaller. Raising capacity or TTL can improve hit
+rates but increases the amount of data retained in the Go heap. Monitor heap
+usage and cache hit/eviction metrics after changing either value.
+
+```bash
+# Disable caching of syntax failures while retaining successful parses.
+PARSER_CACHE_SYNTAX_CAPACITY=0 go run ./cmd/server
+
+# Retain more successful parses for five minutes.
+PARSER_CACHE_SUCCESS_CAPACITY=1000 \
+PARSER_CACHE_SUCCESS_TTL_SECONDS=300 \
+go run ./cmd/server
+```
+
+---
 ## Decision Tree: How to Tune
 
 ```
