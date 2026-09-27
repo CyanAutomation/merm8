@@ -97,7 +97,7 @@ func TestParseCache_PutObservesCapacityEviction(t *testing.T) {
 }
 
 func TestParseCache_GetSuccessReturnedDiagramMutationDoesNotAffectCachedDiagram(t *testing.T) {
-	cache := newParseCache()
+	cache := newParseCache(DefaultCacheConfig())
 	const key = "flowchart:mutation"
 
 	nodeLine := 10
@@ -194,7 +194,7 @@ func TestParseCache_GetSuccessReturnedDiagramMutationDoesNotAffectCachedDiagram(
 }
 
 func TestParseCache_GetReturnedDiagramMutationDoesNotAffectCachedDiagram(t *testing.T) {
-	cache := newParseCache()
+	cache := newParseCache(DefaultCacheConfig())
 	const key = "flowchart:get"
 
 	nodeLine := 7
@@ -225,7 +225,7 @@ func TestParseCache_GetReturnedDiagramMutationDoesNotAffectCachedDiagram(t *test
 }
 
 func TestParseCache_GetReturnsSyntaxAfterSuccessOverwrite(t *testing.T) {
-	cache := newParseCache()
+	cache := newParseCache(DefaultCacheConfig())
 	const key = "flowchart:success-then-syntax"
 
 	cache.putSuccess(key, &model.Diagram{Nodes: []model.Node{{ID: "A"}}})
@@ -247,7 +247,7 @@ func TestParseCache_GetReturnsSyntaxAfterSuccessOverwrite(t *testing.T) {
 }
 
 func TestParseCache_GetReturnsSuccessAfterSyntaxOverwrite(t *testing.T) {
-	cache := newParseCache()
+	cache := newParseCache(DefaultCacheConfig())
 	const key = "flowchart:syntax-then-success"
 
 	cache.putSyntax(key, &SyntaxError{Message: "old syntax", Line: 1, Column: 1})
@@ -269,7 +269,7 @@ func TestParseCache_GetReturnsSuccessAfterSyntaxOverwrite(t *testing.T) {
 }
 
 func TestParseCache_ConcurrentOverwritesKeepSingleEntryTypePerKey(t *testing.T) {
-	cache := newParseCache()
+	cache := newParseCache(DefaultCacheConfig())
 	const key = "flowchart:concurrent-overwrite"
 
 	for i := 0; i < 500; i++ {
@@ -300,5 +300,92 @@ func TestParseCache_ConcurrentOverwritesKeepSingleEntryTypePerKey(t *testing.T) 
 		if successOK == syntaxOK {
 			t.Fatalf("expected exactly one cache entry type after concurrent overwrite, got success=%v syntax=%v on iter=%d", successOK, syntaxOK, i)
 		}
+	}
+}
+
+func TestCacheConfigFromEnv(t *testing.T) {
+	for _, name := range []string{
+		"PARSER_CACHE_SUCCESS_CAPACITY", "PARSER_CACHE_SUCCESS_TTL_SECONDS",
+		"PARSER_CACHE_SYNTAX_CAPACITY", "PARSER_CACHE_SYNTAX_TTL_SECONDS",
+	} {
+		t.Setenv(name, "")
+	}
+
+	if got, want := CacheConfigFromEnv(), DefaultCacheConfig(); got != want {
+		t.Fatalf("default cache config = %+v, want %+v", got, want)
+	}
+
+	t.Setenv("PARSER_CACHE_SUCCESS_CAPACITY", "100")
+	t.Setenv("PARSER_CACHE_SUCCESS_TTL_SECONDS", "45")
+	t.Setenv("PARSER_CACHE_SYNTAX_CAPACITY", "50")
+	t.Setenv("PARSER_CACHE_SYNTAX_TTL_SECONDS", "10")
+	want := CacheConfig{SuccessCapacity: 100, SuccessTTL: 45 * time.Second, SyntaxCapacity: 50, SyntaxTTL: 10 * time.Second}
+	if got := CacheConfigFromEnv(); got != want {
+		t.Fatalf("overridden cache config = %+v, want %+v", got, want)
+	}
+}
+
+func TestCacheConfigFromEnvInvalidValuesUseDefaults(t *testing.T) {
+	t.Setenv("PARSER_CACHE_SUCCESS_CAPACITY", "-1")
+	t.Setenv("PARSER_CACHE_SUCCESS_TTL_SECONDS", "not-a-number")
+	t.Setenv("PARSER_CACHE_SYNTAX_CAPACITY", "10001")
+	t.Setenv("PARSER_CACHE_SYNTAX_TTL_SECONDS", "86401")
+	if got, want := CacheConfigFromEnv(), DefaultCacheConfig(); got != want {
+		t.Fatalf("invalid cache config = %+v, want defaults %+v", got, want)
+	}
+}
+
+func TestParseCacheDisabledByZeroCapacityOrTTL(t *testing.T) {
+	cache := newParseCache(CacheConfig{
+		SuccessCapacity: 0,
+		SuccessTTL:      time.Hour,
+		SyntaxCapacity:  10,
+		SyntaxTTL:       0,
+	})
+	cache.putSuccess("success", &model.Diagram{})
+	cache.putSyntax("syntax", &SyntaxError{Message: "bad"})
+	if _, _, ok := cache.get("success"); ok {
+		t.Fatal("zero capacity must disable the success cache")
+	}
+	if _, _, ok := cache.get("syntax"); ok {
+		t.Fatal("zero TTL must disable the syntax cache")
+	}
+	if len(cache.success.entries) != 0 || len(cache.syntax.entries) != 0 {
+		t.Fatal("disabled caches must not retain entries")
+	}
+}
+
+func TestCacheConfigEffectiveConfigNormalizesUnsafeValues(t *testing.T) {
+	got := (CacheConfig{
+		SuccessCapacity: -1,
+		SuccessTTL:      -time.Second,
+		SyntaxCapacity:  maxParseCacheCapacity + 1,
+		SyntaxTTL:       maxParseCacheTTL + time.Second,
+	}).EffectiveConfig()
+	defaults := DefaultCacheConfig()
+	if got.SuccessCapacity != defaults.SuccessCapacity || got.SuccessTTL != defaults.SuccessTTL {
+		t.Fatalf("negative values were not safely defaulted: %+v", got)
+	}
+	if got.SyntaxCapacity != maxParseCacheCapacity || got.SyntaxTTL != maxParseCacheTTL {
+		t.Fatalf("excessive values were not capped: %+v", got)
+	}
+}
+
+func TestNewUsesCacheConfigFromEnv(t *testing.T) {
+	t.Setenv("PARSER_CACHE_SUCCESS_CAPACITY", "7")
+	t.Setenv("PARSER_CACHE_SUCCESS_TTL_SECONDS", "8")
+	t.Setenv("PARSER_CACHE_SYNTAX_CAPACITY", "9")
+	t.Setenv("PARSER_CACHE_SYNTAX_TTL_SECONDS", "10")
+
+	p, err := newWithConfigAndCacheAndRepoRootResolver("parse.mjs", Config{}, CacheConfigFromEnv(), func() (string, error) {
+		return t.TempDir(), nil
+	})
+	if err != nil {
+		t.Fatalf("construct parser: %v", err)
+	}
+	if p.cache.success.maxSize != 7 || p.cache.success.ttl != 8*time.Second ||
+		p.cache.syntax.maxSize != 9 || p.cache.syntax.ttl != 10*time.Second {
+		t.Fatalf("parser did not receive environment cache policy: success=%d/%s syntax=%d/%s",
+			p.cache.success.maxSize, p.cache.success.ttl, p.cache.syntax.maxSize, p.cache.syntax.ttl)
 	}
 }
