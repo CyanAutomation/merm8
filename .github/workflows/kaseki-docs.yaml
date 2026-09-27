@@ -5,12 +5,13 @@ on:
     - cron: "0 6 * * 2"
   workflow_dispatch:
 
-run-name: >-
-  Docs sweep · ${{ github.repository }}@${{ github.event.repository.default_branch }}
+run-name: Docs sweep · ${{ github.repository }}@main
 
 permissions:
   contents: read
 
+# Configure KASEKI_BASE_URL and comma-separated KASEKI_ALLOWED_HOSTS in the
+# kaseki-agent environment. Limit that environment to main without reviewers.
 concurrency:
   group: kaseki-docs-sweep-${{ github.repository }}
   cancel-in-progress: false
@@ -18,11 +19,13 @@ concurrency:
 jobs:
   system_status:
     name: Kaseki System Status
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     environment: kaseki-agent
     env:
       KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
+      KASEKI_ALLOWED_HOSTS: ${{ vars.KASEKI_ALLOWED_HOSTS }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -46,12 +49,14 @@ jobs:
 
   readiness:
     name: Kaseki System Readiness
+    if: github.ref == 'refs/heads/main'
     needs: system_status
     runs-on: ubuntu-latest
     timeout-minutes: 2
     environment: kaseki-agent
     env:
       KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
+      KASEKI_ALLOWED_HOSTS: ${{ vars.KASEKI_ALLOWED_HOSTS }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -75,12 +80,14 @@ jobs:
 
   api_connection:
     name: Kaseki API Status
+    if: github.ref == 'refs/heads/main'
     needs: readiness
     runs-on: ubuntu-latest
     timeout-minutes: 2
     environment: kaseki-agent
     env:
       KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
+      KASEKI_ALLOWED_HOSTS: ${{ vars.KASEKI_ALLOWED_HOSTS }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -109,19 +116,19 @@ jobs:
 
   dispatch:
     name: Submit Kaseki documentation sweep
+    if: github.ref == 'refs/heads/main'
     needs: api_connection
     runs-on: ubuntu-latest
     # Kaseki accepts a three-hour task budget; leave time to observe its terminal result.
     timeout-minutes: 190
     environment: kaseki-agent
     env:
-      # Configure this only as a secret in the protected kaseki-docs environment.
       KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
-
+      KASEKI_ALLOWED_HOSTS: ${{ vars.KASEKI_ALLOWED_HOSTS }}
       # Automatically targets the repository containing this workflow.
       REPO_URL: ${{ github.server_url }}/${{ github.repository }}
       # Keep scheduled and manually dispatched sweeps within the same fixed scope.
-      REF: ${{ github.event.repository.default_branch }}
+      REF: main
       TASK_DESCRIPTION: Keep README.md and docs/ accurate against the current implementation.
       ALLOWLIST: README.md,docs/**/*.md
       VALIDATION_COMMAND: npm test
@@ -196,7 +203,7 @@ jobs:
                 )
               }'
           )"
-          
+
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
@@ -226,6 +233,7 @@ jobs:
           fi
 
           run_id="$(jq -er '.id' "$response_file")"
+          run_id="$(KASEKI_RUN_ID="$run_id" node scripts/validate-kaseki-run-id.mjs)"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
       - name: Wait for Kaseki completion

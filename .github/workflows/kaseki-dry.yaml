@@ -5,8 +5,7 @@ on:
     - cron: "0 6 * * 5"
   workflow_dispatch:
 
-run-name: >-
-  DRY sweep · ${{ github.repository }}@${{ github.event.repository.default_branch }}
+run-name: DRY sweep · ${{ github.repository }}@main
 
 permissions:
   contents: read
@@ -19,29 +18,38 @@ concurrency:
 jobs:
   dry_sweep:
     name: Run Kaseki DRY sweep
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     # Kaseki allows a run to last three hours; leave time for
     # preflight and final status polling.
     timeout-minutes: 200
 
-    # Configure KASEKI_API_TOKEN as a secret and KASEKI_BASE_URL as an
-    # environment variable. Any valid HTTPS endpoint may be used.
+    # Configure KASEKI_API_TOKEN as a secret, KASEKI_BASE_URL as an
+    # environment variable, and KASEKI_ALLOWED_HOSTS as comma-separated
+    # approved controller hostnames in the kaseki-agent environment.
+    # Restrict that environment to main and leave required reviewers empty.
     environment: kaseki-agent
 
     env:
       KASEKI_BASE_URL: ${{ vars.KASEKI_BASE_URL }}
+      KASEKI_ALLOWED_HOSTS: ${{ vars.KASEKI_ALLOWED_HOSTS }}
 
       REPO_URL: ${{ github.server_url }}/${{ github.repository }}
-      REF: ${{ github.event.repository.default_branch }}
+      REF: main
 
       TASK_DESCRIPTION: >-
         Perform a conservative DRY-principle review of this repository.
 
       # Adjust these paths for each repository.
-      ALLOWLIST: src/**/*,scripts/**/*,test/**/*,tests/**/*
+      ALLOWLIST: >-
+        cmd/**/*,internal/**/*,parser-node/**/*,scripts/**/*,src/**/*,test/**/*,tests/**/*,worker/**/*,worker-tests/**/*
 
-      VALIDATION_COMMAND: npm run check
+      VALIDATION_COMMAND: >-
+        npm ci && npm --prefix parser-node ci && npm test &&
+        PARSER_SCRIPT=./parser-node/parse.mjs go vet ./... &&
+        PARSER_SCRIPT=./parser-node/parse.mjs go test ./... -count=1 &&
+        PARSER_SCRIPT=./parser-node/parse.mjs go test -tags=integration ./cmd/server -count=1
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -202,26 +210,8 @@ jobs:
           fi
 
           run_id="$(jq -er '.id' "$response_file")"
-
-          if [[ ${#run_id} -gt 128 || ${#run_id} -lt 1 ]]; then
-            echo "::error title=Invalid Kaseki run ID::Controller returned an invalid run ID (invalid length)"
-            exit 1
-          fi
-
-          case "$run_id" in
-            *[!A-Za-z0-9_-]*)
-              echo "::error title=Invalid Kaseki run ID::Controller returned an invalid run ID (invalid characters)"
-              exit 1
-              ;;
-          esac
-
-          output_delimiter="$(uuidgen)"
-
-          {
-            echo "run_id<<$output_delimiter"
-            echo "$run_id"
-            echo "$output_delimiter"
-          } >> "$GITHUB_OUTPUT"
+          run_id="$(KASEKI_RUN_ID="$run_id" node scripts/validate-kaseki-run-id.mjs)"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
           echo "idempotency_key=$idempotency_key" >> "$GITHUB_OUTPUT"
 

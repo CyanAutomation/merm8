@@ -50,7 +50,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify commit and manual CI status
+      - name: Verify commit and successful CI status
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -67,7 +67,24 @@ jobs:
             exit 1
           fi
 
-          if [[ "$IS_REUSABLE_CALL" != "true" ]]; then
+          if [[ "$IS_REUSABLE_CALL" == "true" ]]; then
+            if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+              echo "Reusable production deployments must be called from main." >&2
+              exit 1
+            fi
+            if [[ "$GITHUB_SHA" != "$BUILD_SHA" ]]; then
+              echo "Reusable production deployments must use the calling workflow commit." >&2
+              exit 1
+            fi
+
+            jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100")"
+            if ! jq -e \
+              'any(.jobs[]; .name == "Test and verify" and .status == "completed" and .conclusion == "success")' \
+              <<< "$jobs" >/dev/null; then
+              echo "The calling workflow has no successful Test and verify job; refusing to deploy." >&2
+              exit 1
+            fi
+          else
             if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
               echo "Manual production deployments must be dispatched from main." >&2
               exit 1
