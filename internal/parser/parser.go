@@ -229,7 +229,7 @@ type inflightParse struct {
 
 // New returns a Parser that will invoke the given Node.js script path.
 func New(scriptPath string) (*Parser, error) {
-	return NewWithConfig(scriptPath, ConfigFromEnv())
+	return newWithConfigAndCacheAndRepoRootResolver(scriptPath, ConfigFromEnv(), CacheConfigFromEnv(), findRepoRoot)
 }
 
 // NewWithConfig returns a Parser configured with explicit execution limits.
@@ -240,6 +240,15 @@ func NewWithConfig(scriptPath string, cfg Config) (*Parser, error) {
 // NewWithConfigAndRepoRootResolver returns a Parser configured with explicit
 // execution limits and a caller-provided repository root resolver.
 func NewWithConfigAndRepoRootResolver(scriptPath string, cfg Config, resolveRepoRoot func() (string, error)) (*Parser, error) {
+	return newWithConfigAndCacheAndRepoRootResolver(scriptPath, cfg, DefaultCacheConfig(), resolveRepoRoot)
+}
+
+// NewWithConfigAndCache returns a Parser with explicit execution and cache policies.
+func NewWithConfigAndCache(scriptPath string, cfg Config, cacheCfg CacheConfig) (*Parser, error) {
+	return newWithConfigAndCacheAndRepoRootResolver(scriptPath, cfg, cacheCfg, findRepoRoot)
+}
+
+func newWithConfigAndCacheAndRepoRootResolver(scriptPath string, cfg Config, cacheCfg CacheConfig, resolveRepoRoot func() (string, error)) (*Parser, error) {
 	if resolveRepoRoot == nil {
 		return nil, fmt.Errorf("failed to initialize parser: repo root resolver is nil")
 	}
@@ -259,7 +268,7 @@ func NewWithConfigAndRepoRootResolver(scriptPath string, cfg Config, resolveRepo
 		mode:              readParserMode(),
 		workerPoolSize:    readWorkerPoolSize(),
 		workerPools:       make(map[int]*workerPool),
-		cache:             newParseCache(),
+		cache:             newParseCache(cacheCfg),
 		inflightParses:    make(map[string]*inflightParse),
 	}, nil
 }

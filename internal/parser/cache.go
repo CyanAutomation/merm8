@@ -8,13 +8,6 @@ import (
 	"github.com/CyanAutomation/merm8/internal/model"
 )
 
-const (
-	defaultParseSuccessCacheTTL  = 30 * time.Second
-	defaultParseSyntaxCacheTTL   = 15 * time.Second
-	defaultParseSuccessCacheSize = 256
-	defaultParseSyntaxCacheSize  = 256
-)
-
 // CacheMetricsObserver receives parser cache events for telemetry.
 type CacheMetricsObserver interface {
 	ObserveParserCacheEvent(result, entryType string)
@@ -29,10 +22,11 @@ type parseCache struct {
 	metrics   CacheMetricsObserver
 }
 
-func newParseCache() *parseCache {
+func newParseCache(cfg CacheConfig) *parseCache {
+	cfg = cfg.EffectiveConfig()
 	return &parseCache{
-		success: newLRUTTLCache[*model.Diagram](defaultParseSuccessCacheSize, defaultParseSuccessCacheTTL),
-		syntax:  newLRUTTLCache[*SyntaxError](defaultParseSyntaxCacheSize, defaultParseSyntaxCacheTTL),
+		success: newLRUTTLCache[*model.Diagram](cfg.SuccessCapacity, cfg.SuccessTTL),
+		syntax:  newLRUTTLCache[*SyntaxError](cfg.SyntaxCapacity, cfg.SyntaxTTL),
 	}
 }
 
@@ -152,6 +146,9 @@ func newLRUTTLCache[T any](maxSize int, ttl time.Duration) *lruTTLCache[T] {
 
 func (c *lruTTLCache[T]) Get(key string) (T, bool, int) {
 	var zero T
+	if c.maxSize <= 0 || c.ttl <= 0 {
+		return zero, false, 0
+	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -175,6 +172,9 @@ func (c *lruTTLCache[T]) Get(key string) (T, bool, int) {
 }
 
 func (c *lruTTLCache[T]) Set(key string, value T) int {
+	if c.maxSize <= 0 || c.ttl <= 0 {
+		return 0
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
