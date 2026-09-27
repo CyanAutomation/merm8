@@ -210,8 +210,14 @@ type Parser struct {
 	inflightMu        sync.Mutex
 	inflightParses    map[string]*inflightParse
 	versionMu         sync.Mutex
-	parserVersion     string
-	versionResolved   bool
+	versionInfo       *VersionInfo
+	versionFlight     *versionResolution
+}
+
+type versionResolution struct {
+	done chan struct{}
+	info *VersionInfo
+	err  error
 }
 
 type inflightParse struct {
@@ -302,6 +308,56 @@ func (p *Parser) Ready() error {
 
 // VersionInfo returns parser script and Mermaid runtime version metadata.
 func (p *Parser) VersionInfo() (*VersionInfo, error) {
+	info, err := p.resolveVersionInfo()
+	if err != nil {
+		return nil, err
+	}
+	copy := *info
+	return &copy, nil
+}
+
+// resolveVersionInfo performs at most one version lookup at a time. Successful
+// metadata is immutable for the lifetime of the Parser. A failed lookup is
+// shared by its concurrent callers, but is not retained: later calls retry and
+// parsing bypasses the cache until a stable version identity is available.
+func (p *Parser) resolveVersionInfo() (*VersionInfo, error) {
+	p.versionMu.Lock()
+	if p.versionInfo != nil {
+		info := *p.versionInfo
+		p.versionMu.Unlock()
+		return &info, nil
+	}
+	if flight := p.versionFlight; flight != nil {
+		p.versionMu.Unlock()
+		<-flight.done
+		if flight.info == nil {
+			return nil, flight.err
+		}
+		info := *flight.info
+		return &info, nil
+	}
+	flight := &versionResolution{done: make(chan struct{})}
+	p.versionFlight = flight
+	p.versionMu.Unlock()
+
+	info, err := p.discoverVersionInfo()
+
+	p.versionMu.Lock()
+	if err == nil {
+		stored := *info
+		p.versionInfo = &stored
+		flight.info = &stored
+	} else {
+		flight.err = err
+	}
+	p.versionFlight = nil
+	close(flight.done)
+	p.versionMu.Unlock()
+
+	return info, err
+}
+
+func (p *Parser) discoverVersionInfo() (*VersionInfo, error) {
 	root, err := p.getRepoRoot()
 	if err != nil {
 		return nil, err
@@ -336,10 +392,8 @@ func (p *Parser) VersionInfo() (*VersionInfo, error) {
 		return nil, fmt.Errorf("%w: version info missing parser_version or mermaid_version", ErrContract)
 	}
 
-	p.versionMu.Lock()
-	p.parserVersion = strings.TrimSpace(info.ParserVersion)
-	p.versionResolved = true
-	p.versionMu.Unlock()
+	info.ParserVersion = strings.TrimSpace(info.ParserVersion)
+	info.MermaidVersion = strings.TrimSpace(info.MermaidVersion)
 
 	return &info, nil
 }
@@ -528,32 +582,27 @@ func (p *Parser) cacheKey(code string, cfg Config) (string, bool) {
 	if !ok {
 		return "", false
 	}
+	return cacheKeyForVersion(code, cfg, version), true
+}
+
+func cacheKeyForVersion(code string, cfg Config, version string) string {
 	sourceEnhancement := defaultParserSourceEnhancementEnabled
 	if cfg.SourceEnhancement != nil {
 		sourceEnhancement = *cfg.SourceEnhancement
 	}
 	payload := strings.Join([]string{code, cfg.Timeout.String(), strconv.Itoa(cfg.NodeMaxOldSpaceMB), strconv.FormatBool(sourceEnhancement), strconv.FormatBool(cfg.NeedSourceEnhancement), version}, "\x00")
 	hash := sha256.Sum256([]byte(payload))
-	return hex.EncodeToString(hash[:]), true
+	return hex.EncodeToString(hash[:])
 }
 
 func (p *Parser) getParserVersion() (string, bool) {
-	p.versionMu.Lock()
-	if p.versionResolved && strings.TrimSpace(p.parserVersion) != "" {
-		version := strings.TrimSpace(p.parserVersion)
-		p.versionMu.Unlock()
-		return version, true
+	info, err := p.resolveVersionInfo()
+	if err != nil {
+		return "", false
 	}
-	if !p.versionResolved {
-		p.versionResolved = true
-		p.parserVersion = "unknown"
-	}
-	version := strings.TrimSpace(p.parserVersion)
-	p.versionMu.Unlock()
-	if version == "" {
-		version = "unknown"
-	}
-	return version, true
+	// Include both values because changes in either the bridge contract or the
+	// Mermaid runtime can change parse output.
+	return info.ParserVersion + "\x00" + info.MermaidVersion, true
 }
 
 func (p *Parser) parseWithSubprocess(mermaidCode string, cfg Config) (*model.Diagram, *SyntaxError, error) {
