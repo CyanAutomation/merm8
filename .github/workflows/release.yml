@@ -44,7 +44,7 @@ jobs:
       commit: ${{ steps.release.outputs.commit }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -92,7 +92,7 @@ jobs:
       PARSER_SCRIPT: ./parser-node/parse.mjs
     steps:
       - name: Checkout validated commit
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.RELEASE_COMMIT }}
           fetch-depth: 1
@@ -140,7 +140,7 @@ jobs:
       RELEASE_COMMIT: ${{ needs.validate-release-tag.outputs.commit }}
     steps:
       - name: Checkout validated commit
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.RELEASE_COMMIT }}
           fetch-depth: 0
