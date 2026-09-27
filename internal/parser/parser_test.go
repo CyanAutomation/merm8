@@ -880,6 +880,12 @@ func TestParser_WorkerPoolTimeoutReplacesWorker(t *testing.T) {
 import fs from "fs";
 import readline from "readline";
 const counterFile = %q;
+
+if (process.argv.includes("--version-info")) {
+  process.stdout.write(JSON.stringify({parser_version:"test-1.0.0",mermaid_version:"test-1.0.0"})+"\n");
+  process.exit(0);
+}
+
 let startCount = 0;
 try {
   startCount = parseInt(fs.readFileSync(counterFile, "utf8"), 10) || 0;
