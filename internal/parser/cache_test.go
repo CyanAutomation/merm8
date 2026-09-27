@@ -2,6 +2,8 @@ package parser
 
 import (
 	"fmt"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -94,6 +96,127 @@ func TestParseCache_PutObservesCapacityEviction(t *testing.T) {
 	cache.putSuccess("second", &model.Diagram{})
 
 	assertCacheEvents(t, metrics, map[string]int{"eviction:success": 1})
+}
+
+func TestLRUTTLCacheExpirationOrderDiffersFromLRUOrder(t *testing.T) {
+	now := time.Unix(5_000, 0)
+	cache := newLRUTTLCache[string](3, time.Second)
+	cache.now = func() time.Time { return now }
+
+	cache.Set("expires-first", "first")
+	now = now.Add(500 * time.Millisecond)
+	cache.Set("expires-last", "last")
+	if _, ok, _ := cache.Get("expires-first"); !ok {
+		t.Fatal("expected access to make earliest-expiring entry most recent")
+	}
+
+	now = now.Add(600 * time.Millisecond)
+	if _, ok, removed := cache.Get("missing"); ok || removed != 1 {
+		t.Fatalf("expected exactly the earliest expiration to be removed, got ok=%v removed=%d", ok, removed)
+	}
+	if value, ok, removed := cache.Get("expires-last"); !ok || value != "last" || removed != 0 {
+		t.Fatalf("expected later expiration to remain, got value=%q ok=%v removed=%d", value, ok, removed)
+	}
+}
+
+func TestLRUTTLCacheUpdateDiscardsStaleExpirationRecord(t *testing.T) {
+	now := time.Unix(6_000, 0)
+	cache := newLRUTTLCache[string](2, time.Second)
+	cache.now = func() time.Time { return now }
+
+	cache.Set("updated", "old")
+	now = now.Add(500 * time.Millisecond)
+	cache.Set("updated", "new")
+	now = now.Add(600 * time.Millisecond)
+
+	if value, ok, removed := cache.Get("updated"); !ok || value != "new" || removed != 0 {
+		t.Fatalf("stale expiration removed updated entry: value=%q ok=%v removed=%d", value, ok, removed)
+	}
+	if got := len(cache.entries); got != 1 {
+		t.Fatalf("cache contains %d live entries, want 1", got)
+	}
+}
+
+func TestLRUTTLCacheExpirationAndCapacityPressure(t *testing.T) {
+	now := time.Unix(7_000, 0)
+	cache := newLRUTTLCache[string](2, time.Second)
+	cache.now = func() time.Time { return now }
+
+	cache.Set("expired", "expired")
+	now = now.Add(500 * time.Millisecond)
+	cache.Set("live", "live")
+	now = now.Add(600 * time.Millisecond)
+	if removed := cache.Set("new", "new"); removed != 1 {
+		t.Fatalf("Set removed %d entries, want exactly one expired entry", removed)
+	}
+	if cache.order.Len() != 2 || len(cache.entries) != 2 {
+		t.Fatalf("cache occupancy = list:%d map:%d, want 2", cache.order.Len(), len(cache.entries))
+	}
+	for _, key := range []string{"live", "new"} {
+		if _, ok, removed := cache.Get(key); !ok || removed != 0 {
+			t.Fatalf("expected %q to survive capacity pressure, got ok=%v removed=%d", key, ok, removed)
+		}
+	}
+}
+
+func TestLRUTTLCacheConcurrentAccessKeepsIndexesConsistent(t *testing.T) {
+	cache := newLRUTTLCache[int](64, time.Hour)
+	const goroutines = 16
+	const operations = 1_000
+	var workers sync.WaitGroup
+	workers.Add(goroutines)
+	for worker := 0; worker < goroutines; worker++ {
+		go func(worker int) {
+			defer workers.Done()
+			for operation := 0; operation < operations; operation++ {
+				key := strconv.Itoa((worker*operations + operation) % 128)
+				switch operation % 3 {
+				case 0:
+					cache.Set(key, operation)
+				case 1:
+					cache.Get(key)
+				case 2:
+					cache.Delete(key)
+				}
+			}
+		}(worker)
+	}
+	workers.Wait()
+
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	if len(cache.entries) > cache.maxSize {
+		t.Fatalf("cache contains %d entries, capacity is %d", len(cache.entries), cache.maxSize)
+	}
+	if cache.order.Len() != len(cache.entries) {
+		t.Fatalf("list/map occupancy differs: list=%d map=%d", cache.order.Len(), len(cache.entries))
+	}
+	seen := make(map[string]bool, cache.order.Len())
+	for elem := cache.order.Front(); elem != nil; elem = elem.Next() {
+		entry := elem.Value.(*lruTTLCacheEntry[int])
+		if seen[entry.key] || cache.entries[entry.key] != elem {
+			t.Fatalf("inconsistent LRU index for key %q", entry.key)
+		}
+		seen[entry.key] = true
+	}
+}
+
+func BenchmarkLRUTTLCacheHit(b *testing.B) {
+	for _, occupancy := range []int{1, maxParseCacheCapacity} {
+		b.Run(fmt.Sprintf("occupancy-%d", occupancy), func(b *testing.B) {
+			cache := newLRUTTLCache[int](occupancy, time.Hour)
+			for i := 0; i < occupancy; i++ {
+				cache.Set(strconv.Itoa(i), i)
+			}
+			key := strconv.Itoa(occupancy / 2)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if _, ok, _ := cache.Get(key); !ok {
+					b.Fatal("unexpected cache miss")
+				}
+			}
+		})
+	}
 }
 
 func TestParseCache_GetSuccessReturnedDiagramMutationDoesNotAffectCachedDiagram(t *testing.T) {
