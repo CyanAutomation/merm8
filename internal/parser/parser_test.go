@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -879,6 +880,12 @@ func TestParser_WorkerPoolTimeoutReplacesWorker(t *testing.T) {
 import fs from "fs";
 import readline from "readline";
 const counterFile = %q;
+
+if (process.argv.includes("--version-info")) {
+  process.stdout.write(JSON.stringify({parser_version:"test-1.0.0",mermaid_version:"test-1.0.0"})+"\n");
+  process.exit(0);
+}
+
 let startCount = 0;
 try {
   startCount = parseInt(fs.readFileSync(counterFile, "utf8"), 10) || 0;
@@ -1336,6 +1343,101 @@ func TestParser_VersionInfo(t *testing.T) {
 	}
 	if info.MermaidVersion == "" {
 		t.Fatal("expected mermaid version to be non-empty")
+	}
+}
+
+func TestParser_ConcurrentFirstParsesResolveVersionOnce(t *testing.T) {
+	t.Setenv("PARSER_MODE", "subprocess")
+	t.Setenv("VERSION_COUNTER", filepath.Join(t.TempDir(), "versions.log"))
+	t.Setenv("PARSE_COUNTER", filepath.Join(t.TempDir(), "parses.log"))
+	script, root := writeVersionCacheTestScript(t, false)
+	p, err := parser.NewWithConfigAndRepoRootResolver(script, parser.Config{Timeout: 10 * time.Second}, func() (string, error) { return root, nil })
+	if err != nil {
+		t.Fatalf("failed to construct parser: %v", err)
+	}
+
+	const count = 8
+	var start sync.WaitGroup
+	start.Add(1)
+	var wg sync.WaitGroup
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start.Wait()
+			if diagram, syntaxErr, parseErr := p.Parse("graph TD\nA-->B"); parseErr != nil || syntaxErr != nil || diagram == nil {
+				t.Errorf("unexpected parse result: diagram=%v syntax=%v err=%v", diagram, syntaxErr, parseErr)
+			}
+		}()
+	}
+	start.Done()
+	wg.Wait()
+
+	assertFileLineCount(t, os.Getenv("VERSION_COUNTER"), 1)
+	assertFileLineCount(t, os.Getenv("PARSE_COUNTER"), 1)
+}
+
+func TestParser_FailedVersionLookupCannotAdmitCacheEntry(t *testing.T) {
+	t.Setenv("PARSER_MODE", "subprocess")
+	t.Setenv("VERSION_COUNTER", filepath.Join(t.TempDir(), "versions.log"))
+	t.Setenv("PARSE_COUNTER", filepath.Join(t.TempDir(), "parses.log"))
+	t.Setenv("VERSION_FAILURE_MARKER", filepath.Join(t.TempDir(), "failed.marker"))
+	script, root := writeVersionCacheTestScript(t, true)
+	p, err := parser.NewWithConfigAndRepoRootResolver(script, parser.Config{Timeout: 10 * time.Second}, func() (string, error) { return root, nil })
+	if err != nil {
+		t.Fatalf("failed to construct parser: %v", err)
+	}
+
+	code := "graph TD\nA-->B"
+	for i := 0; i < 3; i++ {
+		if diagram, syntaxErr, parseErr := p.Parse(code); parseErr != nil || syntaxErr != nil || diagram == nil {
+			t.Fatalf("parse %d failed: diagram=%v syntax=%v err=%v", i+1, diagram, syntaxErr, parseErr)
+		}
+	}
+
+	// The failed lookup makes the first parse uncacheable. The second lookup
+	// succeeds and admits its result, so the third parse is a cache hit.
+	assertFileLineCount(t, os.Getenv("VERSION_COUNTER"), 2)
+	assertFileLineCount(t, os.Getenv("PARSE_COUNTER"), 2)
+}
+
+func writeVersionCacheTestScript(t *testing.T, failFirstVersion bool) (string, string) {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module versioncachetest\n\ngo 1.24\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(root, "parse.mjs")
+	body := fmt.Sprintf(`import fs from "node:fs";
+if (process.argv.includes("--version-info")) {
+  fs.appendFileSync(process.env.VERSION_COUNTER, "version\n");
+  const marker = process.env.VERSION_FAILURE_MARKER;
+  if (%t && marker && !fs.existsSync(marker)) {
+    fs.writeFileSync(marker, "failed");
+    process.stderr.write("version unavailable");
+    process.exit(1);
+  }
+  process.stdout.write(JSON.stringify({parser_version:"bridge-v2",mermaid_version:"12.0.0"}));
+  process.exit(0);
+}
+fs.appendFileSync(process.env.PARSE_COUNTER, "parse\n");
+process.stdin.resume();
+process.stdin.on("end", () => process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[],edges:[],subgraphs:[],suppressions:[]}})));
+`, failFirstVersion)
+	if err := os.WriteFile(script, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return script, root
+}
+
+func assertFileLineCount(t *testing.T, path string, want int) {
+	t.Helper()
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read counter %s: %v", path, err)
+	}
+	if got := strings.Count(string(contents), "\n"); got != want {
+		t.Fatalf("counter %s has %d lines, want %d", path, got, want)
 	}
 }
 
