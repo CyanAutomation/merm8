@@ -66,6 +66,10 @@ go build -o mermaid-lint ./cmd/server
 PARSER_SCRIPT=./parser-node/parse.mjs ./mermaid-lint
 ```
 
+`PARSER_SCRIPT` is required when running locally: the server default
+(`/app/parser-node/parse.mjs`) targets the container layout, and startup panics
+if the script is missing.
+
 ### Cloudflare Worker
 
 The hosted REST API and MCP server run as a Cloudflare Worker. Configure the
@@ -890,8 +894,6 @@ Rules are loaded automatically into the engine at startup via these family funct
 /internal/rules      Rule interface + built-in rule implementations
 /internal/engine     Runs all registered rules against a Diagram
 /parser-node         Node.js Mermaid parser script + package.json
-/Dockerfile          Multi-stage Docker build
-/docker-compose.yml  Local development compose file
 ```
 
 ---
@@ -944,6 +946,14 @@ export PARSER_SCRIPT=./parser-node/parse.mjs
 go test ./internal/parser/...
 ```
 
+The server also keeps runtime-dependent behavior (Node subprocess, timeout and
+concurrency coordination) behind an integration build tag, as documented in
+[`cmd/server/README.md`](cmd/server/README.md):
+
+```bash
+go test -tags=integration ./cmd/server
+```
+
 ### Smoke Tests
 
 After building and starting the service, run the smoke test script:
@@ -956,6 +966,9 @@ PARSER_SCRIPT=./parser-node/parse.mjs ./mermaid-lint
 # In another terminal, run smoke tests:
 bash smoke-test.sh
 ```
+
+Alternatively, `bash smoke-test.sh --build` builds, starts, and stops the
+service on `http://localhost:8080` automatically.
 
 The smoke test validates:
 
