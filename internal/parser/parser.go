@@ -149,13 +149,13 @@ type ParseResult struct {
 	Error       *SyntaxError `json:"error,omitempty"`
 }
 
-// VersionInfo describes parser/runtime version metadata reported by parser-node/parse.mjs.
+// VersionInfo describes parser/runtime version metadata reported by parser-node/parse.ts.
 type VersionInfo struct {
 	ParserVersion  string `json:"parser_version"`
 	MermaidVersion string `json:"mermaid_version"`
 }
 
-// parsedAST mirrors the simplified AST returned by parser-node/parse.mjs.
+// parsedAST mirrors the simplified AST returned by parser-node/parse.ts.
 type parsedAST struct {
 	Type         string              `json:"type"`
 	Direction    string              `json:"direction"`
@@ -307,7 +307,7 @@ func (p *Parser) Ready() error {
 		return fmt.Errorf("node runtime not found: %w", err)
 	}
 
-	cmd := exec.Command("node", append(p.nodeArgs(), "--check", scriptPath)...) //nolint:gosec
+	cmd := exec.Command("node", parserNodeArgs(scriptPath, append(p.nodeArgs(), "--check", scriptPath)...)...) //nolint:gosec
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("parser script check failed: %w (%s)", err, strings.TrimSpace(string(out)))
 	}
@@ -380,7 +380,7 @@ func (p *Parser) discoverVersionInfo() (*VersionInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "node", append(p.nodeArgs(), scriptPath, "--version-info")...) //nolint:gosec
+	cmd := exec.CommandContext(ctx, "node", parserNodeArgs(scriptPath, append(p.nodeArgs(), scriptPath, "--version-info")...)...) //nolint:gosec
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -632,7 +632,7 @@ func (p *Parser) parseWithSubprocess(mermaidCode string, cfg Config) (*model.Dia
 	defer cancel()
 
 	// Use both a Node heap cap and a process timeout to reduce memory/CPU abuse.
-	cmd := exec.CommandContext(ctx, "node", []string{fmt.Sprintf("--max-old-space-size=%d", cfg.NodeMaxOldSpaceMB), scriptPath}...) //nolint:gosec
+	cmd := exec.CommandContext(ctx, "node", parserNodeArgs(scriptPath, fmt.Sprintf("--max-old-space-size=%d", cfg.NodeMaxOldSpaceMB), scriptPath)...) //nolint:gosec
 	cmd.Stdin = bytes.NewBufferString(mermaidCode)
 
 	var stdout, stderr bytes.Buffer

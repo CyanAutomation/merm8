@@ -38,7 +38,7 @@ func getParserScript(t *testing.T) string {
 		gomod := filepath.Join(cwd, "go.mod")
 		if _, err := os.Stat(gomod); err == nil {
 			// Found go.mod, parser should be here
-			script := filepath.Join(cwd, "parser-node", "parse.mjs")
+			script := filepath.Join(cwd, "parser-node", "parse.ts")
 			return script
 		}
 		parent := filepath.Dir(cwd)
@@ -48,7 +48,7 @@ func getParserScript(t *testing.T) string {
 		cwd = parent
 	}
 
-	t.Fatalf("could not locate parser-node/parse.mjs. Set PARSER_SCRIPT env var")
+	t.Fatalf("could not locate parser-node/parse.ts. Set PARSER_SCRIPT env var")
 	return ""
 }
 
@@ -1318,7 +1318,7 @@ func TestParser_NewFailsWhenRepoRootMissing(t *testing.T) {
 		}
 	})
 
-	p, err := parser.New("parser-node/parse.mjs")
+	p, err := parser.New("parser-node/parse.ts")
 	if err == nil {
 		t.Fatal("expected New to fail when repository root cannot be located")
 	}

@@ -33,10 +33,10 @@ This is intended to be a Mermaid linting service that:
 │      │                                          │
 │      ├─► internal/parser  ── parser.go          │
 │      │       │  exec.CommandContext (timeout 2s)│
-│      │       │  stdin ──► node parse.mjs        │
+│      │       │  stdin ──► node --experimental-strip-types parse.ts │
 │      │       │  stdout ◄── JSON AST / error     │
 │      │       ▼                                  │
-│      │   parser-node/parse.mjs  (Node.js)       │
+│      │   parser-node/parse.ts  (Node.js)       │
 │      │   [official mermaid.parse()]              │
 │      │                                          │
 │      └─► internal/engine ── engine.go           │
@@ -55,7 +55,7 @@ This is intended to be a Mermaid linting service that:
 
 ## Quick Start
 
-### Local (requires Go 1.24+ and Node 20+)
+### Local (requires Go 1.24+ and Node 22.6+)
 
 ```bash
 # Install Node parser dependencies
@@ -63,11 +63,11 @@ cd parser-node && npm install && cd ..
 
 # Build and run the Go server
 go build -o mermaid-lint ./cmd/server
-PARSER_SCRIPT=./parser-node/parse.mjs ./mermaid-lint
+PARSER_SCRIPT=./parser-node/parse.ts ./mermaid-lint
 ```
 
 `PARSER_SCRIPT` is required when running locally: the server default
-(`/app/parser-node/parse.mjs`) targets the container layout, and startup panics
+(`/app/parser-node/parse.ts`) targets the container layout, and startup panics
 if the script is missing.
 
 ### Cloudflare Worker
@@ -145,7 +145,7 @@ Use `--fail-on-syntax` (default `true`) and `--fail-on-lint` (default `false`) t
 
 ```bash
 # Offline CI mode (no running API server required)
-PARSER_SCRIPT=./parser-node/parse.mjs ./merm8-cli \
+PARSER_SCRIPT=./parser-node/parse.ts ./merm8-cli \
   --config ./lint-config.json \
   --fail-on-lint \
   diagrams/**/*.mmd
@@ -936,13 +936,13 @@ Then run the parser tests:
 
 ```bash
 # Run parser subprocess integration tests (requires parser-node npm install)
-PARSER_SCRIPT=./parser-node/parse.mjs go test ./internal/parser/...
+PARSER_SCRIPT=./parser-node/parse.ts go test ./internal/parser/...
 ```
 
 Or use the environment variable to point to the parser script:
 
 ```bash
-export PARSER_SCRIPT=./parser-node/parse.mjs
+export PARSER_SCRIPT=./parser-node/parse.ts
 go test ./internal/parser/...
 ```
 
@@ -961,7 +961,7 @@ After building and starting the service, run the smoke test script:
 ```bash
 # Start the service first:
 go build -o mermaid-lint ./cmd/server
-PARSER_SCRIPT=./parser-node/parse.mjs ./mermaid-lint
+PARSER_SCRIPT=./parser-node/parse.ts ./mermaid-lint
 
 # In another terminal, run smoke tests:
 bash smoke-test.sh
@@ -992,7 +992,7 @@ The test suite uses two complementary approaches:
    - Examples: `TestAnalyze_ValidDiagram_SuccessPath`, `TestAnalyze_ConfigApplied_MaxFanout`, `TestAnalyze_MultipleRulesAggregate`
 
 2. **Integration Parser Tests**: Test real Node.js subprocess
-   - Require `PARSER_SCRIPT` env var to point to parse.mjs
+   - Require `PARSER_SCRIPT` env var to point to parse.ts
    - Exercise actual Mermaid parsing with official parser
    - Includes explicit coverage for timeout categorization and parser subprocess failures
    - Run with `-v` for detailed per-test output
@@ -1055,7 +1055,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 | Variable                        | Default                                       | Description                                                                                                         |
 | ------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `PORT`                          | `8080`                                        | TCP port the HTTP server listens on                                                                                 |
-| `PARSER_SCRIPT`                 | `/app/parser-node/parse.mjs`                  | Path to the Node.js parser script                                                                                   |
+| `PARSER_SCRIPT`                 | `/app/parser-node/parse.ts`                  | Path to the Node.js parser script                                                                                   |
 | `PARSER_TIMEOUT_SECONDS`        | `5`                                           | Parser wall-clock timeout in seconds (1-60); configurable for complex diagrams                                      |
 | `PARSER_CONCURRENCY_LIMIT`      | `8`                                           | Maximum concurrent parser invocations; excess requests receive 503                                                  |
 | `PARSER_MAX_OLD_SPACE_MB`       | `512`                                         | Node.js V8 old-space heap cap per parser subprocess                                                                 |

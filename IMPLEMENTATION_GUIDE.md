@@ -15,7 +15,7 @@ The merm8 service follows a Go modular architecture:
 - **`internal/model/`** — Shared types: `Diagram`, `Node`, `Edge`, `Issue`, `DiagramType`, `DiagramFamily`.
 - **`internal/output/sarif/`** — SARIF 2.1.0 transformation from lint results.
 - **`internal/telemetry/`** — Prometheus metric collection and handler exposure.
-- **`parser-node/`** — Node.js Mermaid parser script (`parse.mjs`) with dependencies.
+- **`parser-node/`** — TypeScript Mermaid parser script (`parse.ts`) with dependencies.
 
 ## Build Process
 
@@ -44,7 +44,7 @@ go build -o merm8-cli ./cmd/merm8-cli
 go test ./...
 
 # Parser integration tests (requires PARSER_SCRIPT env var)
-PARSER_SCRIPT=./parser-node/parse.mjs go test ./internal/parser/...
+PARSER_SCRIPT=./parser-node/parse.ts go test ./internal/parser/...
 go test ./internal/api/...
 
 # Coverage
@@ -87,7 +87,7 @@ See [docs/benchmarking.md](docs/benchmarking.md) for full benchmark capabilities
 ### Parser Bridge
 
 The parser bridge executes the Node.js Mermaid parser via either:
-- **Subprocess mode** (`PARSER_MODE=subprocess`): one `node parse.mjs` invocation per request
+- **Subprocess mode** (`PARSER_MODE=subprocess`): one `node --experimental-strip-types parse.ts` invocation per request
 - **Pool mode** (`PARSER_MODE=pool`): long-lived Node workers communicating via newline-delimited JSON envelopes; timed-out workers are recycled individually
 
 Both modes share the same short-lived LRU cache keyed by request code, parser limits, and the reported parser and Mermaid runtime versions. Version metadata is resolved once per parser instance before the first cacheable parse. Concurrent lookups share that resolution; if discovery fails, that parse bypasses the cache and a later parse retries discovery.

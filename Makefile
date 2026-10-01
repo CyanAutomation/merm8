@@ -20,7 +20,7 @@ format:
 	@echo "✓ Go code formatted"
 	@if command -v prettier >/dev/null 2>&1; then \
 		echo "Formatting with prettier..."; \
-		cd parser-node && npx prettier --write "**/*.{mjs,json}" || echo "prettier skipped (not installed)"; \
+		cd parser-node && npx prettier --write "**/*.{ts,json}" || echo "prettier skipped (not installed)"; \
 		cd ..; \
 		echo "✓ Node code formatted"; \
 	fi
@@ -47,6 +47,5 @@ test-contract:
 benchmark:
 	@echo "Running benchmark suite..."
 	@VERSION=$$(git describe --tags --always 2>/dev/null || echo "v0.1.0-dev"); \
-	PARSER_SCRIPT=$(PWD)/parser-node/parse.mjs MERM8_VERSION=$$VERSION go run -ldflags="-X github.com/CyanAutomation/merm8/benchmarks.appVersion=$$VERSION" ./benchmarks/main.go
+	PARSER_SCRIPT=$(PWD)/parser-node/parse.ts MERM8_VERSION=$$VERSION go run -ldflags="-X github.com/CyanAutomation/merm8/benchmarks.appVersion=$$VERSION" ./benchmarks/main.go
 	@echo "✓ Benchmark complete. Open benchmark.html to view results."
-

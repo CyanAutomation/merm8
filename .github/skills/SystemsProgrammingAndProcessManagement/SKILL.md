@@ -21,7 +21,7 @@ merm8 spawns a Node.js process to parse diagrams.
 ### Process Invocation
 
 ```go
-cmd := exec.CommandContext(ctx, "node", "parse.mjs")
+cmd := exec.CommandContext(ctx, "node", "--experimental-strip-types", "parse.ts")
 cmd.Stdin = strings.NewReader(diagramCode)
 cmd.Stdout = &stdout
 cmd.Stderr = &stderr
@@ -33,7 +33,7 @@ err := cmd.Run()
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 defer cancel()
-cmd := exec.CommandContext(ctx, "node", "parse.mjs")
+cmd := exec.CommandContext(ctx, "node", "--experimental-strip-types", "parse.ts")
 ```
 
 ### I/O Handling
@@ -48,7 +48,7 @@ cmd := exec.CommandContext(ctx, "node", "parse.mjs")
 | -------------- | ------------------------- | --------------------------------- |
 | Parser wrapper | internal/parser/parser.go | Subprocess lifecycle + timeout    |
 | Main server    | cmd/server/main.go        | HTTP server calling parser        |
-| Node script    | parser-node/parse.mjs     | Subprocess entry point            |
+| Node script    | parser-node/parse.ts     | Subprocess entry point            |
 | Docker setup   | Dockerfile                | Container environment for Node.js |
 
 ## Development Workflow
@@ -56,7 +56,7 @@ cmd := exec.CommandContext(ctx, "node", "parse.mjs")
 ### Testing Subprocess Behavior
 
 ```bash
-echo "graph TD\n  A-->B" | node parser-node/parse.mjs
+echo "graph TD\n  A-->B" | node --experimental-strip-types parser-node/parse.ts
 ```
 
 ### Debugging I/O Issues
@@ -128,7 +128,7 @@ cmd.Run()
 
 ### Environment Variables
 
-- `PARSER_SCRIPT`: path to `parse.mjs`
+- `PARSER_SCRIPT`: path to `parse.ts`
 - `PORT`: server port
 
 ### Resource Limits

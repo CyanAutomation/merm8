@@ -49,7 +49,7 @@ services:
       - "8080:8080"
     environment:
       PORT: 8080
-      PARSER_SCRIPT: /app/parser-node/parse.mjs
+      PARSER_SCRIPT: /app/parser-node/parse.ts
 ```
 
 ## Relevant Code in merm8

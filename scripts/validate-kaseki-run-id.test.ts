@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validateKasekiRunId } from "./validate-kaseki-run-id.mjs";
+import { validateKasekiRunId } from "./validate-kaseki-run-id.ts";
 
 test("accepts run IDs composed of safe URL and output characters", () => {
   for (const runId of ["1", "run_abc-123", "A".repeat(128)]) {

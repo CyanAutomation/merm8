@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 )
@@ -44,7 +45,7 @@ type parserWorker struct {
 }
 
 func startParserWorker(scriptPath string, nodeArgs []string) (*parserWorker, error) {
-	args := append([]string{}, nodeArgs...)
+	args := parserNodeArgs(scriptPath, nodeArgs...)
 	args = append(args, scriptPath, "--worker")
 	cmd := exec.Command("node", args...) //nolint:gosec
 
@@ -74,6 +75,13 @@ func startParserWorker(scriptPath string, nodeArgs []string) (*parserWorker, err
 	}()
 
 	return w, nil
+}
+
+func parserNodeArgs(scriptPath string, args ...string) []string {
+	if filepath.Ext(scriptPath) == ".ts" {
+		args = append([]string{"--experimental-strip-types"}, args...)
+	}
+	return args
 }
 
 func (w *parserWorker) do(req workerRequestEnvelope) (*workerResponseEnvelope, error) {

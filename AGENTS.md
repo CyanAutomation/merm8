@@ -7,7 +7,7 @@ This repository is a **Go API + CLI project** with a **Node-based Mermaid parser
 Key areas:
 - API server: `cmd/server`, `internal/api`
 - CLI: `cmd/merm8-cli`
-- Parser bridge: `internal/parser` and `parser-node/parse.mjs`
+- Parser bridge: `internal/parser` and `parser-node/parse.ts`
 - Rules engine: `internal/engine`, `internal/rules`
 - Docs: `docs/`, `API_GUIDE.md`, `IMPLEMENTATION_GUIDE.md`
 

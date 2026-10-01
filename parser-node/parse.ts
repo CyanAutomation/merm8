@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * parse.mjs - Mermaid parser subprocess for mermaid-lint
+ * parse.ts - Mermaid parser subprocess for mermaid-lint
  *
  * Reads Mermaid diagram source from stdin and writes structured JSON result(s)
  * to stdout. Supports one-shot mode and long-lived worker mode.
@@ -15,29 +15,100 @@ import parserPkg from "./package.json" with { type: "json" };
 // initialises correctly in Node.js (it requires a window/document object).
 import { JSDOM } from "jsdom";
 
+type DiagramType = "flowchart" | "sequence" | "class" | "er" | "state" | "unknown";
+type Mistake =
+  | "graphviz"
+  | "yaml-frontmatter"
+  | "tabs"
+  | "wrong-arrow-graphviz"
+  | "wrong-arrow-single";
+type SourceLocation = { line?: number; column?: number };
+type NodeAST = SourceLocation & { id: string; label: string };
+type EdgeAST = SourceLocation & {
+  from: string;
+  to: string;
+  type: string;
+  label?: string;
+};
+type SubgraphAST = { id: string; label: string; nodes: string[] };
+type Suppression = {
+  ruleId: string;
+  scope: "file" | "next-line";
+  line: number;
+  targetLine: number;
+};
+type ParserAST = {
+  type: DiagramType;
+  direction: string;
+  nodes: NodeAST[];
+  edges: EdgeAST[];
+  subgraphs: SubgraphAST[];
+  suppressions: Suppression[];
+  startStates?: string[];
+};
+type ParseResult =
+  | { valid: true; diagram_type: DiagramType; ast: ParserAST }
+  | {
+      valid: false;
+      error: { message: string; line: number; column: number };
+    };
+type RawRecord = Record<string, any>;
+type MermaidAPI = {
+  getDiagramFromText(source: string): Promise<{ db?: RawRecord | null }>;
+};
+type MermaidRuntime = {
+  version?: string;
+  initialize(config: { startOnLoad: boolean }): void;
+  detectType(source: string, options: { suppressErrors: boolean }): string;
+  parse(source: string): Promise<unknown>;
+  mermaidAPI: MermaidAPI;
+};
+type TimerHandle = ReturnType<typeof setTimeout> | number;
+type WorkerTimer = {
+  setTimeout(callback: () => void, timeoutMs: number): TimerHandle;
+  clearTimeout(handle: TimerHandle): void;
+};
+type WorkerTimeoutError = Error & { code: "WORKER_TIMEOUT" };
+
+function asRecord(value: unknown): RawRecord | null {
+  return typeof value === "object" && value !== null
+    ? (value as RawRecord)
+    : null;
+}
+
+function errorMessage(error: unknown): string {
+  const message = asRecord(error)?.message;
+  return message ? String(message) : String(error);
+}
+
+function errorCode(error: unknown): string {
+  return String(asRecord(error)?.code || "");
+}
+
 const { window: _win } = new JSDOM("<!DOCTYPE html>");
-global.window = _win;
-global.document = _win.document;
-global.Element = _win.Element;
-global.HTMLElement = _win.HTMLElement;
-global.DocumentFragment = _win.DocumentFragment;
-global.NodeFilter = _win.NodeFilter;
-global.Node = _win.Node;
+const runtimeGlobals = globalThis as unknown as Record<string, unknown>;
+runtimeGlobals.window = _win;
+runtimeGlobals.document = _win.document;
+runtimeGlobals.Element = _win.Element;
+runtimeGlobals.HTMLElement = _win.HTMLElement;
+runtimeGlobals.DocumentFragment = _win.DocumentFragment;
+runtimeGlobals.NodeFilter = _win.NodeFilter;
+runtimeGlobals.Node = _win.Node;
 
 const versionInfoMode = process.argv.includes("--version-info");
 const workerMode = process.argv.includes("--worker");
 
-let mermaidRuntime = null;
+let mermaidRuntime: MermaidRuntime | null = null;
 
-async function loadMermaid() {
+async function loadMermaid(): Promise<MermaidRuntime> {
   if (!mermaidRuntime) {
-    mermaidRuntime = (await import("mermaid/dist/mermaid.core.mjs")).default;
+    mermaidRuntime = (await import("mermaid/dist/mermaid.core.mjs")).default as MermaidRuntime;
     mermaidRuntime.initialize({ startOnLoad: false });
   }
   return mermaidRuntime;
 }
 
-async function main() {
+async function main(): Promise<void> {
   if (versionInfoMode) {
     try {
       const mermaid = await loadMermaid();
@@ -57,7 +128,7 @@ async function main() {
       writeResult({
         parser_version: String(parserPkg?.version || "").trim(),
         mermaid_version: mermaidDependencyVersion,
-        error: "internal parser error: " + String(err?.message || err),
+        error: "internal parser error: " + errorMessage(err),
       });
       process.exit(1);
     }
@@ -72,18 +143,15 @@ async function main() {
   const singleResult = await parseSource(input);
   writeResult(singleResult);
   if (
-    String(singleResult?.error?.message || "").startsWith(
-      "internal parser error:",
-    ) ||
-    String(singleResult?.error?.message || "").startsWith(
-      "parser_memory_limit:",
-    )
+    !singleResult.valid &&
+    (singleResult.error.message.startsWith("internal parser error:") ||
+      singleResult.error.message.startsWith("parser_memory_limit:"))
   ) {
     process.exit(1);
   }
 }
 
-async function runWorkerMode() {
+async function runWorkerMode(): Promise<void> {
   await loadMermaid();
 
   const rl = readline.createInterface({
@@ -98,13 +166,13 @@ async function runWorkerMode() {
       continue;
     }
 
-    let envelope;
+    let envelope: RawRecord;
     try {
-      envelope = JSON.parse(trimmed);
+      envelope = JSON.parse(trimmed) as RawRecord;
     } catch (err) {
       writeResult({
         id: "",
-        error: "invalid worker request: " + String(err?.message || err),
+        error: "invalid worker request: " + errorMessage(err),
       });
       continue;
     }
@@ -136,13 +204,13 @@ async function runWorkerMode() {
       }
       writeResult({
         id,
-        error: "internal parser error: " + String(err?.message || err),
+        error: "internal parser error: " + errorMessage(err),
       });
     }
   }
 }
 
-function normalizeWorkerTimeoutMs(rawTimeoutMs) {
+function normalizeWorkerTimeoutMs(rawTimeoutMs: unknown): number {
   const parsed = Number.parseInt(String(rawTimeoutMs ?? ""), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return 0;
@@ -150,19 +218,23 @@ function normalizeWorkerTimeoutMs(rawTimeoutMs) {
   return Math.min(parsed, 24 * 60 * 60 * 1000);
 }
 
-export function withWorkerTimeout(promise, timeoutMs, timer = globalThis) {
+export function withWorkerTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  timer: WorkerTimer = globalThis,
+): Promise<T> {
   if (!timeoutMs || timeoutMs <= 0) {
     return promise;
   }
 
   return new Promise((resolve, reject) => {
     const timerId = timer.setTimeout(() => {
-      const err = new Error("worker parse timeout");
+      const err = new Error("worker parse timeout") as WorkerTimeoutError;
       err.code = "WORKER_TIMEOUT";
       reject(err);
     }, timeoutMs);
 
-    timerId.unref?.();
+    if (typeof timerId === "object") timerId.unref?.();
 
     promise.then(
       (value) => {
@@ -177,11 +249,11 @@ export function withWorkerTimeout(promise, timeoutMs, timer = globalThis) {
   });
 }
 
-function isWorkerTimeoutError(err) {
-  return String(err?.code || "") === "WORKER_TIMEOUT";
+function isWorkerTimeoutError(err: unknown): err is WorkerTimeoutError {
+  return errorCode(err) === "WORKER_TIMEOUT";
 }
 
-async function parseSource(input) {
+async function parseSource(input: string): Promise<ParseResult> {
   const trimmedInput = String(input || "").trim();
 
   if (!trimmedInput) {
@@ -195,11 +267,11 @@ async function parseSource(input) {
     const mermaid = await loadMermaid();
     const { parse, detectType, mermaidAPI } = mermaid;
 
-    let diagramType;
+    let diagramType: string;
     try {
       diagramType = detectType(input, { suppressErrors: false });
     } catch (typeErr) {
-      const base = String(typeErr?.message || typeErr);
+      const base = errorMessage(typeErr);
       const mistakes = detectCommonMistakes(input);
       const hint = buildErrorHint(base, mistakes);
       return {
@@ -211,9 +283,12 @@ async function parseSource(input) {
     try {
       await parse(input);
     } catch (parseErr) {
-      const msg = parseErr?.message || String(parseErr);
-      const line = parseErr?.hash?.loc?.first_line ?? 0;
-      const col = parseErr?.hash?.loc?.first_column ?? 0;
+      const parseFailure = asRecord(parseErr);
+      const message = parseFailure?.message;
+      const location = asRecord(asRecord(parseFailure?.hash)?.loc);
+      const msg = message ? String(message) : String(parseErr);
+      const line = Number(location?.first_line ?? 0);
+      const col = Number(location?.first_column ?? 0);
       const mistakes = detectCommonMistakes(input);
       const enhancedMsg = buildParseErrorMessage(msg, mistakes);
       return {
@@ -232,7 +307,7 @@ async function parseSource(input) {
         error: {
           message:
             "AST extraction failed in parser runtime: " +
-            String(err?.message || err),
+            errorMessage(err),
           line: 0,
           column: 0,
         },
@@ -245,7 +320,7 @@ async function parseSource(input) {
       ast,
     };
   } catch (err) {
-    const errorMsg = String(err?.message || err).toLowerCase();
+    const errorMsg = errorMessage(err).toLowerCase();
     const isMemoryError =
       errorMsg.includes("heap") ||
       errorMsg.includes("memory") ||
@@ -267,7 +342,7 @@ async function parseSource(input) {
     return {
       valid: false,
       error: {
-        message: "internal parser error: " + String(err?.message || err),
+        message: "internal parser error: " + errorMessage(err),
         line: 0,
         column: 0,
       },
@@ -279,9 +354,9 @@ async function parseSource(input) {
 // Error detection and hint generation
 // ---------------------------------------------------------------------------
 
-function detectCommonMistakes(input) {
+function detectCommonMistakes(input: string): Mistake[] {
   const firstLine = input.split("\n")[0].trim();
-  const mistakes = [];
+  const mistakes: Mistake[] = [];
 
   // Detect Graphviz syntax
   if (
@@ -315,7 +390,7 @@ function detectCommonMistakes(input) {
   return mistakes;
 }
 
-function buildErrorHint(baseMessage, mistakes) {
+function buildErrorHint(baseMessage: string, mistakes: Mistake[]): string {
   const hints = [];
 
   if (mistakes.includes("graphviz")) {
@@ -345,7 +420,7 @@ function buildErrorHint(baseMessage, mistakes) {
   return 'Hint: start the diagram with a Mermaid type keyword like "flowchart", "graph", "sequenceDiagram", "classDiagram", "stateDiagram", or "erDiagram".';
 }
 
-function buildParseErrorMessage(originalMsg, mistakes) {
+function buildParseErrorMessage(originalMsg: string, mistakes: Mistake[]): string {
   const hints = [];
 
   if (mistakes.includes("tabs")) {
@@ -374,19 +449,23 @@ function buildParseErrorMessage(originalMsg, mistakes) {
 // AST extraction helpers
 // ---------------------------------------------------------------------------
 
-async function extractAST(mermaidAPI, source, diagramType) {
+async function extractAST(
+  mermaidAPI: MermaidAPI,
+  source: string,
+  diagramType: DiagramType,
+): Promise<ParserAST> {
   const ast = {
     type: diagramType,
     direction: "TD",
-    nodes: [],
-    edges: [],
-    subgraphs: [],
+    nodes: [] as NodeAST[],
+    edges: [] as EdgeAST[],
+    subgraphs: [] as SubgraphAST[],
     suppressions: extractSuppressions(source),
   };
 
   const sourceLines = source.split(/\r?\n/);
 
-  let db = null;
+  let db: RawRecord | null = null;
   try {
     const diagram = await mermaidAPI.getDiagramFromText(source);
     db = diagram?.db ?? null;
@@ -440,14 +519,14 @@ async function extractAST(mermaidAPI, source, diagramType) {
   const explicitNodes = Object.entries(rawVertices);
   
   // Build a set of all node IDs referenced in edges
-  const nodeIDsInEdges = new Set();
+  const nodeIDsInEdges = new Set<string>();
   for (const e of ast.edges) {
     if (e.from) nodeIDsInEdges.add(e.from);
     if (e.to) nodeIDsInEdges.add(e.to);
   }
   
   if (explicitNodes.length > 0) {
-    const seen = new Set();
+    const seen = new Set<string>();
     for (const [id, v] of explicitNodes) {
       const normalizedID = normalizeNodeID(id);
       
@@ -478,7 +557,7 @@ async function extractAST(mermaidAPI, source, diagramType) {
       }
     }
   } else {
-    const seen = new Set();
+    const seen = new Set<string>();
     for (const e of ast.edges) {
       if (e.from && !seen.has(e.from)) {
         seen.add(e.from);
@@ -499,7 +578,7 @@ async function extractAST(mermaidAPI, source, diagramType) {
       id: String(s.id ?? s.title ?? ""),
       label: String(s.title ?? s.id ?? ""),
       nodes: Array.isArray(s.nodes)
-        ? s.nodes.map((n) => normalizeNodeID(n))
+        ? s.nodes.map((n: unknown) => normalizeNodeID(n))
         : [],
     });
   }
@@ -507,7 +586,7 @@ async function extractAST(mermaidAPI, source, diagramType) {
   return ast;
 }
 
-function findNodeLocation(lines, id) {
+function findNodeLocation(lines: string[], id: string): SourceLocation | null {
   const escaped = escapeRegExp(id);
   const patterns = [
     new RegExp(`(^|\\s)${escaped}(?=\\s*[\\[({])`),
@@ -520,7 +599,7 @@ function findNodeLocation(lines, id) {
     for (const pattern of patterns) {
       const m = line.match(pattern);
       if (m) {
-        const start = m.index + m[1].length;
+        const start = (m.index ?? 0) + m[1].length;
         return { line: i + 1, column: start + 1 };
       }
     }
@@ -529,7 +608,11 @@ function findNodeLocation(lines, id) {
   return null;
 }
 
-function findEdgeLocation(lines, from, to) {
+function findEdgeLocation(
+  lines: string[],
+  from: string,
+  to: string,
+): SourceLocation | null {
   if (!from || !to) return null;
 
   const escapedFrom = escapeRegExp(from);
@@ -551,7 +634,7 @@ function findEdgeLocation(lines, from, to) {
       continue;
     }
 
-    const fromIndex = fromMatch.index + fromMatch[1].length;
+    const fromIndex = (fromMatch.index ?? 0) + fromMatch[1].length;
     if (fromIndex > arrowIndex) {
       continue;
     }
@@ -568,11 +651,11 @@ function findEdgeLocation(lines, from, to) {
   return null;
 }
 
-function escapeRegExp(value) {
+function escapeRegExp(value: string): string {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function normalizeFlowchartDirection(dir) {
+function normalizeFlowchartDirection(dir: unknown): string {
   const normalized = String(dir || "")
     .trim()
     .toUpperCase();
@@ -588,18 +671,22 @@ function normalizeFlowchartDirection(dir) {
   return "TD";
 }
 
-function normalizeNodeID(id) {
+function normalizeNodeID(id: unknown): string {
   // Preserve Mermaid's canonical node identity (case-sensitive), while trimming
   // incidental surrounding whitespace from parser/runtime values.
   return String(id).trim();
 }
 
-function extractSequenceAST(ast, db, sourceLines) {
+function extractSequenceAST(
+  ast: ParserAST,
+  db: RawRecord,
+  sourceLines: string[],
+): ParserAST {
   const state = db?.state?.records;
   if (!state) return ast;
 
   // Extract explicitly defined participants from source (preserve duplicates for detection)
-  const participantDefinitions = [];
+  const participantDefinitions: (SourceLocation & { id: string })[] = [];
   for (let i = 0; i < sourceLines.length; i++) {
     const trimmed = sourceLines[i].trim();
     // Match "participant X" or "participant X as Y" - capture full name (may include spaces)
@@ -615,7 +702,7 @@ function extractSequenceAST(ast, db, sourceLines) {
 
   // Extract messages as edges
   const messages = Array.isArray(state.messages) ? state.messages : [];
-  const allActors = new Set();
+  const allActors = new Set<string>();
 
   for (const msg of messages) {
     const from = String(msg.from || "").trim();
@@ -644,12 +731,16 @@ function extractSequenceAST(ast, db, sourceLines) {
   return ast;
 }
 
-function extractClassAST(ast, db, sourceLines) {
+function extractClassAST(
+  ast: ParserAST,
+  db: RawRecord,
+  sourceLines: string[],
+): ParserAST {
   const relations = Array.isArray(db.relations) ? db.relations : [];
   const classes = db.classes || {};
 
   // Extract class definitions from source (preserve duplicates for detection)
-  const classDefinitions = [];
+  const classDefinitions: (SourceLocation & { id: string })[] = [];
   for (let i = 0; i < sourceLines.length; i++) {
     const trimmed = sourceLines[i].trim();
     // Match "class ClassName" or "class ClassName {"
@@ -708,11 +799,15 @@ function extractClassAST(ast, db, sourceLines) {
   return ast;
 }
 
-function extractERAST(ast, db, sourceLines) {
+function extractERAST(
+  ast: ParserAST,
+  db: RawRecord,
+  sourceLines: string[],
+): ParserAST {
   const relationships = Array.isArray(db.relationships) ? db.relationships : [];
 
   // Extract entity names from relationships
-  const entityNames = new Set();
+  const entityNames = new Set<string>();
   for (const rel of relationships) {
     // Entity names are prefixed with "entity-" and suffixed with "-N"
     const entityA = String(rel.entityA || "").replace(/^entity-/, "").replace(/-\d+$/, "");
@@ -748,12 +843,16 @@ function extractERAST(ast, db, sourceLines) {
   return ast;
 }
 
-function extractStateAST(ast, db, sourceLines) {
+function extractStateAST(
+  ast: ParserAST,
+  db: RawRecord,
+  sourceLines: string[],
+): ParserAST {
   const nodes = Array.isArray(db.nodes) ? db.nodes : [];
   const edges = Array.isArray(db.edges) ? db.edges : [];
 
   // Track start state transitions for reachability
-  const startTransitions = [];
+  const startTransitions: string[] = [];
 
   // Extract states as nodes (skip start/end markers)
   for (const node of nodes) {
@@ -798,7 +897,7 @@ function extractStateAST(ast, db, sourceLines) {
   return ast;
 }
 
-function normalizeDiagramType(detectedType) {
+function normalizeDiagramType(detectedType: unknown): DiagramType {
   const raw = String(detectedType || "").toLowerCase();
   if (raw.startsWith("flowchart") || raw === "graph") return "flowchart";
   if (raw.startsWith("sequence")) return "sequence";
@@ -808,8 +907,8 @@ function normalizeDiagramType(detectedType) {
   return "unknown";
 }
 
-function extractSuppressions(source) {
-  const suppressions = [];
+function extractSuppressions(source: string): Suppression[] {
+  const suppressions: Suppression[] = [];
   const lines = source.split(/\r?\n/);
 
   for (let i = 0; i < lines.length; i++) {
@@ -845,16 +944,18 @@ function extractSuppressions(source) {
   return suppressions;
 }
 
-function extractLabel(vertex) {
+function extractLabel(vertex: unknown): string {
   if (!vertex) return "";
-  if (typeof vertex.text === "string") return vertex.text;
-  if (typeof vertex.label === "string") return vertex.label;
-  if (vertex.text && typeof vertex.text.label === "string")
-    return vertex.text.label;
+  const record = asRecord(vertex);
+  if (!record) return "";
+  if (typeof record.text === "string") return record.text;
+  if (typeof record.label === "string") return record.label;
+  const text = asRecord(record.text);
+  if (typeof text?.label === "string") return text.label;
   return "";
 }
 
-function writeResult(obj) {
+function writeResult(obj: unknown): void {
   process.stdout.write(JSON.stringify(obj) + "\n");
 }
 

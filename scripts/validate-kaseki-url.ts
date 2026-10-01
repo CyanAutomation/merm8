@@ -2,7 +2,10 @@ import { appendFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-export function validateKasekiBaseUrl(value, allowedHostsValue) {
+export function validateKasekiBaseUrl(
+  value: unknown,
+  allowedHostsValue?: unknown,
+): string {
   if (typeof value !== "string" || value.length === 0 || /\s/.test(value)) {
     throw new Error("KASEKI_BASE_URL must be a valid HTTPS URL");
   }
@@ -90,7 +93,8 @@ if (
       console.log(baseUrl);
     }
   } catch (error) {
-    console.error(`::error title=Invalid Kaseki URL::${error.message}`);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`::error title=Invalid Kaseki URL::${message}`);
     process.exitCode = 1;
   }
 }
