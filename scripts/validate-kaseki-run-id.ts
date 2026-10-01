@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-export function validateKasekiRunId(value) {
+export function validateKasekiRunId(value: unknown): string {
   if (typeof value !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(value)) {
     throw new Error("Kaseki returned an invalid run ID");
   }
@@ -16,7 +16,8 @@ if (
   try {
     console.log(validateKasekiRunId(process.env.KASEKI_RUN_ID));
   } catch (error) {
-    console.error(`::error title=Invalid Kaseki run ID::${error.message}`);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`::error title=Invalid Kaseki run ID::${message}`);
     process.exitCode = 1;
   }
 }

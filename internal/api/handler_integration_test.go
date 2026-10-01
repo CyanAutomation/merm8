@@ -98,7 +98,7 @@ func getParserScriptPath(t *testing.T) string {
 	}
 
 	for {
-		candidate := filepath.Join(cwd, "parser-node", "parse.mjs")
+		candidate := filepath.Join(cwd, "parser-node", "parse.ts")
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate
 		}

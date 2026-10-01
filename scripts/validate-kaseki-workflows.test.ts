@@ -10,7 +10,7 @@ const repositoryRoot = path.resolve(
 );
 const workflows = ["kaseki-dry.yaml", "kaseki-docs.yaml"];
 
-function readJobs(workflowName) {
+function readJobs(workflowName: string): { name: string; source: string }[] {
   const source = readFileSync(
     path.join(repositoryRoot, ".github", "workflows", workflowName),
     "utf8",

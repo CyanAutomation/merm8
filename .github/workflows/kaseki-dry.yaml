@@ -47,17 +47,20 @@ jobs:
 
       VALIDATION_COMMAND: >-
         npm ci && npm --prefix parser-node ci && npm test &&
-        PARSER_SCRIPT=./parser-node/parse.mjs go vet ./... &&
-        PARSER_SCRIPT=./parser-node/parse.mjs go test ./... -count=1 &&
-        PARSER_SCRIPT=./parser-node/parse.mjs go test -tags=integration ./cmd/server -count=1
+        PARSER_SCRIPT=./parser-node/parse.ts go vet ./... &&
+        PARSER_SCRIPT=./parser-node/parse.ts go test ./... -count=1 &&
+        PARSER_SCRIPT=./parser-node/parse.ts go test -tags=integration ./cmd/server -count=1
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
 
       - name: Validate Kaseki configuration
-        run: node scripts/validate-kaseki-url.mjs
+        run: node --experimental-strip-types scripts/validate-kaseki-url.ts
 
       - name: Verify controller health
         shell: bash
@@ -210,7 +213,7 @@ jobs:
           fi
 
           run_id="$(jq -er '.id' "$response_file")"
-          run_id="$(KASEKI_RUN_ID="$run_id" node scripts/validate-kaseki-run-id.mjs)"
+          run_id="$(KASEKI_RUN_ID="$run_id" node --experimental-strip-types scripts/validate-kaseki-run-id.ts)"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
           echo "idempotency_key=$idempotency_key" >> "$GITHUB_OUTPUT"

@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "description": "Minimal Mermaid parser subprocess for mermaid-lint",
   "type": "module",
-  "main": "parse.mjs",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "main": "parse.ts",
   "scripts": {
-    "parse": "node parse.mjs"
+    "parse": "node --experimental-strip-types parse.ts"
   },
   "dependencies": {
     "jsdom": "^24.0.0",

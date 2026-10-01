@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { validateKasekiBaseUrl } from "./validate-kaseki-url.mjs";
+import { validateKasekiBaseUrl } from "./validate-kaseki-url.ts";
 
 test("accepts an HTTPS Kaseki endpoint on an explicitly allowed host", () => {
   assert.equal(
@@ -90,19 +90,23 @@ test("normalizes the base URL through the GitHub Actions environment file", () =
   const directory = mkdtempSync(path.join(tmpdir(), "kaseki-url-test-"));
   const githubEnv = path.join(directory, "github-env");
   const script = fileURLToPath(
-    new URL("./validate-kaseki-url.mjs", import.meta.url),
+    new URL("./validate-kaseki-url.ts", import.meta.url),
   );
 
   try {
-    const result = spawnSync(process.execPath, [script], {
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        GITHUB_ENV: githubEnv,
-        KASEKI_BASE_URL: "https://controller.example.org/kaseki///",
-        KASEKI_ALLOWED_HOSTS: "controller.example.org",
+    const result = spawnSync(
+      process.execPath,
+      ["--experimental-strip-types", script],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          GITHUB_ENV: githubEnv,
+          KASEKI_BASE_URL: "https://controller.example.org/kaseki///",
+          KASEKI_ALLOWED_HOSTS: "controller.example.org",
+        },
       },
-    });
+    );
 
     assert.equal(result.status, 0, result.stderr);
     assert.equal(

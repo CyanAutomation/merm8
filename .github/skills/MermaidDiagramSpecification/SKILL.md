@@ -51,7 +51,7 @@ graph TD
 | Component     | Location                  | Purpose                                   |
 | ------------- | ------------------------- | ----------------------------------------- |
 | Diagram model | internal/model/diagram.go | Nodes, edges, subgraphs                   |
-| Parser        | parser-node/parse.mjs     | Mermaid AST source                        |
+| Parser        | parser-node/parse.ts     | Mermaid AST source                        |
 | Rules         | internal/rules/           | Validate structure (fanout, connectivity) |
 
 ## Development Workflow

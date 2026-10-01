@@ -22,7 +22,7 @@ The easiest way to explore and test the API is through the interactive Swagger U
 
    ```bash
    # From the workspace root
-   PARSER_SCRIPT=./parser-node/parse.mjs go run ./cmd/server
+   PARSER_SCRIPT=./parser-node/parse.ts go run ./cmd/server
    ```
 
 2. **Open in your browser**:
@@ -1083,7 +1083,7 @@ ps aux | grep -i "go run"
 
 # Start the server explicitly
 cd /workspaces/merm8
-PARSER_SCRIPT=./parser-node/parse.mjs go run ./cmd/server
+PARSER_SCRIPT=./parser-node/parse.ts go run ./cmd/server
 ```
 
 ### "/docs" Returns 404

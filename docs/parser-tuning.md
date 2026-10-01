@@ -391,7 +391,7 @@ grep -c "\[" diagram.mmd  # Crude node count
 
 **Step 2**: Check if it's actually slow or just timeout too low
 
-- Run locally: `time node parse.mjs < diagram.mmd`
+- Run locally: `time node --experimental-strip-types parse.ts < diagram.mmd`
 - If > 2 seconds: consider splitting diagram
 
 **Step 3**: Increase timeout incrementally
@@ -406,7 +406,7 @@ PARSER_TIMEOUT_SECONDS=10 go run ./cmd/server
 
 - Add intermediate subgraphs to reduce depth
 - Move unrelated flows to separate diagrams
-- Profile Node.js parser: `node --prof parse.mjs`
+- Profile Node.js parser: `node --experimental-strip-types --prof parse.ts`
 
 ---
 

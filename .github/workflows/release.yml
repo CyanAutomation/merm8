@@ -89,7 +89,7 @@ jobs:
     env:
       VERSION: ${{ needs.validate-release-tag.outputs.version }}
       RELEASE_COMMIT: ${{ needs.validate-release-tag.outputs.commit }}
-      PARSER_SCRIPT: ./parser-node/parse.mjs
+      PARSER_SCRIPT: ./parser-node/parse.ts
     steps:
       - name: Checkout validated commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

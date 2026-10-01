@@ -5,8 +5,16 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
     "types": ["@cloudflare/workers-types", "node"],
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "worker/**/*.ts", "worker-tests/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "worker/**/*.ts",
+    "worker-tests/**/*.ts",
+    "scripts/**/*.ts",
+    "parser-node/**/*.ts"
+  ]
 }

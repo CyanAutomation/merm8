@@ -33,7 +33,7 @@ var buildTime = ""
 func main() {
 	scriptPath := os.Getenv("PARSER_SCRIPT")
 	if scriptPath == "" {
-		scriptPath = "/app/parser-node/parse.mjs"
+		scriptPath = "/app/parser-node/parse.ts"
 	}
 
 	port := os.Getenv("PORT")

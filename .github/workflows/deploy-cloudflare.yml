@@ -130,7 +130,7 @@ jobs:
           MERM8_EXPECTED_BUILD_SHA: ${{ inputs.build_sha || github.sha }}
         run: |
           for attempt in 1 2 3 4 5; do
-            if node scripts/smoke-worker.mjs; then
+            if node --import tsx scripts/smoke-worker.ts; then
               exit 0
             fi
             if [ "$attempt" -lt 5 ]; then
