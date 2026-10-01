@@ -12,7 +12,7 @@ description: Build and maintain the Node.js parser bridge for Mermaid diagram va
 
 ## Inputs / Outputs / Non-goals
 
-- Inputs: Node.js parser script (parse.mjs), package.json, Mermaid diagram code via stdin, Go subprocess wrapper.
+- Inputs: TypeScript Node.js parser script (`parse.ts`), package.json, Mermaid diagram code via stdin, Go subprocess wrapper.
 - Outputs: Valid JSON AST or error output to stdout; robust, testable parser script.
 - Non-goals: Do not implement Go backend logic; do not change Mermaid library internals.
 
@@ -32,7 +32,7 @@ Use this skill when prompts include or imply:
 
 ## Validation checklist
 
-- [ ] Required commands/checks were run (node parse.mjs, npm test, integration with Go).
+- [ ] Required commands/checks were run (node --experimental-strip-types parse.ts, npm test, integration with Go).
 - [ ] Relevant tests were updated/executed.
 - [ ] Risk/impact was documented.
 
@@ -123,7 +123,7 @@ try {
 
 | Component         | Location                  | Purpose                       |
 | ----------------- | ------------------------- | ----------------------------- |
-| Parser script     | parser-node/parse.mjs     | Node.js entry point           |
+| Parser script     | parser-node/parse.ts     | Node.js entry point           |
 | Package config    | parser-node/package.json  | Dependencies (mermaid, jsdom) |
 | Go parser wrapper | internal/parser/parser.go | Spawns this script            |
 
@@ -134,13 +134,13 @@ try {
 ```bash
 cd parser-node
 npm install
-node parse.mjs
+node --experimental-strip-types parse.ts
 ```
 
 ### Testing Parser Changes
 
-1. Update parse.mjs
-2. Pipe sample diagram: `echo 'graph TD\n  A-->B' | node parse.mjs`
+1. Update `parse.ts`
+2. Pipe sample diagram: `echo 'graph TD\n  A-->B' | node --experimental-strip-types parse.ts`
 3. Verify JSON output is valid
 4. Run Go tests for integration
 
@@ -177,8 +177,8 @@ catch (error) {
 ### Debugging Parser Issues
 
 ```bash
-DEBUG=mermaid:* node parse.mjs
-echo 'graph TD\n  A-->B' | node parse.mjs
+DEBUG=mermaid:* node --experimental-strip-types parse.ts
+echo 'graph TD\n  A-->B' | node --experimental-strip-types parse.ts
 ```
 
 ## Process Communication Protocol

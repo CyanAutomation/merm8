@@ -140,7 +140,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	if opts.URL == "" {
 		scriptPath := os.Getenv("PARSER_SCRIPT")
 		if strings.TrimSpace(scriptPath) == "" {
-			scriptPath = filepath.Join(".", "parser-node", "parse.mjs")
+			scriptPath = filepath.Join(".", "parser-node", "parse.ts")
 		}
 		localParser, err = parserNew(scriptPath)
 		if err != nil {

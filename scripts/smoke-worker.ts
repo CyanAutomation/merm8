@@ -2,11 +2,17 @@ const endpoint = (process.env.MERM8_API_URL ?? "").replace(/\/$/, "");
 const expectedBuildSha = process.env.MERM8_EXPECTED_BUILD_SHA ?? "";
 const requestTimeoutMs = 10_000;
 
+type AnalyzeResponse = {
+  valid: boolean;
+  issues: Array<{ "rule-id"?: string }>;
+  error?: { code?: string };
+};
+
 if (!endpoint) {
   throw new Error("MERM8_API_URL is required");
 }
 
-async function request(path, init) {
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const response = await fetch(`${endpoint}${path}`, {
     ...init,
     signal: AbortSignal.timeout(requestTimeoutMs),
@@ -18,7 +24,7 @@ async function request(path, init) {
 }
 
 const health = await request("/v1/healthz");
-const healthPayload = await health.json();
+const healthPayload = (await health.json()) as { status?: string };
 if (healthPayload.status !== "ok") throw new Error("healthz did not report ok");
 const deployedBuildSha = health.headers.get("x-merm8-build");
 if (!deployedBuildSha) throw new Error("missing deployment provenance header");
@@ -27,7 +33,10 @@ if (expectedBuildSha && deployedBuildSha !== expectedBuildSha) {
 }
 
 const spec = await request("/v1/spec");
-const specPayload = await spec.json();
+const specPayload = (await spec.json()) as {
+  openapi?: string;
+  paths?: Record<string, unknown>;
+};
 if (specPayload.openapi !== "3.0.3" || !specPayload.paths?.["/v1/analyze"]) {
   throw new Error("OpenAPI document does not describe /v1/analyze");
 }
@@ -40,8 +49,13 @@ const valid = await request("/v1/analyze", {
     config: { "schema-version": "v1", rules: { "no-duplicate-node-ids": { enabled: true } } },
   }),
 });
-const validPayload = await valid.json();
-if (!validPayload.valid || validPayload.issues.some(issue => issue["rule-id"] === "no-duplicate-node-ids")) {
+const validPayload = (await valid.json()) as AnalyzeResponse;
+if (
+  !validPayload.valid ||
+  validPayload.issues.some(
+    (issue) => issue["rule-id"] === "no-duplicate-node-ids",
+  )
+) {
   throw new Error("valid flowchart was not analysed cleanly");
 }
 
@@ -50,9 +64,11 @@ const invalid = await request("/v1/analyze", {
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ code: "flowchart TD\n  A --> --> B" }),
 });
-const invalidPayload = await invalid.json();
+const invalidPayload = (await invalid.json()) as AnalyzeResponse;
 if (invalidPayload.valid || invalidPayload.error?.code !== "syntax_error") {
   throw new Error("malformed Mermaid was accepted");
 }
 
 console.log(`Worker smoke test passed: ${endpoint}`);
+
+export {};

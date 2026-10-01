@@ -1,23 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { withWorkerTimeout } from "./parse.mjs";
+import { withWorkerTimeout } from "./parse.ts";
 
 function createTimerHarness() {
   let nextId = 0;
-  const scheduled = new Map();
-  const cleared = [];
+  const scheduled = new Map<number, () => void>();
+  const cleared: number[] = [];
 
   return {
     timer: {
-      setTimeout(fn, _timeoutMs) {
+      setTimeout(fn: () => void, _timeoutMs: number) {
         const id = ++nextId;
         scheduled.set(id, fn);
         return id;
       },
-      clearTimeout(id) {
-        cleared.push(id);
-        scheduled.delete(id);
+      clearTimeout(id: ReturnType<typeof setTimeout> | number) {
+        const numericId = typeof id === "number" ? id : Number(id);
+        cleared.push(numericId);
+        scheduled.delete(numericId);
       },
     },
     getCleared() {
@@ -59,22 +60,23 @@ test("withWorkerTimeout clears timeout when wrapped promise rejects", async () =
 
 test("withWorkerTimeout keeps WORKER_TIMEOUT error code for timeout failures", async () => {
   const harness = createTimerHarness();
-  let timeoutErr;
+  let timeoutErr: (Error & { code?: string }) | undefined;
 
   const pending = withWorkerTimeout(
     new Promise(() => {}),
     25,
     harness.timer,
-  ).catch((err) => {
-    timeoutErr = err;
+  ).catch((err: unknown) => {
+    timeoutErr = err as Error & { code?: string };
     throw err;
   });
 
   harness.triggerTimeout(1);
 
-  await assert.rejects(pending, (err) => {
-    assert.equal(err?.code, "WORKER_TIMEOUT");
-    assert.equal(err?.message, "worker parse timeout");
+  await assert.rejects(pending, (err: unknown) => {
+    const timeoutError = err as Error & { code?: string };
+    assert.equal(timeoutError.code, "WORKER_TIMEOUT");
+    assert.equal(timeoutError.message, "worker parse timeout");
     return true;
   });
   assert.equal(timeoutErr?.code, "WORKER_TIMEOUT");

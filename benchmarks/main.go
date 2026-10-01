@@ -82,11 +82,11 @@ Examples:
 	}
 
 	// Locate parser script
-	parserScript := "parser-node/parse.mjs"
+	parserScript := "parser-node/parse.ts"
 	if _, err := os.Stat(parserScript); os.IsNotExist(err) {
-		parserScript = filepath.Join(os.Getenv("MERM8_PARSER_SCRIPT"), "parse.mjs")
+		parserScript = filepath.Join(os.Getenv("MERM8_PARSER_SCRIPT"), "parse.ts")
 		if _, err := os.Stat(parserScript); os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "Error: parser script not found. Set MERM8_PARSER_SCRIPT or ensure parser-node/parse.mjs exists\n")
+			fmt.Fprintf(os.Stderr, "Error: parser script not found. Set MERM8_PARSER_SCRIPT or ensure parser-node/parse.ts exists\n")
 			os.Exit(1)
 		}
 	}

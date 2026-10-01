@@ -55,7 +55,7 @@ jobs:
 
       - name: Run Go vet and test suite
         env:
-          PARSER_SCRIPT: ./parser-node/parse.mjs
+          PARSER_SCRIPT: ./parser-node/parse.ts
         run: |
           go vet ./...
           go test ./... -count=1
