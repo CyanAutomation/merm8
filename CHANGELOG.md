@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Guarded one-shot parser error inspection against results without error details.
 - Parser cache entries now require successfully resolved parser and Mermaid version metadata; concurrent first parses share version discovery, while failed discovery bypasses caching and remains retryable.
 - Parser cache eviction telemetry now counts both expired and capacity-evicted entries, including expirations discovered during cache misses and writes.
 - Escaped newline characters in Prometheus metric label values.
