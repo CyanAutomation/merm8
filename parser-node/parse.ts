@@ -144,6 +144,7 @@ async function main(): Promise<void> {
   writeResult(singleResult);
   if (
     !singleResult.valid &&
+    singleResult.error &&
     (singleResult.error.message.startsWith("internal parser error:") ||
       singleResult.error.message.startsWith("parser_memory_limit:"))
   ) {
