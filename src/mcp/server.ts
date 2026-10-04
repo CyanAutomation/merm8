@@ -7,6 +7,6 @@ export const mcpHandler = createMcpHandler(() => {
   const server = new McpServer({ name: "merm8", version: "1.0.0" });
   server.registerTool("analyze_mermaid", { description: "Validate and lint a Mermaid diagram.", inputSchema: { code: z.string().min(1), config: z.record(z.string(), z.record(z.string(), z.unknown())).optional() } }, async ({ code, config }) => result(analyzeMermaid(code, config ?? {})));
   server.registerTool("list_rules", { description: "List Worker-supported merm8 lint rule IDs.", inputSchema: {} }, async () => result({ rules: supportedRules }));
-  server.registerTool("list_diagram_types", { description: "List Mermaid diagram families supported by merm8.", inputSchema: {} }, async () => result({ "parser-recognized": ["flowchart", "sequence", "class", "er", "state"], "lint-supported": ["flowchart"] }));
+  server.registerTool("list_diagram_types", { description: "List Mermaid diagram families supported by merm8.", inputSchema: {} }, async () => result({ "parser-recognized": ["flowchart", "sequence", "class", "er", "state"], "lint-supported": ["flowchart", "sequence", "class", "er", "state"] }));
   return server;
 }, { legacy: "stateless", responseMode: "json" });

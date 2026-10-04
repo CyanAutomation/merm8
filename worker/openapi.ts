@@ -3,6 +3,21 @@ const errorResponse = {
   content: { "application/json": { schema: { type: "object", properties: { error: { type: "object" } } } } },
 };
 
+const metricsSchema = {
+  type: "object",
+  required: ["node-count", "edge-count", "disconnected-node-count", "duplicate-node-count", "max-fanin", "max-fanout", "diagram-type", "issue-counts"],
+  properties: {
+    "node-count": { type: "integer", minimum: 0 },
+    "edge-count": { type: "integer", minimum: 0 },
+    "disconnected-node-count": { type: "integer", minimum: 0 },
+    "duplicate-node-count": { type: "integer", minimum: 0 },
+    "max-fanin": { type: "integer", minimum: 0 },
+    "max-fanout": { type: "integer", minimum: 0 },
+    "diagram-type": { type: "string", enum: ["flowchart", "sequence", "class", "er", "state", "unknown"] },
+    "issue-counts": { type: "object", required: ["by-severity", "by-rule"], properties: { "by-severity": { type: "object", additionalProperties: { type: "integer", minimum: 0 } }, "by-rule": { type: "object", additionalProperties: { type: "integer", minimum: 0 } } } },
+  },
+};
+
 /** The Worker intentionally publishes only endpoints it implements. */
 export const workerOpenApi = {
   openapi: "3.0.3",
@@ -27,7 +42,18 @@ export const workerOpenApi = {
       post: {
         summary: "Validate Mermaid source and lint supported diagrams",
         requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["code"], properties: { code: { type: "string" }, config: { type: "object" } } } } } },
-        responses: { "200": { description: "Analysis result. `lint-supported` reports whether Worker rules ran for the diagram type." }, "400": errorResponse, "413": { description: "Request body exceeds the 1 MiB limit" } },
+        responses: { "200": { description: "Analysis result with structural metrics. `lint-supported` reports whether deterministic rules ran for the diagram type.", content: { "application/json": { schema: { type: "object", required: ["valid", "diagram-type", "lint-supported", "issues", "metrics"], properties: { valid: { type: "boolean" }, "diagram-type": { type: "string", enum: ["flowchart", "sequence", "class", "er", "state", "unknown"] }, "lint-supported": { type: "boolean" }, issues: { type: "array", items: { type: "object" } }, metrics: metricsSchema } } } } }, "400": errorResponse, "413": { description: "Request body exceeds the 1 MiB limit" } },
+      },
+    },
+    "/v1/analyze/sarif": {
+      post: {
+        summary: "Analyze Mermaid source and return SARIF 2.1.0",
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["code"], properties: { code: { type: "string" }, config: { type: "object" } } } } } },
+        responses: {
+          "200": { description: "SARIF 2.1.0 report.", content: { "application/sarif+json": { schema: { type: "object", required: ["version", "runs"], properties: { version: { type: "string", enum: ["2.1.0"] }, runs: { type: "array", items: { type: "object" } } } } } } },
+          "400": errorResponse,
+          "413": { description: "Request body exceeds the 1 MiB limit" },
+        },
       },
     },
     "/v1/semantic-review": {
@@ -46,12 +72,13 @@ export const workerOpenApi = {
               "application/json": {
                 schema: {
                   type: "object",
-                  required: ["valid", "diagram-type", "lint-supported", "issues", "semantic-review", "meta"],
+                  required: ["valid", "diagram-type", "lint-supported", "issues", "metrics", "semantic-review", "meta"],
                   properties: {
                     valid: { type: "boolean" },
                     "diagram-type": { type: "string", enum: ["flowchart", "sequence", "class", "er", "state", "unknown"] },
                     "lint-supported": { type: "boolean" },
                     issues: { type: "array", items: { type: "object" } },
+                    metrics: metricsSchema,
                     "semantic-review": {
                       type: "object",
                       required: ["purpose", "label-clarity", "branch-clarity", "abstraction-consistency", "ambiguity", "review-priority"],
