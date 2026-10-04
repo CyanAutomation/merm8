@@ -5,7 +5,7 @@ on:
     - cron: "0 6 * * 5"
   workflow_dispatch:
 
-run-name: DRY sweep · ${{ github.repository }}@main
+run-name: DRY sweep · ${{ github.repository }}@${{ github.sha }}
 
 permissions:
   contents: read
@@ -36,7 +36,7 @@ jobs:
       KASEKI_ALLOWED_HOSTS: ${{ vars.KASEKI_ALLOWED_HOSTS }}
 
       REPO_URL: ${{ github.server_url }}/${{ github.repository }}
-      REF: main
+      REF: ${{ github.sha }}
 
       TASK_DESCRIPTION: >-
         Perform a conservative DRY-principle review of this repository.
@@ -54,6 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -147,6 +148,7 @@ jobs:
                 taskMode: "patch",
                 publishMode: "pr",
                 timeoutSeconds: 10800,
+                maxDiffBytes: 102400,
                 idempotencyKey: $idempotencyKey,
 
                 changedFilesAllowlist: (
@@ -228,47 +230,66 @@ jobs:
           KASEKI_API_TOKEN: ${{ secrets.KASEKI_API_TOKEN }}
         run: |
           set -euo pipefail
+          : "${RUN_ID:?Kaseki run ID is missing}"
 
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
+          deadline=$((SECONDS + 11100))
 
           # Kaseki can run for up to three hours. Poll a little longer so a
           # terminal result created near that limit is still observed.
-          for attempt in $(seq 1 185); do
-            curl --proto '=https' --fail-with-body --silent --show-error \
+          while (( SECONDS < deadline )); do
+            if ! curl --proto '=https' --fail-with-body --silent --show-error \
               --retry 3 --retry-all-errors \
               --connect-timeout 10 --max-time 60 \
               --output "$response_file" \
               --header "Authorization: Bearer $KASEKI_API_TOKEN" \
-              "$KASEKI_BASE_URL/api/runs/$RUN_ID/status"
+              "$KASEKI_BASE_URL/api/runs/$RUN_ID/status"; then
+              echo "::warning title=Kaseki status unavailable::The status request failed after retries; polling will continue."
+              sleep 60
+              continue
+            fi
 
-            status="$(jq -er '.status' "$response_file")"
+            if ! status="$(jq -er '.status | strings' "$response_file")"; then
+              echo "status=invalid response" >> "$GITHUB_OUTPUT"
+              echo "::error title=Invalid Kaseki status response::The controller response did not include a valid status."
+              exit 1
+            fi
 
             case "$status" in
               completed)
-                echo "status=$status" >> "$GITHUB_OUTPUT"
+                exit_code="$(jq -er '.exitCode // 0 | numbers' "$response_file")"
+                if [[ "$exit_code" != 0 ]]; then
+                  echo "status=failed (exit code $exit_code)" >> "$GITHUB_OUTPUT"
+                  echo "::error title=Kaseki DRY sweep failed::The controller completed with exit code $exit_code."
+                  exit 1
+                fi
+                echo "status=completed" >> "$GITHUB_OUTPUT"
                 echo "Kaseki status: completed"
                 exit 0
                 ;;
 
-              failed)
+              failed|cancelled)
                 echo "status=$status" >> "$GITHUB_OUTPUT"
-                echo "Kaseki status: failed"
+                echo "::error title=Kaseki DRY sweep failed::The controller reported status $status."
                 exit 1
                 ;;
 
               queued|running)
-                echo "Kaseki status: $status (attempt $attempt/185)"
-                sleep 60
+                echo "Kaseki status: $status"
                 ;;
 
               *)
+                echo "status=unexpected" >> "$GITHUB_OUTPUT"
                 echo "::error title=Unexpected Kaseki status::Controller returned an unsupported status"
                 exit 1
                 ;;
             esac
+
+            sleep 60
           done
 
+          echo "status=timed out" >> "$GITHUB_OUTPUT"
           echo "::error title=Kaseki run timed out::No terminal status after 185 minutes"
           exit 1
 
