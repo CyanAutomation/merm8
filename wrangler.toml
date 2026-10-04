@@ -9,3 +9,5 @@ enabled = true
 REST_ALLOWED_ORIGINS = "https://merm8-splash.vercel.app"
 
 # Configure with: wrangler secret put API_KEY
+# Configure semantic review with: wrangler secret put OPENROUTER_API_KEY
+# Optional model override: MERM8_DECISION_MODEL = "~typesafe/jev-latest"

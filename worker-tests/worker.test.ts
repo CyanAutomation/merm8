@@ -132,7 +132,7 @@ test("does not confuse edge references with duplicate node declarations", async 
   }), env);
   const result = await response.json() as { valid: boolean; issues: Array<{ "rule-id": string }> };
   assert.equal(result.valid, true);
-  assert.ok(!result.issues.some(issue => issue["rule-id"] === "no-duplicate-node-ids"));
+  assert.deepEqual(result.issues, []);
 });
 
 test("reports a repeated explicit node declaration", async () => {
