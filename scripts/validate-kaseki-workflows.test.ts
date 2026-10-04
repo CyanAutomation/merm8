@@ -10,11 +10,15 @@ const repositoryRoot = path.resolve(
 );
 const workflows = ["kaseki-dry.yaml", "kaseki-docs.yaml"];
 
-function readJobs(workflowName: string): { name: string; source: string }[] {
-  const source = readFileSync(
+function readWorkflow(workflowName: string): string {
+  return readFileSync(
     path.join(repositoryRoot, ".github", "workflows", workflowName),
     "utf8",
   );
+}
+
+function readJobs(workflowName: string): { name: string; source: string }[] {
+  const source = readWorkflow(workflowName);
   const jobsMatch = source.match(/^jobs:\s*\n([\s\S]*)$/m);
   assert.ok(jobsMatch, `${workflowName} must define jobs`);
 
@@ -30,6 +34,19 @@ function readJobs(workflowName: string): { name: string; source: string }[] {
     const end = jobHeaders[index + 1]?.index ?? jobsSource.length;
     return { name: header[1], source: jobsSource.slice(start, end) };
   });
+}
+
+function readStep(workflowSource: string, stepName: string): string {
+  const marker = `      - name: ${stepName}\n`;
+  const start = workflowSource.indexOf(marker);
+  assert.notEqual(start, -1, `workflow must define the "${stepName}" step`);
+
+  const stepStart = start + marker.length;
+  const nextStep = workflowSource.slice(stepStart).search(/^      - /m);
+  return workflowSource.slice(
+    stepStart,
+    nextStep === -1 ? undefined : stepStart + nextStep,
+  );
 }
 
 for (const workflowName of workflows) {
@@ -67,3 +84,48 @@ for (const workflowName of workflows) {
     }
   });
 }
+
+for (const workflowName of workflows) {
+  test(`${workflowName} pins the Kaseki task to the triggering main commit`, () => {
+    const source = readWorkflow(workflowName);
+    assert.match(source, /^      REF: \$\{\{ github\.sha \}\}$/m);
+    assert.match(source, /^\s+ref: \$\{\{ github\.sha \}\}\s*$/m);
+  });
+
+  test(`${workflowName} submits bounded normal pull requests`, () => {
+    const source = readWorkflow(workflowName);
+    assert.match(source, /publishMode:\s*"pr"/);
+    assert.doesNotMatch(source, /publishMode:\s*"draft_pr"/);
+    assert.match(source, /maxDiffBytes:\s*102400/);
+  });
+
+  test(`${workflowName} makes submission retries idempotent`, () => {
+    const source = readWorkflow(workflowName);
+    assert.match(source, /idempotency_key=/);
+    assert.match(source, /idempotencyKey:\s*\$idempotencyKey/);
+  });
+
+  test(`${workflowName} only reports successful Kaseki completion for exit code zero`, () => {
+    const source = readWorkflow(workflowName);
+    const waitStep = readStep(source, "Wait for Kaseki completion");
+    assert.match(waitStep, /exitCode/);
+    assert.match(waitStep, /failed\|cancelled/);
+  });
+
+  test(`${workflowName} always publishes the run ID and final status`, () => {
+    const source = readWorkflow(workflowName);
+    const summaryStep = readStep(source, "Publish run details");
+    assert.match(summaryStep, /^        if: always\(\)\s*$/m);
+    assert.match(summaryStep, /RUN_ID: \$\{\{ steps\.submit\.outputs\.run_id/);
+    assert.match(summaryStep, /FINAL_STATUS: \$\{\{ steps\.wait\.outputs\.status/);
+  });
+}
+
+test("kaseki-dry.yaml retries polling after temporary controller errors", () => {
+  const waitStep = readStep(
+    readWorkflow("kaseki-dry.yaml"),
+    "Wait for Kaseki completion",
+  );
+  assert.match(waitStep, /if ! curl/);
+  assert.match(waitStep, /polling will continue/);
+});
