@@ -23,9 +23,8 @@ function cyclic(diagram: Diagram): string[] {
   for (const node of diagram.nodes) visit(node.id); return [...found];
 }
 
-export function analyzeMermaid(code: string, config: RuleConfig = {}): Analysis {
-  const parsed = parseMermaid(code); if (!parsed.diagram) return { valid: false, issues: [], error: parsed.error };
-  const diagram = parsed.diagram; const issues: Issue[] = [];
+export function analyzeDiagram(diagram: Diagram, config: RuleConfig = {}): Analysis {
+  const issues: Issue[] = [];
   if (diagram.type === "flowchart") {
     const outgoing = new Map<string, number>(); const connected = new Set<string>();
     for (const edge of diagram.edges) { outgoing.set(edge.from, (outgoing.get(edge.from) ?? 0) + 1); connected.add(edge.from); connected.add(edge.to); }
@@ -35,6 +34,12 @@ export function analyzeMermaid(code: string, config: RuleConfig = {}): Analysis 
     if (enabled("no-duplicate-node-ids", config)) { const counts = new Map<string, number>(); for (const id of diagram.sourceNodeIds) counts.set(id, (counts.get(id) ?? 0) + 1); for (const [id, count] of counts) if (count > 1) { const node = diagram.nodes.find(n => n.id === id); issues.push(issue("no-duplicate-node-ids", "error", `duplicate node ID: ${id}`, node?.line, node?.column, config)); } }
   }
   return { valid: true, "diagram-type": diagram.type, "lint-supported": diagram.type === "flowchart", issues: issues.sort((a, b) => (a.line ?? 0) - (b.line ?? 0) || a["rule-id"].localeCompare(b["rule-id"])) };
+}
+
+export function analyzeMermaid(code: string, config: RuleConfig = {}): Analysis {
+  const parsed = parseMermaid(code);
+  if (!parsed.diagram) return { valid: false, issues: [], error: parsed.error };
+  return analyzeDiagram(parsed.diagram, config);
 }
 
 export const supportedRules = ["max-fanout", "no-cycles", "no-disconnected-nodes", "no-duplicate-node-ids"] as const;

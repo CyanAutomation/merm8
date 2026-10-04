@@ -1,8 +1,17 @@
 import { analyzeMermaid } from "../src/engine/analyze.js";
 import { mcpHandler } from "../src/mcp/server.js";
+import { reviewMermaidSemantics } from "../src/semantic/review.js";
+import { SemanticReviewError } from "../src/semantic/types.js";
 import { workerOpenApi } from "./openapi.js";
 
-export interface Env { API_KEY?: string; REST_ALLOWED_ORIGINS?: string; BUILD_VERSION?: string; BUILD_SHA?: string }
+export interface Env {
+  API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
+  MERM8_DECISION_MODEL?: string;
+  REST_ALLOWED_ORIGINS?: string;
+  BUILD_VERSION?: string;
+  BUILD_SHA?: string;
+}
 const json = (body: unknown, status = 200, headers: HeadersInit = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", ...headers } });
 const allowed = (request: Request, value?: string) => !!value && (request.headers.get("authorization") === `Bearer ${value}` || request.headers.get("x-api-key") === value);
 const MAX_ANALYZE_BODY_BYTES = 1024 * 1024;
@@ -120,10 +129,29 @@ export default {
       if (path === "/v1/rules") return json({ rules: ruleMetadata });
       if (path === "/v1/version") return json({ "service-version": env.BUILD_VERSION ?? "development", "build-commit": env.BUILD_SHA ?? "" });
       if (path === "/mcp") { if (!allowed(request, env.API_KEY)) return json({ error: { code: "unauthorized", message: "A valid API key is required" } }, 401, { "www-authenticate": "Bearer" }); return mcpHandler.fetch(request); }
+      if (path === "/v1/semantic-review" && request.method === "POST") {
+        if (!allowed(request, env.API_KEY)) return json({ error: { code: "unauthorized", message: "A valid API key is required" } }, 401, { "www-authenticate": "Bearer" });
+        const parsed = await parseAnalyzeBody(request);
+        if (parsed.response) return parsed.response;
+        const body = parsed.body;
+        if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.code !== "string") {
+          return json({ error: { code: "invalid_request", message: "code must be a string" } }, 400);
+        }
+        try {
+          return json(await reviewMermaidSemantics(body.code, env));
+        } catch (error) {
+          if (error instanceof SemanticReviewError) {
+            return json({ error: { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) } }, error.status);
+          }
+          console.error("Semantic review failed");
+          return json({ error: { code: "semantic_review_failed", message: "Semantic review could not be completed" } }, 500);
+        }
+      }
       if ((path === "/v1/analyze" || path === "/v1/analyse") && request.method === "POST") {
         const parsed = await parseAnalyzeBody(request);
         if (parsed.response) return parsed.response;
         const body = parsed.body!;
+        if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: { code: "invalid_request", message: "request body must be an object" } }, 400);
         if (typeof body.code !== "string") return json({ error: { code: "invalid_request", message: "code must be a string" } }, 400);
         const configError = validateRuleConfig(body.config);
         if (configError) return json({ error: configError }, 400);
