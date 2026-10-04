@@ -74,8 +74,10 @@ if the script is missing.
 
 The hosted REST API and MCP server run as a Cloudflare Worker. Configure the
 `API_KEY` and `MCP_ALLOWED_HOSTNAMES` secrets with Wrangler, then deploy with
-`npm run deploy`. REST analysis is served at `/v1/analyze`; authenticated
-Streamable HTTP MCP is served at `/mcp`.
+`npm run deploy`. Deterministic REST analysis is served at `/v1/analyze`; the
+optional paid JEV semantic review is served separately at authenticated
+`/v1/semantic-review` and also requires the server-side `OPENROUTER_API_KEY`.
+Authenticated Streamable HTTP MCP is served at `/mcp`.
 
 The Worker is a deliberately smaller, Worker-safe implementation. It recognizes
 flowchart, sequence, class, ER, and state diagrams, and currently lints
