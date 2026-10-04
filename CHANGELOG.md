@@ -109,6 +109,12 @@ Fixtures are discoverable and ready for rule implementation. As new rules are ad
 
 ### Added
 
+- Added an authenticated Worker `/v1/semantic-review` endpoint that batches six
+  typed JEV semantic judgements while keeping its probabilistic response separate
+  from deterministic analysis issues.
+- Added bounded semantic state with Mermaid node and edge labels, configurable
+  Decisions API model selection, timeout/retry handling, and metadata-only JEV
+  observability.
 - Configurable parser timeout via `PARSER_TIMEOUT_SECONDS` environment variable (1–60 seconds, default 5s). Exposed in `GET /info` response as `parser_timeout_seconds` field.
 - `POST /analyze/sarif` returns SARIF 2.1.0 format for all error responses (previously returned JSON with 200 OK). **Breaking change**: Clients must expect proper HTTP status codes (400, 413, 504, 503, 500) with SARIF error format.
 - Comprehensive test coverage for timeout configurability, SARIF error response format, and concurrent error handling.
