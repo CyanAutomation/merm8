@@ -32,7 +32,7 @@ test("serves Worker-native health and discovery endpoints", async () => {
   assert.equal((await health.json() as { status: string }).status, "ok");
 
   const types = await worker.fetch(new Request("https://example.test/v1/diagram-types"), env);
-  assert.deepEqual((await types.json() as { "lint-supported": string[] })["lint-supported"], ["flowchart"]);
+  assert.deepEqual((await types.json() as { "lint-supported": string[] })["lint-supported"], ["flowchart", "sequence", "class", "er", "state"]);
 
   const rules = await worker.fetch(new Request("https://example.test/v1/rules"), env);
   const payload = await rules.json() as { rules: Array<{ id: string; description: string; severity: string }> };
@@ -55,7 +55,7 @@ test("serves a usable OpenAPI document and secure response headers", async () =>
   assert.ok(analyze?.post);
   assert.ok("413" in analyze.post!.responses);
   assert.ok(!("/v1/analyze/raw" in document.paths));
-  assert.ok(!("/v1/analyze/sarif" in document.paths));
+  assert.ok("/v1/analyze/sarif" in document.paths);
 
   const root = await worker.fetch(new Request("https://example.test/"), env);
   assert.equal(root.status, 200);
@@ -92,19 +92,64 @@ test("honours splash nested rule configuration", async () => {
   assert.ok(!result.issues.some(issue => issue["rule-id"] === "no-disconnected-nodes"));
 });
 
-test("reports when a recognized diagram type has no Worker lint rules", async () => {
+test("runs a deterministic rule for each recognized non-flowchart diagram type", async () => {
+  const cases = [
+    { code: "sequenceDiagram\nparticipant Alice\nAlice->>Bob: Hello", rule: "no-undefined-actors" },
+    { code: "classDiagram\nclass Animal\nclass Animal", rule: "no-duplicate-classes" },
+    { code: "erDiagram\nCUSTOMER ||--o{ CUSTOMER : relates", rule: "no-self-referential" },
+    { code: "stateDiagram-v2\n[*] --> Ready\nReady --> Done\nLost --> End", rule: "no-unreachable-state" },
+  ];
+
+  for (const item of cases) {
+    const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: item.code }),
+    }), env);
+    assert.equal(response.status, 200);
+    const result = await response.json() as { "lint-supported": boolean; issues: Array<{ "rule-id": string }> };
+    assert.equal(result["lint-supported"], true, item.code);
+    assert.ok(result.issues.some(issue => issue["rule-id"] === item.rule), `${item.rule} should be reported`);
+  }
+});
+
+test("returns structure metrics for Worker analysis", async () => {
   const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code: "sequenceDiagram\nAlice->>Bob: Hello" }),
+    body: JSON.stringify({ code: "flowchart TD\nA --> B\nB --> C\nX[isolated]" }),
   }), env);
-
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
-    valid: true,
-    "diagram-type": "sequence",
-    "lint-supported": false,
-    issues: [],
+  const result = await response.json() as {
+    metrics: { "node-count": number; "edge-count": number; "disconnected-node-count": number; "max-fanin": number; "max-fanout": number; "diagram-type": string; "issue-counts": { "by-rule": Record<string, number> } };
+  };
+  assert.deepEqual(result.metrics, {
+    "node-count": 4,
+    "edge-count": 2,
+    "disconnected-node-count": 1,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 1,
+    "diagram-type": "flowchart",
+    "issue-counts": { "by-severity": { error: 1 }, "by-rule": { "no-disconnected-nodes": 1 } },
   });
+});
+
+test("exports SARIF 2.1.0 from Worker analysis", async () => {
+  const response = await worker.fetch(new Request("https://example.test/v1/analyze/sarif", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: "flowchart TD\nA --> B\nB --> A" }),
+  }), env);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /application\/sarif\+json/);
+  const report = await response.json() as {
+    version: string;
+    runs: Array<{ tool: { driver: { name: string; rules: Array<{ id: string }> } }; results: Array<{ ruleId: string; level: string; locations: Array<{ physicalLocation: { artifactLocation: { uri: string }; region: { startLine: number } } }>; partialFingerprints: Record<string, string> }> }>;
+  };
+  assert.equal(report.version, "2.1.0");
+  assert.equal(report.runs[0].tool.driver.name, "merm8");
+  assert.ok(report.runs[0].tool.driver.rules.some(rule => rule.id === "no-cycles"));
+  assert.ok(report.runs[0].results.some(result => result.ruleId === "no-cycles" && result.level === "error"));
+  assert.equal(report.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri, "diagram.mmd");
+  assert.equal(report.runs[0].results[0].locations[0].physicalLocation.region.startLine, 2);
+  assert.ok(report.runs[0].results[0].partialFingerprints.issueFingerprint);
 });
 
 test("rejects malformed max-fanout configuration instead of silently using defaults", async () => {
@@ -178,6 +223,17 @@ test("protects MCP and exposes the analysis tool through Streamable HTTP", async
   const wire = await response.text();
   const body = JSON.parse(wire.match(/^data: (.+)$/m)?.[1] ?? "{}") as { result: { structuredContent: { valid: boolean } } };
   assert.equal(body.result.structuredContent.valid, true);
+});
+
+test("MCP diagram discovery reflects all Worker lint families", async () => {
+  const response = await worker.fetch(new Request("https://example.test/mcp", {
+    method: "POST", headers: { authorization: "Bearer test-key", "content-type": "application/json", accept: "application/json, text/event-stream", host: "example.test" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "list_diagram_types", arguments: {} } }),
+  }), env);
+  assert.equal(response.status, 200);
+  const wire = await response.text();
+  const body = JSON.parse(wire.match(/^data: (.+)$/m)?.[1] ?? "{}") as { result: { structuredContent: { "lint-supported": string[] } } };
+  assert.deepEqual(body.result.structuredContent["lint-supported"], ["flowchart", "sequence", "class", "er", "state"]);
 });
 
 test("authorizes MCP with credentials instead of the client-controlled hostname", async () => {

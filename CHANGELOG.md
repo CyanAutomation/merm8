@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Worker analysis now returns structural metrics and SARIF 2.1.0 reports.
+- Worker lint support now includes sequence, class, ER, and state diagrams, with the supported rule list published through discovery endpoints.
+
 ### Changed
 
 - Parser cache expiration tracking now uses a min-heap independent of LRU recency, avoiding full-cache scans on cache access.

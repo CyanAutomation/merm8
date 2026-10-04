@@ -15,7 +15,7 @@ export function parseMermaid(source: string): { diagram?: Diagram; error?: { cod
   if (!source.trim()) return { error: { code: "empty_input", message: "empty input", line: 0, column: 0 } };
   const type = typeFor(source);
   if (type === "unknown") return { error: { code: "syntax_error", message: "Unsupported or unrecognised Mermaid diagram type", line: 1, column: 1 } };
-  const nodes: Diagram["nodes"] = []; const edges: Diagram["edges"] = []; const sourceNodeIds: string[] = [];
+  const nodes: Diagram["nodes"] = []; const edges: Diagram["edges"] = []; const sourceNodeIds: string[] = []; const startNodeIds: string[] = [];
   const semanticNodes: Diagram["nodes"] = []; const semanticEdges: Diagram["edges"] = [];
   const seen = new Set<string>(); const semanticSeen = new Map<string, Diagram["nodes"][number]>();
   const add = (id: string, line: number, column: number, isDeclaration = false) => {
@@ -72,6 +72,38 @@ export function parseMermaid(source: string): { diagram?: Diagram; error?: { cod
   for (const [i, line] of source.split(/\r?\n/).entries()) {
     const number = i + 1; const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("%%") || /^(flowchart|graph|sequenceDiagram|classDiagram|erDiagram|stateDiagram)/i.test(trimmed)) continue;
+    if (type === "sequence") {
+      const participant = line.match(/^\s*(?:participant|actor)\s+([\w.-]+)(?:\s+as\s+([\w.-]+))?/i);
+      if (participant) {
+        const id = participant[2] ?? participant[1];
+        const column = line.indexOf(id) + 1;
+        add(id, number, column, true);
+        addSemantic(id, number, column, participant[1]);
+        continue;
+      }
+    }
+    if (type === "class") {
+      const declaration = line.match(/^\s*class\s+([\w.-]+)/i);
+      if (declaration) {
+        const column = line.indexOf(declaration[1]) + 1;
+        add(declaration[1], number, column, true);
+        addSemantic(declaration[1], number, column);
+        continue;
+      }
+    }
+    if (type === "state") {
+      const startTransition = line.match(/^\s*\[\*\]\s*-->\s*([\w.-]+)/);
+      if (startTransition) {
+        const target = startTransition[1];
+        const column = line.indexOf(target) + 1;
+        add(target, number, column);
+        addSemantic(target, number, column);
+        startNodeIds.push(target);
+        edges.push({ from: "*", to: target, label: null, line: number, column: line.indexOf("[*]") + 1 });
+        semanticEdges.push({ from: "*", to: target, label: null, line: number, column: line.indexOf("[*]") + 1 });
+        continue;
+      }
+    }
     if (type === "flowchart" && /(?:-->|---|--|\.\.>|==>)\s*(?:-->|---|--|\.\.>|==>)/.test(line)) {
       return { error: { code: "syntax_error", message: "Malformed flowchart relation", line: number, column: 1 } };
     }
@@ -122,7 +154,7 @@ export function parseMermaid(source: string): { diagram?: Diagram; error?: { cod
       }
       addSemantic(from, number, fromCol, extractLabel(line, from, fromCol));
       addSemantic(semanticTo, number, semanticToCol, extractLabel(line, semanticTo, semanticToCol));
-      edges.push({ from, to, label: null, line: number, column: fromCol });
+      edges.push({ from, to: type === "er" ? semanticTo : to, label: null, line: number, column: fromCol });
       semanticEdges.push({ from, to: semanticTo, label: edgeLabel, line: number, column: fromCol });
       continue;
     }
@@ -135,5 +167,5 @@ export function parseMermaid(source: string): { diagram?: Diagram; error?: { cod
       }
     }
   }
-  return { diagram: { type, nodes, edges, sourceNodeIds, semantic: { nodes: semanticNodes, edges: semanticEdges } } };
+  return { diagram: { type, nodes, edges, sourceNodeIds, ...(startNodeIds.length ? { startNodeIds } : {}), semantic: { nodes: semanticNodes, edges: semanticEdges } } };
 }

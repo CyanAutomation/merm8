@@ -17,16 +17,25 @@ specific deployment.
 | `GET` | `/v1/diagram-types` | Recognized and lint-supported diagram types |
 | `GET` | `/v1/rules` | Available lint rules |
 | `POST` | `/v1/analyze` | Validate Mermaid source and lint supported diagrams |
+| `POST` | `/v1/analyze/sarif` | Analyze Mermaid source and return SARIF 2.1.0 |
 | `POST` | `/v1/semantic-review` | Authenticated JEV semantic review alongside deterministic analysis |
 
-The Worker recognizes flowchart, sequence, class, ER, and state diagrams. Unlike the
-Go server, whose default engine lints all five families, this smaller Worker runtime
-currently provides only the flowchart rule set. Use `/v1/diagram-types` to discover
-the capabilities of the deployment you are calling.
+The Worker recognizes and lints flowchart, sequence, class, ER, and state diagrams.
+Its rule set includes `max-fanout`, `no-cycles`, `no-disconnected-nodes`, and
+`no-duplicate-node-ids` for flowcharts, plus `no-undefined-actors` for sequence,
+`no-duplicate-classes` for class, `no-self-referential` for ER, and
+`no-unreachable-state` for state diagrams. Use `/v1/diagram-types` and `/v1/rules`
+to discover the capabilities of the deployment you are calling.
 
 Every successful analysis response includes `lint-supported`. A `false` value means
 the source was parsed successfully but no Worker lint rules ran for that diagram type.
-The response still has HTTP 200 and an empty `issues` array.
+Successful responses also include node, edge, connectivity, fan-in/out, and issue-count
+metrics. The response uses HTTP 200 when no family rules are available.
+
+`POST /v1/analyze/sarif` accepts the same JSON body and rule configuration as
+`/v1/analyze`. Valid source returns a SARIF 2.1.0 report with rule metadata, source
+locations, and stable issue fingerprints. Invalid JSON, rule configuration, Mermaid,
+and oversized requests return the same JSON error contract used by `/v1/analyze`.
 
 ## Deterministic analysis and semantic review
 
@@ -34,7 +43,7 @@ The response still has HTTP 200 and an empty `issues` array.
 credentials. It remains the endpoint for repeatable structural checks.
 
 `POST /v1/semantic-review` is a separate, optional capability. It reuses the
-Worker parser and deterministic flowchart rules, then sends compact structured
+Worker parser and deterministic family rules, then sends compact structured
 diagram state to OpenRouter's Decisions API. JEV returns probabilistic semantic
 judgements in `semantic-review`; these are not deterministic lint issues and do
 not change the meaning of `/v1/analyze`.
@@ -73,6 +82,16 @@ is a neutral 0.5 normalization for clients that need a simple display value.
   "diagram-type": "flowchart",
   "lint-supported": true,
   "issues": [],
+  "metrics": {
+    "node-count": 2,
+    "edge-count": 1,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 1,
+    "max-fanout": 1,
+    "diagram-type": "flowchart",
+    "issue-counts": { "by-severity": {}, "by-rule": {} }
+  },
   "semantic-review": {
     "purpose": { "value": "process", "confidence": 0.91 },
     "label-clarity": { "value": true, "probability": 0.87 },
@@ -106,7 +125,7 @@ they are never silently replaced with defaults.
 
 ## Request limits
 
-`POST /v1/analyze` accepts JSON request bodies up to 1 MiB. Larger requests
+`POST /v1/analyze` and `/v1/analyze/sarif` accept JSON request bodies up to 1 MiB. Larger requests
 receive `413` with the `payload_too_large` error code. Clients should split
 larger diagrams before sending them for analysis.
 
@@ -120,11 +139,10 @@ required `API_KEY` and apply an appropriate Cloudflare rate limit to
 
 ## Important differences from the Go server
 
-The Worker does **not** expose the Go server's raw-analysis, SARIF, metrics,
+The Worker does **not** expose the Go server's raw-analysis, Prometheus metrics,
 or legacy unversioned endpoints. In particular, do not call:
 
 - `POST /v1/analyze/raw`
-- `POST /v1/analyze/sarif`
 - `GET /metrics`
 
 For those capabilities, run the Go server described in the root README and use
