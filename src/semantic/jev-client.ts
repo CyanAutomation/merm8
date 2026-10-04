@@ -158,7 +158,7 @@ export async function requestJevDecisions(
           : new JevClientError("network", "JEV network request failed");
         if (attempt >= maxRetries || !retryable(clientError)) throw clientError;
         retryCount += 1;
-        await wait(retryDelayMs * 2 ** attempt);
+        await wait(retryDelayMs * 2 ** retryCount);
       }
     }
   } catch (error) {
