@@ -17,6 +17,25 @@ This is intended to be a Mermaid linting service that:
 
 ---
 
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [CLI (cmd/merm8-cli)](#cli-cmdmerm8-cli)
+- [Canonical JSON naming convention](#canonical-json-naming-convention)
+- [API](#api)
+- [Security & Production Hardening](#security--production-hardening)
+- [Rule System](#rule-system)
+- [Project Structure](#project-structure)
+- [Testing](#testing)
+- [OpenAPI Spec Regeneration (Contributors)](#openapi-spec-regeneration-contributors)
+- [Changelog](#changelog)
+- [Contributing](#contributing)
+- [Environment Variables](#environment-variables)
+- [Future Roadmap](#future-roadmap)
+
+---
+
 ## Architecture
 
 ```
