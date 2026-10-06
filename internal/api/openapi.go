@@ -48,59 +48,35 @@ var openapi = map[string]interface{}{
 	},
 	"paths": map[string]interface{}{
 
-		"/": map[string]interface{}{
-			"get": map[string]interface{}{
-				"tags":        []string{"Probes"},
-				"summary":     "Liveness probe root alias",
-				"description": "Probe-friendly root alias for canonical /v1/healthz liveness checks. Returns process liveness status only.",
-				"operationId": "getHealthRoot",
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{
-						"description": "Process is healthy",
-						"content": map[string]interface{}{
-							"application/json": map[string]interface{}{
-								"schema": map[string]interface{}{
-									"type": "object",
-									"properties": map[string]interface{}{
-										"status": map[string]interface{}{"type": "string", "example": "ok"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		"/health": map[string]interface{}{
-			"get": map[string]interface{}{
-				"tags":        []string{"Probes"},
-				"summary":     "Liveness probe alias",
-				"description": "Legacy alias for canonical /v1/healthz; scheduled for removal in v1.2.0 (Q2 2026). Returns process liveness status (dependency checks are handled by /v1/ready).",
-				"operationId": "getHealth",
-				"deprecated":  true,
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{
-						"description": "Process is healthy",
-						"content": map[string]interface{}{
-							"application/json": map[string]interface{}{
-								"schema": map[string]interface{}{
-									"type": "object",
-									"properties": map[string]interface{}{
-										"status": map[string]interface{}{"type": "string", "example": "ok"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
 		"/v1/healthz": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Liveness probe (canonical v1)",
 				"description": "Canonical v1 process liveness-only probe. Returns process liveness status (dependency checks are handled by /ready).",
 				"operationId": "getHealthz",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Process is healthy",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"type": "object",
+									"properties": map[string]interface{}{
+										"status": map[string]interface{}{"type": "string", "example": "ok"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"/v1/health": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Liveness probe alias",
+				"description": "Versioned alias for canonical /v1/healthz. Returns process liveness status (dependency checks are handled by /v1/ready).",
+				"operationId": "getHealth",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{
 						"description": "Process is healthy",
@@ -192,7 +168,7 @@ var openapi = map[string]interface{}{
 			},
 		},
 
-		"/info": map[string]interface{}{
+		"/v1/info": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Service and parser runtime metadata",
@@ -212,7 +188,34 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
-
+		"/v1/metrics": map[string]interface{}{
+			"get": map[string]interface{}{
+				"tags":        []string{"Probes"},
+				"summary":     "Prometheus metrics",
+				"description": "Returns service metrics in Prometheus text exposition format. Exported families are request_total{route,method,status}, request_duration_seconds{route,method} histogram, analyze_requests_total{outcome}, and parser_duration_seconds{outcome} histogram. Restrict exposure to trusted scrape networks/identities in production.",
+				"operationId": "getMetrics",
+				"responses": map[string]interface{}{
+					"200": map[string]interface{}{
+						"description": "Metrics in Prometheus text format",
+						"content": map[string]interface{}{
+							"text/plain": map[string]interface{}{
+								"schema": map[string]interface{}{"type": "string"},
+							},
+						},
+					},
+					"501": map[string]interface{}{
+						"description": "Metrics exporter not configured",
+						"content": map[string]interface{}{
+							"application/json": map[string]interface{}{
+								"schema": map[string]interface{}{
+									"$ref": "#/components/schemas/AnalyzeResponse",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"/v1/version": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
@@ -256,79 +259,6 @@ var openapi = map[string]interface{}{
 			},
 		},
 
-		"/config-versions": map[string]interface{}{
-			"get": map[string]interface{}{
-				"tags":        []string{"Documentation"},
-				"summary":     "Config schema version compatibility information alias",
-				"description": "Legacy alias for /v1/config-versions. Returns config schema version and deprecation info.",
-				"operationId": "getConfigVersions",
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{
-						"description": "Config version compatibility information",
-						"content": map[string]interface{}{
-							"application/json": map[string]interface{}{
-								"schema": map[string]interface{}{
-									"$ref": "#/components/schemas/ConfigVersionsResponse",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		"/version": map[string]interface{}{
-			"get": map[string]interface{}{
-				"tags":        []string{"Probes"},
-				"summary":     "Version and build metadata alias",
-				"description": "Legacy alias for /v1/version. Returns informational service/build metadata.",
-				"operationId": "getVersion",
-				"deprecated":  true,
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{
-						"description": "Version metadata",
-						"content": map[string]interface{}{
-							"application/json": map[string]interface{}{
-								"schema": map[string]interface{}{
-									"type":                 "object",
-									"additionalProperties": map[string]interface{}{"type": "string"},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		"/metrics": map[string]interface{}{
-			"get": map[string]interface{}{
-				"tags":        []string{"Probes"},
-				"summary":     "Prometheus metrics",
-				"description": "Returns service metrics in Prometheus text exposition format. Exported families are request_total{route,method,status}, request_duration_seconds{route,method} histogram, analyze_requests_total{outcome}, and parser_duration_seconds{outcome} histogram. Restrict exposure to trusted scrape networks/identities in production.",
-				"operationId": "getMetrics",
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{
-						"description": "Metrics in Prometheus text format",
-						"content": map[string]interface{}{
-							"text/plain": map[string]interface{}{
-								"schema": map[string]interface{}{
-									"type": "string",
-								},
-							},
-						},
-					},
-					"501": map[string]interface{}{
-						"description": "Metrics exporter not configured",
-						"content": map[string]interface{}{
-							"application/json": map[string]interface{}{
-								"schema": map[string]interface{}{
-									"$ref": "#/components/schemas/AnalyzeResponse",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-
 		"/v1/internal/metrics": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
@@ -349,28 +279,6 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
-		"/internal/metrics": map[string]interface{}{
-			"get": map[string]interface{}{
-				"tags":        []string{"Probes"},
-				"summary":     "Internal analyze outcome counters (legacy alias)",
-				"description": "Deprecated compatibility alias for GET /v1/internal/metrics. Scheduled for removal in v1.2.0 (Q2 2026).",
-				"operationId": "getInternalMetricsLegacy",
-				"deprecated":  true,
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{
-						"description": "Internal analyze outcome counters",
-						"content": map[string]interface{}{
-							"application/json": map[string]interface{}{
-								"schema": map[string]interface{}{
-									"$ref": "#/components/schemas/InternalMetricsResponse",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-
 		"/v1/rules": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Linting"},
@@ -530,7 +438,7 @@ var openapi = map[string]interface{}{
 			},
 		},
 
-		"/diagram-types": map[string]interface{}{
+		"/v1/diagram-types": map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Linting"},
 				"summary":     "List parser-recognized and lint-supported diagram types",
@@ -550,6 +458,7 @@ var openapi = map[string]interface{}{
 				},
 			},
 		},
+
 		"/v1/analyze": map[string]interface{}{
 			"post": map[string]interface{}{
 				"tags":        []string{"Linting"},
@@ -1715,100 +1624,6 @@ var openapi = map[string]interface{}{
 					"504": map[string]interface{}{"description": "Parser timeout", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
 				},
 			},
-		},
-		"/analyze": map[string]interface{}{
-			"post": map[string]interface{}{
-				"tags":        []string{"Linting"},
-				"summary":     "Analyze and lint a Mermaid diagram (legacy alias)",
-				"description": "Deprecated compatibility alias for POST /v1/analyze. Scheduled for removal in v1.2.0 (Q2 2026).",
-				"operationId": "analyzeCodeLegacy",
-				"deprecated":  true,
-				"requestBody": map[string]interface{}{
-					"required": true,
-					"content": map[string]interface{}{
-						"application/json": map[string]interface{}{
-							"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeRequest"},
-						},
-					},
-				},
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{"description": "Success", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
-					"400": map[string]interface{}{"description": "Bad request", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
-					"413": map[string]interface{}{"description": "Request too large", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
-					"500": map[string]interface{}{"description": "Parser/service internal failure", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
-					"504": map[string]interface{}{"description": "Parser timeout", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
-				},
-			},
-		},
-		"/analyze/raw": map[string]interface{}{
-			"post": map[string]interface{}{
-				"tags":        []string{"Linting"},
-				"summary":     "Analyze and lint a Mermaid diagram (raw text, legacy alias)",
-				"description": "Deprecated compatibility alias for POST /v1/analyze/raw. Accepts raw mermaid code directly. Scheduled for removal in v1.2.0 (Q2 2026).",
-				"operationId": "analyzeCodeRawLegacy",
-				"deprecated":  true,
-				"requestBody": map[string]interface{}{
-					"required": true,
-					"content": map[string]interface{}{
-						"text/plain": map[string]interface{}{
-							"schema": map[string]interface{}{
-								"type":        "string",
-								"description": "Raw mermaid diagram code",
-							},
-						},
-						"application/json": map[string]interface{}{
-							"schema": map[string]interface{}{
-								"type":        "object",
-								"description": "Auto-detected JSON with code field",
-								"properties": map[string]interface{}{
-									"code": map[string]interface{}{
-										"type":        "string",
-										"description": "Mermaid diagram code",
-									},
-								},
-								"required": []string{"code"},
-							},
-						},
-					},
-				},
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{"description": "Analysis complete", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
-					"400": map[string]interface{}{"description": "Bad request", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/Error"}}}},
-					"413": map[string]interface{}{"description": "Request too large", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/Error"}}}},
-					"500": map[string]interface{}{"description": "Parser/service internal failure", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
-					"504": map[string]interface{}{"description": "Parser timeout", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/AnalyzeResponse"}}}},
-				},
-			},
-		},
-		"/rules": map[string]interface{}{
-			"get": map[string]interface{}{
-				"tags":        []string{"Linting"},
-				"summary":     "List built-in lint rules (legacy alias)",
-				"description": "Deprecated compatibility alias for GET /v1/rules. Scheduled for removal in v1.2.0 (Q2 2026).",
-				"operationId": "listRulesLegacy",
-				"deprecated":  true,
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{"description": "Built-in rule metadata", "content": map[string]interface{}{"application/json": map[string]interface{}{"schema": map[string]interface{}{"$ref": "#/components/schemas/RulesResponse"}}}},
-				},
-			},
-		},
-		"/rules/schema": map[string]interface{}{
-			"get": map[string]interface{}{
-				"tags":        []string{"Linting"},
-				"summary":     "Get JSON Schema for lint rule configuration (legacy alias)",
-				"description": "Deprecated compatibility alias for GET /v1/rules/schema. Scheduled for removal in v1.2.0 (Q2 2026).",
-				"operationId": "getRuleConfigSchemaLegacy",
-				"deprecated":  true,
-				"responses": map[string]interface{}{
-					"200": map[string]interface{}{"description": "Rule configuration schema"},
-				},
-			},
-		},
-		"/spec": map[string]interface{}{
-			"get": map[string]interface{}{"tags": []string{"Documentation"}, "summary": "Get OpenAPI specification (legacy alias)", "description": "Deprecated compatibility alias for GET /v1/spec. Scheduled for removal in v1.2.0 (Q2 2026).", "operationId": "getSpecLegacy", "deprecated": true, "responses": map[string]interface{}{"200": map[string]interface{}{"description": "OpenAPI specification"}}},
-		},
-		"/docs": map[string]interface{}{
-			"get": map[string]interface{}{"tags": []string{"Documentation"}, "summary": "Interactive API documentation (legacy alias)", "description": "Deprecated compatibility alias for GET /v1/docs. Scheduled for removal in v1.2.0 (Q2 2026).", "operationId": "getDocsLegacy", "deprecated": true, "responses": map[string]interface{}{"200": map[string]interface{}{"description": "Swagger UI HTML page"}}},
 		},
 	},
 	"components": map[string]interface{}{

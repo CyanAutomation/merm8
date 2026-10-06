@@ -61,22 +61,6 @@ func TestParseCache_GetObservesExpirationsDuringMissByEntryType(t *testing.T) {
 	})
 }
 
-func TestParseCache_GetSuccessObservesExpirationDuringMiss(t *testing.T) {
-	now := time.Unix(2_000, 0)
-	cache, metrics := newTestParseCache(&now, 4, 4, time.Second)
-	cache.putSuccess("expired", &model.Diagram{})
-
-	now = now.Add(2 * time.Second)
-	if diagram, ok := cache.getSuccess("missing"); ok || diagram != nil {
-		t.Fatalf("expected miss, got diagram=%v ok=%v", diagram, ok)
-	}
-
-	assertCacheEvents(t, metrics, map[string]int{
-		"eviction:success": 1,
-		"miss:success":     1,
-	})
-}
-
 func TestParseCache_PutObservesEveryExpirationDuringSet(t *testing.T) {
 	now := time.Unix(3_000, 0)
 	cache, metrics := newTestParseCache(&now, 4, 4, time.Second)
@@ -219,7 +203,8 @@ func BenchmarkLRUTTLCacheHit(b *testing.B) {
 	}
 }
 
-func TestParseCache_GetSuccessReturnedDiagramMutationDoesNotAffectCachedDiagram(t *testing.T) {
+// @spec: CACHE-001: Cache reads return deep copies that callers can mutate safely
+func TestParseCache_GetReturnedDiagramMutationDoesNotAffectCachedDiagram(t *testing.T) {
 	cache := newParseCache(DefaultCacheConfig())
 	const key = "flowchart:mutation"
 
@@ -252,9 +237,9 @@ func TestParseCache_GetSuccessReturnedDiagramMutationDoesNotAffectCachedDiagram(
 		DuplicateNodeIDs:    []string{"A"},
 	})
 
-	firstRead, ok := cache.getSuccess(key)
-	if !ok {
-		t.Fatalf("expected cache hit on first read")
+	firstRead, syntaxErr, ok := cache.get(key)
+	if !ok || syntaxErr != nil || firstRead == nil {
+		t.Fatalf("expected successful cache read, got diagram=%v syntaxErr=%v ok=%v", firstRead, syntaxErr, ok)
 	}
 	if firstRead.Nodes[0].Line == nil || firstRead.Nodes[0].Column == nil || firstRead.Edges[0].Line == nil || firstRead.Edges[0].Column == nil {
 		t.Fatalf("expected first read to include node/edge positions")
@@ -273,9 +258,9 @@ func TestParseCache_GetSuccessReturnedDiagramMutationDoesNotAffectCachedDiagram(
 	firstRead.DisconnectedNodeIDs[0] = "mutated-disconnected"
 	firstRead.DuplicateNodeIDs[0] = "mutated-duplicate"
 
-	secondRead, ok := cache.getSuccess(key)
-	if !ok {
-		t.Fatalf("expected cache hit on second read")
+	secondRead, syntaxErr, ok := cache.get(key)
+	if !ok || syntaxErr != nil || secondRead == nil {
+		t.Fatalf("expected successful second cache read, got diagram=%v syntaxErr=%v ok=%v", secondRead, syntaxErr, ok)
 	}
 
 	if got := *secondRead.Nodes[0].Line; got != 10 {
@@ -313,37 +298,6 @@ func TestParseCache_GetSuccessReturnedDiagramMutationDoesNotAffectCachedDiagram(
 	}
 	if got := secondRead.DuplicateNodeIDs[0]; got != "A" {
 		t.Fatalf("expected cached duplicate node IDs to remain unchanged, got %q", got)
-	}
-}
-
-func TestParseCache_GetReturnedDiagramMutationDoesNotAffectCachedDiagram(t *testing.T) {
-	cache := newParseCache(DefaultCacheConfig())
-	const key = "flowchart:get"
-
-	nodeLine := 7
-	edgeColumn := 9
-	cache.putSuccess(key, &model.Diagram{
-		Nodes: []model.Node{{ID: "A", Line: &nodeLine}},
-		Edges: []model.Edge{{From: "A", To: "B", Type: "-->", Column: &edgeColumn}},
-	})
-
-	firstRead, syntaxErr, ok := cache.get(key)
-	if !ok || syntaxErr != nil || firstRead == nil {
-		t.Fatalf("expected successful cache read, got diagram=%v syntaxErr=%v ok=%v", firstRead, syntaxErr, ok)
-	}
-
-	*firstRead.Nodes[0].Line = 70
-	*firstRead.Edges[0].Column = 90
-
-	secondRead, syntaxErr, ok := cache.get(key)
-	if !ok || syntaxErr != nil || secondRead == nil {
-		t.Fatalf("expected successful second cache read, got diagram=%v syntaxErr=%v ok=%v", secondRead, syntaxErr, ok)
-	}
-	if got := *secondRead.Nodes[0].Line; got != 7 {
-		t.Fatalf("expected node line to remain 7, got %d", got)
-	}
-	if got := *secondRead.Edges[0].Column; got != 9 {
-		t.Fatalf("expected edge column to remain 9, got %d", got)
 	}
 }
 

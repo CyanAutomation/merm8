@@ -23,10 +23,28 @@ func (p *nilEngineTestParser) Parse(_ string) (*model.Diagram, *parser.SyntaxErr
 	return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 }
 
+// @spec: API-009: A nil engine dependency falls back to the default analysis engine
 func TestNewHandler_DefaultsNilEngineDependency(t *testing.T) {
 	h := NewHandler(&nilEngineTestParser{}, nil)
-	if h.engine == nil {
-		t.Fatal("expected NewHandler to initialize default engine when nil dependency provided")
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(`{"code":"graph TD;A-->B"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected handler with default engine to analyze successfully, got %d body=%s", w.Code, w.Body.String())
+	}
+	var response struct {
+		Valid bool `json:"valid"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode analysis response: %v", err)
+	}
+	if !response.Valid {
+		t.Fatalf("expected valid analysis response, got %s", w.Body.String())
 	}
 }
 

@@ -40,22 +40,6 @@ func (c *parseCache) setMetrics(metrics CacheMetricsObserver) {
 	c.metricsMu.Unlock()
 }
 
-func (c *parseCache) getSuccess(key string) (*model.Diagram, bool) {
-	if c == nil {
-		return nil, false
-	}
-	c.entries.RLock()
-	v, ok, removed := c.success.Get(key)
-	c.entries.RUnlock()
-	c.observeRemovals(removed, "success")
-	if !ok {
-		c.observe("miss", "success")
-		return nil, false
-	}
-	c.observe("hit", "success")
-	return cloneDiagram(v), true
-}
-
 func (c *parseCache) get(key string) (*model.Diagram, *SyntaxError, bool) {
 	if c == nil {
 		return nil, nil, false
