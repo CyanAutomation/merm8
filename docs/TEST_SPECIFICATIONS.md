@@ -24,7 +24,7 @@ Each entry contains:
 
 ### API-002: Missing Code Field Validation
 
-- **Requirement**: POST /analyze requests without `code` field return 400 with error code `missing_code`
+- **Requirement**: POST `/v1/analyze` requests without `code` field return 400 with error code `missing_code`
 - **Tests**: `TestAnalyze_MissingCode`
 - **File**: `internal/api/handler_test.go`
 
@@ -58,6 +58,30 @@ Each entry contains:
 - **Requirement**: Parser returning invalid AST structure returns 500 with error code `parser_contract_violation`
 - **Tests**: `TestAnalyze_ParserContractViolation_Returns500`
 - **File**: `internal/api/handler_test.go`
+
+### API-008: Versioned Analysis Spelling Aliases
+
+- **Requirement**: Canonical `/v1/analyze` routes remain available, `/v1/analyse` spelling aliases remain available with deprecation headers, and unversioned routes are not advertised or registered
+- **Tests**: `TestRegisterRoutes_V1CanonicalAndSpellingAliases`, `TestServeSpec_RegisteredAnalysisAliasesAreDocumented`
+- **Files**: `internal/api/handler_test.go`, `internal/api/openapi_test.go`
+
+### DOCS-001: OpenAPI Copies Are Independent
+
+- **Requirement**: Mutating a returned OpenAPI document does not mutate a later document returned by the package
+- **Tests**: `TestOpenAPISpec_ReturnsIndependentCopy`
+- **File**: `internal/api/openapi_test.go`
+
+### DOCS-002: Registered Service Routes Are Documented
+
+- **Requirement**: OpenAPI documents the registered versioned health, metadata, metrics, and diagram-type endpoints using their actual paths and operation IDs
+- **Tests**: `TestServeSpec_RegisteredServiceRoutesAreDocumented`
+- **File**: `internal/api/openapi_test.go`
+
+### API-009: Nil Engine Dependency Uses Default Engine
+
+- **Requirement**: A handler created without an engine dependency still analyzes a valid diagram successfully using its default engine
+- **Tests**: `TestNewHandler_DefaultsNilEngineDependency`
+- **File**: `internal/api/handler_nil_engine_test.go`
 
 ---
 
@@ -111,6 +135,12 @@ Each entry contains:
 - **Tests**: `TestRateLimiter_UnknownClientRejectedAtCapacity`, `TestRateLimiter_ExistingClientContinuesAtCapacity`
 - **File**: `internal/api/middleware_internal_test.go`
 
+### FLOW-CONTROL-001: Runtime Parser Limit Updates Preserve In-Flight Accounting
+
+- **Requirement**: Reapplying the configured parser concurrency limit while parses are in flight does not admit work beyond the configured cap
+- **Tests**: `TestAnalyze_ParserConcurrencyLimit_RuntimeUpdates_DoNotCreateParallelLimiters`
+- **File**: `internal/api/handler_test.go`
+
 ---
 
 ## Hint & Help System Tests
@@ -130,7 +160,7 @@ Each entry contains:
 ### CACHE-001: Parser Cache Returns Deep Copies
 
 - **Requirement**: Parser cache returns deep copies; mutations by caller don't affect cached value
-- **Tests**: `TestParseCache_GetSuccessReturnedDiagramMutationDoesNotAffectCachedDiagram`
+- **Tests**: `TestParseCache_GetReturnedDiagramMutationDoesNotAffectCachedDiagram`
 - **File**: `internal/parser/cache_test.go`
 - **Validation**: Covers node positions, edges, subgraphs, suppressions, and derived fields
 
@@ -170,10 +200,6 @@ The following test helpers are deprecated and should not be used for new tests. 
 
 ---
 
-## Mutation Testing Baseline
+## Mutation Testing Status
 
-After refactoring, mutation testing baseline was updated:
-
-- **Before**: 3 low-value tests removed; 7 tests refactored with structured assertions
-- **Expected Impact**: Mutation score maintained or improved (fewer brittle assertions prone to false negatives)
-- **Baseline File**: See `benchmarks/BENCHMARK.md` for detailed mutation score report
+No mutation testing tool or mutation score baseline is currently configured for this repository. Mutation impact is therefore unmeasured; `benchmarks/BENCHMARK.md` describes rule-efficacy benchmarks and is not a mutation report. Establish a mutation testing tool and record an initial baseline before using mutation score to compare test changes.

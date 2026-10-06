@@ -286,8 +286,6 @@ When `ANALYZE_AUTH_TOKEN` is configured, authentication is **required** for:
 | `/v1/analyze/sarif` | POST | ✅ Yes |
 | `/v1/analyse` | POST (deprecated) | ✅ Yes |
 | `/v1/analyse/raw` | POST (deprecated) | ✅ Yes |
-| `/analyze` | POST (legacy) | ✅ Yes |
-| `/analyze/raw` | POST (legacy) | ✅ Yes |
 
 ### Never Protected
 

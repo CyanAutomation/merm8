@@ -316,7 +316,7 @@ func TestServeSpec_Non2xxResponsesUseSharedErrorSchema(t *testing.T) {
 	if got := lookup(t, spec, "components", "schemas", "ReadyErrorResponse", "properties", "error", "$ref"); got != "#/components/schemas/Error" {
 		t.Fatalf("expected ReadyErrorResponse.error to reference Error schema, got %#v", got)
 	}
-	if got := lookup(t, spec, "paths", "/metrics", "get", "responses", "501", "content", "application/json", "schema", "$ref"); got != "#/components/schemas/AnalyzeResponse" {
+	if got := lookup(t, spec, "paths", "/v1/metrics", "get", "responses", "501", "content", "application/json", "schema", "$ref"); got != "#/components/schemas/AnalyzeResponse" {
 		t.Fatalf("expected /v1/metrics 501 schema AnalyzeResponse, got %#v", got)
 	}
 }
@@ -555,11 +555,11 @@ func TestServeSpec_Regression_ConfigValidationAndSeverityExamples(t *testing.T) 
 
 func TestServeSpec_ExposesDiagramTypesEndpointAndSchema(t *testing.T) {
 	spec := loadServedSpec(t)
-	if got := lookup(t, spec, "paths", "/diagram-types", "get", "operationId"); got != "listDiagramTypes" {
-		t.Fatalf("expected /diagram-types operationId listDiagramTypes, got %#v", got)
+	if got := lookup(t, spec, "paths", "/v1/diagram-types", "get", "operationId"); got != "listDiagramTypes" {
+		t.Fatalf("expected /v1/diagram-types operationId listDiagramTypes, got %#v", got)
 	}
-	if got := lookup(t, spec, "paths", "/diagram-types", "get", "responses", "200", "content", "application/json", "schema", "$ref"); got != "#/components/schemas/DiagramTypesResponse" {
-		t.Fatalf("expected /diagram-types response schema ref, got %#v", got)
+	if got := lookup(t, spec, "paths", "/v1/diagram-types", "get", "responses", "200", "content", "application/json", "schema", "$ref"); got != "#/components/schemas/DiagramTypesResponse" {
+		t.Fatalf("expected /v1/diagram-types response schema ref, got %#v", got)
 	}
 	_ = lookup(t, spec, "components", "schemas", "DiagramTypesResponse")
 }
@@ -657,19 +657,43 @@ func TestServeSpec_ExposesRuleConfigSchemaAndEndpoint(t *testing.T) {
 	}
 }
 
-func TestServeSpec_LegacyAliasesAreDeprecated(t *testing.T) {
+// @spec: API-008: OpenAPI documents active versioned analysis spelling aliases only
+func TestServeSpec_RegisteredAnalysisAliasesAreDocumented(t *testing.T) {
 	spec := loadServedSpec(t)
-	for _, path := range []string{"/analyze", "/rules", "/rules/schema", "/spec", "/docs", "/internal/metrics"} {
+	paths := lookup(t, spec, "paths").(map[string]interface{})
+	for path := range paths {
+		if !strings.HasPrefix(path, "/v1/") {
+			t.Errorf("OpenAPI advertises unversioned route %q, but unversioned routes are not registered", path)
+		}
+	}
+	for _, path := range []string{"/v1/analyse", "/v1/analyse/raw"} {
 		methods := lookup(t, spec, "paths", path).(map[string]interface{})
-		for _, methodDef := range methods {
-			operation := methodDef.(map[string]interface{})
-			if deprecated, ok := operation["deprecated"].(bool); !ok || !deprecated {
-				t.Fatalf("expected %s to be marked deprecated", path)
-			}
+		operation := methods["post"].(map[string]interface{})
+		if deprecated, ok := operation["deprecated"].(bool); !ok || !deprecated {
+			t.Errorf("expected active spelling alias %s to be marked deprecated", path)
 		}
 	}
 }
-func TestServeSpec_InternalMetricsEndpointsDocumented(t *testing.T) {
+
+// @spec: DOCS-002: OpenAPI documents registered versioned service routes
+func TestServeSpec_RegisteredServiceRoutesAreDocumented(t *testing.T) {
+	spec := loadServedSpec(t)
+	for _, tc := range []struct {
+		path        string
+		operationID string
+	}{
+		{path: "/v1/health", operationID: "getHealth"},
+		{path: "/v1/info", operationID: "getInfo"},
+		{path: "/v1/metrics", operationID: "getMetrics"},
+		{path: "/v1/diagram-types", operationID: "listDiagramTypes"},
+	} {
+		if got := lookup(t, spec, "paths", tc.path, "get", "operationId"); got != tc.operationID {
+			t.Errorf("expected %s operationId %q, got %#v", tc.path, tc.operationID, got)
+		}
+	}
+}
+
+func TestServeSpec_InternalMetricsEndpointDocumented(t *testing.T) {
 	spec := loadServedSpec(t)
 
 	if got := lookup(t, spec, "paths", "/v1/internal/metrics", "get", "operationId"); got != "getInternalMetrics" {
@@ -678,18 +702,18 @@ func TestServeSpec_InternalMetricsEndpointsDocumented(t *testing.T) {
 	if got := lookup(t, spec, "paths", "/v1/internal/metrics", "get", "responses", "200", "content", "application/json", "schema", "$ref"); got != "#/components/schemas/InternalMetricsResponse" {
 		t.Fatalf("expected /v1/internal/metrics to use InternalMetricsResponse schema, got %#v", got)
 	}
-	if deprecated, ok := lookup(t, spec, "paths", "/internal/metrics", "get", "deprecated").(bool); !ok || !deprecated {
-		t.Fatalf("expected /internal/metrics legacy alias to be deprecated")
-	}
 }
 
+// @spec: DOCS-001: Mutating a returned OpenAPI spec does not mutate later copies
 func TestOpenAPISpec_ReturnsIndependentCopy(t *testing.T) {
 	specA := api.OpenAPISpec()
 	specB := api.OpenAPISpec()
 
-	specA["openapi"] = "mutated"
+	infoA := specA["info"].(map[string]interface{})
+	infoB := specB["info"].(map[string]interface{})
+	infoA["title"] = "mutated"
 
-	if specB["openapi"] != "3.0.0" {
-		t.Fatalf("expected second spec copy to remain unchanged, got %#v", specB["openapi"])
+	if got := infoB["title"]; got != "merm8 - Mermaid Lint API" {
+		t.Fatalf("expected nested info in second spec copy to remain unchanged, got %#v", got)
 	}
 }

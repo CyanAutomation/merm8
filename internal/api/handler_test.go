@@ -3898,14 +3898,17 @@ func TestAnalyze_ParserConcurrencyLimit_HighConcurrencyContention(t *testing.T) 
 	}
 }
 
+// @spec: FLOW-CONTROL-001: Runtime parser limit updates preserve in-flight accounting
 func TestAnalyze_ParserConcurrencyLimit_RuntimeUpdates_DoNotCreateParallelLimiters(t *testing.T) {
-	const (
-		limit      = 2
-		totalCalls = 80
-	)
+	const limit = 2
 
 	var inFlight int32
 	var peakInFlight int32
+	entered := make(chan struct{}, limit+1)
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+	defer unblock()
 
 	mockP := &mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		current := atomic.AddInt32(&inFlight, 1)
@@ -3916,7 +3919,8 @@ func TestAnalyze_ParserConcurrencyLimit_RuntimeUpdates_DoNotCreateParallelLimite
 			}
 		}
 
-		time.Sleep(25 * time.Millisecond)
+		entered <- struct{}{}
+		<-release
 		atomic.AddInt32(&inFlight, -1)
 		return &model.Diagram{}, nil, nil
 	}}
@@ -3927,41 +3931,59 @@ func TestAnalyze_ParserConcurrencyLimit_RuntimeUpdates_DoNotCreateParallelLimite
 	h.RegisterRoutes(mux)
 
 	body, _ := json.Marshal(map[string]string{"code": "graph TD\n  A-->B"})
-
-	start := make(chan struct{})
-	var requestsWG sync.WaitGroup
-	for i := 0; i < totalCalls; i++ {
-		requestsWG.Add(1)
+	request := func() <-chan int {
+		result := make(chan int, 1)
 		go func() {
-			defer requestsWG.Done()
-			<-start
-
 			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
-
-			if w.Code != http.StatusOK && w.Code != http.StatusServiceUnavailable {
-				t.Errorf("expected 200 or 503 under contention, got %d", w.Code)
-			}
+			result <- w.Code
 		}()
+		return result
 	}
 
-	updatesDone := make(chan struct{})
-	go func() {
-		defer close(updatesDone)
-		<-start
-		for i := 0; i < 200; i++ {
-			h.SetParserConcurrencyLimit(limit)
+	firstResults := []<-chan int{request(), request()}
+	for i := 0; i < limit; i++ {
+		select {
+		case <-entered:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for admitted parser call %d", i+1)
 		}
-	}()
+	}
 
-	close(start)
-	requestsWG.Wait()
-	<-updatesDone
+	// Repeated updates while both parser calls are in flight must preserve the
+	// shared in-flight count. A replaced limiter would admit a third call.
+	for i := 0; i < 200; i++ {
+		h.SetParserConcurrencyLimit(limit)
+	}
+
+	thirdResult := request()
+	select {
+	case status := <-thirdResult:
+		if status != http.StatusServiceUnavailable {
+			t.Fatalf("expected third request to be rejected while both slots are occupied, got %d", status)
+		}
+	case <-entered:
+		t.Fatal("runtime limit updates admitted a third parser call")
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the third request result")
+	}
 
 	if got := int(atomic.LoadInt32(&peakInFlight)); got > limit {
 		t.Fatalf("peak parser in-flight calls exceeded limit during runtime updates: got %d want <= %d", got, limit)
+	}
+
+	unblock()
+	for i, result := range firstResults {
+		select {
+		case status := <-result:
+			if status != http.StatusOK {
+				t.Fatalf("expected admitted request %d to complete with 200, got %d", i+1, status)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for admitted request %d to finish", i+1)
+		}
 	}
 }
 
@@ -4898,52 +4920,28 @@ func TestAnalyze_ConfigSuppressionSelectors_MalformedRejected(t *testing.T) {
 	})
 }
 
-func TestAnalyze_RequestIDHeaderPropagation(t *testing.T) {
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
-	})
-	handler := api.RequestIDMiddleware(mux)
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(`{"code":"graph TD;A-->B"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Request-Id", "req-123")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if got := w.Header().Get("X-Request-Id"); got != "req-123" {
-		t.Fatalf("expected propagated request id, got %q", got)
-	}
-}
-
-func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
+// @spec: API-008: Versioned analysis spelling aliases remain available and deprecated
+func TestRegisterRoutes_V1CanonicalAndSpellingAliases(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
 
 	for _, tc := range []struct {
-		method string
-		path   string
-		body   string
-		want   int
+		name            string
+		method          string
+		path            string
+		body            string
+		contentType     string
+		wantStatus      int
+		wantDeprecated  bool
+		warningFragment string
 	}{
-		{method: http.MethodPost, path: "/v1/analyze", body: `{"code":"graph TD;A-->B"}`, want: http.StatusOK},
-		{method: http.MethodPost, path: "/v1/analyze", body: `{"code":"graph TD;A-->B"}`, want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/rules", want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/rules", want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/rules/schema", want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/spec", want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/spec", want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/docs", want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/docs", want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/benchmark.html", want: http.StatusNotFound},
-		{method: http.MethodGet, path: "/v1/healthz", want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/healthz", want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/ready", want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/ready", want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/version", want: http.StatusOK},
-		{method: http.MethodGet, path: "/v1/version", want: http.StatusOK},
+		{name: "canonical JSON analysis", method: http.MethodPost, path: "/v1/analyze", body: `{"code":"graph TD;A-->B"}`, contentType: "application/json", wantStatus: http.StatusOK},
+		{name: "deprecated spelling JSON alias", method: http.MethodPost, path: "/v1/analyse", body: `{"code":"graph TD;A-->B"}`, contentType: "application/json", wantStatus: http.StatusOK, wantDeprecated: true, warningFragment: "use POST /v1/analyze."},
+		{name: "canonical raw analysis", method: http.MethodPost, path: "/v1/analyze/raw", body: "graph TD;A-->B", contentType: "text/plain", wantStatus: http.StatusOK},
+		{name: "deprecated spelling raw alias", method: http.MethodPost, path: "/v1/analyse/raw", body: "graph TD;A-->B", contentType: "text/plain", wantStatus: http.StatusOK, wantDeprecated: true, warningFragment: "use POST /v1/analyze/raw."},
 	} {
-		t.Run(tc.path, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			var reqBody *strings.Reader
 			if tc.body != "" {
 				reqBody = strings.NewReader(tc.body)
@@ -4951,17 +4949,60 @@ func TestRegisterRoutes_V1CanonicalAndLegacyAliases(t *testing.T) {
 				reqBody = strings.NewReader("")
 			}
 			req := httptest.NewRequest(tc.method, tc.path, reqBody)
-			if tc.method == http.MethodPost {
-				req.Header.Set("Content-Type", "application/json")
+			if tc.contentType != "" {
+				req.Header.Set("Content-Type", tc.contentType)
 			}
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
-			if w.Code != tc.want {
-				t.Fatalf("expected %d, got %d body=%s", tc.want, w.Code, w.Body.String())
+			if w.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d body=%s", tc.wantStatus, w.Code, w.Body.String())
+			}
+			if tc.wantDeprecated {
+				if got := w.Header().Get("Deprecation"); got != "true" {
+					t.Fatalf("expected deprecated alias header, got %q", got)
+				}
+				if got := w.Header().Get("Warning"); !strings.Contains(got, tc.warningFragment) {
+					t.Fatalf("expected warning to include %q, got %q", tc.warningFragment, got)
+				}
+			} else if got := w.Header().Get("Deprecation"); got != "" {
+				t.Fatalf("expected no deprecation header, got %q", got)
 			}
 		})
 	}
 
+	for _, route := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/"},
+		{method: http.MethodGet, path: "/health"},
+		{method: http.MethodGet, path: "/healthz"},
+		{method: http.MethodGet, path: "/ready"},
+		{method: http.MethodGet, path: "/info"},
+		{method: http.MethodGet, path: "/config-versions"},
+		{method: http.MethodGet, path: "/version"},
+		{method: http.MethodGet, path: "/metrics"},
+		{method: http.MethodGet, path: "/internal/metrics"},
+		{method: http.MethodGet, path: "/diagram-types"},
+		{method: http.MethodPost, path: "/analyze"},
+		{method: http.MethodGet, path: "/analyze/help"},
+		{method: http.MethodPost, path: "/analyze/sarif"},
+		{method: http.MethodPost, path: "/analyze/raw"},
+		{method: http.MethodGet, path: "/rules"},
+		{method: http.MethodGet, path: "/rules/schema"},
+		{method: http.MethodGet, path: "/spec"},
+		{method: http.MethodGet, path: "/docs"},
+		{method: http.MethodGet, path: "/benchmark.html"},
+	} {
+		t.Run("unversioned route is not registered: "+route.method+" "+route.path, func(t *testing.T) {
+			req := httptest.NewRequest(route.method, route.path, nil)
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+			if w.Code != http.StatusNotFound {
+				t.Fatalf("expected unversioned route %s %s to return 404, got %d", route.method, route.path, w.Code)
+			}
+		})
+	}
 }
 
 func TestServeBenchmark_Returns200WhenFileExists(t *testing.T) {

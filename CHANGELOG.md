@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The served OpenAPI document no longer advertises unversioned routes that the server does not register; active versioned spelling aliases remain documented as deprecated.
 - Parser cache expiration tracking now uses a min-heap independent of LRU recency, avoiding full-cache scans on cache access.
 - Parser result caching is now configurable with independent success and syntax capacities and TTLs; setting either capacity or TTL to zero disables that cache.
 - The default Go lint engine now reports flowchart, sequence, class, ER, and state diagrams as lint-supported and runs each family's registered rules.
