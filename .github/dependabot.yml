@@ -5,3 +5,18 @@ updates:
     schedule:
       interval: weekly
       day: monday
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+  - package-ecosystem: npm
+    directory: /parser-node
+    schedule:
+      interval: weekly
+      day: monday
