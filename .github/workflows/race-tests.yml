@@ -1,6 +1,13 @@
 name: Race Tests
 
 on:
+  pull_request:
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "parser-node/**"
+      - ".github/workflows/race-tests.yml"
   schedule:
     - cron: "30 5 * * 1"
   workflow_dispatch:

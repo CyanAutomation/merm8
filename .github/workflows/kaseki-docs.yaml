@@ -30,7 +30,8 @@ jobs:
       REF: ${{ github.sha }}
       TASK_DESCRIPTION: Keep README.md and docs/ accurate against the current implementation.
       ALLOWLIST: README.md,docs/**/*.md
-      VALIDATION_COMMAND: npm test
+      VALIDATION_COMMAND: >-
+        npm ci && npm --prefix parser-node ci && npm test
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
