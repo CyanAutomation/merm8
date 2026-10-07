@@ -64,7 +64,8 @@ jobs:
         run: node --experimental-strip-types scripts/validate-kaseki-url.ts
 
       - name: Verify controller health
-        uses: CyanAutomation/kaseki-agent/.github/actions/verify-controller-health@30db5d15e117b8d8de13eb66766d48cf6b7d618b
+        # Keep the immutable SHA pin; ignore the pedantic tag check until the shared action is released.
+        uses: CyanAutomation/kaseki-agent/.github/actions/verify-controller-health@30db5d15e117b8d8de13eb66766d48cf6b7d618b # zizmor: ignore[stale-action-refs]
         with:
           base-url: ${{ vars.KASEKI_BASE_URL }}
 
