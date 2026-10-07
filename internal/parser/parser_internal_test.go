@@ -2,7 +2,7 @@ package parser
 
 import (
 	"strconv"
-	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -198,15 +198,32 @@ func TestReadWorkerPoolSize(t *testing.T) {
 	})
 }
 
-func TestNewWorkerRequestID(t *testing.T) {
-	first := newWorkerRequestID()
-	second := newWorkerRequestID()
-
-	if !strings.HasPrefix(first, "req-") {
-		t.Fatalf("expected request id to include req- prefix, got %q", first)
+func TestNewWorkerRequestIDReturnsUniqueIDsConcurrently(t *testing.T) {
+	const count = 256
+	ids := make(chan string, count)
+	var workers sync.WaitGroup
+	workers.Add(count)
+	for i := 0; i < count; i++ {
+		go func() {
+			defer workers.Done()
+			ids <- newWorkerRequestID()
+		}()
 	}
-	if first == second {
-		t.Fatalf("expected unique request ids across invocations")
+	workers.Wait()
+	close(ids)
+
+	seen := make(map[string]struct{}, count)
+	for id := range ids {
+		if id == "" {
+			t.Fatal("expected a non-empty worker request id")
+		}
+		if _, exists := seen[id]; exists {
+			t.Fatalf("worker request id was reused: %q", id)
+		}
+		seen[id] = struct{}{}
+	}
+	if len(seen) != count {
+		t.Fatalf("got %d unique worker request ids, want %d", len(seen), count)
 	}
 }
 

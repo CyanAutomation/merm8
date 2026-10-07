@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1303,33 +1305,44 @@ func TestParser_RepoRootCachedAcrossWorkingDirectoryChange(t *testing.T) {
 }
 
 func TestParser_NewFailsWhenRepoRootMissing(t *testing.T) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get current directory: %v", err)
-	}
-
-	tmp := t.TempDir()
-	if err := os.Chdir(tmp); err != nil {
-		t.Fatalf("failed to chdir to temp dir: %v", err)
-	}
-	t.Cleanup(func() {
-		if chdirErr := os.Chdir(cwd); chdirErr != nil {
-			t.Fatalf("failed to restore cwd: %v", chdirErr)
+	const repoRootMissingChildEnv = "MERM8_TEST_REPO_ROOT_MISSING_CHILD"
+	if os.Getenv(repoRootMissingChildEnv) == "1" {
+		p, err := parser.New("parser-node/parse.ts")
+		if err == nil {
+			t.Fatal("expected New to fail when repository root cannot be located")
 		}
-	})
-
-	p, err := parser.New("parser-node/parse.ts")
-	if err == nil {
-		t.Fatal("expected New to fail when repository root cannot be located")
+		if p != nil {
+			t.Fatal("expected nil parser when New fails")
+		}
+		if !strings.Contains(err.Error(), "failed to locate repository root") {
+			t.Fatalf("expected repository-root discovery error, got %v", err)
+		}
+		return
 	}
-	if p != nil {
-		t.Fatal("expected nil parser when New fails")
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestParser_NewFailsWhenRepoRootMissing$")
+	cmd.Dir = t.TempDir()
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(entry, repoRootMissingChildEnv+"=") {
+			cmd.Env = append(cmd.Env, entry)
+		}
+	}
+	cmd.Env = append(cmd.Env, repoRootMissingChildEnv+"=1")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("isolated repo-root test process failed: %v\n%s", err, output)
 	}
 }
 
 func TestParser_VersionInfo(t *testing.T) {
-	script := getParserScript(t)
-	p := mustNewParser(t, script)
+	t.Setenv("PARSER_MODE", "subprocess")
+	t.Setenv("VERSION_COUNTER", filepath.Join(t.TempDir(), "versions.log"))
+	script, root := writeVersionCacheTestScript(t, false)
+	p, err := parser.NewWithConfigAndRepoRootResolver(script, parser.Config{Timeout: 10 * time.Second}, func() (string, error) {
+		return root, nil
+	})
+	if err != nil {
+		t.Fatalf("failed to construct parser: %v", err)
+	}
 
 	info, err := p.VersionInfo()
 	if err != nil {
@@ -1338,12 +1351,66 @@ func TestParser_VersionInfo(t *testing.T) {
 	if info == nil {
 		t.Fatal("expected non-nil version info")
 	}
-	if info.ParserVersion == "" {
-		t.Fatal("expected parser version to be non-empty")
+	if info.ParserVersion != "bridge-v2" {
+		t.Fatalf("parser version = %q, want bridge-v2", info.ParserVersion)
 	}
-	if info.MermaidVersion == "" {
-		t.Fatal("expected mermaid version to be non-empty")
+	if info.MermaidVersion != "12.0.0" {
+		t.Fatalf("Mermaid version = %q, want 12.0.0", info.MermaidVersion)
 	}
+
+	second, err := p.VersionInfo()
+	if err != nil {
+		t.Fatalf("second version lookup failed: %v", err)
+	}
+	if *second != *info {
+		t.Fatalf("cached version info = %#v, want %#v", second, info)
+	}
+	assertFileLineCount(t, os.Getenv("VERSION_COUNTER"), 1)
+}
+
+func TestParser_VersionInfoRejectsMalformedOrIncompleteOutput(t *testing.T) {
+	tests := []struct {
+		name    string
+		output  string
+		wantErr error
+	}{
+		{name: "malformed JSON", output: "{not-json", wantErr: parser.ErrDecode},
+		{name: "missing Mermaid version", output: `{"parser_version":"bridge-v2"}`, wantErr: parser.ErrContract},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			script, root := writeVersionInfoOutputScript(t, tt.output)
+			p, err := parser.NewWithConfigAndRepoRootResolver(script, parser.Config{Timeout: 5 * time.Second}, func() (string, error) {
+				return root, nil
+			})
+			if err != nil {
+				t.Fatalf("failed to construct parser: %v", err)
+			}
+
+			info, err := p.VersionInfo()
+			if info != nil {
+				t.Fatalf("expected no version info for invalid output, got %#v", info)
+			}
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("VersionInfo error = %v, want category %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func writeVersionInfoOutputScript(t *testing.T, output string) (string, string) {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module versioninfotest\n\ngo 1.24\n"), 0o600); err != nil {
+		t.Fatalf("write temporary go.mod: %v", err)
+	}
+	script := filepath.Join(root, "parse.mjs")
+	body := fmt.Sprintf("if (process.argv.includes(\"--version-info\")) { process.stdout.write(%s); process.exit(0); }\n", strconv.Quote(output))
+	if err := os.WriteFile(script, []byte(body), 0o600); err != nil {
+		t.Fatalf("write parser version fixture: %v", err)
+	}
+	return script, root
 }
 
 func TestParser_ConcurrentFirstParsesResolveVersionOnce(t *testing.T) {

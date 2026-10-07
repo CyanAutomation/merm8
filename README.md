@@ -988,17 +988,31 @@ PARSER_SCRIPT=./parser-node/parse.ts ./mermaid-lint
 bash smoke-test.sh
 ```
 
-Alternatively, `bash smoke-test.sh --build` builds, starts, and stops the
-service on `http://localhost:8080` automatically.
+Set `MERM8_SMOKE_TEST_URL` to target a different service URL. The script checks
+the versioned health, analysis, rule configuration, SARIF, and validation
+contracts. It does not build or start the service.
+
+Rate limiting is an opt-in check because it consumes the configured client
+quota. Run it against a fresh service/client window configured with the same
+limit:
+
+```bash
+TEST_RATE_LIMIT_ENABLED=1 TEST_RATE_LIMIT_PER_MIN=2 \
+  MERM8_SMOKE_TEST_URL=http://localhost:8080 bash smoke-test.sh
+```
+
+`TEST_RATE_LIMIT_PER_MIN` must match the service's
+`ANALYZE_RATE_LIMIT_PER_MINUTE` setting. This mode runs only the health check
+and rate-limit scenario so earlier analysis requests do not consume quota.
 
 The smoke test validates:
 
-- ✅ Valid diagram parsing with correct response structure
-- ✅ Syntax error handling (200 response with error details)
-- ✅ Missing 'code' field rejection
-- ✅ Complex diagrams with multiple nodes/edges
-- ✅ Custom rule configuration application
-- ✅ Graceful handling of edge cases
+- ✅ Versioned health endpoint returns `status: ok`
+- ✅ Valid diagram analysis returns correct node and edge counts
+- ✅ Configured `max-fanout` rule reports a violation
+- ✅ SARIF returns a SARIF 2.1.0 document with rule and severity data
+- ✅ Missing `code` is rejected with `missing_code`
+- ✅ Optional isolated rate-limit scenario
 
 ### Test Coverage Summary
 
