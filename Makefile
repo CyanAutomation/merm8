@@ -1,4 +1,4 @@
-.PHONY: lint format vet tidy help test-contract benchmark
+.PHONY: lint format vet tidy help test-contract test-mutation benchmark
 
 help:
 	@echo "Linting and Formatting Targets:"
@@ -10,6 +10,7 @@ help:
 	@echo ""
 	@echo "Benchmark Targets:"
 	@echo "  make benchmark  - Run benchmark suite and generate reports"
+	@echo "  make test-mutation - Run pinned mutation checks for engine package"
 
 lint: vet
 	@echo "✓ Linting complete"
@@ -43,6 +44,10 @@ test-contract:
 	@echo "Running contract integration tests..."
 	go test ./cmd/server -run '^TestServerContractIntegration_' -count=1 -timeout=90s
 	@echo "✓ contract integration tests passed"
+
+test-mutation:
+	@echo "Running mutation checks for the engine package..."
+	./scripts/mutation-baseline.sh
 
 benchmark:
 	@echo "Running benchmark suite..."
