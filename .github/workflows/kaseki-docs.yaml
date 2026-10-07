@@ -45,18 +45,9 @@ jobs:
         run: node --experimental-strip-types scripts/validate-kaseki-url.ts
 
       - name: Verify controller health
-        shell: bash
-        run: |
-          set -euo pipefail
-          : "${KASEKI_BASE_URL:?KASEKI_BASE_URL is not configured}"
-          response_file="$(mktemp)"
-          trap 'rm -f "$response_file"' EXIT
-
-          curl --proto '=https' --tlsv1.2 --fail-with-body --silent --show-error \
-            --retry 3 --retry-all-errors --connect-timeout 10 --max-time 20 \
-            --max-filesize 1048576 --output "$response_file" \
-            "$KASEKI_BASE_URL/health"
-          jq -e '.status == "healthy"' "$response_file" >/dev/null
+        uses: CyanAutomation/kaseki-agent/.github/actions/verify-controller-health@30db5d15e117b8d8de13eb66766d48cf6b7d618b
+        with:
+          base-url: ${{ vars.KASEKI_BASE_URL }}
 
       - name: Verify controller readiness
         shell: bash
