@@ -31,7 +31,7 @@ concurrency:
 jobs:
   contract-integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,3 +56,9 @@ jobs:
           PARSER_CONCURRENCY_LIMIT: "1"
         run: |
           go test ./cmd/server -run '^TestServerContractIntegration_' -count=1 -timeout=90s
+
+      - name: Integration-tagged Go suites
+        env:
+          PARSER_SCRIPT: ./parser-node/parse.ts
+          PARSER_CONCURRENCY_LIMIT: "1"
+        run: go test -tags=integration ./cmd/server ./internal/api -count=1 -timeout=10m

@@ -129,3 +129,29 @@ test("kaseki-dry.yaml retries polling after temporary controller errors", () => 
   assert.match(waitStep, /if ! curl/);
   assert.match(waitStep, /polling will continue/);
 });
+
+test("kaseki-docs.yaml installs project dependencies before validation", () => {
+  const source = readWorkflow("kaseki-docs.yaml");
+  const validationCommand = source.match(
+    /^      VALIDATION_COMMAND: >-\n((?:        .*\n)+)/m,
+  );
+  assert.ok(validationCommand, "docs validation command must be explicit");
+
+  const command = validationCommand[1]
+    .replace(/^        /gm, "")
+    .replace(/\n/g, " ")
+    .trim();
+  const installRoot = command.indexOf("npm ci");
+  const installParser = command.indexOf("npm --prefix parser-node ci");
+  const runTests = command.indexOf("npm test");
+
+  assert.ok(installRoot >= 0, "validation must install root dependencies");
+  assert.ok(
+    installParser > installRoot,
+    "validation must install parser dependencies after root dependencies",
+  );
+  assert.ok(
+    runTests > installParser,
+    "validation must run tests after installing both dependency sets",
+  );
+});
