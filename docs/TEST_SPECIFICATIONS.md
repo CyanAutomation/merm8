@@ -164,6 +164,60 @@ Each entry contains:
 - **File**: `internal/parser/cache_test.go`
 - **Validation**: Covers node positions, edges, subgraphs, suppressions, and derived fields
 
+### CACHE-002: Cached Parse Honors Timeout Overrides
+
+- **Requirement**: A cached successful parse must not be reused for a request whose effective parser timeout differs; the shorter timeout is enforced and the parser executes again
+- **Tests**: `TestParserCache_DoesNotReuseResultAcrossTimeoutOverrides`
+- **File**: `internal/parser/cache_integration_test.go`
+
+### PARSER-001: Runtime Version Metadata Contract
+
+- **Requirement**: Parser version metadata is decoded into the supported bridge and Mermaid versions, cached after one lookup, and rejects malformed or incomplete output with the appropriate error
+- **Tests**: `TestParser_VersionInfo`, `TestParser_VersionInfoRejectsMalformedOrIncompleteOutput`
+- **File**: `internal/parser/parser_test.go`
+
+### PARSER-002: Repository Root Discovery Failure
+
+- **Requirement**: Parser initialization reports a stable actionable error when no repository root can be found, without changing the calling test process working directory
+- **Tests**: `TestParser_NewFailsWhenRepoRootMissing`
+- **File**: `internal/parser/parser_test.go`
+
+### WORKER-001: Concurrent Worker Request IDs Are Unique
+
+- **Requirement**: Concurrent request ID generation returns nonempty unique identifiers
+- **Tests**: `TestNewWorkerRequestIDReturnsUniqueIDsConcurrently`
+- **File**: `internal/parser/parser_internal_test.go`
+
+### ENGINE-001: Nil Diagram Produces an Empty Issue Result
+
+- **Requirement**: Both engine entry points safely return a non-nil empty issue slice and zero instrumentation metrics for a nil diagram
+- **Tests**: `TestEngine_NilDiagramReturnsNonNilEmptyIssues`
+- **File**: `internal/engine/engine_test.go`
+
+### SMOKE-001: Versioned Health Endpoint
+
+- **Requirement**: The service health route returns HTTP 200 with `status: ok`
+- **Checks**: `health`
+- **File**: `smoke-test.sh`
+
+### SMOKE-002: Analysis Metrics and Configured Rule Behavior
+
+- **Requirement**: Valid flowcharts return correct node/edge counts, and configured `max-fanout` limits produce the corresponding issue
+- **Checks**: `valid diagram`, `configured max-fanout rule`
+- **File**: `smoke-test.sh`
+
+### SMOKE-003: SARIF and Request Validation Contracts
+
+- **Requirement**: The SARIF route returns a SARIF 2.1.0 document with the correct media type and preserves configured rule IDs and severity; a missing code field returns HTTP 400 with `missing_code`
+- **Checks**: `SARIF endpoint`, `SARIF with configured violation`, `missing code`
+- **File**: `smoke-test.sh`
+
+### SMOKE-004: Analyze Rate Limit
+
+- **Requirement**: A client exceeding the configured analysis quota receives HTTP 429 with `rate_limited`
+- **Checks**: `rate-limit mode` (opt-in; must run against a fresh service/client window)
+- **File**: `smoke-test.sh`
+
 ---
 
 ## Integration Tests (with `build tag: integration`)
@@ -202,4 +256,6 @@ The following test helpers are deprecated and should not be used for new tests. 
 
 ## Mutation Testing Status
 
-No mutation testing tool or mutation score baseline is currently configured for this repository. Mutation impact is therefore unmeasured; `benchmarks/BENCHMARK.md` describes rule-efficacy benchmarks and is not a mutation report. Establish a mutation testing tool and record an initial baseline before using mutation score to compare test changes.
+Mutation checks use `gremlins v0.5.1`, pinned by `scripts/mutation-baseline.sh` and exposed as `make test-mutation`. The initial baseline, captured 2026-10-07, covers `internal/engine`: 69.12% test efficacy (47 killed, 21 lived) and 73.91% mutant coverage (68 of 92 mutants). The parser package is not included in this baseline because its coverage pass takes about 50 seconds and Gremlins reruns package tests for each covered mutant.
+
+`benchmarks/BENCHMARK.md` describes rule-efficacy benchmarks and is not a mutation report. Mutation efficacy and mutant coverage are reported separately by Gremlins; compare future runs against the same tool version and package scope.

@@ -558,31 +558,40 @@ func TestEngine_RunWithInstrumentation_SkipsDisabledRules(t *testing.T) {
 	}
 }
 
-func TestEngine_RunWithInstrumentation_NilDiagramReturnsEmptyIssues(t *testing.T) {
-	e := engine.NewWithRules(supportedRule{})
-	sink := &capturingSink{}
+func TestEngine_NilDiagramReturnsNonNilEmptyIssues(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(*engine.Engine, *capturingSink) []model.Issue
+	}{
+		{
+			name: "Run",
+			run: func(e *engine.Engine, _ *capturingSink) []model.Issue {
+				return e.Run(nil, rules.Config{})
+			},
+		},
+		{
+			name: "RunWithInstrumentation",
+			run: func(e *engine.Engine, sink *capturingSink) []model.Issue {
+				return e.RunWithInstrumentation(nil, rules.Config{}, sink)
+			},
+		},
+	}
 
-	issues := e.RunWithInstrumentation(nil, rules.Config{}, sink)
-	if issues == nil {
-		t.Fatal("RunWithInstrumentation should never return a nil slice")
-	}
-	if len(issues) != 0 {
-		t.Fatalf("expected no issues for nil diagram, got %#v", issues)
-	}
-	if len(sink.metrics) != 0 {
-		t.Fatalf("expected no metrics for nil diagram, got %#v", sink.metrics)
-	}
-}
-
-func TestEngine_Run_NilDiagramReturnsEmptyIssues(t *testing.T) {
-	e := engine.NewWithRules(supportedRule{})
-
-	issues := e.Run(nil, rules.Config{})
-	if issues == nil {
-		t.Fatal("Run should never return a nil slice")
-	}
-	if len(issues) != 0 {
-		t.Fatalf("expected no issues for nil diagram, got %#v", issues)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := engine.NewWithRules(supportedRule{})
+			sink := &capturingSink{}
+			issues := tt.run(e, sink)
+			if issues == nil {
+				t.Fatal("nil diagram should return a non-nil empty issue slice")
+			}
+			if len(issues) != 0 {
+				t.Fatalf("nil diagram returned issues: %#v", issues)
+			}
+			if len(sink.metrics) != 0 {
+				t.Fatalf("nil diagram recorded rule metrics: %#v", sink.metrics)
+			}
+		})
 	}
 }
 

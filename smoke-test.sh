@@ -1,287 +1,118 @@
 #!/usr/bin/env bash
-# smoke-test.sh - End-to-end smoke test for merm8 service
-#
-# This script validates that merm8 can be built and run, and responds correctly
-# to HTTP requests. It expects the service to listen on port 8080.
-#
-# Usage:
-#   ./smoke-test.sh              -- runs tests against a pre-running service
-#   ./smoke-test.sh --build      -- builds and runs the service for testing
-#
+set -euo pipefail
 
-set -e
+SERVICE_URL="${MERM8_SMOKE_TEST_URL:-http://localhost:8080}"
+SERVICE_URL="${SERVICE_URL%/}"
+REQUEST_TIMEOUT="${SMOKE_TEST_TIMEOUT_SECONDS:-10}"
+RESPONSE_FILE="$(mktemp)"
+trap 'rm -f "$RESPONSE_FILE"' EXIT
 
-SERVICE_URL="http://localhost:8080"
-TIMEOUT=5
+request() {
+  local method="$1"
+  local path="$2"
+  local body="${3:-}"
+  local -a args=(--silent --show-error --connect-timeout "$REQUEST_TIMEOUT" --max-time "$REQUEST_TIMEOUT" -X "$method")
+  local result
 
-# Colors for output
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+  if [[ -n "${ANALYZE_AUTH_TOKEN:-}" ]]; then
+    args+=(-H "Authorization: Bearer ${ANALYZE_AUTH_TOKEN}")
+  fi
+  if [[ -n "$body" ]]; then
+    args+=(-H 'Content-Type: application/json' --data "$body")
+  fi
 
-log_pass() {
-    echo -e "${GREEN}✓${NC} $1"
+  if ! result="$(curl "${args[@]}" -o "$RESPONSE_FILE" -w '%{http_code} %{content_type}' "$SERVICE_URL$path")"; then
+    echo "FAIL: request to $SERVICE_URL$path failed" >&2
+    return 1
+  fi
+  read -r HTTP_STATUS HTTP_CONTENT_TYPE <<<"$result"
+  HTTP_BODY="$(cat "$RESPONSE_FILE")"
 }
 
-log_fail() {
-    echo -e "${RED}✗${NC} $1"
-    exit 1
+expect_status() {
+  local expected="$1"
+  if [[ "$HTTP_STATUS" != "$expected" ]]; then
+    echo "FAIL: expected HTTP $expected, got $HTTP_STATUS: $HTTP_BODY" >&2
+    return 1
+  fi
 }
 
-log_info() {
-    echo -e "${YELLOW}ℹ${NC} $1"
+expect_json() {
+  local filter="$1"
+  if ! jq -e "$filter" >/dev/null <<<"$HTTP_BODY"; then
+    echo "FAIL: response did not satisfy jq filter ($filter): $HTTP_BODY" >&2
+    return 1
+  fi
 }
 
-# Helper function to make API calls
-call_api() {
-    local code="$1"
-    local config="${2:-}"
-    
-    if [ -z "$config" ]; then
-        curl -s -X POST "$SERVICE_URL/analyze" \
-            -H "Content-Type: application/json" \
-            -d "{\"code\": $(echo "$code" | jq -R .),\"config\":{}}"
-    else
-        curl -s -X POST "$SERVICE_URL/analyze" \
-            -H "Content-Type: application/json" \
-            -d "{\"code\": $(echo "$code" | jq -R .), \"config\": $config}"
-    fi
+analyze() {
+  local code="$1"
+  local config='{}'
+  local body
+  if (($# >= 2)); then
+    config="$2"
+  fi
+  body="$(jq -cn --arg code "$code" --argjson config "$config" '{code:$code,config:$config}')"
+  request POST /v1/analyze "$body"
 }
 
-# Check if service is running with retry logic
-check_service_running() {
-    local max_retries=3
-    local delay=1
-    
-    for ((i=0; i<max_retries; i++)); do
-        response=$(curl -s -w "\n%{http_code}" -X POST "$SERVICE_URL/analyze" \
-            -H "Content-Type: application/json" \
-            -d '{"code":""}')
-        
-        # Extract status code (last line)
-        status_code=$(echo "$response" | tail -n1)
-        
-        # Accept 200 (success) or 400 (bad request - at least parsed)
-        if [[ "$status_code" =~ ^[24][0-9][0-9]$ ]]; then
-            return 0
-        fi
-        
-        if [ $((i + 1)) -lt $max_retries ]; then
-            log_info "Service not yet ready (retry $((i+1))/$((max_retries-1)))..."
-            sleep $delay
-        fi
-    done
-    
-    log_fail "Service not available at $SERVICE_URL after $max_retries attempts"
-}
+echo "Checking service at $SERVICE_URL"
+request GET /v1/healthz
+expect_status 200
+expect_json '.status == "ok"'
+echo "PASS: versioned health endpoint"
 
+if [[ "${TEST_RATE_LIMIT_ENABLED:-0}" == "1" ]]; then
+  if [[ ! "${TEST_RATE_LIMIT_PER_MIN:-}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Set TEST_RATE_LIMIT_PER_MIN to the service's ANALYZE_RATE_LIMIT_PER_MINUTE value." >&2
+    exit 2
+  fi
+  echo "Rate-limit mode: this must be a fresh service/client window with limit $TEST_RATE_LIMIT_PER_MIN."
+  for ((i = 1; i <= TEST_RATE_LIMIT_PER_MIN; i++)); do
+    analyze $'graph TD\nA-->B'
+    expect_status 200
+  done
+  analyze $'graph TD\nA-->B'
+  expect_status 429
+  expect_json '.error.code == "rate_limited"'
+  echo "PASS: analyze requests are rate limited at the configured quota"
+  exit 0
+fi
 
-# Test: Complex diagram with proper validation
-test_complex_diagram() {
-    log_info "Test: Complex diagram validation"
-    
-    # Using decision node and realistic flow
-    code="graph TD
-    A[Start] --> B[Process]
-    B --> C{Decision}
-    C -->|Yes| D[Output]
-    C -->|No| E[Error]
-    D --> F[End]"
-    
-    response=$(call_api "$code")
-    
-    # Validate diagram is correctly parsed
-    valid=$(echo "$response" | jq '.valid')
-    if [ "$valid" != "true" ]; then
-        log_fail "Expected complex diagram to be valid, got: $(echo "$response" | jq -c .)"
-    fi
-    
-    # Validate exact node and edge counts
-    node_count=$(echo "$response" | jq '.metrics.node_count')
-    if [ "$node_count" != "6" ]; then
-        log_fail "Expected exactly 6 nodes (A,B,C,D,E,F), got $node_count"
-    fi
-    
-    edge_count=$(echo "$response" | jq '.metrics.edge_count')
-    if [ "$edge_count" != "5" ]; then
-        log_fail "Expected exactly 5 edges, got $edge_count"
-    fi
-    
-    log_pass "Complex diagram test passed"
-}
+analyze $'graph TD\nA[Start] --> B[Process]\nB --> C{Decision}\nC -->|Yes| D[Output]\nC -->|No| E[Error]\nD --> F[End]'
+expect_status 200
+expect_json '.valid == true and .metrics["node-count"] == 6 and .metrics["edge-count"] == 5'
+echo "PASS: valid diagram returns semantic analysis metrics"
 
-# Test: SARIF endpoint - valid diagram with no issues
-test_sarif_endpoint() {
-    log_info "Test: SARIF endpoint with valid diagram"
-    
-    code="graph TD
-    A[Start] --> B[End]"
-    
-    response=$(curl -s -X POST "$SERVICE_URL/analyze/sarif" \
-        -H "Content-Type: application/json" \
-        -d "{\"code\": $(echo "$code" | jq -R .)}")
-    
-    # Verify SARIF structure
-    version=$(echo "$response" | jq '.version' 2>/dev/null)
-    if [ "$version" != '"2.1.0"' ]; then
-        log_fail "Expected SARIF version 2.1.0, got: $version"
-    fi
-    
-    # Verify runs array exists
-    runs_count=$(echo "$response" | jq '.runs | length' 2>/dev/null)
-    if [ "$runs_count" -ne 1 ]; then
-        log_fail "Expected 1 run, got: $runs_count"
-    fi
-    
-    # Verify tool information
-    tool_name=$(echo "$response" | jq -r '.runs[0].tool.driver.name' 2>/dev/null)
-    if [ "$tool_name" != "merm8" ]; then
-        log_fail "Expected tool name 'merm8', got: $tool_name"
-    fi
-    
-    # Verify results array (should be empty for valid diagram with no issues)
-    results_count=$(echo "$response" | jq '.runs[0].results | length' 2>/dev/null)
-    if [ "$results_count" -ne 0 ]; then
-        log_fail "Expected no results for clean diagram, got: $results_count"
-    fi
-    
-    log_pass "SARIF endpoint test passed"
-}
+flow_config='{"schema-version":"v1","rules":{"max-fanout":{"limit":1}}}'
+analyze $'graph TD\nA-->B\nA-->C' "$flow_config"
+expect_status 200
+expect_json '.valid == true and any(.issues[]; .["rule-id"] == "max-fanout")'
+echo "PASS: configured max-fanout rule reports a violation"
 
-# Test: SARIF endpoint - diagram with issues
-test_sarif_with_issues() {
-    log_info "Test: SARIF endpoint with diagram containing issues"
-    
-    code="graph TD
-    A[Start] --> B[Process]
-    A --> C[Process]
-    A --> D[Process]
-    A --> E[Process]
-    A --> F[Process]
-    A --> G[Process]
-    A --> H[Process]"
-    
-    # Use config to set max-fanout to 5, so A with 7 edges violates rule
-    config='{"schema-version":"v1","rules":{"max-fanout":{"enabled":true,"limit":5,"severity":"error"}}}'
-    
-    response=$(curl -s -X POST "$SERVICE_URL/analyze/sarif" \
-        -H "Content-Type: application/json" \
-        -d "{\"code\": $(echo "$code" | jq -R .), \"config\": $config}")
-    
-    # Verify SARIF version
-    version=$(echo "$response" | jq '.version' 2>/dev/null)
-    if [ "$version" != '"2.1.0"' ]; then
-        log_fail "Expected SARIF version 2.1.0, got: $version"
-    fi
-    
-    # Verify results contain an error
-    results_count=$(echo "$response" | jq '.runs[0].results | length' 2>/dev/null)
-    if [ "$results_count" -eq 0 ]; then
-        log_fail "Expected lint violations in SARIF results"
-    fi
-    
-    # Verify error level is present
-    error_level=$(echo "$response" | jq '.runs[0].results[0].level' 2>/dev/null)
-    if [ "$error_level" != '"error"' ]; then
-        log_fail "Expected error level in SARIF result, got: $error_level"
-    fi
-    
-    # Verify ruleId is present
-    rule_id=$(echo "$response" | jq -r '.runs[0].results[0].ruleId' 2>/dev/null)
-    if [ "$rule_id" != "max-fanout" ]; then
-        log_fail "Expected ruleId 'max-fanout', got: $rule_id"
-    fi
-    
-    log_pass "SARIF with issues test passed"
-}
+request POST /v1/analyze/sarif "$(jq -cn --arg code $'graph TD\nA-->B' '{code:$code}')"
+expect_status 200
+if [[ "$HTTP_CONTENT_TYPE" != application/sarif+json* ]]; then
+  echo "FAIL: expected application/sarif+json, got $HTTP_CONTENT_TYPE" >&2
+  exit 1
+fi
+expect_json '.version == "2.1.0" and .runs[0].tool.driver.name == "merm8" and (.runs[0].results | length == 0)'
+echo "PASS: SARIF endpoint returns a SARIF 2.1.0 document"
 
-# Helper: Make multiple concurrent requests
-make_concurrent_requests() {
-    local count=$1
-    local url=$2
-    local body=$3
-    
-    for ((i = 0; i < count; i++)); do
-        curl -s -X POST "$url" \
-            -H "Content-Type: application/json" \
-            -d "$body" > /dev/null 2>&1 &
-    done
-    wait
-}
+sarif_issue_config='{"schema-version":"v1","rules":{"max-fanout":{"limit":1,"severity":"error"}}}'
+sarif_issue_body="$(jq -cn --arg code $'graph TD\nA-->B\nA-->C' --argjson config "$sarif_issue_config" '{code:$code,config:$config}')"
+request POST /v1/analyze/sarif "$sarif_issue_body"
+expect_status 200
+if [[ "$HTTP_CONTENT_TYPE" != application/sarif+json* ]]; then
+  echo "FAIL: expected application/sarif+json, got $HTTP_CONTENT_TYPE" >&2
+  exit 1
+fi
+expect_json '.version == "2.1.0" and any(.runs[0].results[]; .ruleId == "max-fanout" and .level == "error")'
+echo "PASS: SARIF includes configured rule violations and severity"
 
-# Test: Rate limiting (if configured)
-test_rate_limiting() {
-    # Skip if rate limiting not configured
-    if [ -z "$TEST_RATE_LIMIT_ENABLED" ]; then
-        log_info "Skipping rate limit test (TEST_RATE_LIMIT_ENABLED not set)"
-        return
-    fi
-    
-    log_info "Test: Rate limiting behavior"
-    
-    local limit=${TEST_RATE_LIMIT_PER_MIN:-5}
-    local code='{"code":"graph TD\n  A[Start] --> B[End]"}'
-    
-    # Make requests equal to limit
-    local passed=0
-    for ((i = 0; i < limit; i++)); do
-        status=$(curl -s -w "\n%{http_code}" -X POST "$SERVICE_URL/analyze" \
-            -H "Content-Type: application/json" \
-            -d "$code" | tail -n1)
-        
-        if [[ "$status" == "200" ]]; then
-            ((passed++))
-        fi
-    done
-    
-    if [ "$passed" -ne "$limit" ]; then
-        log_fail "Expected $limit successful requests, got $passed"
-    fi
-    
-    # Next request should be rate limited (429)
-    status=$(curl -s -w "\n%{http_code}" -X POST "$SERVICE_URL/analyze" \
-        -H "Content-Type: application/json" \
-        -d "$code" | tail -n1)
-    
-    if [ "$status" != "429" ]; then
-        log_fail "Expected HTTP 429 (rate limited), got $status"
-    fi
-    
-    log_pass "Rate limiting test passed"
-}
+request POST /v1/analyze '{}'
+expect_status 400
+expect_json '.error.code == "missing_code"'
+echo "PASS: missing code is rejected with the documented error code"
 
-# Main execution
-main() {
-    log_info "Starting merm8 smoke tests"
-    log_info "Service URL: $SERVICE_URL"
-    
-    echo ""
-    
-    check_service_running
-    log_pass "Service is running"
-    
-    echo ""
-    
-    # Run tests
-    test_complex_diagram
-    echo ""
-    
-    test_sarif_endpoint
-    echo ""
-    
-    test_sarif_with_issues
-    echo ""
-    
-    # Optional rate limiting test (can be enabled with TEST_RATE_LIMIT_ENABLED=1)
-    if [ -n "$TEST_RATE_LIMIT_ENABLED" ]; then
-        test_rate_limiting
-        echo ""
-    fi
-    
-    log_pass "All tests completed successfully!"
-    exit 0
-}
-
-# Run main
-main
+echo "All smoke checks passed."

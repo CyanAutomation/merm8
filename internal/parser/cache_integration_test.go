@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -20,24 +21,17 @@ func TestParserCache_CachesSuccessfulParses(t *testing.T) {
 
 	code := "graph TD\nA-->B"
 
-	start := time.Now()
 	diagram1, syntaxErr1, err := p.Parse(code)
-	firstDuration := time.Since(start)
 	if err != nil || syntaxErr1 != nil || diagram1 == nil {
 		t.Fatalf("expected successful parse on first request, got diagram=%v syntax=%v err=%v", diagram1, syntaxErr1, err)
 	}
 
-	start = time.Now()
 	diagram2, syntaxErr2, err := p.Parse(code)
-	secondDuration := time.Since(start)
 	if err != nil || syntaxErr2 != nil || diagram2 == nil {
 		t.Fatalf("expected successful parse on cached request, got diagram=%v syntax=%v err=%v", diagram2, syntaxErr2, err)
 	}
-	if diagram2.Type != diagram1.Type || len(diagram2.Nodes) != len(diagram1.Nodes) || len(diagram2.Edges) != len(diagram1.Edges) {
-		t.Fatalf("expected cached response to preserve correctness")
-	}
-	if secondDuration >= firstDuration/2 {
-		t.Fatalf("expected second parse to be faster due to cache, first=%s second=%s", firstDuration, secondDuration)
+	if !reflect.DeepEqual(diagram2, diagram1) {
+		t.Fatalf("cached response differs from original parse:\nfirst=%#v\nsecond=%#v", diagram1, diagram2)
 	}
 
 	counterContent, err := os.ReadFile(os.Getenv("COUNTER_FILE"))
@@ -47,6 +41,30 @@ func TestParserCache_CachesSuccessfulParses(t *testing.T) {
 	if got := strings.Count(string(counterContent), "parse"); got != 1 {
 		t.Fatalf("expected parser subprocess to run once, got %d invocations", got)
 	}
+}
+
+func TestParserCache_DoesNotReuseResultAcrossTimeoutOverrides(t *testing.T) {
+	t.Setenv("PARSER_MODE", "subprocess")
+	t.Setenv("COUNTER_FILE", filepath.Join(t.TempDir(), "counter-timeout-override.log"))
+	script, root := writeCacheTestParserScript(t)
+	p := mustNewCacheTestParser(t, script, root)
+	code := "graph TD\nA-->B"
+
+	if diagram, syntaxErr, err := p.Parse(code); err != nil || syntaxErr != nil || diagram == nil {
+		t.Fatalf("expected initial parse to succeed, got diagram=%v syntax=%v err=%v", diagram, syntaxErr, err)
+	}
+
+	t.Setenv("SLOW_PARSER", "1")
+	config := parser.DefaultConfig()
+	config.Timeout = 500 * time.Millisecond
+	enhancementEnabled := true
+	config.SourceEnhancement = &enhancementEnabled
+	config.NeedSourceEnhancement = true
+	_, _, err := p.ParseWithConfig(code, config)
+	if !errors.Is(err, parser.ErrTimeout) {
+		t.Fatalf("expected shorter timeout override to execute and time out, got %v", err)
+	}
+	assertFileLineCount(t, os.Getenv("COUNTER_FILE"), 2)
 }
 
 func TestParserCache_CachesSyntaxErrors(t *testing.T) {
@@ -192,6 +210,7 @@ let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", c => { input += c; });
 process.stdin.on("end", () => {
+  const delay = process.env.SLOW_PARSER === "1" ? 1500 : 120;
   setTimeout(() => {
     if (input.includes("-->") && input.trim().endsWith("-->")) {
       process.stdout.write(JSON.stringify({valid:false,error:{message:"Syntax error",line:2,column:4}}));
@@ -209,7 +228,7 @@ process.stdin.on("end", () => {
         suppressions:[]
       }
     }));
-  }, 120);
+  }, delay);
 });
 process.stdin.resume();
 `
