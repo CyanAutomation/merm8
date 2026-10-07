@@ -36,7 +36,7 @@ jobs:
       KASEKI_ALLOWED_HOSTS: ${{ vars.KASEKI_ALLOWED_HOSTS }}
 
       REPO_URL: ${{ github.server_url }}/${{ github.repository }}
-      REF: ${{ github.sha }}
+      REF: main
 
       TASK_DESCRIPTION: >-
         Perform a conservative DRY-principle review of this repository.
