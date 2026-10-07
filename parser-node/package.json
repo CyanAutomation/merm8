@@ -11,7 +11,7 @@
     "parse": "node --experimental-strip-types parse.ts"
   },
   "dependencies": {
-    "jsdom": "^24.0.0",
+    "jsdom": "^30.1.2",
     "mermaid": "^11.16.1"
   },
   "devDependencies": {
