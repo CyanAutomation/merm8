@@ -19,12 +19,6 @@ format:
 	@echo "Formatting Go code..."
 	gofmt -w ./cmd ./internal ./benchmarks scripts/*.go
 	@echo "✓ Go code formatted"
-	@if command -v prettier >/dev/null 2>&1; then \
-		echo "Formatting with prettier..."; \
-		cd parser-node && npx prettier --write "**/*.{ts,json}" || echo "prettier skipped (not installed)"; \
-		cd ..; \
-		echo "✓ Node code formatted"; \
-	fi
 
 vet:
 	@echo "Running go vet..."
