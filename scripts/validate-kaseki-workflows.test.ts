@@ -9,6 +9,10 @@ const repositoryRoot = path.resolve(
   "..",
 );
 const workflows = ["kaseki-dry.yaml", "kaseki-docs.yaml"];
+const submitStepNames: Record<string, string> = {
+  "kaseki-dry.yaml": "Submit DRY sweep",
+  "kaseki-docs.yaml": "Submit documentation sweep",
+};
 
 function readWorkflow(workflowName: string): string {
   return readFileSync(
@@ -86,10 +90,21 @@ for (const workflowName of workflows) {
 }
 
 for (const workflowName of workflows) {
-  test(`${workflowName} pins the Kaseki task to the triggering main commit`, () => {
+  test(`${workflowName} submits Kaseki runs against the main branch`, () => {
     const source = readWorkflow(workflowName);
-    assert.match(source, /^      REF: \$\{\{ github\.sha \}\}$/m);
-    assert.match(source, /^\s+ref: \$\{\{ github\.sha \}\}\s*$/m);
+    const submitStep = readStep(source, submitStepNames[workflowName]);
+
+    assert.match(source, /^      REF: main\s*$/m);
+    assert.match(submitStep, /--arg ref "\$REF"/);
+    assert.match(submitStep, /^\s+ref: \$ref,\s*$/m);
+  });
+
+  test(`${workflowName} checks out the triggering commit for validation`, () => {
+    const source = readWorkflow(workflowName);
+    assert.match(
+      source,
+      /^      - uses: actions\/checkout@[^\n]+\n        with:\n          ref: \$\{\{ github\.sha \}\}\n/m,
+    );
   });
 
   test(`${workflowName} submits bounded normal pull requests`, () => {
