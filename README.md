@@ -99,8 +99,8 @@ optional paid JEV semantic review is served separately at authenticated
 Authenticated Streamable HTTP MCP is served at `/mcp`.
 
 The Worker is a deliberately smaller, Worker-safe implementation. It recognizes
-flowchart, sequence, class, ER, and state diagrams, and currently lints
-flowcharts. Its self-describing contract is available from `/v1/spec`; use
+flowchart, sequence, class, ER, and state diagrams, and lints
+all five types. Its self-describing contract is available from `/v1/spec`; use
 `/v1/diagram-types` and `/v1/rules` to discover runtime capabilities. The
 deployment SHA is returned in the `X-Merm8-Build` response header. See the
 [Worker API reference](docs/worker-api.md) before integrating with a deployed
@@ -292,6 +292,16 @@ The server exports Prometheus metric families:
 - `request_duration_seconds{route,method}` (histogram)
 - `analyze_requests_total{outcome}`
 - `parser_duration_seconds{outcome}` (histogram)
+- `parser_latency_seconds{outcome}` (histogram)
+- `rule_execution_duration_seconds{rule_id}` (histogram)
+- `rule_issues_emitted_total{rule_id}`
+- `rule_violations_by_severity_total{rule_id,severity}`
+- `rule_suppressions_total{rule_id}`
+- `analysis_latency_seconds{diagram_type}` (histogram)
+- `diagram_type_analyzed_total{diagram_type}`
+- `lint_support_check_total{diagram_type,result}`
+- `cors_rejected_total`
+- `parser_cache_events_total{result,entry_type}`
 
 Example scrape:
 
@@ -924,7 +934,7 @@ Rules are loaded automatically into the engine at startup via these family funct
 ### Prerequisites
 
 - **Go** 1.24+
-- **Node.js** 20+ and npm
+- **Node.js** 22.6+ and npm
 - **curl** (for smoke tests)
 
 ### Running Unit Tests
