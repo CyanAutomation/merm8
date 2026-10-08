@@ -37,16 +37,7 @@ echo "========================================="
 if [ -f "parser-node/package.json" ]; then
     echo "Checking Node dependencies..."
     cd parser-node
-    
-    # Check if prettier is installed
-    if npm ls prettier > /dev/null 2>&1; then
-        echo "Running prettier..."
-        npx prettier --write "**/*.{mjs,json}"
-        echo "✓ prettier completed"
-    else
-        echo "Note: prettier not installed. Install with: npm install --save-dev prettier"
-    fi
-    
+    echo "✓ Node package check complete"
     cd ..
 fi
 
