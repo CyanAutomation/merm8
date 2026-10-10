@@ -124,3 +124,28 @@ test("requires OpenRouter credentials before attempting a request", async () => 
   );
   assert.equal(calls, 0);
 });
+
+test("rejects invalid model configuration before attempting a request", async () => {
+  let calls = 0;
+  await assert.rejects(
+    requestJevDecisions(sampleState(), semanticQuestions, {
+      apiKey: "server-secret",
+      model: "not a valid model name",
+      fetchImpl: async () => { calls += 1; return Response.json({}); },
+    }),
+    (error: unknown) => error instanceof JevClientError && error.code === "configuration",
+  );
+  assert.equal(calls, 0);
+});
+
+test("does not trust a provider model name that contains the API key", async () => {
+  const payload = validPayload(semanticQuestions);
+  payload.model = "provider/server-secret";
+  const result = await requestJevDecisions(sampleState(), semanticQuestions, {
+    apiKey: "server-secret",
+    fetchImpl: async () => Response.json(payload),
+  });
+
+  assert.equal(result.model, "~typesafe/jev-latest");
+  assert.equal(JSON.stringify(result).includes("server-secret"), false);
+});
