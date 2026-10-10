@@ -797,17 +797,25 @@ process.exit(1);
 	}
 }
 
+// @spec: PARSER-003: Subprocess timeouts return the parser timeout category within configured bounds.
 func TestParser_TimeoutCategory(t *testing.T) {
+	t.Setenv("PARSER_MODE", "subprocess")
+	minTimeout, _, _, _ := parser.LimitBounds()
+	timeout := minTimeout
 	tempDir := repoTempDir(t)
 	script := filepath.Join(tempDir, "parse.mjs")
 	scriptBody := `#!/usr/bin/env node
-setTimeout(() => {}, 10000);
+setTimeout(() => {}, 5000);
 `
 	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
 		t.Fatalf("failed to write test parser script: %v", err)
 	}
 
-	p := mustNewParser(t, script)
+	p, err := parser.NewWithConfig(script, parser.Config{Timeout: timeout, NodeMaxOldSpaceMB: 256})
+	if err != nil {
+		t.Fatalf("failed to construct parser: %v", err)
+	}
+	t.Cleanup(func() { _ = p.Close() })
 	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
 	if err == nil {
 		t.Fatal("expected timeout error, got nil")
@@ -871,9 +879,13 @@ for await (const line of rl) {
 	}
 }
 
+// @spec: PARSER-003: A timed-out worker is replaced before the next parse request.
 func TestParser_WorkerPoolTimeoutReplacesWorker(t *testing.T) {
 	t.Setenv("PARSER_MODE", "pool")
 	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
+	minTimeout, _, _, _ := parser.LimitBounds()
+	timeout := minTimeout
+	slowDelay := timeout + 300*time.Millisecond
 
 	tempDir := repoTempDir(t)
 	script := filepath.Join(tempDir, "parse.mjs")
@@ -882,6 +894,7 @@ func TestParser_WorkerPoolTimeoutReplacesWorker(t *testing.T) {
 import fs from "fs";
 import readline from "readline";
 const counterFile = %q;
+const slowDelayMs = %d;
 
 if (process.argv.includes("--version-info")) {
   process.stdout.write(JSON.stringify({parser_version:"test-1.0.0",mermaid_version:"test-1.0.0"})+"\n");
@@ -904,7 +917,7 @@ const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity,
 for await (const line of rl) {
   const req = JSON.parse(line);
   if (String(req.code || "").includes("SLOW")) {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, slowDelayMs));
   }
   process.stdout.write(JSON.stringify({
     id: req.id,
@@ -922,15 +935,16 @@ for await (const line of rl) {
     }
   }) + "\n");
 }
-`, counterFile)
+`, counterFile, slowDelay.Milliseconds())
 	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
 		t.Fatalf("failed to write test parser script: %v", err)
 	}
 
-	p, err := parser.NewWithConfig(script, parser.Config{Timeout: time.Second, NodeMaxOldSpaceMB: 256})
+	p, err := parser.NewWithConfig(script, parser.Config{Timeout: timeout, NodeMaxOldSpaceMB: 256})
 	if err != nil {
 		t.Fatalf("failed to construct parser: %v", err)
 	}
+	t.Cleanup(func() { _ = p.Close() })
 	if _, _, err := p.Parse("graph TD\nSLOW"); err == nil || !errors.Is(err, parser.ErrTimeout) {
 		t.Fatalf("expected timeout from slow request, got %v", err)
 	}
@@ -990,9 +1004,11 @@ for await (const line of rl) {
 	}
 }
 
+// @spec: PARSER-003: A worker response without a newline cannot exceed the parser timeout bound.
 func TestParser_WorkerPoolTimeoutReturnsPromptlyWhenWorkerNeverWritesNewline(t *testing.T) {
 	t.Setenv("PARSER_MODE", "pool")
 	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
+	minTimeout, _, _, _ := parser.LimitBounds()
 
 	tempDir := repoTempDir(t)
 	script := filepath.Join(tempDir, "parse.mjs")
@@ -1025,11 +1041,12 @@ for await (const line of rl) {
 		t.Fatalf("failed to write test parser script: %v", err)
 	}
 
-	timeout := time.Second
+	timeout := minTimeout
 	p, err := parser.NewWithConfig(script, parser.Config{Timeout: timeout, NodeMaxOldSpaceMB: 256})
 	if err != nil {
 		t.Fatalf("failed to construct parser: %v", err)
 	}
+	t.Cleanup(func() { _ = p.Close() })
 
 	start := time.Now()
 	diagram, syntaxErr, err := p.ParseWithConfig("graph TD\nNO_NEWLINE", parser.Config{Timeout: timeout, NodeMaxOldSpaceMB: 256})
@@ -1040,7 +1057,7 @@ for await (const line of rl) {
 	if diagram != nil || syntaxErr != nil {
 		t.Fatalf("expected nil diagram/syntaxErr on timeout, got diagram=%v syntaxErr=%v", diagram, syntaxErr)
 	}
-	if elapsed > timeout+700*time.Millisecond {
+	if elapsed > timeout+500*time.Millisecond {
 		t.Fatalf("expected timeout return near configured bound, elapsed=%s timeout=%s", elapsed, timeout)
 	}
 }

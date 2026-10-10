@@ -63,6 +63,7 @@ expect_json '.status == "ok"'
 echo "PASS: versioned health endpoint"
 
 if [[ "${TEST_RATE_LIMIT_ENABLED:-0}" == "1" ]]; then
+  # Deployment smoke only: use a disposable service and fresh client quota window.
   if [[ ! "${TEST_RATE_LIMIT_PER_MIN:-}" =~ ^[1-9][0-9]*$ ]]; then
     echo "Set TEST_RATE_LIMIT_PER_MIN to the service's ANALYZE_RATE_LIMIT_PER_MINUTE value." >&2
     exit 2

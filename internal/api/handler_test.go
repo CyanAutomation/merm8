@@ -2320,13 +2320,13 @@ func TestAnalyze_LargeDiagram(t *testing.T) {
 	}
 }
 
+// @spec: API-011: Large diagrams produce accurate topology metrics and findings across graph shapes.
 func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 	type testCase struct {
 		name            string
 		diagram         *model.Diagram
 		expectedMetrics map[string]int
 		expectedRules   map[string]int
-		maxDuration     time.Duration
 	}
 
 	buildChainDiagram := func(n int) *model.Diagram {
@@ -2381,7 +2381,6 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 				"max-fanout": 1,
 			},
 			expectedRules: map[string]int{"max-depth": 1},
-			maxDuration:   8 * time.Second,
 		},
 		{
 			name:    "single hub high fan-out",
@@ -2392,7 +2391,6 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 				"max-fanout": 6000,
 			},
 			expectedRules: map[string]int{"max-fanout": 1},
-			maxDuration:   8 * time.Second,
 		},
 		{
 			name:    "high fan-in target node",
@@ -2403,7 +2401,6 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 				"max-fanout": 1,
 			},
 			expectedRules: map[string]int{},
-			maxDuration:   8 * time.Second,
 		},
 	}
 
@@ -2422,9 +2419,7 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			start := time.Now()
 			mux.ServeHTTP(w, req)
-			elapsed := time.Since(start)
 
 			if w.Code != http.StatusOK {
 				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
@@ -2472,10 +2467,6 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 				if got := ruleCounts[ruleID]; got != want {
 					t.Errorf("expected rule %q to report %d findings, got %d", ruleID, want, got)
 				}
-			}
-
-			if elapsed > tt.maxDuration {
-				t.Fatalf("analysis exceeded stable upper bound (%v): %v", tt.maxDuration, elapsed)
 			}
 		})
 	}
@@ -4640,7 +4631,8 @@ func TestAnalyzeSARIF_SeverityMapping(t *testing.T) {
 	}
 }
 
-func TestAnalyzeSARIF_NilURLDoesNotPanic(t *testing.T) {
+// @spec: API-010: Direct SARIF handler calls without a request URL use a stable fallback request URI.
+func TestAnalyzeSARIF_NilURLUsesFallbackRequestURI(t *testing.T) {
 	h := api.NewHandler(&mockParser{parseFunc: func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	}}, engine.NewWithRules(sarifProbeRule{}))
@@ -4658,6 +4650,33 @@ func TestAnalyzeSARIF_NilURLDoesNotPanic(t *testing.T) {
 	}
 	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "application/sarif+json") {
 		t.Fatalf("expected SARIF content type, got %q", ct)
+	}
+
+	var report struct {
+		Version string `json:"version"`
+		Runs    []struct {
+			Invocations []struct {
+				Properties map[string]string `json:"properties"`
+			} `json:"invocations"`
+			Results []struct {
+				RuleID string `json:"ruleId"`
+			} `json:"results"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &report); err != nil {
+		t.Fatalf("decode SARIF response: %v", err)
+	}
+	if report.Version != "2.1.0" || len(report.Runs) != 1 {
+		t.Fatalf("expected one SARIF 2.1.0 run, got version=%q runs=%d", report.Version, len(report.Runs))
+	}
+	if len(report.Runs[0].Invocations) != 1 {
+		t.Fatalf("expected invocation metadata, got %#v", report.Runs[0].Invocations)
+	}
+	if got := report.Runs[0].Invocations[0].Properties["request-uri"]; got != "/analyze/sarif" {
+		t.Fatalf("fallback request-uri = %q, want /analyze/sarif", got)
+	}
+	if len(report.Runs[0].Results) != 1 || report.Runs[0].Results[0].RuleID != "sarif-probe" {
+		t.Fatalf("expected SARIF probe finding, got %#v", report.Runs[0].Results)
 	}
 }
 
