@@ -103,31 +103,55 @@ async function requestAttempt(
       signal: controller.signal,
     });
     if (!response.ok) throw new JevClientError("http", `JEV returned HTTP ${response.status}`, response.status);
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch (error) {
-      if (controller.signal.aborted || abortError(error)) throw new JevClientError("timeout", `JEV request timed out after ${timeoutMs}ms`);
-      throw new JevClientError("invalid_response", "JEV returned invalid JSON");
-    }
+    const payload = await readResponsePayload(response, controller, timeoutMs);
     return validatePayload(payload, questions, model, apiKey);
   } catch (error) {
-    if (error instanceof JevClientError) throw error;
-    if (controller.signal.aborted || abortError(error)) throw new JevClientError("timeout", `JEV request timed out after ${timeoutMs}ms`);
-    throw new JevClientError("network", "JEV network request failed");
+    throw classifyRequestFailure(error, controller, timeoutMs);
   } finally {
     clearTimeout(timer);
   }
 }
 
-export async function requestJevDecisions(
-  state: SemanticState,
-  questions: Record<string, JevQuestion>,
-  options: JevClientOptions = {},
-): Promise<JevDecisionResult> {
-  const startedAt = Date.now();
-  const configuredModel = options.model?.trim();
-  const model = configuredModel || DEFAULT_DECISION_MODEL;
+async function readResponsePayload(
+  response: Response,
+  controller: AbortController,
+  timeoutMs: number,
+): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch (error) {
+    if (controller.signal.aborted || abortError(error)) {
+      throw new JevClientError("timeout", `JEV request timed out after ${timeoutMs}ms`);
+    }
+    throw new JevClientError("invalid_response", "JEV returned invalid JSON");
+  }
+}
+
+function classifyRequestFailure(error: unknown, controller: AbortController, timeoutMs: number): JevClientError {
+  if (error instanceof JevClientError) return error;
+  if (controller.signal.aborted || abortError(error)) {
+    return new JevClientError("timeout", `JEV request timed out after ${timeoutMs}ms`);
+  }
+  return new JevClientError("network", "JEV network request failed");
+}
+
+function asClientError(error: unknown): JevClientError {
+  return error instanceof JevClientError
+    ? error
+    : new JevClientError("network", "JEV network request failed");
+}
+
+type RequestSettings = {
+  model: string;
+  timeoutMs: number;
+  maxRetries: number;
+  retryDelayMs: number;
+};
+
+type RetryState = { count: number };
+
+function requestSettings(options: JevClientOptions): RequestSettings {
+  const model = options.model?.trim() || DEFAULT_DECISION_MODEL;
   const timeoutMs = Number.isInteger(options.timeoutMs) && (options.timeoutMs ?? 0) > 0
     ? options.timeoutMs!
     : DEFAULT_JEV_TIMEOUT_MS;
@@ -137,30 +161,63 @@ export async function requestJevDecisions(
   const retryDelayMs = Number.isInteger(options.retryDelayMs) && (options.retryDelayMs ?? -1) >= 0
     ? options.retryDelayMs!
     : 100;
-  let retryCount = 0;
+  return { model, timeoutMs, maxRetries, retryDelayMs };
+}
+
+async function requestWithRetries(
+  state: SemanticState,
+  questions: Record<string, JevQuestion>,
+  options: JevClientOptions,
+  settings: RequestSettings & { apiKey: string },
+  retryState: RetryState,
+): Promise<JevDecisionResult> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await requestAttempt(
+        state,
+        questions,
+        settings.model,
+        settings.apiKey,
+        options,
+        settings.timeoutMs,
+      );
+    } catch (error) {
+      const clientError = asClientError(error);
+      if (attempt >= settings.maxRetries || !retryable(clientError)) throw clientError;
+      retryState.count += 1;
+      await wait(settings.retryDelayMs * 2 ** retryState.count);
+    }
+  }
+}
+
+export async function requestJevDecisions(
+  state: SemanticState,
+  questions: Record<string, JevQuestion>,
+  options: JevClientOptions = {},
+): Promise<JevDecisionResult> {
+  const startedAt = Date.now();
+  const settings = requestSettings(options);
+  const retryState: RetryState = { count: 0 };
   let outcome = "error";
   let resolved = "unresolved";
 
   try {
-    if (!/^[-a-zA-Z0-9._:/@~]{1,128}$/.test(model)) throw new JevClientError("configuration", "MERM8_DECISION_MODEL is invalid");
+    if (!/^[-a-zA-Z0-9._:/@~]{1,128}$/.test(settings.model)) {
+      throw new JevClientError("configuration", "MERM8_DECISION_MODEL is invalid");
+    }
     const apiKey = options.apiKey?.trim();
     if (!apiKey) throw new JevClientError("credentials", "OPENROUTER_API_KEY is not configured");
 
-    for (let attempt = 0; ; attempt += 1) {
-      try {
-        const result = await requestAttempt(state, questions, model, apiKey, options, timeoutMs);
-        resolved = result.model;
-        outcome = "success";
-        return result;
-      } catch (error) {
-        const clientError = error instanceof JevClientError
-          ? error
-          : new JevClientError("network", "JEV network request failed");
-        if (attempt >= maxRetries || !retryable(clientError)) throw clientError;
-        retryCount += 1;
-        await wait(retryDelayMs * 2 ** retryCount);
-      }
-    }
+    const result = await requestWithRetries(
+      state,
+      questions,
+      options,
+      { ...settings, apiKey },
+      retryState,
+    );
+    resolved = result.model;
+    outcome = "success";
+    return result;
   } catch (error) {
     outcome = error instanceof JevClientError ? error.code : "error";
     throw error;
@@ -168,11 +225,11 @@ export async function requestJevDecisions(
     emitLog(options, {
       operation: "semantic-review",
       outcome,
-      "requested-model": model,
+      "requested-model": settings.model,
       "resolved-model": resolved,
       "question-count": Object.keys(questions).length,
       "duration-ms": Math.max(0, Date.now() - startedAt),
-      "retry-count": retryCount,
+      "retry-count": retryState.count,
     });
   }
 }
