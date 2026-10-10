@@ -51,20 +51,31 @@ func TestTryAcquireParserSlot_RuntimeLimitTransition_LimitedToUnlimited(t *testi
 	release()
 }
 
-func TestParserConcurrencyLimiter_Release_DoesNotGoNegative(t *testing.T) {
-	limiter := newParserConcurrencyLimiter()
+// @spec: FLOW-CONTROL-001: Runtime limit changes preserve in-flight accounting.
+func TestTryAcquireParserSlot_ReleaseCallbackIsIdempotent(t *testing.T) {
+	h := NewHandler(noopParser{}, nil)
 
-	limiter.Release()
-	if limiter.inFlight != 0 {
-		t.Fatalf("expected inFlight to remain at zero after release without acquire, got %d", limiter.inFlight)
+	releaseA, ok := h.tryAcquireParserSlot()
+	if !ok {
+		t.Fatal("expected first unlimited acquire to succeed")
+	}
+	releaseB, ok := h.tryAcquireParserSlot()
+	if !ok {
+		t.Fatal("expected second unlimited acquire to succeed")
 	}
 
-	if !limiter.TryAcquire() {
-		t.Fatal("expected unlimited acquire to succeed")
+	h.SetParserConcurrencyLimit(1)
+	releaseA()
+	releaseA()
+
+	if _, ok := h.tryAcquireParserSlot(); ok {
+		t.Fatal("expected the remaining in-flight request to keep the limit saturated")
 	}
-	limiter.Release()
-	limiter.Release()
-	if limiter.inFlight != 0 {
-		t.Fatalf("expected inFlight to stay non-negative after extra release, got %d", limiter.inFlight)
+
+	releaseB()
+	releaseC, ok := h.tryAcquireParserSlot()
+	if !ok {
+		t.Fatal("expected acquire to succeed after all in-flight requests are released")
 	}
+	releaseC()
 }

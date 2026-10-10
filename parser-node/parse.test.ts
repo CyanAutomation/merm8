@@ -34,28 +34,24 @@ function createTimerHarness() {
   };
 }
 
-test("withWorkerTimeout clears timeout when wrapped promise resolves", async () => {
-  const harness = createTimerHarness();
-
+// @spec: PARSER-NODE-001: Settled worker requests clear their timeout timer.
+test("withWorkerTimeout clears its timer when the wrapped promise settles", async () => {
+  const resolvedHarness = createTimerHarness();
   const result = await withWorkerTimeout(
     Promise.resolve("ok"),
     25,
-    harness.timer,
+    resolvedHarness.timer,
   );
-
   assert.equal(result, "ok");
-  assert.deepEqual(harness.getCleared(), [1]);
-});
+  assert.deepEqual(resolvedHarness.getCleared(), [1]);
 
-test("withWorkerTimeout clears timeout when wrapped promise rejects", async () => {
-  const harness = createTimerHarness();
+  const rejectedHarness = createTimerHarness();
   const expected = new Error("boom");
-
   await assert.rejects(
-    withWorkerTimeout(Promise.reject(expected), 25, harness.timer),
+    withWorkerTimeout(Promise.reject(expected), 25, rejectedHarness.timer),
     expected,
   );
-  assert.deepEqual(harness.getCleared(), [1]);
+  assert.deepEqual(rejectedHarness.getCleared(), [1]);
 });
 
 test("withWorkerTimeout keeps WORKER_TIMEOUT error code for timeout failures", async () => {

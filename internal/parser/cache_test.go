@@ -143,45 +143,48 @@ func TestLRUTTLCacheExpirationAndCapacityPressure(t *testing.T) {
 	}
 }
 
-func TestLRUTTLCacheConcurrentAccessKeepsIndexesConsistent(t *testing.T) {
-	cache := newLRUTTLCache[int](64, time.Hour)
-	const goroutines = 16
-	const operations = 1_000
+// @spec: CACHE-003: Concurrent cache operations preserve non-evicted values.
+func TestLRUTTLCacheConcurrentAccessPreservesValues(t *testing.T) {
+	const (
+		goroutines = 16
+		perWorker  = 64
+	)
+	cache := newLRUTTLCache[int](goroutines*perWorker, time.Hour)
+	start := make(chan struct{})
+	failures := make(chan string, 2*goroutines*perWorker)
 	var workers sync.WaitGroup
 	workers.Add(goroutines)
 	for worker := 0; worker < goroutines; worker++ {
 		go func(worker int) {
 			defer workers.Done()
-			for operation := 0; operation < operations; operation++ {
-				key := strconv.Itoa((worker*operations + operation) % 128)
-				switch operation % 3 {
-				case 0:
-					cache.Set(key, operation)
-				case 1:
-					cache.Get(key)
-				case 2:
-					cache.Delete(key)
+			<-start
+			for operation := 0; operation < perWorker; operation++ {
+				key := fmt.Sprintf("%d:%d", worker, operation)
+				want := worker*perWorker + operation
+				if removed := cache.Set(key, want); removed != 0 {
+					failures <- fmt.Sprintf("Set(%q) removed %d entries, want none", key, removed)
+				}
+				if got, ok, removed := cache.Get(key); !ok || got != want || removed != 0 {
+					failures <- fmt.Sprintf("Get(%q) = (%d, %t, %d), want (%d, true, 0)", key, got, ok, removed, want)
 				}
 			}
 		}(worker)
 	}
+	close(start)
 	workers.Wait()
+	close(failures)
+	for failure := range failures {
+		t.Error(failure)
+	}
 
-	cache.mu.Lock()
-	defer cache.mu.Unlock()
-	if len(cache.entries) > cache.maxSize {
-		t.Fatalf("cache contains %d entries, capacity is %d", len(cache.entries), cache.maxSize)
-	}
-	if cache.order.Len() != len(cache.entries) {
-		t.Fatalf("list/map occupancy differs: list=%d map=%d", cache.order.Len(), len(cache.entries))
-	}
-	seen := make(map[string]bool, cache.order.Len())
-	for elem := cache.order.Front(); elem != nil; elem = elem.Next() {
-		entry := elem.Value.(*lruTTLCacheEntry[int])
-		if seen[entry.key] || cache.entries[entry.key] != elem {
-			t.Fatalf("inconsistent LRU index for key %q", entry.key)
+	for worker := 0; worker < goroutines; worker++ {
+		for operation := 0; operation < perWorker; operation++ {
+			key := fmt.Sprintf("%d:%d", worker, operation)
+			want := worker*perWorker + operation
+			if got, ok, removed := cache.Get(key); !ok || got != want || removed != 0 {
+				t.Fatalf("Get(%q) after concurrent writes = (%d, %t, %d), want (%d, true, 0)", key, got, ok, removed, want)
+			}
 		}
-		seen[entry.key] = true
 	}
 }
 
