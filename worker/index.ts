@@ -27,6 +27,11 @@ const ruleMetadata = [
 ] as const;
 const supportedRuleIds = new Set<string>(ruleMetadata.map(rule => rule.id));
 const sarifLevel = (severity: string): string => severity === "error" ? "error" : severity === "warning" ? "warning" : "note";
+type ConfigError = { code: string; message: string };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
 
 function toSarif(code: string, analysis: ReturnType<typeof analyzeMermaid>) {
   const rules = new Map<string, { id: string; shortDescription: { text: string }; defaultConfiguration: { level: string } }>();
@@ -99,40 +104,44 @@ function ruleConfig(value: unknown): Record<string, Record<string, unknown>> {
   return config as Record<string, Record<string, unknown>>;
 }
 
-function validateRuleConfig(value: unknown): { code: string; message: string } | null {
+function validateMaxFanoutLimit(ruleId: string, options: Record<string, unknown>): ConfigError | null {
+  if (ruleId !== "max-fanout" || !("limit" in options)) return null;
+  if (Number.isInteger(options.limit) && (options.limit as number) >= 0) return null;
+  return { code: "invalid_option", message: "max-fanout.limit must be a non-negative integer" };
+}
+
+function validateRuleOptions(ruleId: string, value: unknown): ConfigError | null {
+  if (!supportedRuleIds.has(ruleId)) return { code: "unknown_rule", message: `unknown rule: ${ruleId}` };
+  if (!isRecord(value)) return { code: "invalid_option", message: `${ruleId} configuration must be an object` };
+  if ("enabled" in value && typeof value.enabled !== "boolean") {
+    return { code: "invalid_option", message: `${ruleId}.enabled must be a boolean` };
+  }
+  if ("severity" in value && !["error", "warning", "info"].includes(String(value.severity))) {
+    return { code: "invalid_option", message: `${ruleId}.severity must be error, warning, or info` };
+  }
+  return validateMaxFanoutLimit(ruleId, value);
+}
+
+function validateRuleEntries(candidate: Record<string, unknown>, allowSchemaVersion: boolean): ConfigError | null {
+  for (const [ruleId, options] of Object.entries(candidate)) {
+    if (allowSchemaVersion && ruleId === "schema-version") continue;
+    const error = validateRuleOptions(ruleId, options);
+    if (error) return error;
+  }
+  return null;
+}
+
+function validateRuleConfig(value: unknown): ConfigError | null {
   if (value === undefined) return null;
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     return { code: "invalid_request", message: "config must be an object" };
   }
-
-  const config = value as Record<string, unknown>;
-  const candidate = "rules" in config ? config.rules : config;
-  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+  const nested = "rules" in value;
+  const candidate = nested ? value.rules : value;
+  if (!isRecord(candidate)) {
     return { code: "invalid_request", message: "config.rules must be an object" };
   }
-
-  for (const [ruleId, options] of Object.entries(candidate as Record<string, unknown>)) {
-    if (candidate === config && ruleId === "schema-version") continue;
-    if (!supportedRuleIds.has(ruleId)) {
-      return { code: "unknown_rule", message: `unknown rule: ${ruleId}` };
-    }
-    if (!options || typeof options !== "object" || Array.isArray(options)) {
-      return { code: "invalid_option", message: `${ruleId} configuration must be an object` };
-    }
-    const optionRecord = options as Record<string, unknown>;
-    if ("enabled" in optionRecord && typeof optionRecord.enabled !== "boolean") {
-      return { code: "invalid_option", message: `${ruleId}.enabled must be a boolean` };
-    }
-    if ("severity" in optionRecord && !["error", "warning", "info"].includes(String(optionRecord.severity))) {
-      return { code: "invalid_option", message: `${ruleId}.severity must be error, warning, or info` };
-    }
-    if (ruleId === "max-fanout" && "limit" in optionRecord &&
-      (!Number.isInteger(optionRecord.limit) || (optionRecord.limit as number) < 0)) {
-      return { code: "invalid_option", message: "max-fanout.limit must be a non-negative integer" };
-    }
-  }
-
-  return null;
+  return validateRuleEntries(candidate, !nested);
 }
 
 async function parseAnalyzeBody(request: Request): Promise<{ body?: { code?: unknown; config?: unknown }; response?: Response }> {
@@ -154,65 +163,104 @@ async function parseAnalyzeBody(request: Request): Promise<{ body?: { code?: unk
   }
 }
 
+async function semanticReviewInput(request: Request, env: Env): Promise<{ code?: string; response?: Response }> {
+  if (!allowed(request, env.API_KEY)) {
+    return { response: json({ error: { code: "unauthorized", message: "A valid API key is required" } }, 401, { "www-authenticate": "Bearer" }) };
+  }
+  const parsed = await parseAnalyzeBody(request);
+  if (parsed.response) return { response: parsed.response };
+  const body = parsed.body;
+  if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.code !== "string") {
+    return { response: json({ error: { code: "invalid_request", message: "code must be a string" } }, 400) };
+  }
+  return { code: body.code };
+}
+
+function semanticReviewFailure(error: unknown): Response {
+  if (error instanceof SemanticReviewError) {
+    return json({ error: { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) } }, error.status);
+  }
+  console.error("Semantic review failed");
+  return json({ error: { code: "semantic_review_failed", message: "Semantic review could not be completed" } }, 500);
+}
+
+async function handleSemanticReview(request: Request, env: Env): Promise<Response> {
+  const input = await semanticReviewInput(request, env);
+  if (input.response) return input.response;
+  try {
+    return json(await reviewMermaidSemantics(input.code!, env));
+  } catch (error) {
+    return semanticReviewFailure(error);
+  }
+}
+
+async function analysisInput(request: Request): Promise<{ code?: string; config?: unknown; response?: Response }> {
+  const parsed = await parseAnalyzeBody(request);
+  if (parsed.response) return { response: parsed.response };
+  const body = parsed.body!;
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { response: json({ error: { code: "invalid_request", message: "request body must be an object" } }, 400) };
+  }
+  if (typeof body.code !== "string") {
+    return { response: json({ error: { code: "invalid_request", message: "code must be a string" } }, 400) };
+  }
+  const configError = validateRuleConfig(body.config);
+  if (configError) return { response: json({ error: configError }, 400) };
+  return { code: body.code, config: body.config };
+}
+
+async function handleAnalysis(request: Request, sarif: boolean): Promise<Response> {
+  const input = await analysisInput(request);
+  if (input.response) return input.response;
+  const code = input.code!;
+  const analysis = analyzeMermaid(code, ruleConfig(input.config));
+  if (!sarif) return json(analysis);
+  if (!analysis.valid) {
+    return json({ error: { code: analysis.error?.code ?? "syntax_error", message: analysis.error?.message ?? "Mermaid source could not be parsed", details: analysis.error } }, 400);
+  }
+  return new Response(JSON.stringify(toSarif(code, analysis)), { headers: { "content-type": "application/sarif+json; charset=utf-8" } });
+}
+
+async function handleMcp(request: Request, env: Env): Promise<Response> {
+  if (!allowed(request, env.API_KEY)) {
+    return json({ error: { code: "unauthorized", message: "A valid API key is required" } }, 401, { "www-authenticate": "Bearer" });
+  }
+  return mcpHandler.fetch(request);
+}
+
+type RouteHandler = (request: Request, env: Env, url: URL) => Response | Promise<Response>;
+
+const routeHandlers = new Map<string, RouteHandler>([
+  ["* /", () => json({ status: "ok" })],
+  ["* /v1/docs", (_request, _env, url) => Response.redirect(`${url.origin}/v1/spec`, 302)],
+  ["* /v1/spec", () => json(workerOpenApi)],
+  ["* /v1/healthz", () => json({ status: "ok" })],
+  ["* /v1/health", () => json({ status: "ok" })],
+  ["* /v1/ready", () => json({ status: "ready", parser: "worker-native" })],
+  ["* /v1/diagram-types", () => json({ "parser-recognized": ["flowchart", "sequence", "class", "er", "state"], "lint-supported": ["flowchart", "sequence", "class", "er", "state"] })],
+  ["* /v1/rules", () => json({ rules: ruleMetadata })],
+  ["* /v1/version", (_request, env) => json({ "service-version": env.BUILD_VERSION ?? "development", "build-commit": env.BUILD_SHA ?? "" })],
+  ["* /mcp", handleMcp],
+  ["POST /v1/semantic-review", handleSemanticReview],
+  ["POST /v1/analyze/sarif", request => handleAnalysis(request, true)],
+  ["POST /v1/analyze", request => handleAnalysis(request, false)],
+  ["POST /v1/analyse", request => handleAnalysis(request, false)],
+]);
+
+async function routeRequest(request: Request, env: Env, url: URL): Promise<Response> {
+  const key = `${request.method} ${url.pathname}`;
+  const handler = routeHandlers.get(key) ?? routeHandlers.get(`* ${url.pathname}`);
+  return handler ? handler(request, env, url) : json({ error: { code: "not_found", message: "Not found" } }, 404);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url); const path = url.pathname;
+    const url = new URL(request.url);
     const cors = corsHeaders(request, env);
     if (request.method === "OPTIONS") {
       return withCors(new Response(null, { status: Object.keys(cors).length ? 204 : 403, headers: cors }), cors, env);
     }
-    const response = await (async (): Promise<Response> => {
-      if (path === "/") return json({ status: "ok" });
-      if (path === "/v1/docs") return Response.redirect(`${url.origin}/v1/spec`, 302);
-      if (path === "/v1/spec") return json(workerOpenApi);
-      if (path === "/v1/healthz" || path === "/v1/health") return json({ status: "ok" });
-      if (path === "/v1/ready") return json({ status: "ready", parser: "worker-native" });
-      if (path === "/v1/diagram-types") return json({ "parser-recognized": ["flowchart", "sequence", "class", "er", "state"], "lint-supported": ["flowchart", "sequence", "class", "er", "state"] });
-      if (path === "/v1/rules") return json({ rules: ruleMetadata });
-      if (path === "/v1/version") return json({ "service-version": env.BUILD_VERSION ?? "development", "build-commit": env.BUILD_SHA ?? "" });
-      if (path === "/mcp") { if (!allowed(request, env.API_KEY)) return json({ error: { code: "unauthorized", message: "A valid API key is required" } }, 401, { "www-authenticate": "Bearer" }); return mcpHandler.fetch(request); }
-      if (path === "/v1/semantic-review" && request.method === "POST") {
-        if (!allowed(request, env.API_KEY)) return json({ error: { code: "unauthorized", message: "A valid API key is required" } }, 401, { "www-authenticate": "Bearer" });
-        const parsed = await parseAnalyzeBody(request);
-        if (parsed.response) return parsed.response;
-        const body = parsed.body;
-        if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.code !== "string") {
-          return json({ error: { code: "invalid_request", message: "code must be a string" } }, 400);
-        }
-        try {
-          return json(await reviewMermaidSemantics(body.code, env));
-        } catch (error) {
-          if (error instanceof SemanticReviewError) {
-            return json({ error: { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) } }, error.status);
-          }
-          console.error("Semantic review failed");
-          return json({ error: { code: "semantic_review_failed", message: "Semantic review could not be completed" } }, 500);
-        }
-      }
-      if (path === "/v1/analyze/sarif" && request.method === "POST") {
-        const parsed = await parseAnalyzeBody(request);
-        if (parsed.response) return parsed.response;
-        const body = parsed.body!;
-        if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: { code: "invalid_request", message: "request body must be an object" } }, 400);
-        if (typeof body.code !== "string") return json({ error: { code: "invalid_request", message: "code must be a string" } }, 400);
-        const configError = validateRuleConfig(body.config);
-        if (configError) return json({ error: configError }, 400);
-        const analysis = analyzeMermaid(body.code, ruleConfig(body.config));
-        if (!analysis.valid) return json({ error: { code: analysis.error?.code ?? "syntax_error", message: analysis.error?.message ?? "Mermaid source could not be parsed", details: analysis.error } }, 400);
-        return new Response(JSON.stringify(toSarif(body.code, analysis)), { headers: { "content-type": "application/sarif+json; charset=utf-8" } });
-      }
-      if ((path === "/v1/analyze" || path === "/v1/analyse") && request.method === "POST") {
-        const parsed = await parseAnalyzeBody(request);
-        if (parsed.response) return parsed.response;
-        const body = parsed.body!;
-        if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: { code: "invalid_request", message: "request body must be an object" } }, 400);
-        if (typeof body.code !== "string") return json({ error: { code: "invalid_request", message: "code must be a string" } }, 400);
-        const configError = validateRuleConfig(body.config);
-        if (configError) return json({ error: configError }, 400);
-        return json(analyzeMermaid(body.code, ruleConfig(body.config)));
-      }
-      return json({ error: { code: "not_found", message: "Not found" } }, 404);
-    })();
+    const response = await routeRequest(request, env, url);
     return withCors(response, cors, env);
   }
 };
