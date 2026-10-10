@@ -871,7 +871,10 @@ func (h *Handler) tryAcquireParserSlot() (func(), bool) {
 		return nil, false
 	}
 
-	return h.parserConcurrency.Release, true
+	var releaseOnce sync.Once
+	return func() {
+		releaseOnce.Do(h.parserConcurrency.Release)
+	}, true
 }
 
 // SetMetricsHandler configures the exporter used by GET /metrics.

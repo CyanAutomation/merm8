@@ -83,6 +83,19 @@ Each entry contains:
 - **Tests**: `TestNewHandler_DefaultsNilEngineDependency`
 - **File**: `internal/api/handler_nil_engine_test.go`
 
+### API-010: SARIF Fallback Request URI
+
+- **Requirement**: A direct SARIF handler call without a request URL returns a valid SARIF report with the stable `/analyze/sarif` request URI
+- **Tests**: `TestAnalyzeSARIF_NilURLUsesFallbackRequestURI`
+- **File**: `internal/api/handler_test.go`
+
+### API-011: Large Topology Metrics and Findings
+
+- **Requirement**: Large linear, high-fan-out, and high-fan-in diagrams return accurate structure metrics and rule findings
+- **Tests**: `TestAnalyze_LargeTopologyMetricsAndFindings`
+- **File**: `internal/api/handler_test.go`
+- **Runtime note**: The test checks semantic results; performance budgets belong in dedicated benchmarks rather than a wall-clock assertion in the unit suite.
+
 ---
 
 ## Observability & Telemetry Tests
@@ -138,8 +151,8 @@ Each entry contains:
 ### FLOW-CONTROL-001: Runtime Parser Limit Updates Preserve In-Flight Accounting
 
 - **Requirement**: Reapplying the configured parser concurrency limit while parses are in flight does not admit work beyond the configured cap
-- **Tests**: `TestAnalyze_ParserConcurrencyLimit_RuntimeUpdates_DoNotCreateParallelLimiters`
-- **File**: `internal/api/handler_test.go`
+- **Tests**: `TestAnalyze_ParserConcurrencyLimit_RuntimeUpdates_DoNotCreateParallelLimiters`, `TestTryAcquireParserSlot_ReleaseCallbackIsIdempotent`
+- **Files**: `internal/api/handler_test.go`, `internal/api/handler_internal_test.go`
 
 ---
 
@@ -170,6 +183,12 @@ Each entry contains:
 - **Tests**: `TestParserCache_DoesNotReuseResultAcrossTimeoutOverrides`
 - **File**: `internal/parser/cache_integration_test.go`
 
+### CACHE-003: Concurrent Cache Operations Preserve Values
+
+- **Requirement**: Concurrent writes and reads preserve every non-evicted cache value
+- **Tests**: `TestLRUTTLCacheConcurrentAccessPreservesValues`
+- **File**: `internal/parser/cache_test.go`
+
 ### PARSER-001: Runtime Version Metadata Contract
 
 - **Requirement**: Parser version metadata is decoded into the supported bridge and Mermaid versions, cached after one lookup, and rejects malformed or incomplete output with the appropriate error
@@ -181,6 +200,25 @@ Each entry contains:
 - **Requirement**: Parser initialization reports a stable actionable error when no repository root can be found, without changing the calling test process working directory
 - **Tests**: `TestParser_NewFailsWhenRepoRootMissing`
 - **File**: `internal/parser/parser_test.go`
+
+### PARSER-003: Subprocess Timeout Enforcement and Recovery
+
+- **Requirement**: Parser timeouts return the timeout category, bound incomplete worker responses, and replace timed-out pooled workers before subsequent parses
+- **Tests**: `TestParser_TimeoutCategory`, `TestParser_WorkerPoolTimeoutReplacesWorker`, `TestParser_WorkerPoolTimeoutReturnsPromptlyWhenWorkerNeverWritesNewline`
+- **File**: `internal/parser/parser_test.go`
+- **Runtime note**: Tests use the configured minimum parser timeout so the subprocess contract is exercised without the default 10-second wait.
+
+### PARSER-NODE-001: Settled Worker Requests Clear Timeout Timers
+
+- **Requirement**: Successful and failed worker requests clear their timeout timer after settling
+- **Tests**: `withWorkerTimeout clears its timer when the wrapped promise settles`
+- **File**: `parser-node/parse.test.ts`
+
+### WORKER-002: Unhealthy Worker Release Does Not Wait for Active Operations
+
+- **Requirement**: An unhealthy worker can be discarded while its operation lock is held, and the pool can create a replacement
+- **Tests**: `TestWorkerPoolUnhealthyReleaseDoesNotWaitForInFlightOperation`
+- **File**: `internal/parser/worker_pool_test.go`
 
 ### WORKER-001: Concurrent Worker Request IDs Are Unique
 
@@ -217,6 +255,7 @@ Each entry contains:
 - **Requirement**: A client exceeding the configured analysis quota receives HTTP 429 with `rate_limited`
 - **Checks**: `rate-limit mode` (opt-in; must run against a fresh service/client window)
 - **File**: `smoke-test.sh`
+- **Classification**: Manual deployment smoke only; run against a disposable service and fresh client quota window. Deterministic automated coverage lives in `TestAnalyzeRateLimitMiddleware_Returns429` and `TestServerStack_AnalyzeRateLimited_IncludesCORSAndRateLimitHeaders`.
 
 ---
 
