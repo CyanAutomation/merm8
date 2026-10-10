@@ -255,100 +255,69 @@ function isWorkerTimeoutError(err: unknown): err is WorkerTimeoutError {
 }
 
 async function parseSource(input: string): Promise<ParseResult> {
-  const trimmedInput = String(input || "").trim();
-
-  if (!trimmedInput) {
-    return {
-      valid: false,
-      error: { message: "empty input", line: 0, column: 0 },
-    };
-  }
-
+  if (!String(input || "").trim()) return parseError("empty input");
   try {
     const mermaid = await loadMermaid();
-    const { parse, detectType, mermaidAPI } = mermaid;
-
-    let diagramType: string;
-    try {
-      diagramType = detectType(input, { suppressErrors: false });
-    } catch (typeErr) {
-      const base = errorMessage(typeErr);
-      const mistakes = detectCommonMistakes(input);
-      const hint = buildErrorHint(base, mistakes);
-      return {
-        valid: false,
-        error: { message: `${base}. ${hint}`, line: 0, column: 0 },
-      };
-    }
-
-    try {
-      await parse(input);
-    } catch (parseErr) {
-      const parseFailure = asRecord(parseErr);
-      const message = parseFailure?.message;
-      const location = asRecord(asRecord(parseFailure?.hash)?.loc);
-      const msg = message ? String(message) : String(parseErr);
-      const line = Number(location?.first_line ?? 0);
-      const col = Number(location?.first_column ?? 0);
-      const mistakes = detectCommonMistakes(input);
-      const enhancedMsg = buildParseErrorMessage(msg, mistakes);
-      return {
-        valid: false,
-        error: { message: enhancedMsg, line, column: col },
-      };
-    }
-
-    let ast;
-    try {
-      const normalizedType = normalizeDiagramType(diagramType);
-      ast = await extractAST(mermaidAPI, input, normalizedType);
-    } catch (err) {
-      return {
-        valid: false,
-        error: {
-          message:
-            "AST extraction failed in parser runtime: " +
-            errorMessage(err),
-          line: 0,
-          column: 0,
-        },
-      };
-    }
-
-    return {
-      valid: true,
-      diagram_type: normalizeDiagramType(diagramType),
-      ast,
-    };
+    return await parseWithRuntime(mermaid, input);
   } catch (err) {
-    const errorMsg = errorMessage(err).toLowerCase();
-    const isMemoryError =
-      errorMsg.includes("heap") ||
-      errorMsg.includes("memory") ||
-      errorMsg.includes("out of memory") ||
-      errorMsg.includes("javascript heap out of memory");
-
-    if (isMemoryError) {
-      return {
-        valid: false,
-        error: {
-          message:
-            "parser_memory_limit: Parser memory exhausted; diagram too large for configured limit",
-          line: 0,
-          column: 0,
-        },
-      };
-    }
-
-    return {
-      valid: false,
-      error: {
-        message: "internal parser error: " + errorMessage(err),
-        line: 0,
-        column: 0,
-      },
-    };
+    return runtimeFailure(err);
   }
+}
+
+function parseError(message: string, line = 0, column = 0): ParseResult {
+  return { valid: false, error: { message, line, column } };
+}
+
+async function parseWithRuntime(mermaid: MermaidRuntime, input: string): Promise<ParseResult> {
+  const detected = detectDiagramType(mermaid, input);
+  if (detected.error) return detected.error;
+  const syntaxError = await validateSyntax(mermaid, input);
+  if (syntaxError) return syntaxError;
+
+  const diagramType = normalizeDiagramType(detected.diagramType);
+  try {
+    const ast = await extractAST(mermaid.mermaidAPI, input, diagramType);
+    return { valid: true, diagram_type: diagramType, ast };
+  } catch (err) {
+    return parseError("AST extraction failed in parser runtime: " + errorMessage(err));
+  }
+}
+
+function detectDiagramType(
+  mermaid: MermaidRuntime,
+  input: string,
+): { diagramType?: string; error?: ParseResult } {
+  try {
+    return { diagramType: mermaid.detectType(input, { suppressErrors: false }) };
+  } catch (err) {
+    const base = errorMessage(err);
+    const hint = buildErrorHint(base, detectCommonMistakes(input));
+    return { error: parseError(`${base}. ${hint}`) };
+  }
+}
+
+async function validateSyntax(mermaid: MermaidRuntime, input: string): Promise<ParseResult | null> {
+  try {
+    await mermaid.parse(input);
+    return null;
+  } catch (err) {
+    const failure = asRecord(err);
+    const location = asRecord(asRecord(failure?.hash)?.loc);
+    const message = failure?.message ? String(failure.message) : String(err);
+    const line = Number(location?.first_line ?? 0);
+    const column = Number(location?.first_column ?? 0);
+    const enhancedMessage = buildParseErrorMessage(message, detectCommonMistakes(input));
+    return parseError(enhancedMessage, line, column);
+  }
+}
+
+function runtimeFailure(err: unknown): ParseResult {
+  const message = errorMessage(err);
+  const lowerMessage = message.toLowerCase();
+  if (lowerMessage.includes("heap") || lowerMessage.includes("memory") || lowerMessage.includes("out of memory")) {
+    return parseError("parser_memory_limit: Parser memory exhausted; diagram too large for configured limit");
+  }
+  return parseError("internal parser error: " + message);
 }
 
 // ---------------------------------------------------------------------------
@@ -455,52 +424,45 @@ async function extractAST(
   source: string,
   diagramType: DiagramType,
 ): Promise<ParserAST> {
-  const ast = {
+  const ast: ParserAST = {
     type: diagramType,
     direction: "TD",
-    nodes: [] as NodeAST[],
-    edges: [] as EdgeAST[],
-    subgraphs: [] as SubgraphAST[],
+    nodes: [],
+    edges: [],
+    subgraphs: [],
     suppressions: extractSuppressions(source),
   };
-
   const sourceLines = source.split(/\r?\n/);
-
-  let db: RawRecord | null = null;
-  try {
-    const diagram = await mermaidAPI.getDiagramFromText(source);
-    db = diagram?.db ?? null;
-  } catch (_) {}
-
+  const db = await diagramDatabase(mermaidAPI, source);
   if (!db) {
-    if (diagramType !== "flowchart") {
-      return ast;
-    }
+    if (diagramType !== "flowchart") return ast;
     throw new Error("AST extraction failed in parser runtime");
   }
+  if (diagramType === "sequence") return extractSequenceAST(ast, db, sourceLines);
+  if (diagramType === "class") return extractClassAST(ast, db, sourceLines);
+  if (diagramType === "er") return extractERAST(ast, db, sourceLines);
+  if (diagramType === "state") return extractStateAST(ast, db, sourceLines);
+  if (diagramType !== "flowchart") return ast;
+  return extractFlowchartAST(ast, db, sourceLines);
+}
 
-  if (diagramType === "sequence") {
-    return extractSequenceAST(ast, db, sourceLines);
-  }
+async function diagramDatabase(mermaidAPI: MermaidAPI, source: string): Promise<RawRecord | null> {
+  try {
+    const diagram = await mermaidAPI.getDiagramFromText(source);
+    return diagram?.db ?? null;
+  } catch (_) {}
+  return null;
+}
 
-  if (diagramType === "class") {
-    return extractClassAST(ast, db, sourceLines);
-  }
-
-  if (diagramType === "er") {
-    return extractERAST(ast, db, sourceLines);
-  }
-
-  if (diagramType === "state") {
-    return extractStateAST(ast, db, sourceLines);
-  }
-
-  if (diagramType !== "flowchart") {
-    return ast;
-  }
-
+function extractFlowchartAST(ast: ParserAST, db: RawRecord, sourceLines: string[]): ParserAST {
   ast.direction = normalizeFlowchartDirection(db.direction);
+  addFlowchartEdges(ast, db, sourceLines);
+  addFlowchartNodes(ast, db.vertices ?? {}, sourceLines);
+  addFlowchartSubgraphs(ast, db.subGraphs);
+  return ast;
+}
 
+function addFlowchartEdges(ast: ParserAST, db: RawRecord, sourceLines: string[]): void {
   const rawEdges = Array.isArray(db.edges) ? db.edges : [];
   for (const e of rawEdges) {
     const fromOriginal = String(e.start ?? e.from ?? "");
@@ -515,32 +477,21 @@ async function extractAST(
       ...(edgeLoc || {}),
     });
   }
+}
 
-  const rawVertices = db.vertices ?? {};
-  const explicitNodes = Object.entries(rawVertices);
-  
-  // Build a set of all node IDs referenced in edges
-  const nodeIDsInEdges = new Set<string>();
-  for (const e of ast.edges) {
-    if (e.from) nodeIDsInEdges.add(e.from);
-    if (e.to) nodeIDsInEdges.add(e.to);
+function addFlowchartNodes(ast: ParserAST, rawVertices: RawRecord, sourceLines: string[]): void {
+  const edgeNodeIds = new Set<string>();
+  for (const edge of ast.edges) {
+    if (edge.from) edgeNodeIds.add(edge.from);
+    if (edge.to) edgeNodeIds.add(edge.to);
   }
-  
+  const explicitNodes = Object.entries(rawVertices);
   if (explicitNodes.length > 0) {
     const seen = new Set<string>();
     for (const [id, v] of explicitNodes) {
       const normalizedID = normalizeNodeID(id);
-      
-      // Only include nodes that are referenced in edges (filters out phantom nodes from labels)
-      if (!nodeIDsInEdges.has(normalizedID)) {
-        continue;
-      }
-      
-      if (seen.has(normalizedID)) {
-        continue;
-      }
+      if (!edgeNodeIds.has(normalizedID) || seen.has(normalizedID)) continue;
       seen.add(normalizedID);
-      
       const nodeLoc = findNodeLocation(sourceLines, id);
       ast.nodes.push({
         id: normalizedID,
@@ -548,32 +499,25 @@ async function extractAST(
         ...(nodeLoc || {}),
       });
     }
-    
-    // Add any nodes from edges that weren't in rawVertices
-    for (const nodeID of nodeIDsInEdges) {
-      if (!seen.has(nodeID)) {
-        seen.add(nodeID);
-        const nodeLoc = findNodeLocation(sourceLines, nodeID);
-        ast.nodes.push({ id: nodeID, label: "", ...(nodeLoc || {}) });
-      }
-    }
+    for (const nodeID of edgeNodeIds) appendFlowchartNode(ast, nodeID, sourceLines, seen);
   } else {
     const seen = new Set<string>();
-    for (const e of ast.edges) {
-      if (e.from && !seen.has(e.from)) {
-        seen.add(e.from);
-        const nodeLoc = findNodeLocation(sourceLines, e.from);
-        ast.nodes.push({ id: e.from, label: "", ...(nodeLoc || {}) });
-      }
-      if (e.to && !seen.has(e.to)) {
-        seen.add(e.to);
-        const nodeLoc = findNodeLocation(sourceLines, e.to);
-        ast.nodes.push({ id: e.to, label: "", ...(nodeLoc || {}) });
-      }
+    for (const edge of ast.edges) {
+      appendFlowchartNode(ast, edge.from, sourceLines, seen);
+      appendFlowchartNode(ast, edge.to, sourceLines, seen);
     }
   }
+}
 
-  const rawSubs = Array.isArray(db.subGraphs) ? db.subGraphs : [];
+function appendFlowchartNode(ast: ParserAST, id: string, sourceLines: string[], seen: Set<string>): void {
+  if (!id || seen.has(id)) return;
+  seen.add(id);
+  const nodeLoc = findNodeLocation(sourceLines, id);
+  ast.nodes.push({ id, label: "", ...(nodeLoc || {}) });
+}
+
+function addFlowchartSubgraphs(ast: ParserAST, subgraphs: unknown): void {
+  const rawSubs = Array.isArray(subgraphs) ? subgraphs : [];
   for (const s of rawSubs) {
     ast.subgraphs.push({
       id: String(s.id ?? s.title ?? ""),
@@ -583,8 +527,6 @@ async function extractAST(
         : [],
     });
   }
-
-  return ast;
 }
 
 function findNodeLocation(lines: string[], id: string): SourceLocation | null {

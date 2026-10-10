@@ -167,6 +167,31 @@ test("rejects malformed max-fanout configuration instead of silently using defau
   });
 });
 
+test("validates rule configuration envelopes and option values", async () => {
+  const cases = [
+    { config: "invalid", expected: { code: "invalid_request", message: "config must be an object" } },
+    { config: { rules: [] }, expected: { code: "invalid_request", message: "config.rules must be an object" } },
+    { config: { mystery: {} }, expected: { code: "unknown_rule", message: "unknown rule: mystery" } },
+    { config: { "no-cycles": { enabled: "yes" } }, expected: { code: "invalid_option", message: "no-cycles.enabled must be a boolean" } },
+    { config: { "no-cycles": { severity: "fatal" } }, expected: { code: "invalid_option", message: "no-cycles.severity must be error, warning, or info" } },
+  ];
+
+  for (const { config, expected } of cases) {
+    const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: "flowchart TD\nA --> B", config }),
+    }), env);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: expected });
+  }
+
+  const legacyConfig = await worker.fetch(new Request("https://example.test/v1/analyze", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: "flowchart TD\nA --> B", config: { "schema-version": "v1", rules: { "no-cycles": { enabled: false } } } }),
+  }), env);
+  assert.equal(legacyConfig.status, 200);
+});
+
 test("does not confuse edge references with duplicate node declarations", async () => {
   const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },

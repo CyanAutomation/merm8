@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// fallow-ignore-file unused-file
 import fs from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';

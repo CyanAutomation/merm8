@@ -57,5 +57,3 @@ export const semanticQuestions = {
     },
   },
 } satisfies JevQuestions;
-
-export const SEMANTIC_QUESTION_COUNT = Object.keys(semanticQuestions).length;

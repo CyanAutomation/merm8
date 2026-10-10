@@ -2,8 +2,8 @@ import type { SemanticState } from "./types.js";
 import { JevClientError, type JevAnswer, type JevDecisionResult, type JevQuestion } from "./types.js";
 
 export const JEV_DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions";
-export const DEFAULT_DECISION_MODEL = "~typesafe/jev-latest";
-export const DEFAULT_JEV_TIMEOUT_MS = 15_000;
+const DEFAULT_DECISION_MODEL = "~typesafe/jev-latest";
+const DEFAULT_JEV_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_RETRIES = 1;
 const RETRYABLE_HTTP_STATUSES = new Set([429, 503, 529]);
 

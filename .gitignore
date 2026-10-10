@@ -27,3 +27,11 @@ benchmarks/reports/
 *.bak[0-9]
 test-output*.log
 test-output*.txt
+
+# Go integration-test parser scripts created in repository-local temp dirs
+/internal/api/api-timeout-parser-*/
+/internal/api/handler-parser-test-*/
+/internal/api/handler-parser-timeout-*/
+/internal/parser/parser-test-*/
+/internal/parser/parser-link-test-*/
+/internal/parser/parser-ready-test-*/
