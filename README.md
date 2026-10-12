@@ -61,6 +61,12 @@ printf 'flowchart TD\n  A[Start] --> B[Finish]\n' \
   | PARSER_SCRIPT=./parser-node/parse.ts ./dist/merm8-cli --stdin
 ```
 
+For this input, the CLI prints:
+
+```text
+stdin: ok
+```
+
 Text output reports `ok` when there are no findings. Add `--format json` for structured output, `--config path/to/config.json` for rule settings, or `--url http://localhost:8080` to use the Go API. `--fail-on-lint` makes lint findings return exit code 1 for CI; syntax errors fail by default. See [CLI options and exit codes](#cli-options) below.
 
 ## Cloudflare Worker quick-start
