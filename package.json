@@ -8,7 +8,9 @@
     "test:worker": "node --import tsx --test worker-tests/*.test.ts",
     "test:workflows": "node --import tsx --test scripts/validate-kaseki-url.test.ts scripts/validate-kaseki-run-id.test.ts scripts/validate-kaseki-workflows.test.ts scripts/validate-ci-workflows.test.ts",
     "test:parser": "node --import tsx --test parser-node/parse.test.ts",
-    "test": "npm run typecheck && npm run test:worker && npm run test:workflows && npm run test:parser",
+    "test:readme-links": "node --test scripts/check-readme-links.test.mjs",
+    "check:readme-links": "node scripts/check-readme-links.mjs",
+    "test": "npm run typecheck && npm run test:worker && npm run test:workflows && npm run test:parser && npm run test:readme-links && npm run check:readme-links",
     "check": "npm test",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
