@@ -12,6 +12,6 @@
   },
   "dependencies": {
     "jsdom": "^24.0.0",
-    "mermaid": "^12.1.0"
+    "mermaid": "^12.2.0"
   }
 }
