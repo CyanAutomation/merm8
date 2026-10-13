@@ -8,11 +8,13 @@ export function extractStateAST(
 ): ParserAST {
   const nodes = Array.isArray(db.nodes) ? db.nodes : [];
   const edges = Array.isArray(db.edges) ? db.edges : [];
+  appendStateNodes(ast, nodes, sourceLines);
+  const startTransitions = appendStateEdges(ast, edges);
+  if (startTransitions.length > 0) ast.startStates = startTransitions;
+  return ast;
+}
 
-  // Track start state transitions for reachability
-  const startTransitions: string[] = [];
-
-  // Extract states as nodes (skip start/end markers)
+function appendStateNodes(ast: ParserAST, nodes: RawRecord[], sourceLines: string[]): void {
   for (const node of nodes) {
     const id = String(node.id || "").trim();
     if (id === "root_start" || id === "root_end") continue;
@@ -24,20 +26,20 @@ export function extractStateAST(
       ...(loc || {}),
     });
   }
+}
 
-  // Extract transitions as edges
+function appendStateEdges(ast: ParserAST, edges: RawRecord[]): string[] {
+  const startTransitions: string[] = [];
   for (const edge of edges) {
     const from = String(edge.start || "").trim();
     const to = String(edge.end || "").trim();
 
-    // Track start state transitions
-    if (from === "root_start" && to !== "root_end") {
+    if (isStartTransition(from, to)) {
       startTransitions.push(to);
       continue;
     }
 
-    // Skip edges from/to end markers
-    if (from === "root_end" || to === "root_start" || to === "root_end") continue;
+    if (isSyntheticTransition(from, to)) continue;
 
     ast.edges.push({
       from,
@@ -46,11 +48,13 @@ export function extractStateAST(
       label: String(edge.label || ""),
     });
   }
+  return startTransitions;
+}
 
-  // Store start state info in a special field for reachability analysis
-  if (startTransitions.length > 0) {
-    ast.startStates = startTransitions;
-  }
+function isStartTransition(from: string, to: string): boolean {
+  return from === "root_start" && to !== "root_end";
+}
 
-  return ast;
+function isSyntheticTransition(from: string, to: string): boolean {
+  return from === "root_end" || to === "root_start" || to === "root_end";
 }
