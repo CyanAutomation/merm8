@@ -11,10 +11,16 @@ type workerPool struct {
 	newFn   func() (*parserWorker, error)
 
 	mu      sync.Mutex
-	cond    *sync.Cond
+	cond    workerPoolCondition
 	idle    []*parserWorker
 	total   int
 	closing bool
+}
+
+type workerPoolCondition interface {
+	Wait()
+	Signal()
+	Broadcast()
 }
 
 func newWorkerPool(maxSize int, newFn func() (*parserWorker, error)) *workerPool {

@@ -1,9 +1,9 @@
 package parser
 
 import (
-	"bufio"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -66,45 +66,66 @@ func TestWorkerPoolUnhealthyReleaseDoesNotWaitForInFlightOperation(t *testing.T)
 	pool.release(replacement, false)
 }
 
-func newProcessWorker(t *testing.T) (*parserWorker, error) {
-	t.Helper()
+type notifyingPoolCondition struct {
+	*sync.Cond
+	waitStarted     chan struct{}
+	waitStartedOnce sync.Once
+	waitAgain       chan struct{}
+	waitCalls       int
+}
 
-	cmd := exec.Command("bash", "-c", "sleep 30") //nolint:gosec
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
+func (c *notifyingPoolCondition) Wait() {
+	c.waitCalls++
+	if c.waitCalls == 2 {
+		close(c.waitAgain)
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	w := &parserWorker{cmd: cmd, stdin: stdin, stdout: bufio.NewReader(stdout)}
-	return w, nil
+	c.waitStartedOnce.Do(func() { close(c.waitStarted) })
+	c.Cond.Wait()
 }
 
 func TestWorkerPoolCloseUnblocksWaiters(t *testing.T) {
 	pool := newWorkerPool(1, func() (*parserWorker, error) {
-		worker, err := newProcessWorker(t)
-		if err != nil {
-			return nil, err
-		}
-		return worker, nil
+		return newUnstartedWorker(), nil
 	})
 
 	worker, err := pool.borrow()
 	if err != nil {
 		t.Fatalf("borrow worker: %v", err)
 	}
+	t.Cleanup(func() {
+		_ = pool.close()
+		pool.release(worker, false)
+	})
+
+	waitStarted := make(chan struct{})
+	waitAgain := make(chan struct{})
+	pool.mu.Lock()
+	pool.cond = &notifyingPoolCondition{
+		Cond:        pool.cond.(*sync.Cond),
+		waitStarted: waitStarted,
+		waitAgain:   waitAgain,
+	}
+	pool.mu.Unlock()
 
 	borrowErrCh := make(chan error, 1)
 	go func() {
 		_, err := pool.borrow()
 		borrowErrCh <- err
 	}()
+	select {
+	case <-waitStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for borrower to block on pool capacity")
+	}
+
+	pool.mu.Lock()
+	pool.cond.Signal()
+	pool.mu.Unlock()
+	select {
+	case <-waitAgain:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for borrower to recheck pool capacity")
+	}
 
 	if err := pool.close(); err != nil {
 		t.Fatalf("close pool: %v", err)
@@ -112,14 +133,13 @@ func TestWorkerPoolCloseUnblocksWaiters(t *testing.T) {
 
 	select {
 	case err := <-borrowErrCh:
-		if err == nil {
-			t.Fatal("expected borrow error after pool close")
+		if err == nil || !strings.Contains(err.Error(), "worker pool is closing") {
+			t.Fatalf("expected pool-closing error from blocked borrower, got %v", err)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for blocked borrow to unblock")
 	}
 
-	pool.release(worker, true)
 }
 
 func TestWorkerPoolBorrowReturnsErrorWhenClosedDuringWorkerCreation(t *testing.T) {
@@ -129,12 +149,7 @@ func TestWorkerPoolBorrowReturnsErrorWhenClosedDuringWorkerCreation(t *testing.T
 	pool := newWorkerPool(1, func() (*parserWorker, error) {
 		close(newFnStarted)
 		<-allowNewFnReturn
-
-		worker, err := newProcessWorker(t)
-		if err != nil {
-			return nil, err
-		}
-		return worker, nil
+		return newUnstartedWorker(), nil
 	})
 
 	borrowResultCh := make(chan struct {
