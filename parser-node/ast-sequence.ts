@@ -1,3 +1,4 @@
+import { extractNamedDefinitions } from "./ast-common.ts";
 import type { ParserAST, RawRecord, SourceLocation } from "./ast-types.ts";
 
 export function extractSequenceAST(
@@ -8,48 +9,55 @@ export function extractSequenceAST(
   const state = db?.state?.records;
   if (!state) return ast;
 
-  // Extract explicitly defined participants from source (preserve duplicates for detection)
-  const participantDefinitions: (SourceLocation & { id: string })[] = [];
-  for (let i = 0; i < sourceLines.length; i++) {
-    const trimmed = sourceLines[i].trim();
-    // Match "participant X" or "participant X as Y" - capture full name (may include spaces)
-    const participantMatch = trimmed.match(/^participant\s+(.+?)(?:\s+as\s+.+)?$/i);
-    if (participantMatch) {
-      participantDefinitions.push({
-        id: participantMatch[1].trim(),
-        line: i + 1,
-        column: trimmed.indexOf(participantMatch[1]) + 1,
-      });
-    }
-  }
+  const definitions = extractNamedDefinitions(
+    sourceLines,
+    /^participant\s+(.+?)(?:\s+as\s+.+)?$/i,
+  );
+  const actors = appendSequenceMessages(ast, Array.isArray(state.messages) ? state.messages : []);
+  appendParticipantNodes(ast, definitions);
+  appendImplicitActors(ast, actors, definitions);
+  return ast;
+}
 
-  // Extract messages as edges
-  const messages = Array.isArray(state.messages) ? state.messages : [];
-  const allActors = new Set<string>();
-
-  for (const msg of messages) {
-    const from = String(msg.from || "").trim();
-    const to = String(msg.to || "").trim();
-    if (from) allActors.add(from);
-    if (to) allActors.add(to);
+function appendSequenceMessages(ast: ParserAST, messages: RawRecord[]): Set<string> {
+  const actors = new Set<string>();
+  for (const message of messages) {
+    const from = String(message.from || "").trim();
+    const to = String(message.to || "").trim();
+    if (from) actors.add(from);
+    if (to) actors.add(to);
 
     ast.edges.push({
       from,
       to,
-      type: msg.type === 1 ? "dotted" : "solid",
-      label: String(msg.message || ""),
+      type: message.type === 1 ? "dotted" : "solid",
+      label: String(message.message || ""),
     });
   }
+  return actors;
+}
 
-  // Add all participant definitions as nodes (including duplicates for detection)
-  for (const def of participantDefinitions) {
+function appendParticipantNodes(
+  ast: ParserAST,
+  definitions: (SourceLocation & { id: string })[],
+): void {
+  for (const definition of definitions) {
     ast.nodes.push({
-      id: def.id,
+      id: definition.id,
       label: "",
-      line: def.line,
-      column: def.column,
+      line: definition.line,
+      column: definition.column,
     });
   }
+}
 
-  return ast;
+function appendImplicitActors(
+  ast: ParserAST,
+  actors: Set<string>,
+  definitions: (SourceLocation & { id: string })[],
+): void {
+  const declaredActors = new Set(definitions.map(({ id }) => id));
+  for (const actor of actors) {
+    if (!declaredActors.has(actor)) ast.nodes.push({ id: actor, label: "" });
+  }
 }

@@ -4,6 +4,24 @@ function asRecord(value: unknown): RawRecord | null {
   return typeof value === "object" && value !== null ? value as RawRecord : null;
 }
 
+export function extractNamedDefinitions(
+  sourceLines: string[],
+  pattern: RegExp,
+): (SourceLocation & { id: string })[] {
+  const definitions: (SourceLocation & { id: string })[] = [];
+  for (let index = 0; index < sourceLines.length; index++) {
+    const trimmed = sourceLines[index].trim();
+    const match = trimmed.match(pattern);
+    if (!match) continue;
+    definitions.push({
+      id: match[1].trim(),
+      line: index + 1,
+      column: trimmed.indexOf(match[1]) + 1,
+    });
+  }
+  return definitions;
+}
+
 export function findNodeLocation(lines: string[], id: string): SourceLocation | null {
   const escaped = escapeRegExp(id);
   const patterns = [

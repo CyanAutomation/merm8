@@ -99,7 +99,7 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const input = readFileSync("/dev/stdin", "utf8");
+  const input = readFileSync(0, "utf8");
   const singleResult = await parseSource(input);
   writeResult(singleResult);
   if (

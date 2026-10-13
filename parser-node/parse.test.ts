@@ -10,13 +10,20 @@ import { withWorkerTimeout } from "./parse.ts";
 
 const parserScript = fileURLToPath(new URL("./parse.ts", import.meta.url));
 
-function parseThroughCli(source: string) {
-  const result = spawnSync(process.execPath, ["--experimental-strip-types", parserScript, "--worker"], {
+function runParser(args: string[], input: string) {
+  return spawnSync(process.execPath, ["--experimental-strip-types", parserScript, ...args], {
     cwd: dirname(parserScript),
     encoding: "utf8",
-    input: `${JSON.stringify({ id: "test", code: source, timeout_ms: 10_000 })}\n`,
+    input,
     timeout: 15_000,
   });
+}
+
+function parseThroughCli(source: string) {
+  const result = runParser(
+    ["--worker"],
+    `${JSON.stringify({ id: "test", code: source, timeout_ms: 10_000 })}\n`,
+  );
   assert.equal(result.status, 0, result.stderr);
   const envelope = JSON.parse(result.stdout) as { result: {
     valid: boolean;
@@ -231,4 +238,118 @@ test("parser CLI keeps syntax-error details and targeted hints", () => {
   assert.equal(result.ast, undefined);
   assert.equal(result.error?.line, 2);
   assert.match(result.error?.message ?? "", /Use "-->" for connections, not "->"/);
+});
+
+test("parser CLI returns targeted hints for Graphviz syntax and tabs", () => {
+  const result = parseThroughCli("digraph G {\n\tA -> B\n}");
+
+  assert.equal(result.valid, false);
+  assert.match(result.error?.message ?? "", /This looks like Graphviz syntax/);
+  assert.match(result.error?.message ?? "", /Replace tabs with spaces/);
+  assert.match(result.error?.message ?? "", /Use "-->" for connections in Mermaid flowcharts/);
+});
+
+test("parser CLI supports one-shot and version-info modes", () => {
+  const oneShot = runParser([], "flowchart TD\nA --> B\n");
+  assert.equal(oneShot.status, 0, oneShot.stderr);
+  const parsed = JSON.parse(oneShot.stdout) as { valid: boolean; diagram_type?: string };
+  assert.equal(parsed.valid, true);
+  assert.equal(parsed.diagram_type, "flowchart");
+
+  const version = runParser(["--version-info"], "");
+  assert.equal(version.status, 0, version.stderr);
+  const versionInfo = JSON.parse(version.stdout) as { parser_version?: string; mermaid_version?: string };
+  assert.ok(versionInfo.parser_version);
+  assert.ok(versionInfo.mermaid_version);
+});
+
+test("flowchart extraction adds edge nodes when Mermaid omits vertex records", async () => {
+  const result = await extractAST(
+    controlledMermaid({
+      direction: "LR",
+      edges: [
+        { start: "A", end: "B", type: "arrow" },
+        { start: "B", end: "C", type: "arrow" },
+      ],
+    }),
+    "flowchart LR\nA --> B\nB --> C",
+    "flowchart",
+  );
+
+  assert.deepEqual(result.nodes.map(({ id }) => id), ["A", "B", "C"]);
+});
+
+test("sequence extraction includes actors mentioned only in messages", async () => {
+  const result = await extractAST(
+    controlledMermaid({
+      state: { records: { messages: [{ from: "Alice", to: "Bob", type: 1, message: "Hello" }] } },
+    }),
+    "sequenceDiagram\nAlice->>Bob: Hello",
+    "sequence",
+  );
+
+  assert.deepEqual(result.nodes.map(({ id, label }) => [id, label]), [
+    ["Alice", ""],
+    ["Bob", ""],
+  ]);
+});
+
+test("class extraction maps every Mermaid relation type and preserves inheritance direction", async () => {
+  const relations = [
+    { type1: 0, type: "aggregation" },
+    { type1: 1, type: "extension" },
+    { type1: 2, type: "composition" },
+    { type1: 3, type: "dependency" },
+    { type1: 4, type: "lollipop" },
+    { type1: 99, type: "dependency" },
+  ];
+  const result = await extractAST(
+    controlledMermaid({
+      relations: relations.map(({ type1 }, index) => ({
+        id1: `Base${index}`,
+        id2: `Child${index}`,
+        relation: { type1 },
+      })),
+      classes: {},
+    }),
+    "classDiagram",
+    "class",
+  );
+
+  assert.deepEqual(result.edges.map(({ from, to, type }) => [from, to, type]), [
+    ["Base0", "Child0", "aggregation"],
+    ["Child1", "Base1", "extension"],
+    ["Base2", "Child2", "composition"],
+    ["Base3", "Child3", "dependency"],
+    ["Base4", "Child4", "lollipop"],
+    ["Base5", "Child5", "dependency"],
+  ]);
+});
+
+test("state extraction filters synthetic transitions and records valid starts", async () => {
+  const result = await extractAST(
+    controlledMermaid({
+      nodes: [
+        { id: "root_start" },
+        { id: "root_end" },
+        { id: "Ready", label: "Ready" },
+        { id: "Done", label: "Done" },
+      ],
+      edges: [
+        { start: "root_start", end: "root_end" },
+        { start: "root_end", end: "Ready" },
+        { start: "Ready", end: "root_start" },
+        { start: "Ready", end: "root_end" },
+        { start: "root_start", end: "Ready" },
+        { start: "Ready", end: "Done", label: "finish" },
+      ],
+    }),
+    "stateDiagram-v2\n[*] --> Ready\nReady --> Done",
+    "state",
+  );
+
+  assert.deepEqual(result.startStates, ["Ready"]);
+  assert.deepEqual(result.edges.map(({ from, to, label }) => [from, to, label]), [
+    ["Ready", "Done", "finish"],
+  ]);
 });
