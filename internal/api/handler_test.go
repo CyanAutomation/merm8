@@ -2251,75 +2251,6 @@ func TestAnalyze_MetricsDuplicateNodeUnionIncludesSourceAnalysisOnlyNodes(t *tes
 	}
 }
 
-func TestAnalyze_LargeDiagram(t *testing.T) {
-	// Create a large diagram with 500 nodes in a chain
-	nodes := make([]model.Node, 500)
-	edges := make([]model.Edge, 499)
-	for i := 0; i < 500; i++ {
-		nodes[i] = model.Node{ID: fmt.Sprintf("N%d", i), Label: fmt.Sprintf("Node%d", i)}
-		if i > 0 {
-			edges[i-1] = model.Edge{From: fmt.Sprintf("N%d", i-1), To: fmt.Sprintf("N%d", i), Type: "arrow"}
-		}
-	}
-
-	diagram := &model.Diagram{
-		Type:      model.DiagramTypeFlowchart,
-		Direction: "TD",
-		Nodes:     nodes,
-		Edges:     edges,
-	}
-
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return diagram, nil, nil
-	})
-
-	body, _ := json.Marshal(map[string]string{"code": "large diagram"})
-	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	// Time the analysis
-	start := time.Now()
-	mux.ServeHTTP(w, req)
-	elapsed := time.Since(start)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 for large diagram, got %d", w.Code)
-	}
-
-	var resp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-
-	metrics, ok := resp["metrics"].(map[string]interface{})
-	if !ok {
-		t.Fatal("expected metrics object")
-	}
-
-	// Verify exact node count
-	if nodeCount, ok := metrics["node-count"].(float64); ok {
-		if int(nodeCount) != 500 {
-			t.Errorf("expected 500 nodes, got %d", int(nodeCount))
-		}
-	} else {
-		t.Error("expected node-count in metrics")
-	}
-
-	// Verify exact edge count (chain should have exactly 499 edges)
-	if edgeCount, ok := metrics["edge-count"].(float64); ok {
-		if int(edgeCount) != 499 {
-			t.Errorf("expected 499 edges in linear chain, got %d", int(edgeCount))
-		}
-	} else {
-		t.Error("expected edge-count in metrics")
-	}
-
-	// Log timing for performance tracking. Keep only a coarse upper bound to reduce CI flakiness.
-	t.Logf("Large diagram analysis completed in %v (nodes: 500, edges: 499)", elapsed)
-	if elapsed > 5*time.Second {
-		t.Fatalf("large diagram analysis exceeded stable upper bound: %v", elapsed)
-	}
-}
-
 // @spec: API-011: Large diagrams produce accurate topology metrics and findings across graph shapes.
 func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 	type testCase struct {
@@ -2569,12 +2500,25 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 				if w.Code != http.StatusOK {
 					return fmt.Errorf("valid payload expected 200, got %d", w.Code)
 				}
-				var resp map[string]interface{}
+				var resp struct {
+					Valid   bool  `json:"valid"`
+					Issues  []any `json:"issues"`
+					Metrics struct {
+						NodeCount int `json:"node-count"`
+						EdgeCount int `json:"edge-count"`
+					} `json:"metrics"`
+				}
 				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 					return fmt.Errorf("valid payload decode failed: %w", err)
 				}
-				if valid, ok := resp["valid"].(bool); !ok || !valid {
-					return fmt.Errorf("valid payload expected valid=true, got %v", resp["valid"])
+				if !resp.Valid {
+					return fmt.Errorf("valid payload expected valid=true")
+				}
+				if resp.Metrics.NodeCount != 6 || resp.Metrics.EdgeCount != 5 {
+					return fmt.Errorf("valid payload expected 6 nodes and 5 edges, got %d and %d", resp.Metrics.NodeCount, resp.Metrics.EdgeCount)
+				}
+				if len(resp.Issues) != 0 {
+					return fmt.Errorf("valid payload expected no lint findings, got %v", resp.Issues)
 				}
 				return nil
 			},
@@ -2586,18 +2530,25 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 				if w.Code != http.StatusOK {
 					return fmt.Errorf("syntax-error payload expected 200, got %d", w.Code)
 				}
-				var resp map[string]interface{}
+				var resp struct {
+					Valid       bool `json:"valid"`
+					SyntaxError struct {
+						Message string `json:"message"`
+						Line    int    `json:"line"`
+					} `json:"syntax-error"`
+					Metrics map[string]any `json:"metrics"`
+				}
 				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 					return fmt.Errorf("syntax-error payload decode failed: %w", err)
 				}
-				if valid, ok := resp["valid"].(bool); !ok || valid {
-					return fmt.Errorf("syntax-error payload expected valid=false, got %v", resp["valid"])
+				if resp.Valid {
+					return fmt.Errorf("syntax-error payload expected valid=false")
 				}
-				if syntaxErrorResp, ok := resp["syntax-error"].(map[string]interface{}); !ok || syntaxErrorResp["message"] == nil {
-					return fmt.Errorf("syntax-error payload expected syntax-error object with message, got %v", resp["syntax-error"])
+				if resp.SyntaxError.Message != "mock syntax error" || resp.SyntaxError.Line != 1 {
+					return fmt.Errorf("syntax-error payload expected mock syntax error on line 1, got %#v", resp.SyntaxError)
 				}
-				if metrics, ok := resp["metrics"].(map[string]interface{}); !ok || metrics["diagram-type"] == nil {
-					return fmt.Errorf("syntax-error payload expected default metrics with diagram-type, got %v", resp["metrics"])
+				if resp.Metrics["diagram-type"] != "unknown" {
+					return fmt.Errorf("syntax-error payload expected unknown diagram metrics, got %v", resp.Metrics)
 				}
 				return nil
 			},
@@ -2617,19 +2568,12 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 				if !ok {
 					return fmt.Errorf("high-fanout payload expected issues array, got %T", resp["issues"])
 				}
-				found := false
-				for _, issue := range issues {
-					issueMap, ok := issue.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					if issueMap["rule-id"] == "max-fanout" {
-						found = true
-						break
-					}
+				if len(issues) != 1 {
+					return fmt.Errorf("high-fanout payload expected one finding, got %v", issues)
 				}
-				if !found {
-					return fmt.Errorf("high-fanout payload expected max-fanout issue, got %v", issues)
+				issue, ok := issues[0].(map[string]interface{})
+				if !ok || issue["rule-id"] != "max-fanout" {
+					return fmt.Errorf("high-fanout payload expected max-fanout finding, got %v", issues[0])
 				}
 				return nil
 			},
@@ -5086,6 +5030,13 @@ func TestServeBenchmark_Returns404WhenFileMissing(t *testing.T) {
 		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
 	})
 
+	healthzReq := httptest.NewRequest(http.MethodGet, "/v1/healthz", nil)
+	healthzW := httptest.NewRecorder()
+	mux.ServeHTTP(healthzW, healthzReq)
+	if healthzW.Code != http.StatusOK {
+		t.Fatalf("expected GET /v1/healthz to remain healthy with 200, got %d", healthzW.Code)
+	}
+
 	req := httptest.NewRequest(http.MethodGet, "/v1/benchmark.html", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
@@ -5103,28 +5054,6 @@ func TestServeBenchmark_Returns404WhenFileMissing(t *testing.T) {
 	}
 	if payload["error"] == "" {
 		t.Fatalf("expected non-empty error message, got payload=%v", payload)
-	}
-}
-
-func TestServeBenchmark_DoesNotInterfereWithHealthEndpoints(t *testing.T) {
-	t.Setenv("MERM8_BENCHMARK_HTML_PATH", filepath.Join(t.TempDir(), "missing-benchmark.html"))
-
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
-	})
-
-	healthzReq := httptest.NewRequest(http.MethodGet, "/v1/healthz", nil)
-	healthzW := httptest.NewRecorder()
-	mux.ServeHTTP(healthzW, healthzReq)
-	if healthzW.Code != http.StatusOK {
-		t.Fatalf("expected GET /v1/healthz to remain healthy with 200, got %d", healthzW.Code)
-	}
-
-	benchmarkReq := httptest.NewRequest(http.MethodGet, "/v1/benchmark.html", nil)
-	benchmarkW := httptest.NewRecorder()
-	mux.ServeHTTP(benchmarkW, benchmarkReq)
-	if benchmarkW.Code != http.StatusNotFound {
-		t.Fatalf("expected benchmark endpoint 404 for missing file, got %d", benchmarkW.Code)
 	}
 }
 
@@ -7301,53 +7230,130 @@ func TestAnalyze_ConcurrentRequests(t *testing.T) {
 }
 
 func TestAnalyze_ConcurrentRequestsWithStrictConfigToggling(t *testing.T) {
+	diagram := &model.Diagram{
+		Type:  model.DiagramTypeFlowchart,
+		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
+		Edges: []model.Edge{{From: "A", To: "B"}, {From: "A", To: "C"}},
+	}
 	mux, h := newTestMuxWithHandler(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return &model.Diagram{Type: model.DiagramTypeFlowchart}, nil, nil
+		return diagram, nil, nil
 	})
 
 	requestBody, err := json.Marshal(map[string]any{
-		"code": "graph TD\n  A --> B",
+		"code": "graph TD\n  A --> B\n  A --> C",
 		"config": map[string]any{
-			"schema-version": "v1",
-			"rules":          map[string]any{},
+			"schema_version": "v1",
+			"rules": map[string]any{
+				"max-fanout": map[string]any{"limit": 1},
+			},
 		},
 	})
 	if err != nil {
 		t.Fatalf("failed to marshal request: %v", err)
 	}
 
-	const toggleIterations = 600
-	const requestGoroutines = 8
-	const requestsPerGoroutine = 120
+	submit := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		return w
+	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
+	assertStrictRejection := func(w *httptest.ResponseRecorder) error {
+		if w.Code != http.StatusBadRequest {
+			return fmt.Errorf("strict mode expected 400, got %d body=%s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			return fmt.Errorf("decode strict-mode error response: %w", err)
+		}
+		if resp.Error.Code != "deprecated_config_format" {
+			return fmt.Errorf("strict mode expected deprecated_config_format, got %q", resp.Error.Code)
+		}
+		return nil
+	}
+	assertLenientResult := func(w *httptest.ResponseRecorder) error {
+		if w.Code != http.StatusOK {
+			return fmt.Errorf("lenient mode expected 200, got %d body=%s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Issues []struct {
+				RuleID string `json:"rule-id"`
+			} `json:"issues"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			return fmt.Errorf("decode lenient-mode analysis response: %w", err)
+		}
+		if len(resp.Issues) != 1 || resp.Issues[0].RuleID != "max-fanout" {
+			return fmt.Errorf("lenient mode expected one max-fanout finding, got %#v", resp.Issues)
+		}
+		if w.Header().Get("Deprecation") != "true" {
+			return fmt.Errorf("lenient mode expected Deprecation header, got %q", w.Header().Get("Deprecation"))
+		}
+		return nil
+	}
+
+	h.SetStrictConfigSchema(true)
+	if err := assertStrictRejection(submit()); err != nil {
+		t.Fatal(err)
+	}
+	h.SetStrictConfigSchema(false)
+	if err := assertLenientResult(submit()); err != nil {
+		t.Fatal(err)
+	}
+
+	const requestGoroutines = 8
+	const requestsPerGoroutine = 40
+
+	start := make(chan struct{})
+	stopToggling := make(chan struct{})
+	togglerDone := make(chan struct{})
 	go func() {
-		defer wg.Done()
-		for i := 0; i < toggleIterations; i++ {
-			h.SetStrictConfigSchema(i%2 == 0)
+		defer close(togglerDone)
+		<-start
+		strict := false
+		for {
+			select {
+			case <-stopToggling:
+				return
+			default:
+				h.SetStrictConfigSchema(strict)
+				strict = !strict
+			}
 		}
 	}()
 
+	var wg sync.WaitGroup
 	errCh := make(chan error, requestGoroutines*requestsPerGoroutine)
 	for i := 0; i < requestGoroutines; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			<-start
 			for j := 0; j < requestsPerGoroutine; j++ {
-				req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(requestBody))
-				req.Header.Set("Content-Type", "application/json")
-				w := httptest.NewRecorder()
-				mux.ServeHTTP(w, req)
-				if w.Code != http.StatusOK {
-					errCh <- fmt.Errorf("unexpected status %d body=%s", w.Code, w.Body.String())
+				w := submit()
+				if err := assertStrictRejection(w); err != nil {
+					if lenientErr := assertLenientResult(w); lenientErr != nil {
+						errCh <- fmt.Errorf("request %d: neither strict nor lenient response was valid: %v; %v", j, err, lenientErr)
+					}
+				}
+				if w.Code != http.StatusOK && w.Code != http.StatusBadRequest {
+					errCh <- fmt.Errorf("request %d returned unexpected status %d", j, w.Code)
 					return
 				}
 			}
 		}()
 	}
 
+	close(start)
 	wg.Wait()
+	close(stopToggling)
+	<-togglerDone
 	close(errCh)
 	for err := range errCh {
 		if err != nil {
