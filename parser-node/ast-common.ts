@@ -9,14 +9,25 @@ export function extractNamedDefinitions(
   pattern: RegExp,
 ): (SourceLocation & { id: string })[] {
   const definitions: (SourceLocation & { id: string })[] = [];
+  const indexedPattern = new RegExp(
+    pattern.source,
+    pattern.flags.includes("d") ? pattern.flags : `${pattern.flags}d`,
+  );
   for (let index = 0; index < sourceLines.length; index++) {
-    const trimmed = sourceLines[index].trim();
-    const match = trimmed.match(pattern);
-    if (!match) continue;
+    const sourceLine = sourceLines[index];
+    const trimmed = sourceLine.trim();
+    indexedPattern.lastIndex = 0;
+    const match = indexedPattern.exec(trimmed);
+    if (!match || match[1] === undefined) continue;
+    const captureStart = (
+      match as RegExpExecArray & { indices?: Array<[number, number] | undefined> }
+    ).indices?.[1]?.[0];
+    if (captureStart === undefined) continue;
+    const leadingWhitespace = sourceLine.length - sourceLine.trimStart().length;
     definitions.push({
       id: match[1].trim(),
       line: index + 1,
-      column: trimmed.indexOf(match[1]) + 1,
+      column: leadingWhitespace + captureStart + 1,
     });
   }
   return definitions;
