@@ -52,7 +52,7 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           COVERAGE_DIR: ${{ runner.temp }}/merm8-v8coverage
-        run: npx --yes fallow@3.33.1 audit --coverage "$COVERAGE_DIR"
+        run: ./node_modules/.bin/fallow audit --coverage "$COVERAGE_DIR"
 
       - name: Verify Go formatting
         run: |

@@ -147,6 +147,26 @@ test("parser CLI extracts sequence participants and messages", () => {
   assert.deepEqual(result.ast?.edges.map(({ from, to }) => [from, to]), [["Alice", "Bob"]]);
 });
 
+test("named class and participant locations include leading indentation", async () => {
+  const sequence = await extractAST(
+    controlledMermaid({ state: { records: { messages: [] } } }),
+    "sequenceDiagram\n  participant r as r",
+    "sequence",
+  );
+  assert.deepEqual(sequence.nodes.map(({ id, line, column }) => [id, line, column]), [
+    ["r", 2, 15],
+  ]);
+
+  const classDiagram = await extractAST(
+    controlledMermaid({ classes: {}, relations: [] }),
+    "classDiagram\n   class a",
+    "class",
+  );
+  assert.deepEqual(classDiagram.nodes.map(({ id, line, column }) => [id, line, column]), [
+    ["a", 2, 10],
+  ]);
+});
+
 test("parser CLI preserves class inheritance direction", () => {
   const result = parseThroughCli("classDiagram\nclass Animal\nclass Dog\nAnimal <|-- Dog");
 
