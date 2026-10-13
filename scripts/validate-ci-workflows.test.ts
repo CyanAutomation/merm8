@@ -23,7 +23,14 @@ type Workflow = {
   jobs?: Record<
     string,
     {
-      steps?: Array<{ name?: string; run?: string }>;
+      steps?: Array<{
+        name?: string;
+        run?: string;
+        if?: string;
+        env?: Record<string, string>;
+        uses?: string;
+        with?: Record<string, unknown>;
+      }>;
     }
   >;
 };
@@ -35,6 +42,14 @@ type DependabotConfig = {
     directory?: string;
     schedule?: { interval?: string };
   }>;
+};
+
+type PackageManifest = {
+  devDependencies?: Record<string, string>;
+};
+
+type NpmLock = {
+  packages?: Record<string, { version?: string; integrity?: string }>;
 };
 
 function readWorkflow(filePath: string): Workflow {
@@ -102,4 +117,32 @@ test("Dependabot updates Go and both npm dependency roots weekly", () => {
   for (const update of relevantUpdates ?? []) {
     assert.equal(update.schedule?.interval, "weekly");
   }
+});
+
+test("CI captures coverage and runs lockfile-installed Fallow for pull requests", () => {
+  const workflow = readWorkflow(".github/workflows/ci.yml");
+  const steps = workflow.jobs?.test?.steps ?? [];
+  const checkout = steps.find((step) => step.uses?.startsWith("actions/checkout@"));
+  const installStep = steps.find((step) => step.name === "Install Node dependencies");
+  const testStep = steps.find((step) => step.name === "Type-check and test Worker");
+  const auditStep = steps.find((step) => step.name === "Audit changed TypeScript code");
+
+  assert.equal(checkout?.with?.["fetch-depth"], 0);
+  assert.ok(installStep, "workflow must install locked Node dependencies");
+  assert.ok(auditStep, "workflow must audit changed TypeScript code");
+  assert.match(installStep?.run ?? "", /npm ci/);
+  assert.equal(testStep?.env?.NODE_V8_COVERAGE, "${{ runner.temp }}/merm8-v8coverage");
+  assert.equal(auditStep?.if, "github.event_name == 'pull_request'");
+  assert.equal(auditStep?.run, "./node_modules/.bin/fallow audit --coverage \"$COVERAGE_DIR\"");
+  assert.ok(
+    steps.indexOf(installStep) < steps.indexOf(auditStep),
+    "Fallow must run after the locked Node dependencies are installed",
+  );
+  assert.equal(auditStep?.env?.COVERAGE_DIR, "${{ runner.temp }}/merm8-v8coverage");
+
+  const manifest = JSON.parse(readRepositoryFile("package.json")) as PackageManifest;
+  const lockfile = JSON.parse(readRepositoryFile("package-lock.json")) as NpmLock;
+  assert.equal(manifest.devDependencies?.fallow, "3.33.1");
+  assert.equal(lockfile.packages?.["node_modules/fallow"]?.version, "3.33.1");
+  assert.match(lockfile.packages?.["node_modules/fallow"]?.integrity ?? "", /^sha512-/);
 });

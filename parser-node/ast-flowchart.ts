@@ -33,26 +33,36 @@ function addFlowchartNodes(ast: ParserAST, rawVertices: RawRecord, sourceLines: 
     if (edge.to) edgeNodeIds.add(edge.to);
   }
   const explicitNodes = Object.entries(rawVertices);
-  if (explicitNodes.length > 0) {
-    const seen = new Set<string>();
-    for (const [id, v] of explicitNodes) {
-      const normalizedID = normalizeNodeID(id);
-      if (!edgeNodeIds.has(normalizedID) || seen.has(normalizedID)) continue;
-      seen.add(normalizedID);
-      const nodeLoc = findNodeLocation(sourceLines, id);
-      ast.nodes.push({
-        id: normalizedID,
-        label: extractLabel(v),
-        ...(nodeLoc || {}),
-      });
-    }
-    for (const nodeID of edgeNodeIds) appendFlowchartNode(ast, nodeID, sourceLines, seen);
-  } else {
-    const seen = new Set<string>();
-    for (const edge of ast.edges) {
-      appendFlowchartNode(ast, edge.from, sourceLines, seen);
-      appendFlowchartNode(ast, edge.to, sourceLines, seen);
-    }
+  if (explicitNodes.length > 0) return addExplicitFlowchartNodes(ast, explicitNodes, edgeNodeIds, sourceLines);
+  addImplicitFlowchartNodes(ast, sourceLines);
+}
+
+function addExplicitFlowchartNodes(
+  ast: ParserAST,
+  explicitNodes: [string, unknown][],
+  edgeNodeIds: Set<string>,
+  sourceLines: string[],
+): void {
+  const seen = new Set<string>();
+  for (const [id, value] of explicitNodes) {
+    const normalizedID = normalizeNodeID(id);
+    if (!edgeNodeIds.has(normalizedID) || seen.has(normalizedID)) continue;
+    seen.add(normalizedID);
+    const nodeLoc = findNodeLocation(sourceLines, id);
+    ast.nodes.push({
+      id: normalizedID,
+      label: extractLabel(value),
+      ...(nodeLoc || {}),
+    });
+  }
+  for (const nodeID of edgeNodeIds) appendFlowchartNode(ast, nodeID, sourceLines, seen);
+}
+
+function addImplicitFlowchartNodes(ast: ParserAST, sourceLines: string[]): void {
+  const seen = new Set<string>();
+  for (const edge of ast.edges) {
+    appendFlowchartNode(ast, edge.from, sourceLines, seen);
+    appendFlowchartNode(ast, edge.to, sourceLines, seen);
   }
 }
 

@@ -1,0 +1,46 @@
+{
+  "minimumVersion": "3.33.1",
+  "audit": {
+    "gate": "new-only"
+  },
+  "boundaries": {
+    "zones": [
+      { "name": "domain", "patterns": ["src/domain/**"] },
+      { "name": "parser", "patterns": ["src/parser/**"] },
+      { "name": "engine", "patterns": ["src/engine/**"] },
+      { "name": "semantic", "patterns": ["src/semantic/**"] },
+      { "name": "mcp", "patterns": ["src/mcp/**"] },
+      { "name": "worker", "patterns": ["worker/**"] },
+      { "name": "parser-node", "patterns": ["parser-node/**"] },
+      { "name": "tooling", "patterns": ["scripts/**"] }
+    ],
+    "rules": [
+      { "from": "domain", "allow": ["domain"] },
+      { "from": "parser", "allow": ["domain", "parser"] },
+      { "from": "engine", "allow": ["domain", "parser", "engine"] },
+      { "from": "semantic", "allow": ["domain", "parser", "engine", "semantic"] },
+      { "from": "mcp", "allow": ["engine", "mcp"] },
+      { "from": "worker", "allow": ["engine", "semantic", "mcp", "worker"] },
+      { "from": "parser-node", "allow": ["parser-node"] },
+      {
+        "from": "tooling",
+        "allow": ["domain", "parser", "engine", "semantic", "mcp", "worker", "parser-node", "tooling"]
+      }
+    ],
+    "coverage": {
+      "requireAllFiles": true,
+      "allowUnmatched": [
+        "worker-tests/**",
+        "cmd/server/testdata/fixtures/parser/**",
+        "benchmark.html",
+        "internal/api/swagger.html"
+      ]
+    }
+  },
+  "health": {
+    "ignore": ["cmd/server/testdata/fixtures/parser/**"]
+  },
+  "rules": {
+    "policy-violation": "off"
+  }
+}
