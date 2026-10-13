@@ -60,7 +60,7 @@ func TestParserConfig_EffectiveConfig_Boundaries(t *testing.T) {
 	}
 }
 
-func TestParserConfig_EnvParsing_ValidInputs(t *testing.T) {
+func TestParserConfig_EnvParsing(t *testing.T) {
 	defaults := DefaultConfig()
 
 	tests := []struct {
@@ -98,6 +98,13 @@ func TestParserConfig_EnvParsing_ValidInputs(t *testing.T) {
 			expectedMemory:  defaults.NodeMaxOldSpaceMB,
 			expectedSource:  false,
 		},
+		{
+			name:            "invalid PARSER_SOURCE_ENHANCEMENT falls back to enabled",
+			env:             map[string]string{"PARSER_SOURCE_ENHANCEMENT": "invalid"},
+			expectedTimeout: defaults.Timeout,
+			expectedMemory:  defaults.NodeMaxOldSpaceMB,
+			expectedSource:  true,
+		},
 	}
 
 	for _, tc := range tests {
@@ -122,29 +129,6 @@ func TestParserConfig_EnvParsing_ValidInputs(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestReadSourceEnhancementEnabled(t *testing.T) {
-	t.Run("default true", func(t *testing.T) {
-		t.Setenv("PARSER_SOURCE_ENHANCEMENT", "")
-		if got := readSourceEnhancementEnabled(); got == nil || !*got {
-			t.Fatal("expected source enhancement to default to enabled")
-		}
-	})
-
-	t.Run("parse false", func(t *testing.T) {
-		t.Setenv("PARSER_SOURCE_ENHANCEMENT", "false")
-		if got := readSourceEnhancementEnabled(); got == nil || *got {
-			t.Fatal("expected source enhancement to be disabled")
-		}
-	})
-
-	t.Run("invalid falls back to true", func(t *testing.T) {
-		t.Setenv("PARSER_SOURCE_ENHANCEMENT", "invalid")
-		if got := readSourceEnhancementEnabled(); got == nil || !*got {
-			t.Fatal("expected invalid value to fall back to enabled")
-		}
-	})
 }
 
 func TestReadParserMode(t *testing.T) {
