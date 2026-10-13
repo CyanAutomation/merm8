@@ -68,11 +68,18 @@ func TestWorkerPoolUnhealthyReleaseDoesNotWaitForInFlightOperation(t *testing.T)
 
 type notifyingPoolCondition struct {
 	*sync.Cond
-	waitStarted chan struct{}
+	waitStarted     chan struct{}
+	waitStartedOnce sync.Once
+	waitAgain       chan struct{}
+	waitCalls       int
 }
 
 func (c *notifyingPoolCondition) Wait() {
-	close(c.waitStarted)
+	c.waitCalls++
+	if c.waitCalls == 2 {
+		close(c.waitAgain)
+	}
+	c.waitStartedOnce.Do(func() { close(c.waitStarted) })
 	c.Cond.Wait()
 }
 
@@ -91,10 +98,12 @@ func TestWorkerPoolCloseUnblocksWaiters(t *testing.T) {
 	})
 
 	waitStarted := make(chan struct{})
+	waitAgain := make(chan struct{})
 	pool.mu.Lock()
 	pool.cond = &notifyingPoolCondition{
 		Cond:        pool.cond.(*sync.Cond),
 		waitStarted: waitStarted,
+		waitAgain:   waitAgain,
 	}
 	pool.mu.Unlock()
 
@@ -107,6 +116,15 @@ func TestWorkerPoolCloseUnblocksWaiters(t *testing.T) {
 	case <-waitStarted:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for borrower to block on pool capacity")
+	}
+
+	pool.mu.Lock()
+	pool.cond.Signal()
+	pool.mu.Unlock()
+	select {
+	case <-waitAgain:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for borrower to recheck pool capacity")
 	}
 
 	if err := pool.close(); err != nil {
