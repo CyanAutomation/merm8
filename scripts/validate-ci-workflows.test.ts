@@ -23,7 +23,14 @@ type Workflow = {
   jobs?: Record<
     string,
     {
-      steps?: Array<{ name?: string; run?: string }>;
+      steps?: Array<{
+        name?: string;
+        run?: string;
+        if?: string;
+        env?: Record<string, string>;
+        uses?: string;
+        with?: Record<string, unknown>;
+      }>;
     }
   >;
 };
@@ -102,4 +109,18 @@ test("Dependabot updates Go and both npm dependency roots weekly", () => {
   for (const update of relevantUpdates ?? []) {
     assert.equal(update.schedule?.interval, "weekly");
   }
+});
+
+test("CI captures runtime coverage and gates only new Fallow findings on pull requests", () => {
+  const workflow = readWorkflow(".github/workflows/ci.yml");
+  const steps = workflow.jobs?.test?.steps ?? [];
+  const checkout = steps.find((step) => step.uses?.startsWith("actions/checkout@"));
+  const testStep = steps.find((step) => step.name === "Type-check and test Worker");
+  const auditStep = steps.find((step) => step.name === "Audit changed TypeScript code");
+
+  assert.equal(checkout?.with?.["fetch-depth"], 0);
+  assert.equal(testStep?.env?.NODE_V8_COVERAGE, "${{ runner.temp }}/merm8-v8coverage");
+  assert.equal(auditStep?.if, "github.event_name == 'pull_request'");
+  assert.match(auditStep?.run ?? "", /fallow@3\.33\.1 audit --coverage/);
+  assert.equal(auditStep?.env?.COVERAGE_DIR, "${{ runner.temp }}/merm8-v8coverage");
 });
