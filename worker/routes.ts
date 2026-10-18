@@ -13,6 +13,7 @@ function corsHeaders(request: Request, env: Env): HeadersInit {
     "access-control-allow-origin": origin,
     "access-control-allow-methods": "GET, POST, OPTIONS",
     "access-control-allow-headers": "content-type, authorization, x-api-key",
+    "access-control-expose-headers": "retry-after",
     "access-control-max-age": "86400",
     vary: "Origin",
   };
