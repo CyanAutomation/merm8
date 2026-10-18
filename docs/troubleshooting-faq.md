@@ -433,28 +433,7 @@ done
 
 **A:** Yes, use SARIF output and upload-sarif action:
 
-```yaml
-name: Lint Diagrams
-on: [push]
-
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Run merm8 linting
-        run: |
-          docker run --rm -v $PWD:/workspace \
-            merm8:latest \
-            /app/merm8-cli /workspace/diagrams/*.mmd \
-            > results.sarif
-
-      - name: Upload to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: results.sarif
-```
+Build the CLI from source using the [root README](../README.md#cli-quick-start) for text or JSON lint output. For GitHub Security, the CLI does not produce SARIF; run the Go API and send diagram source to `POST /v1/analyze/sarif`, then upload that response with GitHub's `upload-sarif` action. The [API Integration Guide](api-integration-guide.md#integration-with-github-security-tab) shows the request. This repository does not publish a container image.
 
 ---
 
