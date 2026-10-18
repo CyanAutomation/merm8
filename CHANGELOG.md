@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Distinguished the deployed Cloudflare Worker API contract from the larger local Go server API, including a dedicated Worker reference.
 - Reworked the README quick-starts, clarified Worker route authentication and public analysis behavior, and added automated checks for README local links.
+- Clarified README shell and CLI output expectations, replaced unprovided container-image setup guidance with source/API instructions, and added README anchor and scheduled external-link checks.
 
 ### Benchmark Suite Enhancements (Phase 1)
 

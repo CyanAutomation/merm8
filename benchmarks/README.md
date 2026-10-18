@@ -26,18 +26,9 @@ This generates:
 - **JSON Results**: `benchmarks/reports/latest-results.json` (structured data)
 - **Text Summary**: Printed to stdout
 
-### Docker Build Behavior (`benchmark.html`)
+### Container packaging
 
-Container builds support two modes for `benchmark.html`:
-
-- **Default/local mode** (`REQUIRE_BENCHMARK_HTML=false`): if `benchmark.html` is missing, Docker creates a placeholder file so local developer builds remain convenient.
-- **Strict mode** (`REQUIRE_BENCHMARK_HTML=true`): build fails when `benchmark.html` is missing. Use this in CI/deploy to ensure production images include a real benchmark report.
-
-Example strict build:
-
-```bash
-docker build --build-arg REQUIRE_BENCHMARK_HTML=true .
-```
+This repository does not define a Dockerfile or the `REQUIRE_BENCHMARK_HTML` build argument. The benchmark suite writes `benchmark.html` when it runs; include that file in any container image built by your deployment pipeline.
 
 ### View Results
 

@@ -18,9 +18,13 @@ The Go API and CLI run as local Go programs. The Worker can run locally with Wra
 | Integrate an API client | [API Integration Guide](docs/api-integration-guide.md) |
 | Find examples, migration, and operations docs | [Documentation Index](docs/INDEX.md) |
 
+**Shell:** The commands below use POSIX/Bash syntax. On Windows, adapt inline environment-variable assignments, pipes, and quoting for PowerShell.
+
 ## Local API quick-start
 
 **Requirements:** Go 1.24+, Node.js 24+, and npm.
+
+These steps build from source. This repository has no Dockerfile or container-image publishing workflow; teams that want a container must build and publish their own image.
 
 From the repository root, install the parser dependencies and build the server:
 
@@ -42,7 +46,7 @@ curl -sS http://localhost:8080/v1/analyze \
 
 The health response is `{"status":"ok"}`. The analysis response includes `valid`, `diagram-type`, `lint-supported`, `issues`, and `metrics`. See the [API reference](API_GUIDE.md) for request options, errors, configuration, and response fields.
 
-The local parser script path is required because the server's default path (`/app/parser-node/parse.ts`) is for its container layout. See [Troubleshooting & FAQ](docs/troubleshooting-faq.md) if startup or parsing fails.
+The local parser script path is required because the server default (`/app/parser-node/parse.ts`) assumes a deployment that provides the parser at that path. See [Troubleshooting & FAQ](docs/troubleshooting-faq.md) if startup or parsing fails.
 
 ## CLI quick-start
 
@@ -61,11 +65,13 @@ printf 'flowchart TD\n  A[Start] --> B[Finish]\n' \
   | PARSER_SCRIPT=./parser-node/parse.ts ./dist/merm8-cli --stdin
 ```
 
-For this input, the CLI prints:
+The result is written to standard output:
 
 ```text
 stdin: ok
 ```
+
+At startup, the current Go rule registry also writes legacy rule-ID deprecation notices to standard error. Those notices are separate from the analysis result shown above.
 
 Text output reports `ok` when there are no findings. Add `--format json` for structured output, `--config path/to/config.json` for rule settings, or `--url http://localhost:8080` to use the Go API. `--fail-on-lint` makes lint findings return exit code 1 for CI; syntax errors fail by default. See [CLI options and exit codes](#cli-options) below.
 
@@ -208,7 +214,7 @@ The runtime-dependent server integration suite is separate:
 PARSER_SCRIPT=./parser-node/parse.ts go test -tags=integration ./cmd/server
 ```
 
-The root `npm test` also checks the README's relative file links. Regenerate and verify OpenAPI artifacts after API contract changes:
+The root `npm test` checks local README links and Markdown section anchors. A separate weekly workflow checks external links so network outages do not block pull requests. Regenerate and verify OpenAPI artifacts after API contract changes:
 
 ```bash
 go run ./scripts/generate_openapi.go
@@ -230,3 +236,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION
 ## Contributing, support, and license
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. For bugs and feature requests, use [GitHub Issues](https://github.com/CyanAutomation/merm8/issues). The project is licensed under [Apache-2.0](LICENSE).
+
+The release workflow publishes GitHub Releases from validated semantic-version tags. See [Releases](https://github.com/CyanAutomation/merm8/releases) and the [Changelog](CHANGELOG.md) for release history.

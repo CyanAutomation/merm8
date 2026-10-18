@@ -8,14 +8,13 @@ Complete guide to integrating merm8 into your applications with proper version n
 
 ### Installation & Setup
 
-```bash
-# 1. Start merm8 server
-docker run -p 8080:8080 -e PARSER_TIMEOUT_SECONDS=10 merm8:latest
+This guide assumes the Go API is running on `localhost:8080`. Follow the root README's [Local API quick-start](../README.md#local-api-quick-start) to build it from source. This repository does not include a Dockerfile or publish a container image.
 
-# 2. Simple health check
+```bash
+# Check the server
 curl http://localhost:8080/v1/healthz
 
-# 3. First analyze request
+# Send a first analyze request
 curl -X POST http://localhost:8080/v1/analyze \
   -H "Content-Type: application/json" \
   -d @- << 'EOF'
@@ -593,6 +592,8 @@ EOF
 
 ### Integration with GitHub Security Tab
 
+The Go API returns SARIF from `POST /v1/analyze/sarif`. The Go CLI supports text and JSON output, not SARIF. Start the API as described in the [root README](../README.md#local-api-quick-start), or set `MERM8_API_URL` to an API that is already running. This repository does not publish the `merm8:latest` image used by older examples.
+
 ```yaml
 # .github/workflows/scan.yml
 name: Diagram Linting
@@ -605,11 +606,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Analyze diagrams
+      - name: Analyze diagram as SARIF
+        env:
+          MERM8_API_URL: ${{ vars.MERM8_API_URL }}
         run: |
-          docker run -v ${{ github.workspace }}:/workspace \
-            merm8:latest \
-            /workspace/diagrams/*.mmd > sarif-output.json
+          jq -n --rawfile code diagrams/example.mmd '{code:$code}' > request.json
+          curl --fail-with-body --silent --show-error \
+            -H 'Content-Type: application/json' \
+            --data-binary @request.json \
+            "$MERM8_API_URL/v1/analyze/sarif" > sarif-output.json
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v2
