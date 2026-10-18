@@ -457,7 +457,7 @@ func TestNewUsesCacheConfigFromEnv(t *testing.T) {
 	t.Setenv("PARSER_CACHE_SYNTAX_CAPACITY", "9")
 	t.Setenv("PARSER_CACHE_SYNTAX_TTL_SECONDS", "10")
 
-	p, err := newWithConfigAndCacheAndRepoRootResolver("parse.mjs", Config{}, CacheConfigFromEnv(), func() (string, error) {
+	p, err := newWithConfigAndCacheAndRepoRootResolver("parse.ts", Config{}, CacheConfigFromEnv(), func() (string, error) {
 		return t.TempDir(), nil
 	})
 	if err != nil {

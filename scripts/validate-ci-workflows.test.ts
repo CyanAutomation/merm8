@@ -45,6 +45,7 @@ type DependabotConfig = {
 };
 
 type PackageManifest = {
+  engines?: Record<string, string>;
   devDependencies?: Record<string, string>;
 };
 
@@ -145,4 +146,42 @@ test("CI captures coverage and runs lockfile-installed Fallow for pull requests"
   assert.equal(manifest.devDependencies?.fallow, "3.33.1");
   assert.equal(lockfile.packages?.["node_modules/fallow"]?.version, "3.33.1");
   assert.match(lockfile.packages?.["node_modules/fallow"]?.integrity ?? "", /^sha512-/);
+});
+
+test("the repository declares and uses Node.js 24", () => {
+  const nodeWorkflows = [
+    ".github/workflows/ci.yml",
+    ".github/workflows/deploy-cloudflare.yml",
+    ".github/workflows/integration-contract-tests.yml",
+    ".github/workflows/kaseki-docs.yaml",
+    ".github/workflows/kaseki-dry.yaml",
+    ".github/workflows/race-tests.yml",
+    ".github/workflows/release.yml",
+  ];
+
+  for (const filePath of nodeWorkflows) {
+    const workflow = readWorkflow(filePath);
+    const setupSteps = Object.values(workflow.jobs ?? {})
+      .flatMap((job) => job.steps ?? [])
+      .filter((step) => step.uses?.startsWith("actions/setup-node@"));
+
+    assert.ok(setupSteps.length > 0, `${filePath} must set up Node.js`);
+    for (const step of setupSteps) {
+      assert.equal(
+        String(step.with?.["node-version"]),
+        "24",
+        `${filePath} must use Node.js 24`,
+      );
+    }
+  }
+
+  const rootManifest = JSON.parse(readRepositoryFile("package.json")) as PackageManifest;
+  const parserManifest = JSON.parse(
+    readRepositoryFile("parser-node/package.json"),
+  ) as PackageManifest;
+
+  assert.equal(rootManifest.engines?.node, ">=24.0.0");
+  assert.equal(parserManifest.engines?.node, ">=24.0.0");
+  assert.match(rootManifest.devDependencies?.["@types/node"] ?? "", /^\^24\./);
+  assert.equal(readRepositoryFile(".nvmrc").trim(), "24");
 });

@@ -4,9 +4,10 @@ import fs from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
-const waitForFile = async (filePath) => {
+const waitForFile = async (filePath: string): Promise<void> => {
   while (true) {
     if (fs.existsSync(filePath)) {
       return;
@@ -15,13 +16,13 @@ const waitForFile = async (filePath) => {
   }
 };
 
-const signalStarted = async () => {
+const signalStarted = async (): Promise<void> => {
   const signalURL = process.env.MERM8_PARSE_SIGNAL_URL;
   if (!signalURL) {
     return;
   }
 
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const client = signalURL.startsWith('https://') ? https : http;
     const req = client.request(signalURL, { method: 'POST' }, (res) => {
       res.resume();
@@ -34,7 +35,7 @@ const signalStarted = async () => {
 
 let input = '';
 process.stdin.setEncoding('utf8');
-process.stdin.on('data', (chunk) => {
+process.stdin.on('data', (chunk: string) => {
   input += chunk;
 });
 

@@ -3,13 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test:worker": "node --import tsx --test worker-tests/*.test.ts",
     "test:workflows": "node --import tsx --test scripts/validate-kaseki-url.test.ts scripts/validate-kaseki-run-id.test.ts scripts/validate-kaseki-workflows.test.ts scripts/validate-ci-workflows.test.ts",
     "test:parser": "node --import tsx --test parser-node/parse.test.ts",
-    "test:readme-links": "node --test scripts/check-readme-links.test.mjs",
-    "check:readme-links": "node scripts/check-readme-links.mjs",
+    "test:readme-links": "node --import tsx --test scripts/check-readme-links.test.ts",
+    "check:readme-links": "node --import tsx scripts/check-readme-links.ts",
     "test": "npm run typecheck && npm run test:worker && npm run test:workflows && npm run test:parser && npm run test:readme-links && npm run check:readme-links",
     "check": "npm test",
     "dev": "wrangler dev",
@@ -21,7 +24,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261011.1",
-    "@types/node": "^26.6.5",
+    "@types/node": "^24.19.2",
     "fallow": "3.33.1",
     "tsx": "^4.20.0",
     "typescript": "^7.0.2",
