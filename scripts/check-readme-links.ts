@@ -60,6 +60,33 @@ function githubHeadingSlug(rawHeading: string): string {
     .replace(/\s+/g, "-");
 }
 
+function addHeadingAnchor(
+  rawHeading: string,
+  anchors: Set<string>,
+  slugCounts: Map<string, number>,
+): void {
+  const baseSlug = githubHeadingSlug(rawHeading);
+  if (!baseSlug) return;
+
+  let suffix = slugCounts.get(baseSlug) ?? 0;
+  let slug = baseSlug;
+  while (anchors.has(slug)) {
+    suffix += 1;
+    slug = `${baseSlug}-${suffix}`;
+  }
+  slugCounts.set(baseSlug, suffix);
+  anchors.add(slug);
+}
+
+function markdownHeadingAt(lines: string[], index: number): string | null {
+  const line = lines[index];
+  const atxHeading = line.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
+  if (atxHeading) return atxHeading[1];
+
+  const setextUnderline = lines[index + 1]?.match(/^ {0,3}(?:=+|-+)\s*$/);
+  return line.trim() && setextUnderline ? line.trim() : null;
+}
+
 function markdownAnchors(markdown: string): Set<string> {
   const source = withoutFencedCode(markdown);
   const lines = source.split("\n");
@@ -67,33 +94,8 @@ function markdownAnchors(markdown: string): Set<string> {
   const slugCounts = new Map<string, number>();
 
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    const atxHeading = line.match(/^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
-    if (atxHeading) {
-      const baseSlug = githubHeadingSlug(atxHeading[1]);
-      if (baseSlug) {
-        let slug = baseSlug;
-        let suffix = slugCounts.get(baseSlug) ?? 0;
-        while (anchors.has(slug)) {
-          suffix += 1;
-          slug = `${baseSlug}-${suffix}`;
-        }
-        slugCounts.set(baseSlug, suffix);
-        anchors.add(slug);
-      }
-    } else if (line.trim() && index + 1 < lines.length && /^ {0,3}(?:=+|-+)\s*$/.test(lines[index + 1])) {
-      const baseSlug = githubHeadingSlug(line.trim());
-      if (baseSlug) {
-        let slug = baseSlug;
-        let suffix = slugCounts.get(baseSlug) ?? 0;
-        while (anchors.has(slug)) {
-          suffix += 1;
-          slug = `${baseSlug}-${suffix}`;
-        }
-        slugCounts.set(baseSlug, suffix);
-        anchors.add(slug);
-      }
-    }
+    const heading = markdownHeadingAt(lines, index);
+    if (heading) addHeadingAnchor(heading, anchors, slugCounts);
   }
 
   for (const match of source.matchAll(/\b(?:id|name)\s*=\s*["']([^"']+)["']/gi)) {
@@ -109,6 +111,43 @@ function decode(value: string): string {
   } catch {
     return value;
   }
+}
+
+function localDestinationParts(destination: string): { rawPath: string; rawFragment: string } {
+  const hashIndex = destination.indexOf("#");
+  const pathAndQuery = hashIndex >= 0 ? destination.slice(0, hashIndex) : destination;
+  const rawFragment = hashIndex >= 0 ? destination.slice(hashIndex + 1).split("?", 1)[0] : "";
+  const queryIndex = pathAndQuery.indexOf("?");
+  const rawPath = queryIndex >= 0 ? pathAndQuery.slice(0, queryIndex) : pathAndQuery;
+  return { rawPath, rawFragment };
+}
+
+async function checkLocalLink(
+  link: MarkdownLink,
+  markdown: string,
+  sourceFilePath: string,
+): Promise<BrokenLink | null> {
+  if (!link.destination || isExternal(link.destination)) return null;
+
+  const { rawPath, rawFragment } = localDestinationParts(link.destination);
+  if (!rawPath && !rawFragment) return null;
+
+  const localPath = decode(rawPath);
+  const target = localPath ? path.resolve(path.dirname(sourceFilePath), localPath) : sourceFilePath;
+  try {
+    await stat(target);
+  } catch {
+    return { ...link, reason: "missing-file" };
+  }
+
+  if (!rawFragment) return null;
+  const targetMarkdown = target === sourceFilePath ? markdown : await markdownContent(target);
+  if (!targetMarkdown) return null;
+
+  const fragment = decode(rawFragment);
+  return markdownAnchors(targetMarkdown).has(fragment)
+    ? null
+    : { ...link, reason: "missing-anchor" };
 }
 
 async function markdownContent(target: string): Promise<string | null> {
@@ -139,36 +178,10 @@ export async function findBrokenLocalLinks(
 ): Promise<BrokenLink[]> {
   const broken: BrokenLink[] = [];
   const sourceFilePath = path.resolve(baseDirectory, sourceFile);
-  const sourceDirectory = path.dirname(sourceFilePath);
 
   for (const link of markdownLinks(markdown)) {
-    const { destination } = link;
-    if (!destination || isExternal(destination)) continue;
-
-    const hashIndex = destination.indexOf("#");
-    const pathAndQuery = hashIndex >= 0 ? destination.slice(0, hashIndex) : destination;
-    const rawFragment = hashIndex >= 0 ? destination.slice(hashIndex + 1).split("?", 1)[0] : "";
-    const queryIndex = pathAndQuery.indexOf("?");
-    const rawPath = queryIndex >= 0 ? pathAndQuery.slice(0, queryIndex) : pathAndQuery;
-    if (!rawPath && !rawFragment) continue;
-
-    const localPath = decode(rawPath);
-    const target = localPath ? path.resolve(sourceDirectory, localPath) : sourceFilePath;
-    try {
-      await stat(target);
-    } catch {
-      broken.push({ ...link, reason: "missing-file" });
-      continue;
-    }
-
-    if (!rawFragment) continue;
-    const targetMarkdown = target === sourceFilePath ? markdown : await markdownContent(target);
-    if (!targetMarkdown) continue;
-
-    const fragment = decode(rawFragment);
-    if (!markdownAnchors(targetMarkdown).has(fragment)) {
-      broken.push({ ...link, reason: "missing-anchor" });
-    }
+    const failure = await checkLocalLink(link, markdown, sourceFilePath);
+    if (failure) broken.push(failure);
   }
 
   return broken;
