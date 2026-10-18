@@ -59,7 +59,7 @@ function appendCounter(path: string | undefined, value: string): void {
 }
 
 function readStartCount(path: string | undefined): number {
-  if (!path) return 1;
+  if (!path) return 0;
   try {
     return Number.parseInt(readFileSync(path, "utf8"), 10) || 0;
   } catch {

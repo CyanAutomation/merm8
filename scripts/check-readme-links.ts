@@ -34,7 +34,8 @@ export async function findBrokenLocalLinks(
     const target = path.resolve(sourceDirectory, decodedPath);
     let exists = false;
     try {
-      exists = (await stat(target)).isFile();
+      await stat(target);
+      exists = true;
     } catch {
       // Missing or inaccessible local link target.
     }

@@ -167,8 +167,14 @@ test("the repository declares and uses Node.js 24", () => {
 
     assert.ok(setupSteps.length > 0, `${filePath} must set up Node.js`);
     for (const step of setupSteps) {
+      const nodeVersion = step.with?.["node-version"];
+      assert.notEqual(
+        nodeVersion,
+        undefined,
+        `${filePath} must specify the Node.js version`,
+      );
       assert.equal(
-        String(step.with?.["node-version"]),
+        String(nodeVersion),
         "24",
         `${filePath} must use Node.js 24`,
       );
