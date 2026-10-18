@@ -349,6 +349,8 @@ merm8 can run with `ANALYZE_AUTH_TOKEN` disabled (auth off), trusting the gatewa
 
 ### Kubernetes Deployment
 
+This manifest is a template. Build and publish your own container image before deploying it; this repository does not include a Dockerfile or publish a container image. Replace the example image reference with an image in a registry available to your cluster.
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -357,7 +359,7 @@ metadata:
 spec:
   containers:
   - name: merm8
-    image: merm8:latest
+    image: ghcr.io/your-org/merm8:your-tag
     env:
     - name: ANALYZE_AUTH_TOKEN
       valueFrom:
