@@ -102,19 +102,19 @@ npx wrangler login
 npm run deploy
 ```
 
-`API_KEY` is required only for the Worker’s `/mcp` and `/v1/semantic-review` endpoints. Configure it as a Wrangler secret if you use either endpoint:
+`API_KEY` is required only for the Worker’s `/mcp` endpoint. Configure it as a Wrangler secret if you use MCP:
 
 ```bash
 npx wrangler secret put API_KEY
 ```
 
-Semantic review is optional, separate from deterministic analysis, and also requires a server-side OpenRouter credential:
+Semantic review is optional and does not require a client API key. It uses a server-side OpenRouter credential and allows up to five requests per source IP per minute in each Cloudflare location:
 
 ```bash
 npx wrangler secret put OPENROUTER_API_KEY
 ```
 
-The Worker does not support an `MCP_ALLOWED_HOSTNAMES` setting. Its deterministic analysis endpoint is publicly callable, so configure Cloudflare rate limiting/WAF controls for public deployments. See [Worker operations and security notes](docs/worker-api.md#request-limits).
+The Worker does not support an `MCP_ALLOWED_HOSTNAMES` setting. Its deterministic analysis endpoint is publicly callable, so configure Cloudflare rate limiting/WAF controls for public deployments. The Worker rate-limit binding also limits semantic review. See [Worker operations and security notes](docs/worker-api.md#request-limits).
 
 After deployment, use the Worker URL printed by Wrangler:
 

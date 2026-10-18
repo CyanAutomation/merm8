@@ -2,7 +2,7 @@ import { analyzeMermaid } from "../src/engine/analyze.js";
 import { mcpHandler } from "../src/mcp/server.js";
 import { reviewMermaidSemantics } from "../src/semantic/review.js";
 import { SemanticReviewError } from "../src/semantic/types.js";
-import { allowed, isRecord, json, MAX_ANALYZE_BODY_BYTES, type Env } from "./shared.js";
+import { allowed, isRecord, json, MAX_ANALYZE_BODY_BYTES, SEMANTIC_REVIEW_RETRY_AFTER_SECONDS, type Env } from "./shared.js";
 import { ruleConfig, validateRuleConfig } from "./config.js";
 import { toSarif } from "./sarif.js";
 
@@ -26,9 +26,35 @@ async function parseAnalyzeBody(request: Request): Promise<{ body?: { code?: unk
 }
 
 async function semanticReviewInput(request: Request, env: Env): Promise<{ code?: string; response?: Response }> {
-  if (!allowed(request, env.API_KEY)) {
-    return { response: json({ error: { code: "unauthorized", message: "A valid API key is required" } }, 401, { "www-authenticate": "Bearer" }) };
+  const retryHeaders = { "retry-after": String(SEMANTIC_REVIEW_RETRY_AFTER_SECONDS) };
+  const limiter = env.SEMANTIC_REVIEW_LIMITER;
+  if (!limiter) {
+    console.error("Semantic review rate limiter is not configured");
+    return { response: json({ error: { code: "rate_limit_unavailable", message: "Semantic review is temporarily unavailable" } }, 503, retryHeaders) };
   }
+
+  const clientIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (!clientIp) {
+    console.error("Semantic review client IP is unavailable");
+    return { response: json({ error: { code: "rate_limit_unavailable", message: "Semantic review is temporarily unavailable" } }, 503, retryHeaders) };
+  }
+
+  try {
+    const { success } = await limiter.limit({ key: `semantic-review:${clientIp}` });
+    if (!success) {
+      return {
+        response: json(
+          { error: { code: "rate_limited", message: "Semantic review limit exceeded; try again later" } },
+          429,
+          retryHeaders,
+        ),
+      };
+    }
+  } catch {
+    console.error("Semantic review rate limiter failed");
+    return { response: json({ error: { code: "rate_limit_unavailable", message: "Semantic review is temporarily unavailable" } }, 503, retryHeaders) };
+  }
+
   const parsed = await parseAnalyzeBody(request);
   if (parsed.response) return { response: parsed.response };
   const body = parsed.body;

@@ -26,12 +26,6 @@ export const workerOpenApi = {
     version: "1.0.0",
     description: "Worker-native deterministic Mermaid structural analysis and optional JEV-powered semantic review.",
   },
-  components: {
-    securitySchemes: {
-      bearerAuth: { type: "http", scheme: "bearer", description: "Merm8 API_KEY secret." },
-      apiKeyHeader: { type: "apiKey", in: "header", name: "x-api-key", description: "Merm8 API_KEY secret." },
-    },
-  },
   paths: {
     "/v1/healthz": { get: { summary: "Liveness probe", responses: { "200": { description: "Service is live" } } } },
     "/v1/ready": { get: { summary: "Readiness probe", responses: { "200": { description: "Service is ready" } } } },
@@ -58,9 +52,8 @@ export const workerOpenApi = {
     },
     "/v1/semantic-review": {
       post: {
-        summary: "Run an authenticated JEV semantic review alongside deterministic analysis",
-        description: "Calls OpenRouter Decisions API once with six typed questions. Requires the Merm8 API_KEY and server-side OPENROUTER_API_KEY. Semantic judgements and probabilities are separate from deterministic lint issues.",
-        security: [{ bearerAuth: [] }, { apiKeyHeader: [] }],
+        summary: "Run a rate-limited JEV semantic review alongside deterministic analysis",
+        description: "Calls OpenRouter Decisions API once with six typed questions. The endpoint is rate-limited by client IP and uses a server-side OPENROUTER_API_KEY. Semantic judgements and probabilities are separate from deterministic lint issues.",
         requestBody: {
           required: true,
           content: { "application/json": { schema: { type: "object", required: ["code"], properties: { code: { type: "string", description: "Mermaid source." } } } } },
@@ -98,11 +91,11 @@ export const workerOpenApi = {
             },
           },
           "400": { ...errorResponse, description: "Invalid JSON, request fields, or Mermaid source." },
-          "401": { ...errorResponse, description: "The Merm8 API_KEY is missing or invalid." },
           "413": { ...errorResponse, description: "The request body or semantic state exceeds its configured bound." },
           "422": { ...errorResponse, description: "The parser produced no nodes that can be reviewed semantically." },
           "502": { ...errorResponse, description: "The JEV response was invalid or the upstream request was rejected." },
-          "503": { ...errorResponse, description: "OpenRouter credentials/model configuration is missing, or the provider is unavailable." },
+          "429": { ...errorResponse, description: "The request exceeds the semantic review rate limit.", headers: { "Retry-After": { description: "Seconds to wait before retrying.", schema: { type: "integer", example: 60 } } } },
+          "503": { ...errorResponse, description: "OpenRouter credentials/model configuration or the rate limiter is unavailable, or the provider is unavailable." },
           "504": { ...errorResponse, description: "The JEV Decisions API request timed out." },
         },
       },

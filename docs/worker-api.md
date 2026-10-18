@@ -18,7 +18,7 @@ specific deployment.
 | `GET` | `/v1/rules` | Available lint rules |
 | `POST` | `/v1/analyze` | Validate Mermaid source and lint supported diagrams |
 | `POST` | `/v1/analyze/sarif` | Analyze Mermaid source and return SARIF 2.1.0 |
-| `POST` | `/v1/semantic-review` | Authenticated JEV semantic review alongside deterministic analysis |
+| `POST` | `/v1/semantic-review` | Rate-limited JEV semantic review alongside deterministic analysis |
 
 The Worker recognizes and lints flowchart, sequence, class, ER, and state diagrams.
 Its rule set includes `max-fanout`, `no-cycles`, `no-disconnected-nodes`, and
@@ -48,25 +48,29 @@ diagram state to OpenRouter's Decisions API. JEV returns probabilistic semantic
 judgements in `semantic-review`; these are not deterministic lint issues and do
 not change the meaning of `/v1/analyze`.
 
-The semantic endpoint requires the Merm8 `API_KEY` using either
-`Authorization: Bearer <API_KEY>` or `x-api-key: <API_KEY>`. OpenRouter uses a
-separate server-side `OPENROUTER_API_KEY`; that credential is never sent to
-clients. Configure it as a Worker secret:
+The semantic endpoint does not require a client API key. The Worker rate-limits
+it to five requests per source IP per minute in each Cloudflare location.
+OpenRouter uses a separate server-side `OPENROUTER_API_KEY`; that credential is
+never sent to clients. Configure it as a Worker secret:
+
+```bash
+npx wrangler secret put OPENROUTER_API_KEY
+```
+
+`API_KEY` remains required for `/mcp` when that endpoint is used:
 
 ```bash
 npx wrangler secret put API_KEY
-npx wrangler secret put OPENROUTER_API_KEY
 ```
 
 The decision model defaults to `~typesafe/jev-latest`. Set the optional
 `MERM8_DECISION_MODEL` Worker variable to select another Decisions API model.
-Do not put either API key in `wrangler.toml`.
+Do not put either secret in `wrangler.toml`.
 
 Example request:
 
 ```http
 POST /v1/semantic-review HTTP/1.1
-Authorization: Bearer YOUR_MERM8_API_KEY
 Content-Type: application/json
 
 {"code":"flowchart TD\nA[Receive order] --> B[Validate payment]"}
@@ -129,13 +133,19 @@ they are never silently replaced with defaults.
 receive `413` with the `payload_too_large` error code. Clients should split
 larger diagrams before sending them for analysis.
 
-For public deployments, also configure a Cloudflare WAF rate-limiting rule for
-`POST /v1/analyze`. Rate-limiting rules are account-level Cloudflare settings,
-so they are intentionally not embedded in the Worker source.
+The Worker uses a Cloudflare Rate Limiting binding for semantic reviews. It
+allows five requests per source IP per 60 seconds in each Cloudflare location
+and returns `429 rate_limited` with `Retry-After: 60` when the limit is reached.
+Requests without `CF-Connecting-IP` share an `unknown` bucket. The binding is
+local to a Cloudflare location and eventually consistent; it is an abuse
+throttle, not a global accounting or spend limit. People sharing an IP can share
+the quota.
 
-Because semantic review calls an external paid service, protect it with the
-required `API_KEY` and apply an appropriate Cloudflare rate limit to
-`POST /v1/semantic-review` as well.
+For public deployments, also configure Cloudflare WAF rate-limiting rules for
+`POST /v1/analyze` and `POST /v1/semantic-review` where the deployment hostname
+supports them. These account-level rules are not embedded in Worker source and
+can provide an additional edge control. A strict global daily spend ceiling
+requires a separate global quota or provider-side budget.
 
 ## Important differences from the Go server
 
