@@ -3,10 +3,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const markdownLinkPattern = /\[((?:\\.|[^\]])*)\]\((<[^>]+>|[^)\s]+)(?:\s+[^)]*)?\)/g;
-const isExternal = destination => /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(destination);
+type BrokenLink = { text: string; destination: string; line: number };
 
-export async function findBrokenLocalLinks(markdown, baseDirectory, sourceFile = "README.md") {
-  const broken = [];
+const isExternal = (destination: string): boolean =>
+  /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(destination);
+
+export async function findBrokenLocalLinks(
+  markdown: string,
+  baseDirectory: string,
+  sourceFile = "README.md",
+): Promise<BrokenLink[]> {
+  const broken: BrokenLink[] = [];
   const sourceDirectory = path.dirname(path.resolve(baseDirectory, sourceFile));
 
   for (const match of markdown.matchAll(markdownLinkPattern)) {
@@ -27,13 +34,14 @@ export async function findBrokenLocalLinks(markdown, baseDirectory, sourceFile =
     const target = path.resolve(sourceDirectory, decodedPath);
     let exists = false;
     try {
-      exists = (await stat(target)).isFile();
+      await stat(target);
+      exists = true;
     } catch {
       // Missing or inaccessible local link target.
     }
 
     if (!exists) {
-      const line = markdown.slice(0, match.index).split("\n").length;
+      const line = markdown.slice(0, match.index ?? 0).split("\n").length;
       broken.push({ text, destination, line });
     }
   }

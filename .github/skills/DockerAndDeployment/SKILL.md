@@ -29,7 +29,7 @@ RUN go mod download
 COPY . .
 RUN go build -o server ./cmd/server/main.go
 
-FROM node:20-alpine
+FROM node:24-alpine
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /app/server /app/server
 COPY parser-node/ /app/parser-node/
