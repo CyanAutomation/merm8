@@ -22,7 +22,7 @@ The merm8 service follows a Go modular architecture:
 ### Prerequisites
 
 - Go 1.24+
-- Node.js 20+ and npm
+- Node.js 24+ and npm
 
 ### Building
 

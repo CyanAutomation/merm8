@@ -15,6 +15,7 @@
     "worker/**/*.ts",
     "worker-tests/**/*.ts",
     "scripts/**/*.ts",
-    "parser-node/**/*.ts"
+    "parser-node/**/*.ts",
+    "cmd/server/testdata/fixtures/parser/**/*.ts"
   ]
 }

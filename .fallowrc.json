@@ -31,6 +31,7 @@
       "requireAllFiles": true,
       "allowUnmatched": [
         "worker-tests/**",
+        "parser-node/test-fixtures/**",
         "cmd/server/testdata/fixtures/parser/**",
         "benchmark.html",
         "internal/api/swagger.html"

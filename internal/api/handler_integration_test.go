@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -111,6 +112,27 @@ func getParserScriptPath(t *testing.T) string {
 
 	t.Skip("real parser script not found")
 	return ""
+}
+
+func writeMockParserFixture(t *testing.T, directory, filename string) string {
+	t.Helper()
+
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to locate API integration test source")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", ".."))
+	source := filepath.Join(repoRoot, "parser-node", "test-fixtures", "bridge-mock.ts")
+	contents, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatalf("read TypeScript parser fixture: %v", err)
+	}
+
+	path := filepath.Join(directory, filename)
+	if err := os.WriteFile(path, contents, 0o600); err != nil {
+		t.Fatalf("write TypeScript parser fixture: %v", err)
+	}
+	return path
 }
 
 func TestAnalyze_Integration_SingleRuleSuppression(t *testing.T) {
@@ -324,15 +346,9 @@ func TestAnalyze_Integration_ParserTimeout_Returns504AndHandlerStaysResponsive(t
 		_ = os.RemoveAll(tempDir)
 	})
 
-	scriptPath := filepath.Join(tempDir, "parse.mjs")
-	scriptBody := `#!/usr/bin/env node
-setTimeout(() => {
-  process.stdout.write(JSON.stringify({ valid: true, ast: { type: "flowchart", direction: "TD", nodes: [], edges: [], subgraphs: [], suppressions: [] } }) + "\n");
-}, 8000);
-`
-	if err := os.WriteFile(scriptPath, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write timeout parser script: %v", err)
-	}
+	t.Setenv("PARSER_MODE", "subprocess")
+	t.Setenv("MERM8_TEST_PARSER_MODE", "timeout")
+	scriptPath := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	mux := newTestMuxWithRealParser(t, scriptPath)
 
@@ -453,13 +469,9 @@ func TestAnalyze_IntegrationParserTimeoutErrorDetails(t *testing.T) {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
-	script := filepath.Join(tempDir, "parse-timeout.mjs")
-	scriptBody := `#!/usr/bin/env node
-setTimeout(() => {}, 10000);
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write parser script: %v", err)
-	}
+	t.Setenv("PARSER_MODE", "subprocess")
+	t.Setenv("MERM8_TEST_PARSER_MODE", "timeout")
+	script := writeMockParserFixture(t, tempDir, "parse-timeout.ts")
 
 	p, err := parser.NewWithConfig(script, parser.Config{Timeout: 1 * time.Second, NodeMaxOldSpaceMB: 512})
 	if err != nil {
@@ -503,15 +515,9 @@ func TestAnalyze_IntegrationParserMemoryLimitErrorDetails(t *testing.T) {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
-	script := filepath.Join(tempDir, "parse-memory.mjs")
-	scriptBody := `#!/usr/bin/env node
-process.stderr.write("FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\\n");
-process.stdout.write(JSON.stringify({valid:false,error:{message:"internal parser error: oom",line:0,column:0}}));
-process.exit(1);
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write parser script: %v", err)
-	}
+	t.Setenv("PARSER_MODE", "subprocess")
+	t.Setenv("MERM8_TEST_PARSER_MODE", "memory-limit")
+	script := writeMockParserFixture(t, tempDir, "parse-memory.ts")
 
 	p, err := parser.NewWithConfig(script, parser.Config{Timeout: 5 * time.Second, NodeMaxOldSpaceMB: 256})
 	if err != nil {
@@ -556,15 +562,10 @@ func TestAnalyze_ParserOverrideTimeoutBehavior(t *testing.T) {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
-	script := filepath.Join(tempDir, "parse-timeout-override.mjs")
-	scriptBody := `#!/usr/bin/env node
-setTimeout(() => {
-	process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[],edges:[],subgraphs:[],suppressions:[]}}));
-}, 2000);
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write parser script: %v", err)
-	}
+	t.Setenv("PARSER_MODE", "subprocess")
+	t.Setenv("MERM8_TEST_PARSER_MODE", "delayed-success")
+	t.Setenv("MERM8_TEST_PARSER_DELAY_MS", "2000")
+	script := writeMockParserFixture(t, tempDir, "parse-timeout-override.ts")
 
 	p, err := parser.NewWithConfig(script, parser.Config{Timeout: 5 * time.Second, NodeMaxOldSpaceMB: 256})
 	if err != nil {
