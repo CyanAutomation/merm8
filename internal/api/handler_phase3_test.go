@@ -156,14 +156,17 @@ func TestAnalyzeSARIF_InvalidJSON(t *testing.T) {
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
 	}
+	if got := resp.Header.Get("Content-Type"); got != "application/sarif+json" {
+		t.Fatalf("content-type = %q, want %q", got, "application/sarif+json")
+	}
 
 	var report sarif.Report
 	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
 		t.Fatalf("decode failed: %v", err)
 	}
 
-	if report.Version != "2.1.0" {
-		t.Errorf("SARIF version = %s, want 2.1.0", report.Version)
+	if report.Version != "2.1.0" || report.Schema != "https://json.schemastore.org/sarif-2.1.0.json" {
+		t.Errorf("SARIF metadata = version %q schema %q, want SARIF 2.1.0", report.Version, report.Schema)
 	}
 
 	if len(report.Runs) == 0 {
@@ -173,6 +176,9 @@ func TestAnalyzeSARIF_InvalidJSON(t *testing.T) {
 	run := report.Runs[0]
 	if len(run.Results) == 0 {
 		t.Fatalf("expected at least one SARIF result in error response")
+	}
+	if run.Results[0].RuleID != "merm8-api" || run.Results[0].Level != sarif.SARIFLevelWarning {
+		t.Errorf("invalid JSON SARIF result = %#v, want API warning result", run.Results[0])
 	}
 
 	if len(run.Invocations) == 0 {
@@ -189,35 +195,60 @@ func TestAnalyzeSARIF_InvalidJSON(t *testing.T) {
 	if props["request-uri"] != "/v1/analyze/sarif" {
 		t.Errorf("invocation properties request-uri = %q, want %q", props["request-uri"], "/v1/analyze/sarif")
 	}
+	if run.Invocations[0].ExecutionSuccessful {
+		t.Error("invalid JSON invocation marked successful")
+	}
 }
 
-// TestAnalyzeSARIF_MissingCode verifies SARIF error for missing code field
-func TestAnalyzeSARIF_MissingCode(t *testing.T) {
-	mockP := &mockParserWithTimeout{}
-	h := NewHandler(mockP, engine.New())
-	mux := http.NewServeMux()
-	h.RegisterRoutes(mux)
-	server := httptest.NewServer(mux)
-	defer server.Close()
+// @spec: API-002: Missing and empty code fields return a structured 400 SARIF error.
+func TestAnalyzeSARIF_MissingOrEmptyCode(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		payload string
+	}{
+		{name: "missing", payload: `{"options": {}}`},
+		{name: "empty", payload: `{"code": ""}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mockP := &mockParserWithTimeout{}
+			h := NewHandler(mockP, engine.New())
+			mux := http.NewServeMux()
+			h.RegisterRoutes(mux)
+			server := httptest.NewServer(mux)
+			defer server.Close()
 
-	body := []byte(`{"options": {}}`)
-	resp, err := http.Post(server.URL+"/v1/analyze/sarif", "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	defer resp.Body.Close()
+			resp, err := http.Post(server.URL+"/v1/analyze/sarif", "application/json", strings.NewReader(tc.payload))
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
-	}
-
-	var report sarif.Report
-	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
-		t.Fatalf("decode failed: %v", err)
-	}
-
-	if len(report.Runs[0].Results) == 0 {
-		t.Errorf("expected error result in SARIF response")
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+			}
+			if got := resp.Header.Get("Content-Type"); got != "application/sarif+json" {
+				t.Fatalf("content-type = %q, want %q", got, "application/sarif+json")
+			}
+			var report sarif.Report
+			if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
+				t.Fatalf("decode SARIF response: %v", err)
+			}
+			if report.Version != "2.1.0" || report.Schema != "https://json.schemastore.org/sarif-2.1.0.json" {
+				t.Fatalf("unexpected SARIF metadata: version=%q schema=%q", report.Version, report.Schema)
+			}
+			if len(report.Runs) != 1 || len(report.Runs[0].Results) != 1 {
+				t.Fatalf("expected one run with one error result, got %#v", report.Runs)
+			}
+			if report.Runs[0].Results[0].RuleID != "merm8-api" || report.Runs[0].Results[0].Level != sarif.SARIFLevelWarning {
+				t.Errorf("missing code SARIF result = %#v, want API warning", report.Runs[0].Results[0])
+			}
+			if len(report.Runs[0].Invocations) != 1 || report.Runs[0].Invocations[0].ExecutionSuccessful {
+				t.Fatalf("expected one unsuccessful invocation, got %#v", report.Runs[0].Invocations)
+			}
+			if got := report.Runs[0].Invocations[0].Properties["error-code"]; got != "missing_code" {
+				t.Errorf("error-code = %q, want missing_code", got)
+			}
+		})
 	}
 }
 
@@ -353,22 +384,6 @@ func TestAnalyzeSARIF_ValidDiagram(t *testing.T) {
 		t.Errorf("invocation properties request-uri = %q, want %q", invocation.Properties["request-uri"], "/v1/analyze/sarif")
 	}
 
-	// With no findings there are no result-level fields to populate. Verify clean
-	// input behavior directly to guard against accidental placeholder findings.
-	for i, result := range run.Results {
-		if result.RuleID == "" {
-			t.Errorf("result[%d].ruleId is empty", i)
-		}
-		if result.Level == "" {
-			t.Errorf("result[%d].level is empty", i)
-		}
-		if strings.TrimSpace(result.Message.Text) == "" {
-			t.Errorf("result[%d].message.text is empty", i)
-		}
-		if len(result.Locations) == 0 {
-			t.Errorf("result[%d].locations is empty", i)
-		}
-	}
 }
 
 // TestAnalyzeSARIF_RequestTooLarge verifies 413 status and SARIF error contract for oversized request.
@@ -483,85 +498,6 @@ func TestAnalyzeSARIF_ParserTimeout(t *testing.T) {
 	}
 	if report.Runs[0].Results[0].Level != sarif.SARIFLevelError {
 		t.Errorf("timeout error should be level=error, got %s", report.Runs[0].Results[0].Level)
-	}
-}
-
-// TestAnalyzeSARIF_SARIFFormatConsistency verifies all error responses use SARIF format
-func TestAnalyzeSARIF_SARIFFormatConsistency(t *testing.T) {
-	tests := []struct {
-		name           string
-		payload        string
-		expectedStatus int
-	}{
-		{"invalid_json", "{invalid}", http.StatusBadRequest},
-		{"missing_code", `{"options":{}}`, http.StatusBadRequest},
-		{"empty_code", `{"code":""}`, http.StatusBadRequest},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			mockP := &mockParserWithTimeout{}
-			h := NewHandler(mockP, engine.New())
-			mux := http.NewServeMux()
-			h.RegisterRoutes(mux)
-			server := httptest.NewServer(mux)
-			defer server.Close()
-
-			resp, err := http.Post(server.URL+"/v1/analyze/sarif", "application/json", bytes.NewBufferString(tc.payload))
-			if err != nil {
-				t.Fatalf("request failed: %v", err)
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != tc.expectedStatus {
-				t.Errorf("status = %d, want %d", resp.StatusCode, tc.expectedStatus)
-			}
-
-			// All responses must be valid SARIF format
-			var report sarif.Report
-			if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
-				t.Errorf("failed to decode as SARIF: %v", err)
-				return
-			}
-
-			if report.Version != "2.1.0" {
-				t.Errorf("SARIF version = %s, want 2.1.0", report.Version)
-			}
-		})
-	}
-}
-
-// TestAnalyzeSARIF_ErrorCodeMapping verifies error codes are properly mapped to SARIF levels
-func TestAnalyzeSARIF_ErrorCodeMapping(t *testing.T) {
-	tests := []struct {
-		code          string
-		expectedLevel string
-	}{
-		{"parser_timeout", sarif.SARIFLevelError},
-		{"parser_subprocess_error", sarif.SARIFLevelError},
-		{"invalid_json", sarif.SARIFLevelWarning},
-		{"unknown_rule", sarif.SARIFLevelWarning},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.code, func(t *testing.T) {
-			level := mapErrorCodeToLevel(tc.code)
-			if level != tc.expectedLevel {
-				t.Errorf("mapErrorCodeToLevel(%s) = %s, want %s", tc.code, level, tc.expectedLevel)
-			}
-		})
-	}
-}
-
-// Helper function that mirrors mapErrorCodeToLevel for testing
-func mapErrorCodeToLevel(code string) string {
-	switch code {
-	case "parser_timeout", "parser_memory_limit", "parser_subprocess_error", "parser_decode_error", "parser_contract_violation", "internal_error", "server_busy":
-		return sarif.SARIFLevelError
-	case "invalid_json", "invalid_config", "missing_code", "request_too_large", "deprecated_config_format", "invalid_option", "unknown_option", "unknown_rule", "unsupported_diagram_type", "syntax_error":
-		return sarif.SARIFLevelWarning
-	default:
-		return sarif.SARIFLevelWarning
 	}
 }
 

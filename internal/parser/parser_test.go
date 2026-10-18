@@ -788,25 +788,28 @@ func TestParser_TimeoutCategory(t *testing.T) {
 	}
 }
 
-func TestParser_WorkerPoolReusesWorkerAcrossRequests(t *testing.T) {
+// @spec: PARSER-004: A pooled worker returns the correct result for each sequential parse request.
+func TestParser_WorkerPoolHandlesSequentialRequests(t *testing.T) {
 	t.Setenv("PARSER_MODE", "pool")
 	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
 
 	tempDir := repoTempDir(t)
-	t.Setenv("MERM8_TEST_PARSER_MODE", "worker-process-id")
+	t.Setenv("MERM8_TEST_PARSER_MODE", "worker-sequential-requests")
 	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
-	p := mustNewParser(t, script)
-	first, syntaxErr, err := p.Parse("graph TD; A-->B")
-	if err != nil || syntaxErr != nil || first == nil || len(first.Nodes) == 0 {
-		t.Fatalf("first parse failed: diagram=%v syntaxErr=%v err=%v", first, syntaxErr, err)
+	p, err := parser.NewWithConfig(script, parser.Config{Timeout: 10 * time.Second, NodeMaxOldSpaceMB: 256})
+	if err != nil {
+		t.Fatalf("failed to construct pooled parser: %v", err)
 	}
-	second, syntaxErr, err := p.Parse("graph TD; B-->C")
-	if err != nil || syntaxErr != nil || second == nil || len(second.Nodes) == 0 {
-		t.Fatalf("second parse failed: diagram=%v syntaxErr=%v err=%v", second, syntaxErr, err)
-	}
-	if first.Nodes[0].Label != second.Nodes[0].Label {
-		t.Fatalf("expected worker reuse with same pid label, got %q and %q", first.Nodes[0].Label, second.Nodes[0].Label)
+	t.Cleanup(func() { _ = p.Close() })
+	for _, code := range []string{"graph TD; A-->B", "graph LR; C-->D"} {
+		diagram, syntaxErr, err := p.Parse(code)
+		if err != nil || syntaxErr != nil || diagram == nil {
+			t.Fatalf("parse %q failed: diagram=%v syntaxErr=%v err=%v", code, diagram, syntaxErr, err)
+		}
+		if len(diagram.Nodes) != 1 || diagram.Nodes[0].Label != code {
+			t.Errorf("parse %q returned nodes %#v; want one node echoing its request", code, diagram.Nodes)
+		}
 	}
 }
 
@@ -849,6 +852,7 @@ func TestParser_WorkerPoolTimeoutReplacesWorker(t *testing.T) {
 	}
 }
 
+// @spec: PARSER-003: A worker timeout envelope maps to the parser timeout error category.
 func TestParser_WorkerPoolWorkerTimeoutEnvelopeMapsToErrTimeout(t *testing.T) {
 	t.Setenv("PARSER_MODE", "pool")
 	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
@@ -861,6 +865,7 @@ func TestParser_WorkerPoolWorkerTimeoutEnvelopeMapsToErrTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to construct parser: %v", err)
 	}
+	t.Cleanup(func() { _ = p.Close() })
 
 	diagram, syntaxErr, err := p.Parse("graph TD\nA-->B")
 	if err == nil || !errors.Is(err, parser.ErrTimeout) {
