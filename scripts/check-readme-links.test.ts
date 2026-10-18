@@ -23,6 +23,13 @@ test("accepts existing relative Markdown targets", async () => {
   });
 });
 
+test("accepts existing directory Markdown targets", async () => {
+  await withFixture(async root => {
+    const broken = await findBrokenLocalLinks("[Docs](docs/)", root);
+    assert.deepEqual(broken, []);
+  });
+});
+
 test("reports missing local targets with their link text and destination", async () => {
   await withFixture(async root => {
     const broken = await findBrokenLocalLinks("[FAQ](docs/missing.md)", root);

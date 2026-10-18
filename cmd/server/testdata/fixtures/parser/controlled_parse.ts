@@ -65,7 +65,10 @@ process.stdin.on('end', async () => {
     ast: {
       type: 'flowchart',
       direction: 'TD',
-      nodes: [{ id: 'A' }, { id: 'B' }],
+      nodes: [
+        { id: 'A', label: 'A' },
+        { id: 'B', label: 'B' },
+      ],
       edges: [{ from: 'A', to: 'B' }],
       subgraphs: [],
       suppressions: [],

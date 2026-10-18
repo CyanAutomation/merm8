@@ -623,7 +623,7 @@ func TestParser_ASTExtractionFailureAndContractMapping(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error containing %q, got nil", tt.wantErrSubstr)
 				}
-				if !contains(err.Error(), tt.wantErrSubstr) {
+				if !strings.Contains(err.Error(), tt.wantErrSubstr) {
 					t.Fatalf("expected error containing %q, got %q", tt.wantErrSubstr, err.Error())
 				}
 				if tt.wantErrSubstr == "failed to decode parser output" && !errors.Is(err, parser.ErrDecode) {
@@ -648,7 +648,7 @@ func TestParser_ASTExtractionFailureAndContractMapping(t *testing.T) {
 			if syntaxErr == nil {
 				t.Fatal("expected syntaxErr, got nil")
 			}
-			if tt.wantSyntaxSubstr != "" && !contains(syntaxErr.Message, tt.wantSyntaxSubstr) {
+			if tt.wantSyntaxSubstr != "" && !strings.Contains(syntaxErr.Message, tt.wantSyntaxSubstr) {
 				t.Fatalf("expected syntaxErr containing %q, got %q", tt.wantSyntaxSubstr, syntaxErr.Message)
 			}
 		})
@@ -674,7 +674,7 @@ func TestParser_WorkerPoolValidFalseWithoutErrorReturnsContractError(t *testing.
 	if !errors.Is(err, parser.ErrContract) {
 		t.Fatalf("expected contract category error, got %v", err)
 	}
-	if !contains(err.Error(), "invalid result missing error for valid=false") {
+	if !strings.Contains(err.Error(), "invalid result missing error for valid=false") {
 		t.Fatalf("expected missing-error contract message, got %q", err.Error())
 	}
 	if diagram != nil || syntaxErr != nil {
@@ -902,16 +902,6 @@ func TestParser_WorkerPoolTimeoutReturnsPromptlyWhenWorkerNeverWritesNewline(t *
 	}
 }
 
-// Helper to check if string contains substring (Go 1.24 doesn't have strings.Contains in all contexts)
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
 func repoTempDir(t *testing.T) string {
 	t.Helper()
 
@@ -1073,7 +1063,7 @@ func TestParser_PathRejectionMatrix(t *testing.T) {
 					errors.Is(err, parser.ErrMemoryLimit) {
 					t.Fatalf("expected path-validation error category, got parser runtime category: %v", err)
 				}
-				if !contains(err.Error(), path.expectedSubstring) {
+				if !strings.Contains(err.Error(), path.expectedSubstring) {
 					t.Fatalf("expected error containing %q, got %v", path.expectedSubstring, err)
 				}
 
@@ -1431,7 +1421,7 @@ func TestParser_SubprocessCloseRacingWithParseReturnsClosedError(t *testing.T) {
 
 	var sawClosed bool
 	for err := range errCh {
-		if err != nil && errors.Is(err, parser.ErrSubprocess) && contains(err.Error(), "parser is closed") {
+		if err != nil && errors.Is(err, parser.ErrSubprocess) && strings.Contains(err.Error(), "parser is closed") {
 			sawClosed = true
 			break
 		}
