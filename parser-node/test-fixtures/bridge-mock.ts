@@ -293,6 +293,17 @@ function setOneShotExitCode(): void {
 
 type WorkerHandler = (request: WorkerRequest) => Promise<boolean>;
 
+async function handleSequentialWorkerRequest(
+  request: WorkerRequest,
+): Promise<boolean> {
+  if (mode !== "worker-sequential-requests") return false;
+  writeJSON({
+    id: request.id ?? "",
+    result: resultWithNodes([{ id: "n", label: request.code ?? "" }]),
+  });
+  return true;
+}
+
 async function handleNoNewlineWorker(request: WorkerRequest): Promise<boolean> {
   if (mode !== "worker-no-newline" || !request.code?.includes("NO_NEWLINE")) {
     return false;
@@ -339,14 +350,8 @@ function workerLabel(): string {
 }
 
 async function handleWorkerRequest(request: WorkerRequest): Promise<void> {
-  if (mode === "worker-sequential-requests") {
-    writeJSON({
-      id: request.id ?? "",
-      result: resultWithNodes([{ id: "n", label: request.code ?? "" }]),
-    });
-    return;
-  }
   const handlers: WorkerHandler[] = [
+    handleSequentialWorkerRequest,
     handleNoNewlineWorker,
     handleTimeoutEnvelope,
     delaySlowWorkerReplacement,
