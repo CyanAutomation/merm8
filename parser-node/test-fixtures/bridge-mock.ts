@@ -332,7 +332,6 @@ async function handleWorkerInvalidResult(
 
 function workerLabel(): string {
   const labels: Record<string, string> = {
-    "worker-process-id": String(process.pid),
     "worker-replacement": String(workerStartCount),
     "worker-close": "A",
   };
@@ -340,6 +339,13 @@ function workerLabel(): string {
 }
 
 async function handleWorkerRequest(request: WorkerRequest): Promise<void> {
+  if (mode === "worker-sequential-requests") {
+    writeJSON({
+      id: request.id ?? "",
+      result: resultWithNodes([{ id: "n", label: request.code ?? "" }]),
+    });
+    return;
+  }
   const handlers: WorkerHandler[] = [
     handleNoNewlineWorker,
     handleTimeoutEnvelope,

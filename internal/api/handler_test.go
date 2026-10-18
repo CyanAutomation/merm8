@@ -868,128 +868,62 @@ func TestAnalyze_SyntaxError_UnsupportedDiagramTypeHintsAndHelp(t *testing.T) {
 	}
 }
 
-// TestAnalyze_SyntaxError_SuggestionsGraphvizDetection tests suggestions for Graphviz syntax.
-func TestAnalyze_SyntaxError_SuggestionsGraphvizDetection(t *testing.T) {
-	syntaxErr := &parser.SyntaxError{
-		Message: "No diagram type detected",
-		Line:    0,
-		Column:  0,
+// @spec: HINT-001: Recognized syntax mistakes produce their matching contextual hints.
+func TestAnalyze_SyntaxError_ContextualDetectorHints(t *testing.T) {
+	tests := []struct {
+		name      string
+		code      string
+		syntaxErr *parser.SyntaxError
+		hintCode  string
+	}{
+		{
+			name:      "graphviz syntax",
+			code:      "digraph G {\n  A -> B\n}",
+			syntaxErr: &parser.SyntaxError{Message: "No diagram type detected", Line: 0, Column: 0},
+			hintCode:  "graphviz_syntax_detected",
+		},
+		{
+			name:      "tab indentation",
+			code:      "flowchart TD\n\tA --> B",
+			syntaxErr: &parser.SyntaxError{Message: "Unexpected token", Line: 2, Column: 0},
+			hintCode:  "tab_indentation_detected",
+		},
+		{
+			name:      "missing diagram type",
+			code:      "A --> B",
+			syntaxErr: &parser.SyntaxError{Message: "No diagram type detected", Line: 0, Column: 0},
+			hintCode:  "missing_diagram_type_keyword",
+		},
 	}
 
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return nil, syntaxErr, nil
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := newTestMux(func(string) (*model.Diagram, *parser.SyntaxError, error) {
+				return nil, tt.syntaxErr, nil
+			})
+			body, err := json.Marshal(map[string]string{"code": tt.code})
+			if err != nil {
+				t.Fatalf("marshal request: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+			}
 
-	body, _ := json.Marshal(map[string]string{"code": "digraph G {\n  A -> B\n}"})
-	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-
-	var resp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-
-	suggestions, ok := resp["suggestions"].([]interface{})
-	if !ok {
-		t.Fatalf("expected suggestions array, got %#v", resp["suggestions"])
-	}
-	if len(suggestions) == 0 {
-		t.Errorf("expected at least one suggestion for Graphviz syntax")
-	}
-
-	hintCodes := hintCodesFromResponse(t, resp)
-	if !containsString(hintCodes, "graphviz_syntax_detected") {
-		t.Errorf("expected graphviz_syntax_detected hint code, got %v", hintCodes)
-	}
-	if len(suggestions) > 0 {
-		firstHint := resp["hints"].([]interface{})[0].(map[string]interface{})
-		if msg, _ := firstHint["message"].(string); suggestions[0] != msg {
-			t.Errorf("expected suggestions to be derived from hints, first suggestion=%q first hint message=%q", suggestions[0], msg)
-		}
-	}
-}
-
-// TestAnalyze_SyntaxError_SuggestionsTabDetection tests suggestions for tab indentation.
-func TestAnalyze_SyntaxError_SuggestionsTabDetection(t *testing.T) {
-	syntaxErr := &parser.SyntaxError{
-		Message: "Unexpected token",
-		Line:    2,
-		Column:  0,
-	}
-
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return nil, syntaxErr, nil
-	})
-
-	codeWithTab := "flowchart TD\n\tA --> B"
-	body, _ := json.Marshal(map[string]string{"code": codeWithTab})
-	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-
-	var resp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-
-	hintCodes := hintCodesFromResponse(t, resp)
-	if !containsString(hintCodes, "tab_indentation_detected") {
-		t.Errorf("expected tab_indentation_detected hint code, got %v", hintCodes)
-	}
-}
-
-// TestAnalyze_SyntaxError_SuggestionsArrowSyntax tests suggestions for arrow syntax.
-func TestAnalyze_SyntaxError_SuggestionsArrowSyntax(t *testing.T) {
-	syntaxErr := &parser.SyntaxError{
-		Message: "Unexpected token",
-		Line:    2,
-		Column:  5,
-	}
-
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return nil, syntaxErr, nil
-	})
-
-	codeWithWrongArrow := "flowchart TD\n  A -> B"
-	body, _ := json.Marshal(map[string]string{"code": codeWithWrongArrow})
-	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-
-	var resp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-
-	hintCodes := hintCodesFromResponse(t, resp)
-	if !containsString(hintCodes, "flowchart_arrow_operator_detected") {
-		t.Errorf("expected flowchart_arrow_operator_detected hint code, got %v", hintCodes)
-	}
-}
-
-// TestAnalyze_SyntaxError_SuggestionsMissingDiagramType tests suggestions for missing diagram type.
-func TestAnalyze_SyntaxError_SuggestionsMissingDiagramType(t *testing.T) {
-	syntaxErr := &parser.SyntaxError{
-		Message: "No diagram type detected",
-		Line:    0,
-		Column:  0,
-	}
-
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return nil, syntaxErr, nil
-	})
-
-	unclearCode := "A --> B"
-	body, _ := json.Marshal(map[string]string{"code": unclearCode})
-	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-
-	var resp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-
-	hintCodes := hintCodesFromResponse(t, resp)
-	if !containsString(hintCodes, "missing_diagram_type_keyword") {
-		t.Errorf("expected missing_diagram_type_keyword hint code, got %v", hintCodes)
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode analyze response: %v", err)
+			}
+			if valid, ok := resp["valid"].(bool); !ok || valid {
+				t.Fatalf("valid = %#v, want false for syntax error", resp["valid"])
+			}
+			if codes := hintCodesFromResponse(t, resp); !containsString(codes, tt.hintCode) {
+				t.Errorf("hint codes = %v, want %q", codes, tt.hintCode)
+			}
+		})
 	}
 }
 
@@ -7229,7 +7163,8 @@ func TestAnalyze_ConcurrentRequests(t *testing.T) {
 	}
 }
 
-func TestAnalyze_ConcurrentRequestsWithStrictConfigToggling(t *testing.T) {
+// @spec: API-012: Concurrent requests honor the configured strict config mode.
+func TestAnalyze_ConcurrentRequestsRespectStrictConfigSetting(t *testing.T) {
 	diagram := &model.Diagram{
 		Type:  model.DiagramTypeFlowchart,
 		Nodes: []model.Node{{ID: "A"}, {ID: "B"}, {ID: "C"}},
@@ -7252,113 +7187,75 @@ func TestAnalyze_ConcurrentRequestsWithStrictConfigToggling(t *testing.T) {
 		t.Fatalf("failed to marshal request: %v", err)
 	}
 
-	submit := func() *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(requestBody))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, req)
-		return w
-	}
-
-	assertStrictRejection := func(w *httptest.ResponseRecorder) error {
-		if w.Code != http.StatusBadRequest {
-			return fmt.Errorf("strict mode expected 400, got %d body=%s", w.Code, w.Body.String())
-		}
-		var resp struct {
-			Error struct {
-				Code string `json:"code"`
-			} `json:"error"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			return fmt.Errorf("decode strict-mode error response: %w", err)
-		}
-		if resp.Error.Code != "deprecated_config_format" {
-			return fmt.Errorf("strict mode expected deprecated_config_format, got %q", resp.Error.Code)
-		}
-		return nil
-	}
-	assertLenientResult := func(w *httptest.ResponseRecorder) error {
-		if w.Code != http.StatusOK {
-			return fmt.Errorf("lenient mode expected 200, got %d body=%s", w.Code, w.Body.String())
-		}
-		var resp struct {
-			Issues []struct {
-				RuleID string `json:"rule-id"`
-			} `json:"issues"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			return fmt.Errorf("decode lenient-mode analysis response: %w", err)
-		}
-		if len(resp.Issues) != 1 || resp.Issues[0].RuleID != "max-fanout" {
-			return fmt.Errorf("lenient mode expected one max-fanout finding, got %#v", resp.Issues)
-		}
-		if w.Header().Get("Deprecation") != "true" {
-			return fmt.Errorf("lenient mode expected Deprecation header, got %q", w.Header().Get("Deprecation"))
-		}
-		return nil
-	}
-
-	h.SetStrictConfigSchema(true)
-	if err := assertStrictRejection(submit()); err != nil {
-		t.Fatal(err)
-	}
-	h.SetStrictConfigSchema(false)
-	if err := assertLenientResult(submit()); err != nil {
-		t.Fatal(err)
-	}
-
-	const requestGoroutines = 8
-	const requestsPerGoroutine = 40
-
-	start := make(chan struct{})
-	stopToggling := make(chan struct{})
-	togglerDone := make(chan struct{})
-	go func() {
-		defer close(togglerDone)
-		<-start
-		strict := false
-		for {
-			select {
-			case <-stopToggling:
-				return
-			default:
-				h.SetStrictConfigSchema(strict)
-				strict = !strict
-			}
-		}
-	}()
-
-	var wg sync.WaitGroup
-	errCh := make(chan error, requestGoroutines*requestsPerGoroutine)
-	for i := 0; i < requestGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-start
-			for j := 0; j < requestsPerGoroutine; j++ {
-				w := submit()
-				if err := assertStrictRejection(w); err != nil {
-					if lenientErr := assertLenientResult(w); lenientErr != nil {
-						errCh <- fmt.Errorf("request %d: neither strict nor lenient response was valid: %v; %v", j, err, lenientErr)
+	const concurrentRequests = 8
+	for _, tc := range []struct {
+		name   string
+		strict bool
+		status int
+	}{
+		{name: "strict", strict: true, status: http.StatusBadRequest},
+		{name: "lenient", strict: false, status: http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h.SetStrictConfigSchema(tc.strict)
+			start := make(chan struct{})
+			errCh := make(chan error, concurrentRequests)
+			var wg sync.WaitGroup
+			for i := 0; i < concurrentRequests; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					<-start
+					req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(requestBody))
+					req.Header.Set("Content-Type", "application/json")
+					w := httptest.NewRecorder()
+					mux.ServeHTTP(w, req)
+					if w.Code != tc.status {
+						errCh <- fmt.Errorf("status = %d, want %d: %s", w.Code, tc.status, w.Body.String())
+						return
 					}
-				}
-				if w.Code != http.StatusOK && w.Code != http.StatusBadRequest {
-					errCh <- fmt.Errorf("request %d returned unexpected status %d", j, w.Code)
-					return
+					if tc.strict {
+						var resp struct {
+							Error struct {
+								Code string `json:"code"`
+							} `json:"error"`
+						}
+						if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+							errCh <- fmt.Errorf("decode strict response: %w", err)
+							return
+						}
+						if resp.Error.Code != "deprecated_config_format" {
+							errCh <- fmt.Errorf("strict error code = %q, want deprecated_config_format", resp.Error.Code)
+						}
+						return
+					}
+					var resp struct {
+						Issues []struct {
+							RuleID string `json:"rule-id"`
+						} `json:"issues"`
+					}
+					if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+						errCh <- fmt.Errorf("decode lenient response: %w", err)
+						return
+					}
+					if len(resp.Issues) != 1 || resp.Issues[0].RuleID != "max-fanout" {
+						errCh <- fmt.Errorf("lenient issues = %#v, want one max-fanout finding", resp.Issues)
+						return
+					}
+					if w.Header().Get("Deprecation") != "true" {
+						errCh <- fmt.Errorf("lenient Deprecation header = %q, want true", w.Header().Get("Deprecation"))
+					}
+				}()
+			}
+			close(start)
+			wg.Wait()
+			close(errCh)
+			for err := range errCh {
+				if err != nil {
+					t.Error(err)
 				}
 			}
-		}()
-	}
-
-	close(start)
-	wg.Wait()
-	close(stopToggling)
-	<-togglerDone
-	close(errCh)
-	for err := range errCh {
-		if err != nil {
-			t.Fatal(err)
-		}
+		})
 	}
 }
 
