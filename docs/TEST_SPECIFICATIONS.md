@@ -96,6 +96,18 @@ Each entry contains:
 - **File**: `internal/api/handler_test.go`
 - **Runtime note**: The test checks semantic results; performance budgets belong in dedicated benchmarks rather than a wall-clock assertion in the unit suite.
 
+### API-012: Concurrent Requests Respect Strict Config Mode
+
+- **Requirement**: Concurrent analysis requests issued while a strictness setting is fixed return the corresponding strict validation error or lenient analysis result
+- **Tests**: `TestAnalyze_ConcurrentRequestsRespectStrictConfigSetting`
+- **File**: `internal/api/handler_test.go`
+
+### SARIF-001: API Error Codes Map to SARIF Levels
+
+- **Requirement**: `TransformError` maps parser failures to SARIF error level, request validation and capacity errors to warning level, and unknown codes to warning by default
+- **Tests**: `TestTransformError_MapsErrorCodeToSARIFLevel`
+- **File**: `internal/output/sarif/transformer_test.go`
+
 ---
 
 ## Observability & Telemetry Tests
@@ -161,8 +173,8 @@ Each entry contains:
 ### HINT-001: Syntax Error → Contextual Help Mapping
 
 - **Requirement**: Syntax errors trigger contextual help hints (graphviz, arrow operator, tab indentation)
-- **Tests**: `TestAnalyzeRaw_SyntaxError_HintMapping` (critical cases only)
-- **File**: `internal/api/handler_help_test.go`
+- **Tests**: `TestAnalyze_SyntaxError_ContextualDetectorHints`, `TestAnalyze_SyntaxError_ArrowOperatorHelp`, `TestAnalyzeRaw_SyntaxError_HintMapping`
+- **Files**: `internal/api/handler_test.go`, `internal/api/handler_help_test.go`
 - **Coverage**: Graphviz syntax, single arrow (→ vs -->), tab indentation, common user mistakes
 - **Note**: Reduced from 15 cases to 3-5 essential user-facing scenarios
 
@@ -204,9 +216,16 @@ Each entry contains:
 ### PARSER-003: Subprocess Timeout Enforcement and Recovery
 
 - **Requirement**: Parser timeouts return the timeout category, bound incomplete worker responses, and replace timed-out pooled workers before subsequent parses
-- **Tests**: `TestParser_TimeoutCategory`, `TestParser_WorkerPoolTimeoutReplacesWorker`, `TestParser_WorkerPoolTimeoutReturnsPromptlyWhenWorkerNeverWritesNewline`
+- **Tests**: `TestParser_TimeoutCategory`, `TestParser_WorkerPoolWorkerTimeoutEnvelopeMapsToErrTimeout`, `TestParser_WorkerPoolTimeoutReplacesWorker`, `TestParser_WorkerPoolTimeoutReturnsPromptlyWhenWorkerNeverWritesNewline`
 - **File**: `internal/parser/parser_test.go`
 - **Runtime note**: Tests use the configured minimum parser timeout so the subprocess contract is exercised without the default 10-second wait.
+
+### PARSER-004: Sequential Requests Through a Pooled Worker
+
+- **Requirement**: A pooled worker returns the correct result for each sequential parse request
+- **Tests**: `TestParser_WorkerPoolHandlesSequentialRequests`
+- **File**: `internal/parser/parser_test.go`
+- **Assertion Strategy**: The controlled worker echoes each request's code into the returned diagram so response mix-ups or stale results fail semantically.
 
 ### PARSER-NODE-001: Settled Worker Requests Clear Timeout Timers
 

@@ -101,3 +101,42 @@ func TestTransform_OmitsArtifactsWhenNoResults(t *testing.T) {
 		t.Fatalf("expected serialized results to be an empty array, got %#v", resultsJSON)
 	}
 }
+
+// @spec: SARIF-001: API error codes map to their documented SARIF result levels.
+func TestTransformError_MapsErrorCodeToSARIFLevel(t *testing.T) {
+	tests := []struct {
+		code  string
+		level string
+	}{
+		{code: "parser_timeout", level: SARIFLevelError},
+		{code: "parser_subprocess_error", level: SARIFLevelError},
+		{code: "parser_contract_violation", level: SARIFLevelError},
+		{code: "invalid_json", level: SARIFLevelWarning},
+		{code: "unknown_rule", level: SARIFLevelWarning},
+		{code: "server_busy", level: SARIFLevelWarning},
+		{code: "unrecognized_code", level: SARIFLevelWarning},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.code, func(t *testing.T) {
+			report := TransformError(ErrorInfo{Code: tt.code, Message: "request failed"}, RequestMetadata{RequestURI: "/v1/analyze/sarif"})
+			if len(report.Runs) != 1 || len(report.Runs[0].Results) != 1 {
+				t.Fatalf("expected one run with one error result, got %#v", report.Runs)
+			}
+			result := report.Runs[0].Results[0]
+			if result.Level != tt.level {
+				t.Errorf("error code %q produced SARIF level %q, want %q", tt.code, result.Level, tt.level)
+			}
+			if result.RuleID != "merm8-api" || result.Message.Text != "request failed" {
+				t.Errorf("error result = %#v, want API rule and original message", result)
+			}
+			invocations := report.Runs[0].Invocations
+			if len(invocations) != 1 || invocations[0].ExecutionSuccessful {
+				t.Fatalf("expected one unsuccessful invocation, got %#v", invocations)
+			}
+			if invocations[0].Properties["error-code"] != tt.code {
+				t.Errorf("invocation error-code = %q, want %q", invocations[0].Properties["error-code"], tt.code)
+			}
+		})
+	}
+}
