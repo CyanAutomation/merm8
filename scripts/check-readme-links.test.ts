@@ -87,13 +87,15 @@ test("checks unique HTTP links and reports unavailable targets", async () => {
   assert.equal(broken[0].destination, "https://example.test/missing");
 });
 
-test("retries an external link with GET when HEAD is unsupported", async () => {
-  const methods: string[] = [];
-  const broken = await findBrokenExternalLinks("[site](https://example.test/site)", async (_input, init) => {
-    methods.push(init?.method ?? "GET");
-    return new Response(null, { status: init?.method === "HEAD" ? 405 : 200 });
-  });
+test("retries external links with GET when HEAD is forbidden or unsupported", async () => {
+  for (const headStatus of [403, 405, 501]) {
+    const methods: string[] = [];
+    const broken = await findBrokenExternalLinks("[site](https://example.test/site)", async (_input, init) => {
+      methods.push(init?.method ?? "GET");
+      return new Response(null, { status: init?.method === "HEAD" ? headStatus : 200 });
+    });
 
-  assert.deepEqual(methods, ["HEAD", "GET"]);
-  assert.deepEqual(broken, []);
+    assert.deepEqual(methods, ["HEAD", "GET"]);
+    assert.deepEqual(broken, []);
+  }
 });

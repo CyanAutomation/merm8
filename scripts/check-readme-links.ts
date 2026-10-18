@@ -206,7 +206,7 @@ export async function findBrokenExternalLinks(
         redirect: "follow",
         signal: AbortSignal.timeout(10_000),
       });
-      if (response.status === 405 || response.status === 501) {
+      if (response.status === 403 || response.status === 405 || response.status === 501) {
         await response.body?.cancel().catch(() => undefined);
         response = await fetcher(destination, {
           method: "GET",
