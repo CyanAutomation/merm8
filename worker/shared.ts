@@ -2,12 +2,14 @@ export interface Env {
   API_KEY?: string;
   OPENROUTER_API_KEY?: string;
   MERM8_DECISION_MODEL?: string;
+  SEMANTIC_REVIEW_LIMITER?: RateLimit;
   REST_ALLOWED_ORIGINS?: string;
   BUILD_VERSION?: string;
   BUILD_SHA?: string;
 }
 
 export const MAX_ANALYZE_BODY_BYTES = 1024 * 1024;
+export const SEMANTIC_REVIEW_RETRY_AFTER_SECONDS = 60;
 
 export const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
   new Response(JSON.stringify(body), {
