@@ -8,6 +8,15 @@ enabled = true
 [vars]
 REST_ALLOWED_ORIGINS = "https://merm8-splash.vercel.app"
 
+[[ratelimits]]
+name = "SEMANTIC_REVIEW_LIMITER"
+# Keep this integer unique within the Cloudflare account unless deliberately sharing counters.
+namespace_id = "2026101801"
+
+  [ratelimits.simple]
+  limit = 5
+  period = 60
+
 # Configure with: wrangler secret put API_KEY
 # Configure semantic review with: wrangler secret put OPENROUTER_API_KEY
 # Optional model override: MERM8_DECISION_MODEL = "~typesafe/jev-latest"

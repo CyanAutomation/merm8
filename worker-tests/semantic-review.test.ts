@@ -4,7 +4,11 @@ import worker from "../worker/index.js";
 import { semanticQuestions } from "../src/semantic/questions.js";
 import type { JevQuestion } from "../src/semantic/types.js";
 
-const authenticatedEnv = { API_KEY: "merm8-key", OPENROUTER_API_KEY: "openrouter-key" };
+const configuredEnv = {
+  API_KEY: "merm8-key",
+  OPENROUTER_API_KEY: "openrouter-key",
+  SEMANTIC_REVIEW_LIMITER: { limit: async () => ({ success: true }) },
+};
 
 function jevPayload(questions: Record<string, JevQuestion> = semanticQuestions) {
   return {
@@ -18,31 +22,93 @@ function jevPayload(questions: Record<string, JevQuestion> = semanticQuestions) 
   };
 }
 
-function request(body: string, headers: Record<string, string> = { authorization: "Bearer merm8-key", "content-type": "application/json" }) {
+function request(body: string, headers: Record<string, string> = { "cf-connecting-ip": "203.0.113.10", "content-type": "application/json" }) {
   return new Request("https://example.test/v1/semantic-review", { method: "POST", headers, body });
 }
 
-test("protects the billable semantic endpoint with a configured Merm8 API key", async (t) => {
+test("allows semantic review without a caller API key while keeping provider credentials server-side", async (t) => {
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => { calls += 1; return Response.json(jevPayload()); });
-  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA --> B" }), { "content-type": "application/json" }), authenticatedEnv);
-  assert.equal(response.status, 401);
-  assert.equal(response.headers.get("www-authenticate"), "Bearer");
-  const unconfigured = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA --> B" }), { "content-type": "application/json" }), { OPENROUTER_API_KEY: "openrouter-key" });
-  assert.equal(unconfigured.status, 401);
+  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA --> B" })), configuredEnv);
+  assert.equal(response.status, 200);
+  assert.equal(calls, 1);
+});
+
+test("rejects over-limit reviews before parsing the body or calling JEV", async (t) => {
+  let calls = 0;
+  let limitedKey = "";
+  t.mock.method(globalThis, "fetch", async () => { calls += 1; return Response.json(jevPayload()); });
+  const env = {
+    ...configuredEnv,
+    SEMANTIC_REVIEW_LIMITER: {
+      limit: async ({ key }: { key: string }) => {
+        limitedKey = key;
+        return { success: false };
+      },
+    },
+  };
+  const response = await worker.fetch(request("{", {
+    "cf-connecting-ip": "203.0.113.10",
+    "x-forwarded-for": "198.51.100.20",
+    "content-type": "application/json",
+  }), env);
+
+  assert.equal(limitedKey, "semantic-review:203.0.113.10");
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get("retry-after"), "60");
+  assert.deepEqual(await response.json(), { error: { code: "rate_limited", message: "Semantic review limit exceeded; try again later" } });
+  assert.equal(calls, 0);
+});
+
+test("fails closed without a source IP instead of using a shared limiter key", async (t) => {
+  let limiterCalls = 0;
+  let providerCalls = 0;
+  t.mock.method(globalThis, "fetch", async () => { providerCalls += 1; return Response.json(jevPayload()); });
+  t.mock.method(console, "error", () => {});
+  const env = {
+    ...configuredEnv,
+    SEMANTIC_REVIEW_LIMITER: {
+      limit: async () => {
+        limiterCalls += 1;
+        return { success: true };
+      },
+    },
+  };
+  const response = await worker.fetch(request("{", { "content-type": "application/json" }), env);
+
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("retry-after"), "60");
+  assert.deepEqual(await response.json(), { error: { code: "rate_limit_unavailable", message: "Semantic review is temporarily unavailable" } });
+  assert.equal(limiterCalls, 0);
+  assert.equal(providerCalls, 0);
+});
+
+test("fails closed when the semantic review limiter is unavailable", async (t) => {
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async () => { calls += 1; return Response.json(jevPayload()); });
+  t.mock.method(console, "error", () => {});
+  const env = {
+    ...configuredEnv,
+    SEMANTIC_REVIEW_LIMITER: { limit: async () => { throw new Error("limiter unavailable"); } },
+  };
+  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA --> B" })), env);
+
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("retry-after"), "60");
+  assert.deepEqual(await response.json(), { error: { code: "rate_limit_unavailable", message: "Semantic review is temporarily unavailable" } });
   assert.equal(calls, 0);
 });
 
 test("validates JSON and required code before semantic processing", async (t) => {
   t.mock.method(console, "error", () => {});
-  const malformed = await worker.fetch(request("{"), authenticatedEnv);
+  const malformed = await worker.fetch(request("{"), configuredEnv);
   assert.equal(malformed.status, 400);
 
-  const missingCode = await worker.fetch(request(JSON.stringify({ diagram: "flowchart TD" })), authenticatedEnv);
+  const missingCode = await worker.fetch(request(JSON.stringify({ diagram: "flowchart TD" })), configuredEnv);
   assert.equal(missingCode.status, 400);
 });
 
-test("supports authenticated semantic review preflight through the configured CORS policy", async () => {
+test("supports semantic review preflight and exposes retry information through CORS", async () => {
   const response = await worker.fetch(new Request("https://example.test/v1/semantic-review", {
     method: "OPTIONS",
     headers: {
@@ -50,16 +116,17 @@ test("supports authenticated semantic review preflight through the configured CO
       "access-control-request-method": "POST",
       "access-control-request-headers": "content-type, authorization",
     },
-  }), { ...authenticatedEnv, REST_ALLOWED_ORIGINS: "https://merm8-splash.vercel.app" });
+  }), { ...configuredEnv, REST_ALLOWED_ORIGINS: "https://merm8-splash.vercel.app" });
   assert.equal(response.status, 204);
   assert.equal(response.headers.get("access-control-allow-origin"), "https://merm8-splash.vercel.app");
   assert.match(response.headers.get("access-control-allow-headers") ?? "", /authorization/);
+  assert.match(response.headers.get("access-control-expose-headers") ?? "", /retry-after/i);
 });
 
 test("does not call JEV when Mermaid parsing fails", async (t) => {
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => { calls += 1; return Response.json(jevPayload()); });
-  const response = await worker.fetch(request(JSON.stringify({ code: "not a Mermaid diagram" })), authenticatedEnv);
+  const response = await worker.fetch(request(JSON.stringify({ code: "not a Mermaid diagram" })), configuredEnv);
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), {
     error: { code: "invalid_mermaid", message: "Mermaid source could not be parsed", details: { code: "syntax_error", message: "Unsupported or unrecognised Mermaid diagram type", line: 1, column: 1 } },
@@ -70,14 +137,14 @@ test("does not call JEV when Mermaid parsing fails", async (t) => {
 test("does not call JEV when parsing yields no semantic nodes", async (t) => {
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => { calls += 1; return Response.json(jevPayload()); });
-  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD" })), authenticatedEnv);
+  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD" })), configuredEnv);
   assert.equal(response.status, 422);
   assert.deepEqual(await response.json(), { error: { code: "semantic_state_unavailable", message: "The parsed diagram contains no nodes for semantic review" } });
   assert.equal(calls, 0);
 });
 
 test("returns an explicit unconfigured error when OpenRouter credentials are missing", async () => {
-  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA[Start] --> B[Finish]" })), { API_KEY: "merm8-key" });
+  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA[Start] --> B[Finish]" })), { ...configuredEnv, OPENROUTER_API_KEY: undefined });
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { error: { code: "missing_openrouter_credentials", message: "OpenRouter credentials are not configured" } });
 });
@@ -95,7 +162,7 @@ test("returns deterministic analysis and separate semantic review from a single 
     return Response.json(jevPayload());
   });
 
-  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA[Receive order] --> B[Validate payment]" })), authenticatedEnv);
+  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA[Receive order] --> B[Validate payment]" })), configuredEnv);
   assert.equal(response.status, 200);
   const result = await response.json() as {
     valid: boolean;
@@ -117,7 +184,7 @@ test("returns deterministic analysis and separate semantic review from a single 
 test("maps upstream network failures to a safe unavailable response", async (t) => {
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => { calls += 1; throw new TypeError("upstream private detail"); });
-  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA --> B" })), authenticatedEnv);
+  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA --> B" })), configuredEnv);
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { error: { code: "jev_upstream_error", message: "Semantic review provider is unavailable" } });
   assert.equal(calls, 2);
@@ -129,7 +196,7 @@ test("maps upstream timeout responses to a safe gateway timeout", async (t) => {
     error.name = "TimeoutError";
     throw error;
   });
-  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA --> B" })), authenticatedEnv);
+  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA --> B" })), configuredEnv);
   assert.equal(response.status, 504);
   assert.deepEqual(await response.json(), { error: { code: "jev_timeout", message: "Semantic review provider timed out" } });
 });
@@ -146,8 +213,9 @@ test("keeps deterministic analyze independent of JEV and includes semantic route
   const spec = await specResponse.json() as { paths: Record<string, { post?: { security?: unknown[]; requestBody?: unknown; responses?: Record<string, unknown> } }> };
   const endpoint = spec.paths["/v1/semantic-review"]?.post;
   assert.ok(endpoint);
-  assert.equal(endpoint.security?.length, 2);
+  assert.equal(endpoint.security, undefined);
   assert.ok(endpoint.requestBody);
-  assert.ok(endpoint.responses?.["401"]);
+  assert.equal(endpoint.responses?.["401"], undefined);
+  assert.ok(endpoint.responses?.["429"]);
   assert.ok(endpoint.responses?.["504"]);
 });
