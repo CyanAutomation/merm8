@@ -60,6 +60,29 @@ test("rejects over-limit reviews before parsing the body or calling JEV", async 
   assert.equal(calls, 0);
 });
 
+test("fails closed without a source IP instead of using a shared limiter key", async (t) => {
+  let limiterCalls = 0;
+  let providerCalls = 0;
+  t.mock.method(globalThis, "fetch", async () => { providerCalls += 1; return Response.json(jevPayload()); });
+  t.mock.method(console, "error", () => {});
+  const env = {
+    ...configuredEnv,
+    SEMANTIC_REVIEW_LIMITER: {
+      limit: async () => {
+        limiterCalls += 1;
+        return { success: true };
+      },
+    },
+  };
+  const response = await worker.fetch(request("{", { "content-type": "application/json" }), env);
+
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("retry-after"), "60");
+  assert.deepEqual(await response.json(), { error: { code: "rate_limit_unavailable", message: "Semantic review is temporarily unavailable" } });
+  assert.equal(limiterCalls, 0);
+  assert.equal(providerCalls, 0);
+});
+
 test("fails closed when the semantic review limiter is unavailable", async (t) => {
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => { calls += 1; return Response.json(jevPayload()); });

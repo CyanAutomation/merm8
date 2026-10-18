@@ -33,7 +33,12 @@ async function semanticReviewInput(request: Request, env: Env): Promise<{ code?:
     return { response: json({ error: { code: "rate_limit_unavailable", message: "Semantic review is temporarily unavailable" } }, 503, retryHeaders) };
   }
 
-  const clientIp = request.headers.get("cf-connecting-ip")?.trim() || "unknown";
+  const clientIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (!clientIp) {
+    console.error("Semantic review client IP is unavailable");
+    return { response: json({ error: { code: "rate_limit_unavailable", message: "Semantic review is temporarily unavailable" } }, 503, retryHeaders) };
+  }
+
   try {
     const { success } = await limiter.limit({ key: `semantic-review:${clientIp}` });
     if (!success) {
