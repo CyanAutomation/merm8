@@ -188,52 +188,6 @@ func writeCacheTestParserScript(t *testing.T) (string, string) {
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module cachetest\n\ngo 1.24\n"), 0o644); err != nil {
 		t.Fatalf("failed to write go.mod: %v", err)
 	}
-
-	scriptPath := filepath.Join(tmpDir, "parse.mjs")
-	script := `import fs from "node:fs";
-const counterFile = process.env.COUNTER_FILE || "";
-if (process.argv.includes("--version-info")) {
-  process.stdout.write(JSON.stringify({parser_version:"cache-test-v1",mermaid_version:"11.12.0"}));
-  process.exit(0);
-}
-if (counterFile) {
-  fs.appendFileSync(counterFile, "parse\n");
-}
-const failMarker = process.env.FAIL_MARKER || "";
-if (process.env.FAIL_INTERNAL_ONCE === "1" && failMarker && !fs.existsSync(failMarker)) {
-  fs.writeFileSync(failMarker, "done");
-  process.stdout.write(JSON.stringify({valid:false,error:{message:"internal parser error: simulated",line:1,column:1}}));
-  process.stderr.write("simulated internal failure");
-  process.exit(1);
-}
-let input = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", c => { input += c; });
-process.stdin.on("end", () => {
-  const delay = process.env.SLOW_PARSER === "1" ? 1500 : 120;
-  setTimeout(() => {
-    if (input.includes("-->") && input.trim().endsWith("-->")) {
-      process.stdout.write(JSON.stringify({valid:false,error:{message:"Syntax error",line:2,column:4}}));
-      return;
-    }
-    process.stdout.write(JSON.stringify({
-      valid:true,
-      diagram_type:"flowchart",
-      ast:{
-        type:"flowchart",
-        direction:"TD",
-        nodes:[{id:"a",label:"A"},{id:"b",label:"B"}],
-        edges:[{from:"a",to:"b",type:"-->",line:2,column:1}],
-        subgraphs:[],
-        suppressions:[]
-      }
-    }));
-  }, delay);
-});
-process.stdin.resume();
-`
-	if err := os.WriteFile(scriptPath, []byte(script), 0o600); err != nil {
-		t.Fatalf("failed to write parser script: %v", err)
-	}
-	return scriptPath, tmpDir
+	t.Setenv("MERM8_TEST_PARSER_MODE", "cache")
+	return writeMockParserFixture(t, tmpDir, "parse.ts"), tmpDir
 }

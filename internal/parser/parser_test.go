@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -52,6 +53,27 @@ func getParserScript(t *testing.T) string {
 
 	t.Fatalf("could not locate parser-node/parse.ts. Set PARSER_SCRIPT env var")
 	return ""
+}
+
+func writeMockParserFixture(t *testing.T, directory, filename string) string {
+	t.Helper()
+
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to locate parser test source")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", ".."))
+	source := filepath.Join(repoRoot, "parser-node", "test-fixtures", "bridge-mock.ts")
+	contents, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatalf("read TypeScript parser fixture: %v", err)
+	}
+
+	path := filepath.Join(directory, filename)
+	if err := os.WriteFile(path, contents, 0o600); err != nil {
+		t.Fatalf("write TypeScript parser fixture: %v", err)
+	}
+	return path
 }
 
 func mustNewParser(t *testing.T, scriptPath string) *parser.Parser {
@@ -539,25 +561,8 @@ A-->D`
 
 func TestParser_ParsePrefersTopLevelDiagramType(t *testing.T) {
 	tempDir := repoTempDir(t)
-	script := filepath.Join(tempDir, "parse.mjs")
-	scriptBody := `#!/usr/bin/env node
-process.stdout.write(JSON.stringify({
-  valid: true,
-  diagram_type: "sequence",
-  ast: {
-    type: "unknown",
-    direction: "TD",
-    nodes: [],
-    edges: [],
-    subgraphs: [],
-    suppressions: []
-  }
-}) + "\n");
-process.exit(0);
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write test parser script: %v", err)
-	}
+	t.Setenv("MERM8_TEST_PARSER_MODE", "top-level-diagram-type")
+	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	p := mustNewParser(t, script)
 	diagram, syntaxErr, err := p.Parse("sequenceDiagram\n  Alice->>Bob: hi")
@@ -578,35 +583,24 @@ process.exit(0);
 func TestParser_ASTExtractionFailureAndContractMapping(t *testing.T) {
 	tests := []struct {
 		name             string
-		scriptBody       string
+		mode             string
+		rawResponse      string
 		wantErrSubstr    string
 		wantSyntaxSubstr string
 	}{
 		{
-			name: "ast extraction style syntax failure",
-			scriptBody: `#!/usr/bin/env node
-process.stdout.write(JSON.stringify({
-  valid: false,
-  error: { message: "AST extraction failed in parser runtime: synthetic fixture", line: 0, column: 0 }
-}) + "\n");
-process.exit(0);
-`,
+			name:             "ast extraction style syntax failure",
+			mode:             "ast-extraction-error",
 			wantSyntaxSubstr: "AST extraction failed",
 		},
 		{
-			name: "malformed json payload",
-			scriptBody: `#!/usr/bin/env node
-process.stdout.write("{\"valid\":false");
-process.exit(0);
-`,
+			name:          "malformed json payload",
+			rawResponse:   `{"valid":false`,
 			wantErrSubstr: "failed to decode parser output",
 		},
 		{
-			name: "valid false without error object",
-			scriptBody: `#!/usr/bin/env node
-process.stdout.write(JSON.stringify({ valid: false }) + "\n");
-process.exit(0);
-`,
+			name:          "valid false without error object",
+			mode:          "valid-false-without-error",
 			wantErrSubstr: "invalid result missing error for valid=false",
 		},
 	}
@@ -614,10 +608,13 @@ process.exit(0);
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := repoTempDir(t)
-			script := filepath.Join(tempDir, "parse.mjs")
-			if err := os.WriteFile(script, []byte(tt.scriptBody), 0o700); err != nil {
-				t.Fatalf("failed to write test parser script: %v", err)
+			if tt.mode != "" {
+				t.Setenv("MERM8_TEST_PARSER_MODE", tt.mode)
 			}
+			if tt.rawResponse != "" {
+				t.Setenv("MERM8_TEST_PARSER_RAW_RESPONSE", tt.rawResponse)
+			}
+			script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 			p := mustNewParser(t, script)
 			diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
@@ -661,28 +658,10 @@ process.exit(0);
 func TestParser_WorkerPoolValidFalseWithoutErrorReturnsContractError(t *testing.T) {
 	t.Setenv("PARSER_MODE", "pool")
 	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
+	t.Setenv("MERM8_TEST_PARSER_MODE", "worker-valid-false-without-error")
 
 	tempDir := repoTempDir(t)
-	script := filepath.Join(tempDir, "parse.mjs")
-	scriptBody := `#!/usr/bin/env node
-if (!process.argv.includes("--worker")) {
-  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:"oneshot"}],edges:[],subgraphs:[],suppressions:[]}})+"\n");
-  process.exit(0);
-}
-
-import readline from "readline";
-const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
-for await (const line of rl) {
-  const req = JSON.parse(line);
-  process.stdout.write(JSON.stringify({
-    id: req.id,
-    result: { valid: false }
-  }) + "\n");
-}
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write test parser script: %v", err)
-	}
+	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	p, err := parser.NewWithConfig(script, parser.Config{Timeout: 10 * time.Second})
 	if err != nil {
@@ -741,13 +720,8 @@ func TestParser_LargeGraph(t *testing.T) {
 
 func TestParser_ValidWithoutASTReturnsInternalError(t *testing.T) {
 	tempDir := repoTempDir(t)
-	script := filepath.Join(tempDir, "parse.mjs")
-	scriptBody := `#!/usr/bin/env node
-process.stdout.write(JSON.stringify({ valid: true }) + "\n");
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write test parser script: %v", err)
-	}
+	t.Setenv("MERM8_TEST_PARSER_MODE", "valid-without-ast")
+	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	p := mustNewParser(t, script)
 	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
@@ -768,17 +742,8 @@ process.stdout.write(JSON.stringify({ valid: true }) + "\n");
 
 func TestParser_SubprocessInternalError(t *testing.T) {
 	tempDir := repoTempDir(t)
-	script := filepath.Join(tempDir, "parse.mjs")
-	scriptBody := `#!/usr/bin/env node
-process.stdout.write(JSON.stringify({
-  valid: false,
-  error: { message: "internal parser error: exploded", line: 0, column: 0 }
-}) + "\n");
-process.exit(1);
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write test parser script: %v", err)
-	}
+	t.Setenv("MERM8_TEST_PARSER_MODE", "subprocess-internal-error")
+	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	p := mustNewParser(t, script)
 	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
@@ -803,13 +768,8 @@ func TestParser_TimeoutCategory(t *testing.T) {
 	minTimeout, _, _, _ := parser.LimitBounds()
 	timeout := minTimeout
 	tempDir := repoTempDir(t)
-	script := filepath.Join(tempDir, "parse.mjs")
-	scriptBody := `#!/usr/bin/env node
-setTimeout(() => {}, 5000);
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write test parser script: %v", err)
-	}
+	t.Setenv("MERM8_TEST_PARSER_MODE", "timeout")
+	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	p, err := parser.NewWithConfig(script, parser.Config{Timeout: timeout, NodeMaxOldSpaceMB: 256})
 	if err != nil {
@@ -833,37 +793,8 @@ func TestParser_WorkerPoolReusesWorkerAcrossRequests(t *testing.T) {
 	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
 
 	tempDir := repoTempDir(t)
-	script := filepath.Join(tempDir, "parse.mjs")
-	scriptBody := `#!/usr/bin/env node
-if (!process.argv.includes("--worker")) {
-  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:"oneshot"}],edges:[],subgraphs:[],suppressions:[]}})+"\n");
-  process.exit(0);
-}
-
-import readline from "readline";
-const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
-for await (const line of rl) {
-  const req = JSON.parse(line);
-  process.stdout.write(JSON.stringify({
-    id: req.id,
-    result: {
-      valid: true,
-      diagram_type: "flowchart",
-      ast: {
-        type: "flowchart",
-        direction: "TD",
-        nodes: [{ id: "n", label: String(process.pid) }],
-        edges: [],
-        subgraphs: [],
-        suppressions: []
-      }
-    }
-  }) + "\n");
-}
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write test parser script: %v", err)
-	}
+	t.Setenv("MERM8_TEST_PARSER_MODE", "worker-process-id")
+	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	p := mustNewParser(t, script)
 	first, syntaxErr, err := p.Parse("graph TD; A-->B")
@@ -888,57 +819,11 @@ func TestParser_WorkerPoolTimeoutReplacesWorker(t *testing.T) {
 	slowDelay := timeout + 300*time.Millisecond
 
 	tempDir := repoTempDir(t)
-	script := filepath.Join(tempDir, "parse.mjs")
 	counterFile := filepath.Join(tempDir, "counter.txt")
-	scriptBody := fmt.Sprintf(`#!/usr/bin/env node
-import fs from "fs";
-import readline from "readline";
-const counterFile = %q;
-const slowDelayMs = %d;
-
-if (process.argv.includes("--version-info")) {
-  process.stdout.write(JSON.stringify({parser_version:"test-1.0.0",mermaid_version:"test-1.0.0"})+"\n");
-  process.exit(0);
-}
-
-let startCount = 0;
-try {
-  startCount = parseInt(fs.readFileSync(counterFile, "utf8"), 10) || 0;
-} catch (_) {}
-startCount += 1;
-fs.writeFileSync(counterFile, String(startCount));
-
-if (!process.argv.includes("--worker")) {
-  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:String(startCount)}],edges:[],subgraphs:[],suppressions:[]}})+"\n");
-  process.exit(0);
-}
-
-const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
-for await (const line of rl) {
-  const req = JSON.parse(line);
-  if (String(req.code || "").includes("SLOW")) {
-    await new Promise((resolve) => setTimeout(resolve, slowDelayMs));
-  }
-  process.stdout.write(JSON.stringify({
-    id: req.id,
-    result: {
-      valid: true,
-      diagram_type: "flowchart",
-      ast: {
-        type: "flowchart",
-        direction: "TD",
-        nodes: [{ id: "n", label: String(startCount) }],
-        edges: [],
-        subgraphs: [],
-        suppressions: []
-      }
-    }
-  }) + "\n");
-}
-`, counterFile, slowDelay.Milliseconds())
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write test parser script: %v", err)
-	}
+	t.Setenv("MERM8_TEST_PARSER_MODE", "worker-replacement")
+	t.Setenv("MERM8_TEST_PARSER_START_COUNTER", counterFile)
+	t.Setenv("MERM8_TEST_PARSER_SLOW_DELAY_MS", strconv.FormatInt(slowDelay.Milliseconds(), 10))
+	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	p, err := parser.NewWithConfig(script, parser.Config{Timeout: timeout, NodeMaxOldSpaceMB: 256})
 	if err != nil {
@@ -969,26 +854,8 @@ func TestParser_WorkerPoolWorkerTimeoutEnvelopeMapsToErrTimeout(t *testing.T) {
 	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
 
 	tempDir := repoTempDir(t)
-	script := filepath.Join(tempDir, "parse.mjs")
-	scriptBody := `#!/usr/bin/env node
-if (!process.argv.includes("--worker")) {
-  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:"oneshot"}],edges:[],subgraphs:[],suppressions:[]}})+"\n");
-  process.exit(0);
-}
-
-import readline from "readline";
-const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
-for await (const line of rl) {
-  const req = JSON.parse(line);
-  process.stdout.write(JSON.stringify({
-    id: req.id,
-    error: "parser_timeout: exceeded " + String(req.timeout_ms || 0) + "ms"
-  }) + "\n");
-}
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write test parser script: %v", err)
-	}
+	t.Setenv("MERM8_TEST_PARSER_MODE", "worker-timeout-envelope")
+	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	p, err := parser.NewWithConfig(script, parser.Config{Timeout: time.Second, NodeMaxOldSpaceMB: 256})
 	if err != nil {
@@ -1011,35 +878,8 @@ func TestParser_WorkerPoolTimeoutReturnsPromptlyWhenWorkerNeverWritesNewline(t *
 	minTimeout, _, _, _ := parser.LimitBounds()
 
 	tempDir := repoTempDir(t)
-	script := filepath.Join(tempDir, "parse.mjs")
-	scriptBody := `#!/usr/bin/env node
-if (!process.argv.includes("--worker")) {
-  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:"oneshot"}],edges:[],subgraphs:[],suppressions:[]}})+"\n");
-  process.exit(0);
-}
-
-import readline from "readline";
-const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
-for await (const line of rl) {
-  const req = JSON.parse(line);
-  if (String(req.code || "").includes("NO_NEWLINE")) {
-    process.stdout.write("{\"id\":\"" + req.id + "\",\"result\":{\"valid\":true}");
-    setInterval(() => {}, 1000);
-    continue;
-  }
-  process.stdout.write(JSON.stringify({
-    id: req.id,
-    result: {
-      valid: true,
-      diagram_type: "flowchart",
-      ast: { type: "flowchart", direction: "TD", nodes: [{ id: "ok", label: "ok" }], edges: [], subgraphs: [], suppressions: [] }
-    }
-  }) + "\n");
-}
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write test parser script: %v", err)
-	}
+	t.Setenv("MERM8_TEST_PARSER_MODE", "worker-no-newline")
+	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	timeout := minTimeout
 	p, err := parser.NewWithConfig(script, parser.Config{Timeout: timeout, NodeMaxOldSpaceMB: 256})
@@ -1166,8 +1006,8 @@ func TestParser_PathRejectionMatrix(t *testing.T) {
 				t.Helper()
 
 				tempDir := t.TempDir()
-				script := filepath.Join(tempDir, "parse.mjs")
-				if err := os.WriteFile(script, []byte("#!/usr/bin/env node\n"), 0o700); err != nil {
+				script := filepath.Join(tempDir, "parse.ts")
+				if err := os.WriteFile(script, nil, 0o600); err != nil {
 					t.Fatalf("failed to write parser script: %v", err)
 				}
 
@@ -1181,8 +1021,8 @@ func TestParser_PathRejectionMatrix(t *testing.T) {
 				t.Helper()
 
 				tempDir := t.TempDir()
-				target := filepath.Join(tempDir, "parse.mjs")
-				if err := os.WriteFile(target, []byte("#!/usr/bin/env node\n"), 0o700); err != nil {
+				target := filepath.Join(tempDir, "parse.ts")
+				if err := os.WriteFile(target, nil, 0o600); err != nil {
 					t.Fatalf("failed to write parser script: %v", err)
 				}
 
@@ -1194,7 +1034,7 @@ func TestParser_PathRejectionMatrix(t *testing.T) {
 					_ = os.RemoveAll(linkDir)
 				})
 
-				linkPath := filepath.Join(linkDir, "parse.mjs")
+				linkPath := filepath.Join(linkDir, "parse.ts")
 				if err := os.Symlink(target, linkPath); err != nil {
 					t.Fatalf("failed to create symlink: %v", err)
 				}
@@ -1206,7 +1046,7 @@ func TestParser_PathRejectionMatrix(t *testing.T) {
 		{
 			name: "traversal",
 			buildScriptPath: func(_ *testing.T) string {
-				return "parser-node/../secrets/parse.mjs"
+				return "parser-node/../secrets/parse.ts"
 			},
 			expectedErr:       os.ErrNotExist,
 			expectedSubstring: "resolve symlinks",
@@ -1254,13 +1094,7 @@ func TestParser_ReadyAcceptsPathInsideWorkingDirectory(t *testing.T) {
 		_ = os.RemoveAll(repoTempDir)
 	})
 
-	script := filepath.Join(repoTempDir, "parse.mjs")
-	scriptBody := `#!/usr/bin/env node
-process.exit(0);
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write parser script: %v", err)
-	}
+	script := writeMockParserFixture(t, repoTempDir, "parse.ts")
 
 	p := mustNewParser(t, script)
 	err = p.Ready()
@@ -1422,11 +1256,8 @@ func writeVersionInfoOutputScript(t *testing.T, output string) (string, string) 
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module versioninfotest\n\ngo 1.24\n"), 0o600); err != nil {
 		t.Fatalf("write temporary go.mod: %v", err)
 	}
-	script := filepath.Join(root, "parse.mjs")
-	body := fmt.Sprintf("if (process.argv.includes(\"--version-info\")) { process.stdout.write(%s); process.exit(0); }\n", strconv.Quote(output))
-	if err := os.WriteFile(script, []byte(body), 0o600); err != nil {
-		t.Fatalf("write parser version fixture: %v", err)
-	}
+	t.Setenv("MERM8_TEST_VERSION_OUTPUT", output)
+	script := writeMockParserFixture(t, root, "parse.ts")
 	return script, root
 }
 
@@ -1491,26 +1322,13 @@ func writeVersionCacheTestScript(t *testing.T, failFirstVersion bool) (string, s
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module versioncachetest\n\ngo 1.24\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	script := filepath.Join(root, "parse.mjs")
-	body := fmt.Sprintf(`import fs from "node:fs";
-if (process.argv.includes("--version-info")) {
-  fs.appendFileSync(process.env.VERSION_COUNTER, "version\n");
-  const marker = process.env.VERSION_FAILURE_MARKER;
-  if (%t && marker && !fs.existsSync(marker)) {
-    fs.writeFileSync(marker, "failed");
-    process.stderr.write("version unavailable");
-    process.exit(1);
-  }
-  process.stdout.write(JSON.stringify({parser_version:"bridge-v2",mermaid_version:"12.0.0"}));
-  process.exit(0);
-}
-fs.appendFileSync(process.env.PARSE_COUNTER, "parse\n");
-process.stdin.resume();
-process.stdin.on("end", () => process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[],edges:[],subgraphs:[],suppressions:[]}})));
-`, failFirstVersion)
-	if err := os.WriteFile(script, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
+	t.Setenv("MERM8_TEST_PARSER_MODE", "version-cache")
+	if failFirstVersion {
+		t.Setenv("MERM8_TEST_FAIL_FIRST_VERSION", "1")
+	} else {
+		t.Setenv("MERM8_TEST_FAIL_FIRST_VERSION", "0")
 	}
+	script := writeMockParserFixture(t, root, "parse.ts")
 	return script, root
 }
 
@@ -1527,15 +1345,8 @@ func assertFileLineCount(t *testing.T, path string, want int) {
 
 func TestParser_MemoryLimitCategory(t *testing.T) {
 	tempDir := repoTempDir(t)
-	script := filepath.Join(tempDir, "parse-memory.mjs")
-	scriptBody := `#!/usr/bin/env node
-process.stderr.write("FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\\n");
-process.stdout.write(JSON.stringify({valid:false,error:{message:"internal parser error: oom",line:0,column:0}}));
-process.exit(1);
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write test parser script: %v", err)
-	}
+	t.Setenv("MERM8_TEST_PARSER_MODE", "memory-limit")
+	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	p := mustNewParser(t, script)
 	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
@@ -1562,30 +1373,8 @@ func TestParser_ClosePreventsFutureBorrows(t *testing.T) {
 	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
 
 	tempDir := repoTempDir(t)
-	script := filepath.Join(tempDir, "parse.mjs")
-	scriptBody := `#!/usr/bin/env node
-if (!process.argv.includes("--worker")) {
-  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:"oneshot"}],edges:[],subgraphs:[],suppressions:[]}})+"\n");
-  process.exit(0);
-}
-
-import readline from "readline";
-const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity, terminal: false });
-for await (const line of rl) {
-  const req = JSON.parse(line);
-  process.stdout.write(JSON.stringify({
-    id: req.id,
-    result: {
-      valid: true,
-      diagram_type: "flowchart",
-      ast: { type: "flowchart", direction: "TD", nodes: [{id: "a", label: "A"}], edges: [], subgraphs: [], suppressions: [] }
-    }
-  }) + "\n");
-}
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write parser script: %v", err)
-	}
+	t.Setenv("MERM8_TEST_PARSER_MODE", "worker-close")
+	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	p := mustNewParser(t, script)
 	if err := p.Close(); err != nil {
@@ -1608,16 +1397,8 @@ func TestParser_SubprocessCloseRacingWithParseReturnsClosedError(t *testing.T) {
 	t.Setenv("PARSER_MODE", "subprocess")
 
 	tempDir := repoTempDir(t)
-	script := filepath.Join(tempDir, "parse-slow.mjs")
-	scriptBody := `#!/usr/bin/env node
-setTimeout(() => {
-  process.stdout.write(JSON.stringify({valid:true,diagram_type:"flowchart",ast:{type:"flowchart",direction:"TD",nodes:[{id:"n",label:"ok"}],edges:[],subgraphs:[],suppressions:[]}}));
-  process.exit(0);
-}, 25);
-`
-	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
-		t.Fatalf("failed to write parser script: %v", err)
-	}
+	t.Setenv("MERM8_TEST_PARSER_MODE", "delayed-success")
+	script := writeMockParserFixture(t, tempDir, "parse.ts")
 
 	p := mustNewParser(t, script)
 

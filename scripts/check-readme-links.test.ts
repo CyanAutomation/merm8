@@ -3,9 +3,9 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { findBrokenLocalLinks } from "./check-readme-links.mjs";
+import { findBrokenLocalLinks } from "./check-readme-links.ts";
 
-const withFixture = async run => {
+const withFixture = async (run: (root: string) => Promise<void>): Promise<void> => {
   const root = await mkdtemp(path.join(os.tmpdir(), "merm8-readme-links-"));
   try {
     await mkdir(path.join(root, "docs"));

@@ -27,7 +27,7 @@ func TestServerContractIntegration_ConcurrencyBusyIncludesRetryAfter(t *testing.
 	blockReleaseFile := filepath.Join(tmpDir, "release-parse-block")
 	t.Setenv("MERM8_PARSE_MARKER", marker)
 	t.Setenv("MERM8_PARSE_BLOCK_RELEASE_FILE", blockReleaseFile)
-	parserScript := filepath.Join("testdata", "fixtures", "parser", "controlled_parse.mjs")
+	parserScript := filepath.Join("testdata", "fixtures", "parser", "controlled_parse.ts")
 
 	h, err := api.NewHandlerWithScript(parserScript)
 	if err != nil {
@@ -153,7 +153,7 @@ func TestServerContractIntegration_ParserTimeoutFromControlledSlowFixture(t *tes
 	blockReleaseFile := filepath.Join(tmpDir, "never-release-parse-block")
 	t.Setenv("MERM8_PARSE_BLOCK_RELEASE_FILE", blockReleaseFile)
 
-	parserScript := filepath.Join("testdata", "fixtures", "parser", "controlled_parse.mjs")
+	parserScript := filepath.Join("testdata", "fixtures", "parser", "controlled_parse.ts")
 	h, err := api.NewHandlerWithScript(parserScript)
 	if err != nil {
 		t.Fatalf("failed to build handler with fixture parser: %v", err)

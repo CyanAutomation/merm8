@@ -20,7 +20,7 @@ The Go API and CLI run as local Go programs. The Worker can run locally with Wra
 
 ## Local API quick-start
 
-**Requirements:** Go 1.24+, Node.js 22.6+, and npm.
+**Requirements:** Go 1.24+, Node.js 24+, and npm.
 
 From the repository root, install the parser dependencies and build the server:
 
@@ -182,7 +182,7 @@ See [API_GUIDE.md — operational environment variables](API_GUIDE.md#operationa
 
 ## Development and tests
 
-**Requirements:** Go 1.24+, Node.js 22.6+, and npm. Install both Node dependency sets before running the complete suite:
+**Requirements:** Go 1.24+, Node.js 24+, and npm. Install both Node dependency sets before running the complete suite:
 
 ```bash
 npm ci
