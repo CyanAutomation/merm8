@@ -214,7 +214,7 @@ The runtime-dependent server integration suite is separate:
 PARSER_SCRIPT=./parser-node/parse.ts go test -tags=integration ./cmd/server
 ```
 
-The root `npm test` checks local README links and Markdown section anchors. A separate weekly workflow checks external links so network outages do not block pull requests. Regenerate and verify OpenAPI artifacts after API contract changes:
+The root `npm test` checks local links and Markdown section anchors in `README.md`. A separate weekly workflow checks external links in that file, so network outages do not block pull requests. Regenerate and verify OpenAPI artifacts after API contract changes:
 
 ```bash
 go run ./scripts/generate_openapi.go
