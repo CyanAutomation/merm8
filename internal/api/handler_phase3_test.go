@@ -493,11 +493,14 @@ func TestAnalyzeSARIF_ParserTimeout(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
 		t.Fatalf("decode failed: %v", err)
 	}
-	if len(report.Runs[0].Results) == 0 {
-		t.Errorf("expected error result in SARIF response for timeout")
+	if len(report.Runs) == 0 {
+		t.Fatal("expected at least one SARIF run for timeout response")
 	}
-	if report.Runs[0].Results[0].Level != sarif.SARIFLevelError {
-		t.Errorf("timeout error should be level=error, got %s", report.Runs[0].Results[0].Level)
+	if len(report.Runs[0].Results) == 0 {
+		t.Fatal("expected error result in SARIF response for timeout")
+	}
+	if got := report.Runs[0].Results[0].Level; got != sarif.SARIFLevelError {
+		t.Errorf("timeout error level = %q, want %q", got, sarif.SARIFLevelError)
 	}
 }
 
