@@ -500,37 +500,40 @@ X-RateLimit-Reset: 1704067890
 
 **HTTP Status**: 200 OK
 
-**When**: Diagram parses successfully but lint rules are not yet implemented for that diagram type.
+**When**: Diagram parses successfully but the parser cannot classify a lint-supported diagram type. `gantt`/`pie` input normalizes to `diagram-type=unknown`.
 
-**Affected Types** (as of v1.0.0):
+**Affected Types**:
 
-- `sequence` — parsed, lint rules planned
-- `class` — parsed, lint rules planned
-- `state` — parsed, lint rules planned
-- `er` — parsed, lint rules planned
-- `gantt` — parsed, unsupported
-- `pie` — parsed, unsupported
+- `gantt` — parsed as `unknown`, lint rules not available
+- `pie` — parsed as `unknown`, lint rules not available
 
 **Response Structure**:
 
 ```json
 {
   "valid": true,
-  "diagram-type": "sequence",
+  "diagram-type": "unknown",
   "lint-supported": false,
   "syntax-error": null,
   "issues": [
     {
       "rule-id": "unsupported-diagram-type",
       "severity": "info",
-      "message": "diagram type \"sequence\" is parsed but lint rules are not available yet"
+      "message": "diagram type \"unknown\" is parsed but lint rules are not available yet"
     }
   ],
   "metrics": {
     "node-count": 0,
     "edge-count": 0,
-    "diagram-type": "sequence",
-    "..." : "zero counts"
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 0,
+    "diagram-type": "unknown",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
   },
   "error": {
     "code": "unsupported_diagram_type",

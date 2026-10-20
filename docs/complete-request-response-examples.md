@@ -682,11 +682,9 @@ Content-Type: application/json
 
 ---
 
-## 12. Valid Sequence Diagram (Lint Unsupported)
+## 12. Valid Sequence Diagram (Lint Supported)
 
-When analyzing a diagram type that the parser recognizes but which doesn't have lint rules yet (e.g., sequence, class, state, ER), the API returns HTTP 200 with `valid=true` and `lint-supported=false`.
-
-**Key point**: This is **NOT** a syntax error. The diagram is syntactically correct; linting is simply unavailable.
+The default Go engine registers sequence diagram rules, so a valid sequence diagram is parsed and linted, returning `valid=true` with `lint-supported=true` and no issues.
 
 **Request**:
 
@@ -706,30 +704,22 @@ When analyzing a diagram type that the parser recognizes but which doesn't have 
 {
   "valid": true,
   "diagram-type": "sequence",
-  "lint-supported": false,
+  "lint-supported": true,
   "syntax-error": null,
-  "issues": [
-    {
-      "rule-id": "unsupported-diagram-type",
-      "severity": "info",
-      "message": "diagram type \"sequence\" is parsed but lint rules are not available yet"
-    }
-  ],
+  "issues": [],
   "metrics": {
-    "node-count": 0,
-    "edge-count": 0,
+    "node-count": 2,
+    "edge-count": 1,
     "disconnected-node-count": 0,
     "duplicate-node-count": 0,
-    "max-fanin": 0,
+    "max-fanin": 1,
+    "max-fanout": 1,
     "diagram-type": "sequence",
+    "direction": "TD",
     "issue-counts": {
       "by-severity": {},
       "by-rule": {}
     }
-  },
-  "error": {
-    "code": "unsupported_diagram_type",
-    "message": "diagram type is parsed but linting is not supported"
   }
 }
 ```
