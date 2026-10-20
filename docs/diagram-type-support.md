@@ -78,8 +78,8 @@ The API response includes two fields that control how you should interpret analy
 | **class**                    | ✅                | ✅             | no-circular-inheritance, no-duplicate-classes, max-inheritance-depth            | ✅ Supported     | Class rules active                   |
 | **state**                    | ✅                | ✅             | no-circular-transitions, no-unreachable-state, max-transitions                   | ✅ Supported     | State rules active                   |
 | **er** (entity-relationship) | ✅                | ✅             | no-circular-chain, no-self-referential                                           | ✅ Supported     | ER rules active                      |
-| **gantt**                    | ❌                | ❌             | —                                                                              | ❌ Not supported | Parses as `unknown`; returns `unsupported_diagram_type` |
-| **pie**                      | ❌                | ❌             | —                                                                              | ❌ Not supported | Parses as `unknown`; returns `unsupported_diagram_type` |
+| **gantt**                    | ⚠️                | ❌             | —                                                                              | ❌ Not supported | Parses as `unknown`; returns `unsupported_diagram_type` |
+| **pie**                      | ⚠️                | ❌             | —                                                                              | ❌ Not supported | Parses as `unknown`; returns `unsupported_diagram_type` |
 
 ---
 

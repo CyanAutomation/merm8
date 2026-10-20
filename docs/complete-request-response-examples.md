@@ -715,7 +715,6 @@ The default Go engine registers sequence diagram rules, so a valid sequence diag
     "max-fanin": 1,
     "max-fanout": 1,
     "diagram-type": "sequence",
-    "direction": "TD",
     "issue-counts": {
       "by-severity": {},
       "by-rule": {}
