@@ -125,7 +125,7 @@ graph TD
     Idle -->|Exit| Done
 ```
 
-## Sequence Diagram Templates (Parser-supported, lint rules not yet enabled)
+## Sequence Diagram Templates
 
 ### Client-Server Interaction
 
@@ -157,7 +157,7 @@ sequenceDiagram
     A->>B: Confirm
 ```
 
-## Class Diagram Templates (Parser-supported, lint rules not yet enabled)
+## Class Diagram Templates
 
 ### Inheritance Hierarchy
 
@@ -207,7 +207,7 @@ classDiagram
     Car *-- Wheel
 ```
 
-## Entity-Relationship Diagram Templates (Parser-supported, lint rules not yet enabled)
+## Entity-Relationship Diagram Templates
 
 ### E-commerce Schema
 
@@ -221,7 +221,7 @@ erDiagram
     REVIEW ||--|| PRODUCT : "reviews"
 ```
 
-## State Diagram Templates (Parser-supported, lint rules not yet enabled)
+## State Diagram Templates
 
 ### Simple State Machine
 
