@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -71,9 +71,43 @@ jobs:
           go vet ./...
           go test ./... -count=1
 
-  deploy-production:
-    needs: test
+  worker-changes:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect Worker bundle changes
+        id: detect
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$BEFORE_SHA" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || \
+            ! git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff --quiet "$BEFORE_SHA" "$GITHUB_SHA" -- \
+            worker/ src/ package.json package-lock.json .npmrc wrangler.toml tsconfig.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-production:
+    needs: [test, worker-changes]
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.worker-changes.outputs.changed == 'true'
     permissions:
       actions: read
       contents: read
