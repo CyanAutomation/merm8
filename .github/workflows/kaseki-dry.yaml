@@ -80,7 +80,7 @@ jobs:
           curl --proto '=https' --fail-with-body --silent --show-error \
             --retry 3 --retry-all-errors \
             --connect-timeout 10 --max-time 20 \
-            --output "$response_file" \
+            --max-filesize 1048576 --output "$response_file" \
             "$KASEKI_BASE_URL/ready"
 
           jq -e '.status == "ready"' "$response_file" >/dev/null
@@ -101,7 +101,7 @@ jobs:
           curl --proto '=https' --fail-with-body --silent --show-error \
             --retry 3 \
             --connect-timeout 10 --max-time 60 \
-            --output "$response_file" \
+            --max-filesize 1048576 --output "$response_file" \
             --header "Authorization: Bearer $KASEKI_API_TOKEN" \
             "$KASEKI_BASE_URL/api/v1/gateway-test?stage=1"
 
@@ -186,9 +186,9 @@ jobs:
           trap 'rm -f "$response_file"' EXIT
 
           http_status="$(
-            curl --silent --show-error \
+            curl --proto '=https' --silent --show-error \
               --retry 3 --retry-all-errors \
-              --max-time 60 \
+              --max-time 60 --max-filesize 1048576 \
               --output "$response_file" \
               --write-out '%{http_code}' \
               --request POST "$KASEKI_BASE_URL/api/v1/runs" \
@@ -229,7 +229,7 @@ jobs:
           while (( SECONDS < deadline )); do
             if ! curl --proto '=https' --fail-with-body --silent --show-error \
               --retry 3 --retry-all-errors \
-              --connect-timeout 10 --max-time 60 \
+              --connect-timeout 10 --max-time 60 --max-filesize 1048576 \
               --output "$response_file" \
               --header "Authorization: Bearer $KASEKI_API_TOKEN" \
               "$KASEKI_BASE_URL/api/v1/runs/$RUN_ID/status"; then
