@@ -15,6 +15,10 @@ function readRepositoryFile(filePath: string): string {
 }
 
 type Workflow = {
+  concurrency?: {
+    group?: string;
+    "cancel-in-progress"?: boolean | string;
+  };
   on?: {
     pull_request?: {
       paths?: string[];
@@ -23,7 +27,11 @@ type Workflow = {
   jobs?: Record<
     string,
     {
+      if?: string;
+      needs?: string | string[];
+      outputs?: Record<string, string>;
       steps?: Array<{
+        id?: string;
         name?: string;
         run?: string;
         if?: string;
@@ -51,6 +59,10 @@ type PackageManifest = {
 
 type NpmLock = {
   packages?: Record<string, { version?: string; integrity?: string }>;
+};
+
+type ZizmorConfig = {
+  rules?: Record<string, { ignore?: string[] }>;
 };
 
 function readWorkflow(filePath: string): Workflow {
@@ -146,6 +158,109 @@ test("CI captures coverage and runs lockfile-installed Fallow for pull requests"
   assert.equal(manifest.devDependencies?.fallow, "3.33.1");
   assert.equal(lockfile.packages?.["node_modules/fallow"]?.version, "3.33.1");
   assert.match(lockfile.packages?.["node_modules/fallow"]?.integrity ?? "", /^sha512-/);
+});
+
+test("README external link workflow installs dependencies before checking links", () => {
+  const workflow = readWorkflow(".github/workflows/readme-links.yml");
+  const steps = workflow.jobs?.["external-links"]?.steps ?? [];
+  const installStep = steps.find((step) => /\bnpm ci\b/.test(step.run ?? ""));
+  const checkStep = steps.find((step) =>
+    (step.run ?? "").includes("npm run check:readme-links:external"),
+  );
+
+  assert.ok(installStep, "workflow must install the locked npm dependencies");
+  assert.ok(checkStep, "workflow must run the external README link checker");
+  assert.ok(
+    steps.indexOf(installStep) < steps.indexOf(checkStep),
+    "link checking must run after npm dependencies are installed",
+  );
+});
+
+test("Zizmor suppression tracks the reusable workflow reference line", () => {
+  const ciLines = readRepositoryFile(".github/workflows/ci.yml").split("\n");
+  const reusableWorkflowLine = ciLines.findIndex((line) =>
+    line.includes("uses: ./.github/workflows/deploy-cloudflare.yml"),
+  ) + 1;
+  const config = parseYaml(
+    readRepositoryFile(".github/zizmor.yml"),
+  ) as ZizmorConfig;
+
+  assert.ok(reusableWorkflowLine > 0, "CI must call the deploy workflow");
+  assert.ok(
+    config.rules?.["self-repository"]?.ignore?.includes(
+      `ci.yml:${reusableWorkflowLine}`,
+    ),
+    "the self-repository suppression must stay on the reusable workflow reference",
+  );
+});
+
+test("production deployment is limited to Worker bundle changes", () => {
+  const workflow = readWorkflow(".github/workflows/ci.yml");
+  const detector = workflow.jobs?.["worker-changes"];
+  const deploy = workflow.jobs?.["deploy-production"];
+  const detectorStep = detector?.steps?.find((step) => step.id === "detect");
+
+  assert.ok(detector, "CI must detect changes that affect the Worker bundle");
+  assert.ok(deploy, "CI must define production deployment");
+  assert.equal(
+    detector?.if,
+    "github.event_name == 'push' && github.ref == 'refs/heads/main'",
+  );
+  assert.equal(
+    detector?.outputs?.changed,
+    "${{ steps.detect.outputs.changed }}",
+  );
+  assert.ok(detectorStep?.run, "Worker change detection must run a diff check");
+  assert.match(detectorStep?.run ?? "", /git cat-file -e/);
+  assert.match(detectorStep?.run ?? "", /git diff --quiet "\$BEFORE_SHA" "\$GITHUB_SHA"/);
+  assert.match(detectorStep?.run ?? "", /echo "changed=true"/);
+  for (const path of [
+    "worker/",
+    "src/",
+    "package.json",
+    "package-lock.json",
+    ".npmrc",
+    "wrangler.toml",
+    "tsconfig.json",
+  ]) {
+    assert.ok(
+      detectorStep.run.includes(path),
+      `Worker change detection must include ${path}`,
+    );
+  }
+  assert.ok(
+    Array.isArray(deploy?.needs) && deploy.needs.includes("worker-changes"),
+    "deployment must depend on Worker change detection",
+  );
+  assert.match(
+    deploy?.if ?? "",
+    /needs\.worker-changes\.outputs\.changed == 'true'/,
+    "deployment must be skipped when Worker inputs are unchanged",
+  );
+});
+
+test("main push CI runs are not coalesced before deployment", () => {
+  const workflow = readWorkflow(".github/workflows/ci.yml");
+
+  assert.match(
+    workflow.concurrency?.group ?? "",
+    /github\.event\.pull_request\.number \|\| github\.sha/,
+    "main pushes must have per-commit concurrency groups",
+  );
+  assert.equal(
+    workflow.concurrency?.["cancel-in-progress"],
+    "${{ github.event_name == 'pull_request' }}",
+    "only stale pull request runs should be cancelled",
+  );
+});
+
+test("changelog describes the main-only manual deployment gate", () => {
+  const changelog = readRepositoryFile("CHANGELOG.md");
+
+  assert.match(
+    changelog,
+    /Production deployments now run only when Worker bundle inputs change on `main`;\s+manual deployments remain limited to a confirmed `main` commit with successful CI\./,
+  );
 });
 
 test("the repository declares and uses Node.js 24", () => {
