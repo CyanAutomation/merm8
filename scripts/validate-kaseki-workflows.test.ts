@@ -170,3 +170,29 @@ test("kaseki-docs.yaml installs project dependencies before validation", () => {
     "validation must run tests after installing both dependency sets",
   );
 });
+
+test("kaseki-dry.yaml caps every controller response body", () => {
+  const source = readWorkflow("kaseki-dry.yaml");
+  const responseFileWrites = source.match(/--output "\$response_file"/g) ?? [];
+  const responseSizeCaps = source.match(/--max-filesize 1048576/g) ?? [];
+
+  assert.ok(responseFileWrites.length > 0, "workflow must capture controller responses");
+  assert.equal(
+    responseSizeCaps.length,
+    responseFileWrites.length,
+    "every response written to disk must have a 1 MiB size cap",
+  );
+});
+
+test("kaseki-dry.yaml restricts DRY sweep submission to HTTPS", () => {
+  const submitStep = readStep(
+    readWorkflow("kaseki-dry.yaml"),
+    "Submit DRY sweep",
+  );
+
+  assert.match(
+    submitStep,
+    /curl --proto '=https' --silent --show-error \\\n/,
+    "the credential-bearing submission request must only use HTTPS",
+  );
+});

@@ -30,7 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Worker analysis now reports `lint-supported=false` for recognized diagram types
   without Worker rules, and rejects malformed rule configuration instead of silently
   falling back to defaults.
-- Manual production deployments can now use a selected branch or tag after explicit confirmation.
+- Production deployments now run only when Worker bundle inputs change on `main`;
+  manual deployments remain limited to a confirmed `main` commit with successful CI.
 - Removed spoofable request-hostname checks from MCP authorization; MCP access now relies on the configured API key.
 - Corrected Worker compatibility-date configuration, repeated-node source columns, and malformed JSON error logging.
 - Worker flowchart validation now rejects relations without a destination node, matching Mermaid preview behavior.
