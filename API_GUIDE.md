@@ -1,4 +1,3 @@
-Fix 2 applied
 # API Guide — merm8 Mermaid Lint API
 
 This guide walks you through interacting with the merm8 API, using both the interactive Swagger UI and direct HTTP requests.
@@ -577,8 +576,8 @@ Add jitter (for example ±20% randomization) per attempt to avoid synchronized r
 
 **Current type support behavior:**
 
-- `flowchart`/`graph` diagrams are linted by built-in rules.
-- `sequence`, `class`, `er`, and `state` diagrams are parsed, and return `valid=false`, `lint-supported=false`, `issues=[]`, a structured `error.code` of `unsupported_diagram_type`, and populated `metrics` computed from the parsed diagram (with empty issue-count maps).
+- `flowchart`/`graph`, `sequence`, `class`, `er`, and `state` diagrams are parsed and linted by the default Go engine's built-in rules, with `lint-supported=true`.
+- Diagram types the parser cannot classify (for example `gantt` or `pie` input, which normalize to `diagram-type=unknown`) return `valid=true`, `lint-supported=false`, and a structured `error.code` of `unsupported_diagram_type`.
 
 - **`valid`** — Boolean indicating if the Mermaid syntax is syntactically correct
 - **`diagram-type`** — Normalized Mermaid type for valid diagrams (`flowchart`, `sequence`, `class`, `er`, `state`, `unknown`)

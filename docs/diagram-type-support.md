@@ -53,9 +53,9 @@ The API response includes two fields that control how you should interpret analy
 |----------|-------|----------------|--------------|--------|---|
 | Valid flowchart, no issues | true | true | null | [] | Success; diagram is valid and passes all rules |
 | Valid flowchart, has issues | true | true | null | [{rule-id: ..., }] | Success; diagram is valid but has lint violations |
-| Syntax error | false | true | {msg...} | [] | Failure; diagram syntax is invalid |
+| Syntax error | false | false | {msg...} | [] | Failure; diagram syntax is invalid; /v1/analyze never lints a failed parse |
 | Valid sequence diagram | true | true | null | [] or family-specific issues | Success; sequence rules were evaluated |
-| Unsupported diagram (gantt/pie) | false | false | {msg...} | [] | Failure; diagram type not recognized by parser |
+| Unsupported diagram (gantt/pie) | true | false | null | unsupported-diagram-type issue | Parses as `unknown`; returns `unsupported_diagram_type` |
 
 ---
 
@@ -78,8 +78,8 @@ The API response includes two fields that control how you should interpret analy
 | **class**                    | ✅                | ✅             | no-circular-inheritance, no-duplicate-classes, max-inheritance-depth            | ✅ Supported     | Class rules active                   |
 | **state**                    | ✅                | ✅             | no-circular-transitions, no-unreachable-state, max-transitions                   | ✅ Supported     | State rules active                   |
 | **er** (entity-relationship) | ✅                | ✅             | no-circular-chain, no-self-referential                                           | ✅ Supported     | ER rules active                      |
-| **gantt**                    | ❌                | ❌             | —                                                                              | ❌ Not supported | Parser rejects; returns syntax error |
-| **pie**                      | ❌                | ❌             | —                                                                              | ❌ Not supported | Parser rejects; returns syntax error |
+| **gantt**                    | ❌                | ❌             | —                                                                              | ❌ Not supported | Parses as `unknown`; returns `unsupported_diagram_type` |
+| **pie**                      | ❌                | ❌             | —                                                                              | ❌ Not supported | Parses as `unknown`; returns `unsupported_diagram_type` |
 
 ---
 
@@ -168,7 +168,7 @@ The default engine evaluates `no-circular-chain` and `no-self-referential`.
 
 ## Unsupported Diagram Types
 
-The following Mermaid diagram types are **not currently supported** and will return a syntax error:
+The following Mermaid diagram types are **not currently supported** by lint rules. They parse as `diagram-type=unknown` and analysis returns an `unsupported_diagram_type` error:
 
 | Type  | Reason                                                         | Suggested Alternative                                |
 | ----- | -------------------------------------------------------------- | ---------------------------------------------------- |
@@ -185,19 +185,38 @@ The following Mermaid diagram types are **not currently supported** and will ret
 }
 ```
 
-**Response** (HTTP 200 OK, but empty results):
+**Response** (HTTP 200 OK):
 
 ```json
 {
-  "valid": false,
+  "valid": true,
   "diagram-type": "unknown",
   "lint-supported": false,
-  "syntax-error": {
-    "message": "Parser does not recognize gantt syntax",
-    "line": 1,
-    "column": 1
+  "syntax-error": null,
+  "issues": [
+    {
+      "rule-id": "unsupported-diagram-type",
+      "severity": "info",
+      "message": "diagram type \"unknown\" is parsed but lint rules are not available yet"
+    }
+  ],
+  "metrics": {
+    "node-count": 0,
+    "edge-count": 0,
+    "disconnected-node-count": 0,
+    "duplicate-node-count": 0,
+    "max-fanin": 0,
+    "max-fanout": 0,
+    "diagram-type": "unknown",
+    "issue-counts": {
+      "by-severity": {},
+      "by-rule": {}
+    }
   },
-  "issues": []
+  "error": {
+    "code": "unsupported_diagram_type",
+    "message": "diagram type is parsed but linting is not supported"
+  }
 }
 ```
 
