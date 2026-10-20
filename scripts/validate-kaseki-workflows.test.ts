@@ -183,3 +183,16 @@ test("kaseki-dry.yaml caps every controller response body", () => {
     "every response written to disk must have a 1 MiB size cap",
   );
 });
+
+test("kaseki-dry.yaml restricts DRY sweep submission to HTTPS", () => {
+  const submitStep = readStep(
+    readWorkflow("kaseki-dry.yaml"),
+    "Submit DRY sweep",
+  );
+
+  assert.match(
+    submitStep,
+    /curl --proto '=https' --silent --show-error \\\n/,
+    "the credential-bearing submission request must only use HTTPS",
+  );
+});

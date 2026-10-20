@@ -186,7 +186,7 @@ jobs:
           trap 'rm -f "$response_file"' EXIT
 
           http_status="$(
-            curl --silent --show-error \
+            curl --proto '=https' --silent --show-error \
               --retry 3 --retry-all-errors \
               --max-time 60 --max-filesize 1048576 \
               --output "$response_file" \
