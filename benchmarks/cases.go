@@ -10,13 +10,13 @@ import (
 // BenchmarkCase represents a single test case in the benchmark suite.
 type BenchmarkCase struct {
 	// Identifiers and metadata
-	ID          string   `json:"id"`           // Unique case ID (e.g., "flowchart-no-cycles-001")
-	Description string   `json:"description"`  // Human-readable test description
-	DiagramPath string   `json:"diagram_path"` // Relative path to fixture (e.g., "cases/flowchart/valid/simple.mmd")
-	RuleID      string   `json:"rule_id"`      // Rule being tested ("*" for all rules)
-	Category    string   `json:"category"`     // "valid" | "violation" | "edge-case"
-	DiagramType string   `json:"diagram_type"` // "flowchart" | "sequence" | "class" | "er" | "state"
-	Tags        []string `json:"tags"`         // ["edge-case", "regression", "simple"]
+	ID          string   `json:"id"`                     // Unique case ID (e.g., "flowchart-no-cycles-001")
+	Description string   `json:"description,omitempty"`  // Human-readable test description
+	DiagramPath string   `json:"diagram_path,omitempty"` // Relative path to fixture (e.g., "cases/flowchart/valid/simple.mmd")
+	RuleID      string   `json:"rule_id"`                // Rule being tested ("*" for all rules)
+	Category    string   `json:"category,omitempty"`     // "valid" | "violation" | "edge-case"
+	DiagramType string   `json:"diagram_type,omitempty"` // "flowchart" | "sequence" | "class" | "er" | "state"
+	Tags        []string `json:"tags,omitempty"`         // ["edge-case", "regression", "simple"]
 
 	// Expected behavior
 	ExpectedIssues []ExpectedIssue `json:"expected_issues"` // Issues this case should produce

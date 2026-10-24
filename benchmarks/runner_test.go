@@ -84,6 +84,7 @@ func TestBenchmarkCase_JSONMarshaling_RequiredFieldsRoundTrip(t *testing.T) {
 	}
 }
 
+// @spec: BENCHMARK-001: Empty optional benchmark metadata is omitted from case JSON.
 func TestBenchmarkCase_JSONMarshaling_OmitsOptionalDefaults(t *testing.T) {
 	bc := benchmarks.BenchmarkCase{
 		ID:             "test-optional",
@@ -96,25 +97,22 @@ func TestBenchmarkCase_JSONMarshaling_OmitsOptionalDefaults(t *testing.T) {
 		t.Fatalf("failed to marshal: %v", err)
 	}
 
-	var roundTrip benchmarks.BenchmarkCase
-	if err := json.Unmarshal(data, &roundTrip); err != nil {
-		t.Fatalf("failed to unmarshal benchmark case: %v", err)
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("decode marshaled benchmark case: %v", err)
 	}
 
-	if roundTrip.Description != "" || roundTrip.DiagramPath != "" || roundTrip.Category != "" || roundTrip.DiagramType != "" {
-		t.Fatalf("expected omitted optional text fields to keep zero values, got %+v", roundTrip)
+	for _, field := range []string{"description", "diagram_path", "category", "diagram_type", "tags"} {
+		if _, exists := payload[field]; exists {
+			t.Errorf("optional field %q should be omitted, got %s", field, payload[field])
+		}
 	}
 
-	if roundTrip.Tags != nil {
-		t.Fatalf("expected omitted tags to remain nil, got %#v", roundTrip.Tags)
+	if got := string(payload["config"]); got != "null" {
+		t.Errorf("config = %q, want JSON null", got)
 	}
-
-	if string(roundTrip.Config) != "null" {
-		t.Fatalf("expected omitted config to round-trip as JSON null, got %q", string(roundTrip.Config))
-	}
-
-	if !reflect.DeepEqual(roundTrip.ExpectedIssues, bc.ExpectedIssues) {
-		t.Fatalf("expected expected_issues %v, got %v", bc.ExpectedIssues, roundTrip.ExpectedIssues)
+	if got := string(payload["expected_issues"]); got != "[]" {
+		t.Errorf("expected_issues = %q, want empty JSON array", got)
 	}
 }
 
