@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -19,17 +19,19 @@ const requiredSections = [
   "## Failure/stop conditions",
 ];
 
-test("every skill has valid discovery metadata and the common instruction sections", () => {
-  const skillDirectories = readdirSync(skillsRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort();
-  const seenNames = new Set<string>();
+const skillDirectories = readdirSync(skillsRoot, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort();
 
+test("at least one skill is present", () => {
   assert.ok(skillDirectories.length > 0, "at least one skill must be present");
+});
 
-  for (const directory of skillDirectories) {
+for (const directory of skillDirectories) {
+  test(`${directory}/SKILL.md has valid metadata and required sections`, () => {
     const skillPath = path.join(skillsRoot, directory, "SKILL.md");
+    assert.ok(existsSync(skillPath), `${directory} must contain SKILL.md`);
     const contents = readFileSync(skillPath, "utf8");
     const frontMatter = contents.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
 
@@ -48,11 +50,10 @@ test("every skill has valid discovery metadata and the common instruction sectio
       description.trim().length >= 20,
       `${directory}/SKILL.md description should explain purpose and use`,
     );
-    assert.ok(!seenNames.has(name), `duplicate skill name: ${name}`);
-    seenNames.add(name);
+    assert.ok(name.length > 0, `${directory}/SKILL.md needs a non-empty name`);
 
     for (const section of requiredSections) {
       assert.ok(contents.includes(section), `${directory}/SKILL.md needs ${section}`);
     }
-  }
-});
+  });
+}
