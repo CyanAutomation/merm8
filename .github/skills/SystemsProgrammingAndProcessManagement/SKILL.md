@@ -1,158 +1,42 @@
-# Systems Programming & Process Management
+---
+name: SystemsProgrammingAndProcessManagement
+description: Safely manage the Go parser's Node.js processes, worker protocol, limits, and shutdown.
+---
 
-## Overview
+# Systems Programming and Process Management
 
-Managing subprocess lifecycle, inter-process communication, and system resource constraints. This skill covers spawning Node.js from Go, handling I/O, managing timeouts, and ensuring clean process termination.
+## Inputs / Outputs / Non-goals
 
-## Learning Objectives
+- Inputs: `internal/parser`, `parser-node/parse.ts`, parser configuration, and server shutdown flow.
+- Outputs: Reliable process lifecycle, bounded execution, and preserved request/response behavior.
+- Non-goals: Do not add a second parser process manager to API handlers or bypass the parser package.
 
-- [ ] Understand subprocess creation and lifecycle management
-- [ ] Implement stdin/stdout-based inter-process communication
-- [ ] Use context for timeouts and cancellation
-- [ ] Handle process signals and graceful termination
-- [ ] Debug subprocess I/O and error streams
+## Trigger conditions
 
-## Key Concepts
+Use this skill when changing subprocess invocation, worker pools, parser timeouts, memory limits, cancellation, or shutdown.
 
-### Subprocess Architecture
+## Mandatory rules
 
-merm8 spawns a Node.js process to parse diagrams.
+- Treat `internal/parser` as the owner of process lifecycle and protocol. The default `PARSER_MODE=pool` reuses long-lived workers; `subprocess` selects one-parse-per-process behavior.
+- In worker mode, requests and replies are newline-delimited JSON envelopes. Preserve request IDs, serialize access to each worker, and recycle unhealthy or timed-out workers.
+- The parser timeout defaults to five seconds and is configured with `PARSER_TIMEOUT_SECONDS`; do not copy a hard-coded timeout into callers. Respect the existing bounded parser configuration and memory limits.
+- For a one-shot `os/exec` call, prefer `cmd.Stdin` plus captured `cmd.Stdout`/`cmd.Stderr` and `cmd.Run()`. If using `StdoutPipe` or `StdinPipe`, check every error and pair `Start`, stream consumption, and `Wait` correctly; do not call `Run` with `StdoutPipe`.
+- Close the parser during server shutdown and make cancellation reach the active parse operation.
 
-### Process Invocation
+## Validation checklist
 
-```go
-cmd := exec.CommandContext(ctx, "node", "--experimental-strip-types", "parse.ts")
-cmd.Stdin = strings.NewReader(diagramCode)
-cmd.Stdout = &stdout
-cmd.Stderr = &stderr
-err := cmd.Run()
-```
+- [ ] Run `go test ./internal/parser` for parser lifecycle or protocol changes.
+- [ ] Run `PARSER_SCRIPT=./parser-node/parse.ts go test -tags=integration ./cmd/server` for runtime integration changes; install `parser-node` dependencies if needed.
+- [ ] Run `make test-contract` when API-visible parser behavior changes.
+- [ ] Exercise timeout, malformed output, worker replacement, and shutdown cases when those paths change.
 
-### Context-Based Timeouts
+## Expected output format
 
-```go
-ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-defer cancel()
-cmd := exec.CommandContext(ctx, "node", "--experimental-strip-types", "parse.ts")
-```
+- Summary: State which process mode, lifecycle, or limit changed.
+- Evidence: Report targeted parser and integration checks.
+- Risks: Describe effects on concurrency, memory, timeouts, or protocol compatibility.
 
-### I/O Handling
+## Failure/stop conditions
 
-- **STDIN**: Write diagram code
-- **STDOUT**: Read JSON AST
-- **STDERR**: Capture errors for debugging
-
-## Relevant Code in merm8
-
-| Component      | Location                  | Purpose                           |
-| -------------- | ------------------------- | --------------------------------- |
-| Parser wrapper | internal/parser/parser.go | Subprocess lifecycle + timeout    |
-| Main server    | cmd/server/main.go        | HTTP server calling parser        |
-| Node script    | parser-node/parse.ts     | Subprocess entry point            |
-| Docker setup   | Dockerfile                | Container environment for Node.js |
-
-## Development Workflow
-
-### Testing Subprocess Behavior
-
-```bash
-echo "graph TD\n  A-->B" | node --experimental-strip-types parser-node/parse.ts
-```
-
-### Debugging I/O Issues
-
-Capture stderr:
-
-```go
-stderr := &bytes.Buffer{}
-cmd.Stderr = stderr
-err := cmd.Run()
-if err != nil {
-    log.Printf("stderr: %s", stderr.String())
-}
-```
-
-### Monitoring Resources
-
-Use `ps`, `docker stats`, or `top` during parser execution.
-
-## Common Tasks
-
-### Changing Timeout
-
-Adjust constant in parser wrapper:
-
-```go
-const parseTimeout = 2 * time.Second
-```
-
-### Handling Crashes
-
-Return structured error when parser fails to run.
-
-### Environment Variables in Subprocess
-
-```go
-cmd.Env = append(os.Environ(), "DEBUG=mermaid:*")
-```
-
-## I/O Patterns
-
-### Writing to Stdin
-
-```go
-stdin, _ := cmd.StdinPipe()
-go func() {
-    io.WriteString(stdin, diagramCode)
-    stdin.Close()
-}()
-```
-
-### Reading from Stdout
-
-```go
-stdout, _ := cmd.StdoutPipe()
-output, _ := io.ReadAll(stdout)
-json.Unmarshal(output, &result)
-```
-
-### Capturing Stderr
-
-```go
-stderr := &bytes.Buffer{}
-cmd.Stderr = stderr
-cmd.Run()
-```
-
-## Deployment Considerations
-
-### Environment Variables
-
-- `PARSER_SCRIPT`: path to `parse.ts`
-- `PORT`: server port
-
-### Resource Limits
-
-Limit memory/CPU for parser processes.
-
-### Docker Environment
-
-Parser runs inside container; ensure Node.js installed.
-
-## Resources & Best Practices
-
-- Always use timeouts
-- Validate parser output before returning
-- Cancel contexts on shutdown
-- Log stderr when errors occur
-
-## Prerequisites
-
-- Go's `os/exec` + `context`
-- UNIX pipes (stdin/stdout)
-- Basic debugging tools (`ps`, `top`)
-
-## Related Skills
-
-- Go Backend Development for API flow
-- Docker & Deployment for containerized processes
+- Stop before changing the worker wire protocol without updating the Go and Node sides together.
+- If runtime checks cannot run, report the missing runtime or dependency and the remaining verification.

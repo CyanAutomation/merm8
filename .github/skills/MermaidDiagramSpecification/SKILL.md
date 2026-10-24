@@ -1,105 +1,43 @@
+---
+name: MermaidDiagramSpecification
+description: Apply Mermaid syntax accurately while respecting the diagram types and structures merm8 supports.
+---
+
 # Mermaid Diagram Specification
 
-## Overview
+## Inputs / Outputs / Non-goals
 
-Understanding Mermaid syntax, diagram types, and structure. This knowledge is essential for writing accurate linting rules and interpreting parser output.
+- Inputs: Official Mermaid syntax, parser AST modules, diagram fixtures, and runtime capability metadata.
+- Outputs: Correct Mermaid examples and changes that match the target parser and rule support.
+- Non-goals: Do not present the full Mermaid language as implemented by every merm8 runtime.
 
-## Learning Objectives
+## Trigger conditions
 
-- [ ] Learn Mermaid diagram types (flowchart, sequence, state, er)
-- [ ] Understand node and edge syntax variations
-- [ ] Study diagram direction and positioning hints
-- [ ] Learn subgraph syntax for clusters
-- [ ] Grasp metadata and styling options
+Use this skill when changing Mermaid parsing, examples, syntax hints, diagram models, or rules tied to diagram structure.
 
-## Key Concepts
+## Mandatory rules
 
-### Diagram Types
+- Distinguish Mermaid's language from merm8's supported subset. Current recognized families include flowchart, sequence, class, ER, and state; parser recognition does not by itself guarantee lint support.
+- Check runtime capability from `GET /v1/diagram-types` and `GET /v1/rules` where available. The Worker and Go server can expose different rule sets.
+- Use Mermaid's official documentation for syntax claims. Avoid describing all Mermaid diagrams as directed graphs; sequence, class, and ER diagrams have different structures and semantics.
+- For parser behavior, inspect `parser-node/ast-*.ts` and the fixtures in `parser-node/parse.test.ts`. For Worker behavior, inspect `src/parser`, `src/engine`, and `worker`.
+- Keep examples valid for the intended Mermaid version. Include diagram type headers, and distinguish node IDs from display labels.
+- Keep parser syntax errors, successfully parsed but unsupported types, and lint findings as separate outcomes.
 
-- **Flowchart (graph)**: Directed graphs, often using `graph TD` or `graph LR`
-- **Sequence**: Interactions over time (`sequenceDiagram`)
-- **State**: Finite state transitions (`stateDiagram-v2`)
-- **Entity-Relationship**: Data modeling (`erDiagram`)
+## Validation checklist
 
-### Flowchart Syntax
+- [ ] Run `npm run test:parser` for Node parser or fixture changes.
+- [ ] Run relevant Worker tests when changing Worker parsing or analysis.
+- [ ] Run `PARSER_SCRIPT=./parser-node/parse.ts go test ./internal/parser` when Go's parsed model is affected.
+- [ ] Verify each new example against the parser or official Mermaid editor.
 
-- Node definitions: `NodeID[Label]`, `NodeID{Label}`, `NodeID((Label))`
-- Edges: `A --> B`, `A -->|Label| B`, `A -.-> B`
-- Directions: `TD`, `LR`, `RL`, `BT`
+## Expected output format
 
-### Subgraphs
+- Summary: Identify the diagram family and syntax or support behavior changed.
+- Evidence: Report parser, fixture, or Worker checks used.
+- Risks: Note Mermaid-version or runtime-support differences.
 
-```mermaid
-graph TD
-  subgraph Frontend
-    A[UI]
-  end
-  subgraph Backend
-    B[API]
-  end
-  A --> B
-```
+## Failure/stop conditions
 
-### Node/Edge Properties
-
-- **Node ID**: Unique key, no spaces (use underscores)
-- **Label**: Display text (can differ from ID)
-- **Edge Types**: Solid, dashed, thick, with labels
-
-## Relevant Code in merm8
-
-| Component     | Location                  | Purpose                                   |
-| ------------- | ------------------------- | ----------------------------------------- |
-| Diagram model | internal/model/diagram.go | Nodes, edges, subgraphs                   |
-| Parser        | parser-node/parse.ts     | Mermaid AST source                        |
-| Rules         | internal/rules/           | Validate structure (fanout, connectivity) |
-
-## Development Workflow
-
-### Parsing Flow
-
-1. User submits diagram
-2. Node.js parser builds AST
-3. Go parser converts to `Diagram` model
-4. Rule engine inspects nodes/edges
-
-### Common Patterns
-
-- **Linear Chain**: `A --> B --> C`
-- **Wide Funnel**: Node fans out to many edges
-- **Disconnected Node**: Node with zero edges
-- **Duplicate Node ID**: Same ID used twice
-
-## Common Tasks
-
-### Validating Syntax
-
-Use Mermaid parser to surface syntax errors before linting.
-
-### Naming Nodes
-
-```mermaid
-graph TD
-  node_1[Process]
-```
-
-### Subgraphs for Clarity
-
-Group related nodes using `subgraph` blocks.
-
-## Resources & Best Practices
-
-- Official docs: https://mermaid.js.org
-- Live editor: https://mermaid.live
-- Always test diagrams before running rules
-
-## Prerequisites
-
-- Familiarity with flowcharts/diagrams
-- Understanding of node/edge concepts
-- Basic Mermaid syntax writing ability
-
-## Related Skills
-
-- Graph Theory & Algorithms for validation logic
-- Node.js & JavaScript for parser implementation
+- Stop before claiming a diagram type or syntax feature is lint-supported without checking the selected runtime's capability list.
+- If Mermaid's AST omits source details needed by a rule, identify the parser/model dependency explicitly.
