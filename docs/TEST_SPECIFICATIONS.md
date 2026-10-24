@@ -77,6 +77,12 @@ Each entry contains:
 - **Tests**: `TestServeSpec_RegisteredServiceRoutesAreDocumented`
 - **File**: `internal/api/openapi_test.go`
 
+### DOCS-003: OpenAPI Fallback Remains Usable
+
+- **Requirement**: If the primary OpenAPI document cannot be serialized, `/v1/spec` still returns valid JSON with the documented fallback GET operation and a usable server URL
+- **Tests**: `TestServeSpec_Returns200WithValidJSONWhenFallbackIsUsed`
+- **File**: `internal/api/openapi_fallback_test.go`
+
 ### API-009: Nil Engine Dependency Uses Default Engine
 
 - **Requirement**: A handler created without an engine dependency still analyzes a valid diagram successfully using its default engine
@@ -226,6 +232,48 @@ Each entry contains:
 - **Tests**: `TestParser_WorkerPoolHandlesSequentialRequests`
 - **File**: `internal/parser/parser_test.go`
 - **Assertion Strategy**: The controlled worker echoes each request's code into the returned diagram so response mix-ups or stale results fail semantically.
+
+### PARSER-005: Concurrent Parse Responses Match Their Requests
+
+- **Requirement**: Concurrent parses through one parser instance return the node IDs from each corresponding source diagram
+- **Tests**: `TestParser_ConcurrentParsing`
+- **File**: `internal/parser/parser_test.go`
+
+### PARSER-006: Parser Root Survives a Working Directory Change
+
+- **Requirement**: After construction, `Ready` and `Parse` continue to work from another working directory using the resolved repository root
+- **Tests**: `TestParser_RepoRootCachedAcrossWorkingDirectoryChange`
+- **File**: `internal/parser/parser_test.go`
+
+### BENCHMARK-001: Optional Benchmark Metadata Is Omitted
+
+- **Requirement**: Empty optional description, diagram path, category, diagram type, and tags fields are omitted from serialized benchmark cases; required issue arrays and null config remain explicit
+- **Tests**: `TestBenchmarkCase_JSONMarshaling_OmitsOptionalDefaults`
+- **File**: `benchmarks/runner_test.go`
+
+### SKILLS-001: Repository Skill Guides Have Valid Metadata and Sections
+
+- **Requirement**: The repository contains at least one skill guide, and each guide has matching metadata and all required sections
+- **Tests**: `repository skills have valid metadata and required sections`
+- **File**: `scripts/validate-skills.test.ts`
+
+### KASEKI-001: Kaseki Workflow Jobs Are Restricted to Main and the Protected Environment
+
+- **Requirement**: Both Kaseki workflows run only for the main branch and load controller configuration from the `kaseki-agent` environment
+- **Tests**: `kaseki-dry.yaml only runs jobs dispatched from main`, `kaseki-docs.yaml only runs jobs dispatched from main`, and the corresponding environment-bound configuration tests for both workflows
+- **Files**: `.github/workflows/kaseki-dry.yaml`, `.github/workflows/kaseki-docs.yaml`, `scripts/validate-kaseki-workflows.test.ts`
+
+### KASEKI-002: Kaseki Submissions Are Bounded and Idempotent
+
+- **Requirement**: Kaseki submissions target main and the triggering commit, create bounded normal pull requests, and use an idempotency key
+- **Tests**: Main-branch submission, triggering-commit checkout, bounded pull request, and idempotency tests for both Kaseki workflows
+- **Files**: `.github/workflows/kaseki-dry.yaml`, `.github/workflows/kaseki-docs.yaml`, `scripts/validate-kaseki-workflows.test.ts`
+
+### KASEKI-003: Polling Retries and Exit Codes Control Success
+
+- **Requirement**: Temporary controller status failures are retried, and a completed run is successful only when its exit code is zero
+- **Tests**: `kaseki-dry.yaml retries status polling after a transient controller failure` and the zero-exit-code completion tests for both workflows
+- **Files**: `.github/workflows/kaseki-dry.yaml`, `.github/workflows/kaseki-docs.yaml`, `scripts/validate-kaseki-workflows.test.ts`
 
 ### PARSER-NODE-001: Settled Worker Requests Clear Timeout Timers
 

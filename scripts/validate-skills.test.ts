@@ -24,12 +24,11 @@ const skillDirectories = readdirSync(skillsRoot, { withFileTypes: true })
   .map((entry) => entry.name)
   .sort();
 
-test("at least one skill is present", () => {
+// @spec: SKILLS-001: Each repository skill has valid metadata and required guidance sections.
+test("repository skills have valid metadata and required sections", () => {
   assert.ok(skillDirectories.length > 0, "at least one skill must be present");
-});
 
-for (const directory of skillDirectories) {
-  test(`${directory}/SKILL.md has valid metadata and required sections`, () => {
+  for (const directory of skillDirectories) {
     const skillPath = path.join(skillsRoot, directory, "SKILL.md");
     assert.ok(existsSync(skillPath), `${directory} must contain SKILL.md`);
     const contents = readFileSync(skillPath, "utf8");
@@ -55,5 +54,5 @@ for (const directory of skillDirectories) {
     for (const section of requiredSections) {
       assert.ok(contents.includes(section), `${directory}/SKILL.md needs ${section}`);
     }
-  });
-}
+  }
+});

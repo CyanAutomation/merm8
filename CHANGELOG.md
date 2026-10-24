@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Benchmark case JSON now omits empty optional description, diagram path, category, diagram type, and tags fields.
 - Worker semantic review no longer requires a caller API key and is limited to five requests per source IP per minute in each Cloudflare location; MCP authentication remains unchanged.
 - The served OpenAPI document no longer advertises unversioned routes that the server does not register; active versioned spelling aliases remain documented as deprecated.
 - Parser cache expiration tracking now uses a min-heap independent of LRU recency, avoiding full-cache scans on cache access.
