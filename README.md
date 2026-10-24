@@ -73,7 +73,7 @@ stdin: ok
 
 At startup, the current Go rule registry also writes legacy rule-ID deprecation notices to standard error. Those notices are separate from the analysis result shown above.
 
-Text output reports `ok` when there are no findings. Add `--format json` for structured output, `--config path/to/config.json` for rule settings, or `--url http://localhost:8080` to use the Go API. `--fail-on-lint` makes lint findings return exit code 1 for CI; syntax errors fail by default. See [CLI options and exit codes](#cli-options) below.
+Text output reports `ok` when there are no findings. Add `--format json` for structured output, `--config path/to/config.json` for rule settings, or `--url http://localhost:8080/v1` to use the Go API. `--fail-on-lint` makes lint findings return exit code 1 for CI; syntax errors fail by default. See [CLI options and exit codes](#cli-options) below.
 
 ## Cloudflare Worker quick-start
 

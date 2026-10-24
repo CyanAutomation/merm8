@@ -1,147 +1,43 @@
+---
+name: RestApiDesign
+description: Change merm8 HTTP contracts using the canonical OpenAPI and Go API behavior.
+---
+
 # REST API Design
 
-## Overview
+## Inputs / Outputs / Non-goals
 
-Building clean, maintainable HTTP APIs. This skill covers RESTful principles, proper HTTP semantics, request/response design, error handling, and versioning.
+- Inputs: `openapi.yaml`, `API_GUIDE.md`, `internal/api`, and the target runtime's route table.
+- Outputs: A consistent endpoint, request/response contract, error behavior, and contract coverage.
+- Non-goals: Do not assume the Cloudflare Worker and Go server expose identical endpoints.
 
-## Learning Objectives
+## Trigger conditions
 
-- [ ] Understand REST principles and conventions
-- [ ] Design clear, predictable endpoints
-- [ ] Use correct HTTP methods and status codes
-- [ ] Create consistent request/response formats
-- [ ] Handle errors with structured responses
+Use this skill when adding or changing HTTP routes, payloads, status codes, headers, versioning, or API documentation.
 
-## Key Concepts
+## Mandatory rules
 
-### REST Principles
+- The canonical Go analysis route is `POST /v1/analyze`. The `/v1/analyse` spelling is a deprecated compatibility alias. Keep new examples on the canonical route.
+- The preferred config shape is `{"schema-version":"v1","rules":{...}}`. Use the documented kebab-case field names, such as `diagram-type`, `syntax-error`, `node-count`, and `rule-id`.
+- Keep syntax and lint outcomes separate from HTTP request failures. Mermaid syntax errors are returned as an analysis response with HTTP 200 and `valid: false`; invalid requests/config return 400; oversized bodies return 413; parser saturation returns 503; parser timeout returns 504; internal parser failures return 500.
+- Use the existing structured JSON error envelope (`error.code`, `error.message`, and documented details). Avoid `http.Error` for public API errors.
+- Treat `openapi.yaml` and `API_GUIDE.md` as contract references. The Cloudflare Worker has a smaller, separately documented contract; inspect its `/v1/spec` and `docs/worker-api.md` before making parity claims.
+- Preserve compatibility, deprecation headers, request limits, and version negotiation unless the task explicitly changes them.
 
-1. **Resource-Oriented**: APIs expose nouns, not verbs
-2. **Standard Methods**: GET, POST, PUT, DELETE
-3. **Statelessness**: Each request contains all context
-4. **Uniform Interface**: Consistent patterns across endpoints
+## Validation checklist
 
-### Current Endpoint
+- [ ] Add handler tests for successful, invalid, and boundary requests affected by the change.
+- [ ] Run `go test ./internal/api` and `make test-contract` for Go API contract changes.
+- [ ] Update `API_GUIDE.md` and `openapi.yaml`; regenerate/check generated OpenAPI artifacts with `go run ./scripts/generate_openapi.go` and `./scripts/check_openapi_generated.sh` when relevant.
+- [ ] For Worker changes, run the Worker tests and update `docs/worker-api.md` separately.
 
-```http
-POST /analyze
-Content-Type: application/json
+## Expected output format
 
-{
-  "code": "graph TD\n  A-->B",
-  "config": { "rules": { "max-fanout": { "limit": 5 } } }
-}
-```
+- Summary: State the endpoint or contract change.
+- Evidence: Report handler, contract, and schema checks run.
+- Risks: Note compatibility, client migration, or runtime-parity effects.
 
-### Response Example
+## Failure/stop conditions
 
-```json
-{
-  "valid": true,
-  "syntax_error": null,
-  "issues": [],
-  "metrics": {
-    "node_count": 2,
-    "edge_count": 1,
-    "max_fanout": 1
-  }
-}
-```
-
-### Status Codes
-
-| Code | Meaning               | Use Case           |
-| ---- | --------------------- | ------------------ |
-| 200  | OK                    | Valid diagram      |
-| 400  | Bad Request           | Invalid JSON       |
-| 422  | Unprocessable Entity  | Validation failure |
-| 500  | Internal Server Error | Parser crash       |
-| 503  | Service Unavailable   | Timeout            |
-
-### Error Responses
-
-```json
-{
-  "error": {
-    "type": "validation_error",
-    "message": "Invalid Mermaid syntax",
-    "details": { "line": 2, "column": 5 }
-  }
-}
-```
-
-## Relevant Code in merm8
-
-| Component        | Location                     | Purpose               |
-| ---------------- | ---------------------------- | --------------------- |
-| Analyze handler  | internal/api/handler.go      | `/analyze` logic      |
-| Request/response | internal/model/diagram.go    | Struct definitions    |
-| HTTP server      | cmd/server/main.go           | Routes + server setup |
-| Handler tests    | internal/api/handler_test.go | Contract verification |
-
-## Development Workflow
-
-### Request/Response Contracts
-
-```go
-type AnalyzeRequest struct {
-    Code   string            `json:"code"`
-    Config *ValidationConfig `json:"config,omitempty"`
-}
-
-type AnalyzeResponse struct {
-    Valid       bool           `json:"valid"`
-    SyntaxError *SyntaxError   `json:"syntax_error"`
-    Issues      []Issue        `json:"issues"`
-    Metrics     DiagramMetrics `json:"metrics"`
-}
-```
-
-### Testing the Endpoint
-
-```go
-testReq := httptest.NewRequest("POST", "/analyze", strings.NewReader("{\"code\":\"graph TD\\n  A-->B\"}"))
-recorder := httptest.NewRecorder()
-handler.Analyze(recorder, testReq)
-
-if recorder.Code != http.StatusOK {
-    t.Fatalf("expected 200")
-}
-```
-
-## Common Tasks
-
-### Adding a Field
-
-1. Update `AnalyzeRequest`
-2. Parse field in handler
-3. Use in engine
-4. Update tests
-
-### Handling Errors
-
-Return `http.Error()` or structured JSON with details.
-
-### Versioning Strategies
-
-- **Path**: `/v1/analyze`
-- **Header**: `Accept: application/vnd.merm8.v1+json`
-- **Query**: `?version=1`
-
-## Resources & Best Practices
-
-- Use consistent naming (kebab-case paths, snake_case JSON)
-- Document fields (README or OpenAPI)
-- Validate input early (400 vs 422 distinction)
-- Maintain backward compatibility when extending schema
-
-## Prerequisites
-
-- HTTP fundamentals (methods/status codes)
-- JSON structure and Go tags
-- Familiarity with `net/http` package
-
-## Related Skills
-
-- Go Backend Development for implementation details
-- Static Analysis & Linting for issue reporting
+- Stop before introducing a breaking route or schema change without an explicit migration decision.
+- If Go and Worker contracts differ, document the target runtime instead of assuming parity.
