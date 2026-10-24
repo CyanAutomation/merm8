@@ -1,203 +1,43 @@
 ---
 name: GraphTheoryAndAlgorithms
-description: Analyze and implement graph-based validation rules for Mermaid diagrams in Go.
+description: Implement deterministic, diagram-family-aware rules over merm8's parsed Mermaid model.
 ---
 
-# Skill Instructions
+# Graph Theory and Algorithms
 
 ## Inputs / Outputs / Non-goals
 
-- Inputs: Go source files for rules, engine, and model; test files; Mermaid diagram ASTs.
-- Outputs: Efficient, correct rule implementations for graph validation; test coverage for new rules.
-- Non-goals: Do not change diagram parsing logic or API handler code unless required for rule integration.
+- Inputs: `internal/model/diagram.go`, rule implementations and groups under `internal/rules`, and engine behavior.
+- Outputs: A correct, deterministic rule implementation with focused tests.
+- Non-goals: Do not assume every Mermaid diagram is a flowchart graph or change parsing/API contracts incidentally.
 
 ## Trigger conditions
 
-Use this skill when prompts include or imply:
-
-- "Add/modify a lint rule for diagrams"
-- "Implement graph validation logic"
-- "Optimize or test rule performance"
+Use this skill when adding or changing graph traversal, reachability, cycle, depth, connectivity, or fanout logic in Go rules.
 
 ## Mandatory rules
 
-- Follow domain constraints and avoid silent public API/schema changes.
-- Keep changes scoped and deterministic.
-- Record assumptions and unresolved ambiguities.
+- Read the model first. `model.Diagram.Nodes` and `Edges` are slices; build indexes locally where useful rather than assuming a map-backed model.
+- Implement the current `rules.Rule` interface: `ID() string` and `Run(d *model.Diagram, cfg rules.Config) []model.Issue`.
+- Add `Families()` when a rule applies only to selected diagram families. Current groups are flowchart, sequence, class, ER, and state.
+- Preserve deterministic issue ordering. Sort IDs or findings when their source is a Go map and output order is observable.
+- Consider source-preserved fields such as `SourceNodeIDs`, `DisconnectedNodeIDs`, and `DuplicateNodeIDs`; Mermaid AST normalization can omit source distinctions.
+- Add rules to the appropriate group in `internal/rules/rule_groups.go`. The engine uses `NewWithRules` for an explicit rule set; there is no `engine.AddRule` method.
 
 ## Validation checklist
 
-- [ ] Required commands/checks were run (go test, go build).
-- [ ] Relevant tests were updated/executed.
-- [ ] Risk/impact was documented.
+- [ ] Run `go test ./internal/rules ./internal/engine`.
+- [ ] Cover empty input, duplicate or missing endpoints, cycles, and boundary values that apply to the rule.
+- [ ] Check deterministic results when maps or graph traversal are involved.
+- [ ] Run `PARSER_SCRIPT=./parser-node/parse.ts go test ./...` when parsed diagram behavior changes.
 
 ## Expected output format
 
-- Summary: What changed in rule logic and why.
-- Evidence: Test results, code diffs, performance notes.
-- Risks: Known risks and mitigations (e.g., missed edge cases, performance regressions).
+- Summary: Name the rule and its diagram family and behavior.
+- Evidence: Report targeted tests and any broader Go checks run.
+- Risks: Note complexity, behavior changes, or issue-order implications.
 
 ## Failure/stop conditions
 
-- Stop if requirements are ambiguous in a way that can cause breaking changes.
-- Stop if required validation cannot be performed and report the blocker.
-
----
-
-# Graph Theory & Algorithms
-
-## Overview
-
-Understanding the graph-based validation logic that powers merm8's linting rules. This skill involves analyzing diagram structure, detecting patterns, and implementing efficient algorithms for validation.
-
-## Learning Objectives
-
-- [ ] Understand directed graph representation (nodes and edges)
-- [ ] Implement graph traversal algorithms (DFS, BFS)
-- [ ] Detect graph properties (connectivity, fanout, cycles)
-- [ ] Design extensible validation rules as graph analysis patterns
-- [ ] Optimize rule performance for large diagrams
-
-## Key Concepts
-
-### Graph Representation
-
-Mermaid diagrams are directed graphs:
-
-```go
-type Diagram struct {
-    Nodes map[string]*Node
-    Edges []*Edge
-}
-
-type Edge struct {
-    From string
-    To   string
-    Type string
-}
-```
-
-### Graph Operations
-
-- **Fanout**: Count edges leaving a node (max-fanout rule uses this).
-- **Connectivity**: Determine reachable nodes to spot disconnected nodes.
-- **Duplication**: Use a set to detect repeated node IDs that break structure.
-
-### Rule Implementation Template
-
-```go
-type Rule interface {
-    ID() string
-    Validate(diagram *Diagram) []Issue
-}
-
-type MaxFanoutRule struct {
-    limit int
-}
-
-func (r *MaxFanoutRule) Validate(d *Diagram) []Issue {
-    // Count out-edges per node and report violations
-}
-```
-
-## Relevant Code in merm8
-
-| Component          | Location                                | Purpose                       |
-| ------------------ | --------------------------------------- | ----------------------------- |
-| Rule interface     | internal/rules/rule.go                  | Base `Rule` definition        |
-| Max fanout         | internal/rules/max_fanout.go            | Enforces outgoing edge limits |
-| Disconnected nodes | internal/rules/no_disconnected_nodes.go | Detects isolated nodes        |
-| Duplicate IDs      | internal/rules/no_duplicate_node_ids.go | Flag repeated node IDs        |
-| Engine             | internal/engine/engine.go               | Runs registered rules         |
-| Tests              | internal/rules/rules_test.go            | Examples of rule validation   |
-
-## Development Workflow
-
-### Building an Adjacency List
-
-```go
-outgoing := make(map[string][]string)
-for _, edge := range diagram.Edges {
-    outgoing[edge.From] = append(outgoing[edge.From], edge.To)
-}
-```
-
-### Detecting Disconnected Nodes
-
-```go
-reachable := bfs(diagram, startNode)
-for nodeID := range diagram.Nodes {
-    if !reachable[nodeID] {
-        // Report disconnected node
-    }
-}
-```
-
-### Fanout Calculation
-
-```go
-fanout := len(outgoing[nodeID])
-if fanout > limit {
-    // Report violation
-}
-```
-
-### Adding a New Rule
-
-1. Create `internal/rules/<rule>.go`
-2. Implement the `Rule` interface
-3. Return `[]Issue` with violations
-4. Register rule in engine
-5. Add tests to `rules_test.go`
-
-## Common Tasks
-
-### Configurable Rules
-
-```go
-type MaxFanoutRule struct {
-    limit int
-}
-
-func NewMaxFanoutRule(config map[string]interface{}) *MaxFanoutRule {
-    limit := config["limit"].(int)
-    return &MaxFanoutRule{limit: limit}
-}
-```
-
-### Optimizing Performance
-
-- Use maps for constant-time node lookups
-- Cache adjacency lists instead of recomputing per rule
-- Avoid redundant traversals
-
-### Testing Rules
-
-```go
-diagram := &Diagram{
-    Nodes: map[string]*Node{
-        "A": {ID: "A"},
-        "B": {ID: "B"},
-    },
-    Edges: []*Edge{{From: "A", To: "B"}},
-}
-issues := rule.Validate(diagram)
-```
-
-## Resources & Best Practices
-
-- **Adjacency Lists**: Use maps of slices for graph representation
-- **Early Exit**: Stop traversal once violation is found if order isn’t important
-- **Clear Messages**: Include node IDs in issue text
-- **Configuration**: Allow thresholds to be overridden via config
-
-## Prerequisites
-
-- Basic data structures (maps, slices)
-- Graph concepts (nodes, edges, directed graphs)
-- Algorithmic complexity awareness
-
-## Related Skills
-
-- Systems Programming & Process Management for parser workflow
-- Static Analysis & Linting for rule architecture
+- Stop before applying a flowchart-only assumption to another diagram family without checking that family's model and rules.
+- If parser output cannot represent a needed graph property, identify that dependency rather than silently approximating it.
