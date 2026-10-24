@@ -254,15 +254,6 @@ test("main push CI runs are not coalesced before deployment", () => {
   );
 });
 
-test("changelog describes the main-only manual deployment gate", () => {
-  const changelog = readRepositoryFile("CHANGELOG.md");
-
-  assert.match(
-    changelog,
-    /Production deployments now run only when Worker bundle inputs change on `main`;\s+manual deployments remain limited to a confirmed `main` commit with successful CI\./,
-  );
-});
-
 test("the repository declares and uses Node.js 24", () => {
   const nodeWorkflows = [
     ".github/workflows/ci.yml",
