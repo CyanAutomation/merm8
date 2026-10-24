@@ -173,48 +173,49 @@ test("kaseki-dry.yaml retries status polling after a transient controller failur
   const run = readStep("kaseki-dry.yaml", "Wait for Kaseki completion").run;
   assert.ok(run, "wait step must define a shell script");
 
-  const directory = mkdtempSync(path.join(os.tmpdir(), "kaseki-poll-retry-"));
-  const binDirectory = path.join(directory, "bin");
-  mkdirSync(binDirectory);
-  const curlCountFile = path.join(directory, "curl-count");
-  const sleepLog = path.join(directory, "sleep-log");
-  const githubOutput = path.join(directory, "github-output");
-
-  writeExecutable(
-    path.join(binDirectory, "curl"),
-    [
-      "#!/bin/sh",
-      "count=0",
-      'if [ -f "$KASEKI_CURL_COUNT_FILE" ]; then count="$(cat "$KASEKI_CURL_COUNT_FILE")"; fi',
-      "count=$((count + 1))",
-      'printf \'%s\' "$count" > "$KASEKI_CURL_COUNT_FILE"',
-      '[ "$count" -eq 1 ] && exit 22',
-      "exit 0",
-      "",
-    ].join("\n"),
-  );
-  writeExecutable(
-    path.join(binDirectory, "jq"),
-    [
-      "#!/bin/sh",
-      'count="$(cat "$KASEKI_CURL_COUNT_FILE")"',
-      'case "$2" in',
-      "  '.status | strings')",
-      '    [ "$count" -ge 2 ] || exit 1',
-      "    printf 'completed\\n'",
-      "    ;;",
-      "  '.exitCode // 0 | numbers') printf '0\\n' ;;",
-      "  *) exit 1 ;;",
-      "esac",
-      "",
-    ].join("\n"),
-  );
-  writeExecutable(
-    path.join(binDirectory, "sleep"),
-    ["#!/bin/sh", 'printf \'%s\\n\' "$*" >> "$KASEKI_SLEEP_LOG"', ""].join("\n"),
-  );
-
+  let directory: string | undefined;
   try {
+    directory = mkdtempSync(path.join(os.tmpdir(), "kaseki-poll-retry-"));
+    const binDirectory = path.join(directory, "bin");
+    mkdirSync(binDirectory);
+    const curlCountFile = path.join(directory, "curl-count");
+    const sleepLog = path.join(directory, "sleep-log");
+    const githubOutput = path.join(directory, "github-output");
+
+    writeExecutable(
+      path.join(binDirectory, "curl"),
+      [
+        "#!/bin/sh",
+        "count=0",
+        'if [ -f "$KASEKI_CURL_COUNT_FILE" ]; then count="$(cat "$KASEKI_CURL_COUNT_FILE")"; fi',
+        "count=$((count + 1))",
+        'printf \'%s\' "$count" > "$KASEKI_CURL_COUNT_FILE"',
+        '[ "$count" -eq 1 ] && exit 22',
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+    writeExecutable(
+      path.join(binDirectory, "jq"),
+      [
+        "#!/bin/sh",
+        'count="$(cat "$KASEKI_CURL_COUNT_FILE")"',
+        'case "$2" in',
+        "  '.status | strings')",
+        '    [ "$count" -ge 2 ] || exit 1',
+        "    printf 'completed\\n'",
+        "    ;;",
+        "  '.exitCode // 0 | numbers') printf '0\\n' ;;",
+        "  *) exit 1 ;;",
+        "esac",
+        "",
+      ].join("\n"),
+    );
+    writeExecutable(
+      path.join(binDirectory, "sleep"),
+      ["#!/bin/sh", 'printf \'%s\\n\' "$*" >> "$KASEKI_SLEEP_LOG"', ""].join("\n"),
+    );
+
     const result = spawnSync("bash", ["-c", run], {
       encoding: "utf8",
       timeout: 5_000,
@@ -235,7 +236,7 @@ test("kaseki-dry.yaml retries status polling after a transient controller failur
     assert.equal(readFileSync(sleepLog, "utf8"), "60\n");
     assert.match(readFileSync(githubOutput, "utf8"), /status=completed/);
   } finally {
-    rmSync(directory, { recursive: true, force: true });
+    if (directory) rmSync(directory, { recursive: true, force: true });
   }
 });
 
