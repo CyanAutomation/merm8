@@ -1,42 +1,41 @@
 ---
-name: <skill-name>
-description: <one-line purpose and when to use>
+name: <match-directory-name>
+description: <purpose and when this skill applies>
 ---
 
-# Skill Instructions
+# <Skill title>
 
 ## Inputs / Outputs / Non-goals
 
-- Inputs: <required artifacts, files, and context>
-- Outputs: <what this skill must produce>
-- Non-goals: <what this skill must not do>
+- Inputs: <files, artifacts, and context needed>
+- Outputs: <concrete result>
+- Non-goals: <nearby work outside the skill's scope>
 
 ## Trigger conditions
 
 Use this skill when prompts include or imply:
 
-- <trigger phrase 1>
-- <trigger phrase 2>
+- <specific task or intent>
 
 ## Mandatory rules
 
-- Follow domain constraints and avoid silent public API/schema changes.
-- Keep changes scoped and deterministic.
-- Record assumptions and unresolved ambiguities.
+- Read the current implementation and canonical project docs before relying on examples.
+- Preserve public contracts unless the task explicitly calls for a contract change.
+- Keep changes scoped and report assumptions that affect the result.
 
 ## Validation checklist
 
-- [ ] Required commands/checks were run.
-- [ ] Relevant tests were updated/executed.
-- [ ] Risk/impact was documented.
+- [ ] Run checks that cover the changed behavior; name the commands in this skill.
+- [ ] If a relevant check cannot run, report why and what remains unverified.
+- [ ] Update related docs or contract artifacts when the change requires it.
 
 ## Expected output format
 
 - Summary: <what changed and why>
-- Evidence: <commands/tests/checks>
-- Risks: <known risks and mitigations>
+- Evidence: <checks run, or checks blocked and why>
+- Risks: <material remaining risks, if any>
 
 ## Failure/stop conditions
 
-- Stop if requirements are ambiguous in a way that can cause breaking changes.
-- Stop if required validation cannot be performed and report the blocker.
+- Stop and ask for clarification only when an unresolved choice could materially change the requested outcome or break a public contract.
+- If a check is blocked, report the blocker and continue independent work where possible.
