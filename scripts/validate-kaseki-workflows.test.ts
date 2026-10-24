@@ -1,8 +1,18 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { spawnSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -14,148 +24,225 @@ const submitStepNames: Record<string, string> = {
   "kaseki-docs.yaml": "Submit documentation sweep",
 };
 
-function readWorkflow(workflowName: string): string {
+type WorkflowStep = {
+  name?: string;
+  uses?: string;
+  if?: string;
+  run?: string;
+  with?: Record<string, unknown>;
+  env?: Record<string, string>;
+};
+
+type WorkflowJob = {
+  if?: string;
+  environment?: string;
+  env?: Record<string, string>;
+  steps?: WorkflowStep[];
+};
+
+type Workflow = { jobs?: Record<string, WorkflowJob> };
+
+function readWorkflowSource(workflowName: string): string {
   return readFileSync(
     path.join(repositoryRoot, ".github", "workflows", workflowName),
     "utf8",
   );
 }
 
-function readJobs(workflowName: string): { name: string; source: string }[] {
-  const source = readWorkflow(workflowName);
-  const jobsMatch = source.match(/^jobs:\s*\n([\s\S]*)$/m);
-  assert.ok(jobsMatch, `${workflowName} must define jobs`);
-
-  const jobsSource = jobsMatch[1];
-  const jobHeaders = [...jobsSource.matchAll(/^  ([A-Za-z0-9_-]+):\s*$/gm)];
-  assert.ok(
-    jobHeaders.length > 0,
-    `${workflowName} must contain at least one job`,
-  );
-
-  return jobHeaders.map((header, index) => {
-    const start = header.index ?? 0;
-    const end = jobHeaders[index + 1]?.index ?? jobsSource.length;
-    return { name: header[1], source: jobsSource.slice(start, end) };
-  });
+function readWorkflow(workflowName: string): Workflow {
+  return parseYaml(readWorkflowSource(workflowName)) as Workflow;
 }
 
-function readStep(workflowSource: string, stepName: string): string {
-  const marker = `      - name: ${stepName}\n`;
-  const start = workflowSource.indexOf(marker);
-  assert.notEqual(start, -1, `workflow must define the "${stepName}" step`);
-
-  const stepStart = start + marker.length;
-  const nextStep = workflowSource.slice(stepStart).search(/^      - /m);
-  return workflowSource.slice(
-    stepStart,
-    nextStep === -1 ? undefined : stepStart + nextStep,
-  );
+function readJobs(workflowName: string): [string, WorkflowJob][] {
+  const jobs = Object.entries(readWorkflow(workflowName).jobs ?? {});
+  assert.ok(jobs.length > 0, `${workflowName} must contain at least one job`);
+  return jobs;
 }
 
+function readStep(workflowName: string, stepName: string): WorkflowStep {
+  for (const [, job] of readJobs(workflowName)) {
+    const step = job.steps?.find((candidate) => candidate.name === stepName);
+    if (step) return step;
+  }
+  assert.fail(`${workflowName} must define the "${stepName}" step`);
+}
+
+function writeExecutable(filePath: string, contents: string): void {
+  writeFileSync(filePath, contents);
+  chmodSync(filePath, 0o755);
+}
+
+// @spec: KASEKI-001: Kaseki jobs run only on main and bind configuration to the protected environment.
 for (const workflowName of workflows) {
   test(`${workflowName} only runs jobs dispatched from main`, () => {
-    const jobs = readJobs(workflowName);
-    for (const job of jobs) {
-      assert.match(
-        job.source,
-        /^    if:\s*github\.ref == 'refs\/heads\/main'\s*$/m,
-        `${workflowName} job ${job.name} must be guarded by the main ref`,
+    for (const [jobName, job] of readJobs(workflowName)) {
+      assert.equal(
+        job.if,
+        "github.ref == 'refs/heads/main'",
+        `${workflowName} job ${jobName} must be guarded by the main ref`,
       );
     }
   });
 }
 
+// @spec: KASEKI-001: Every Kaseki job reads its controller settings from the environment.
 for (const workflowName of workflows) {
   test(`${workflowName} reads Kaseki configuration from the environment-bound jobs`, () => {
-    const jobs = readJobs(workflowName);
-    for (const job of jobs) {
-      assert.match(
-        job.source,
-        /^    environment: kaseki-agent\s*$/m,
-        `${workflowName} job ${job.name} must select the Kaseki environment`,
+    for (const [jobName, job] of readJobs(workflowName)) {
+      assert.equal(
+        job.environment,
+        "kaseki-agent",
+        `${workflowName} job ${jobName} must select the Kaseki environment`,
       );
-      assert.match(
-        job.source,
-        /^      KASEKI_BASE_URL: \$\{\{ vars\.KASEKI_BASE_URL \}\}\s*$/m,
-        `${workflowName} job ${job.name} must read the environment-scoped base URL`,
+      assert.equal(
+        job.env?.KASEKI_BASE_URL,
+        "${{ vars.KASEKI_BASE_URL }}",
+        `${workflowName} job ${jobName} must read the environment-scoped base URL`,
       );
-      assert.match(
-        job.source,
-        /^      KASEKI_ALLOWED_HOSTS: \$\{\{ vars\.KASEKI_ALLOWED_HOSTS \}\}\s*$/m,
-        `${workflowName} job ${job.name} must read the environment-scoped host allowlist`,
+      assert.equal(
+        job.env?.KASEKI_ALLOWED_HOSTS,
+        "${{ vars.KASEKI_ALLOWED_HOSTS }}",
+        `${workflowName} job ${jobName} must read the environment-scoped host allowlist`,
       );
     }
   });
 }
 
+// @spec: KASEKI-002: Kaseki submissions use the triggering commit, bounded PRs, main, and idempotency keys.
 for (const workflowName of workflows) {
   test(`${workflowName} submits Kaseki runs against the main branch`, () => {
-    const source = readWorkflow(workflowName);
-    const submitStep = readStep(source, submitStepNames[workflowName]);
+    const job = readJobs(workflowName).map(([, value]) => value).find((value) =>
+      value.steps?.some((step) => step.name === submitStepNames[workflowName]),
+    );
+    assert.ok(job, `${workflowName} must define its submit job`);
+    assert.equal(job.env?.REF, "main");
 
-    assert.match(source, /^      REF: main\s*$/m);
-    assert.match(submitStep, /--arg ref "\$REF"/);
-    assert.match(submitStep, /^\s+ref: \$ref,\s*$/m);
+    const submitStep = readStep(workflowName, submitStepNames[workflowName]);
+    assert.match(submitStep.run ?? "", /--arg ref "\$REF"/);
+    assert.match(submitStep.run ?? "", /\bref:\s*\$ref\b/);
   });
 
   test(`${workflowName} checks out the triggering commit for validation`, () => {
-    const source = readWorkflow(workflowName);
-    assert.match(
-      source,
-      /^      - uses: actions\/checkout@[^\n]+\n        with:\n          ref: \$\{\{ github\.sha \}\}\n/m,
-    );
+    const checkout = readJobs(workflowName)
+      .flatMap(([, job]) => job.steps ?? [])
+      .find((step) => step.uses?.startsWith("actions/checkout@"));
+    assert.ok(checkout, `${workflowName} must check out the repository`);
+    assert.equal(checkout.with?.ref, "${{ github.sha }}");
+    assert.equal(checkout.with?.["persist-credentials"], false);
   });
 
   test(`${workflowName} submits bounded normal pull requests`, () => {
-    const source = readWorkflow(workflowName);
-    assert.match(source, /publishMode:\s*"pr"/);
-    assert.doesNotMatch(source, /publishMode:\s*"draft_pr"/);
-    assert.match(source, /maxDiffBytes:\s*102400/);
+    const run = readStep(workflowName, submitStepNames[workflowName]).run ?? "";
+    assert.match(run, /taskMode:\s*"patch",\s*publishMode:\s*"pr"/);
+    assert.match(run, /publishMode:\s*"pr",\s*timeoutSeconds:\s*10800,\s*maxDiffBytes:\s*102400/);
   });
 
   test(`${workflowName} makes submission retries idempotent`, () => {
-    const source = readWorkflow(workflowName);
-    assert.match(source, /idempotency_key=/);
-    assert.match(source, /idempotencyKey:\s*\$idempotencyKey/);
+    const run = readStep(workflowName, submitStepNames[workflowName]).run ?? "";
+    assert.match(run, /idempotency_key=/);
+    assert.match(run, /idempotencyKey:\s*\$idempotencyKey/);
   });
 
   test(`${workflowName} only reports successful Kaseki completion for exit code zero`, () => {
-    const source = readWorkflow(workflowName);
-    const waitStep = readStep(source, "Wait for Kaseki completion");
-    assert.match(waitStep, /exitCode/);
-    assert.match(waitStep, /failed\|cancelled/);
+    const run = readStep(workflowName, "Wait for Kaseki completion").run ?? "";
+    const completedBranch = run.indexOf("completed)");
+    const nonZeroGuard = run.indexOf('if [[ "$exit_code" != 0 ]]', completedBranch);
+    const successStatus = run.indexOf('echo "status=completed"', nonZeroGuard);
+
+    assert.ok(completedBranch >= 0, "wait step must handle completed runs");
+    assert.ok(nonZeroGuard > completedBranch, "completed runs must validate exitCode");
+    assert.ok(
+      successStatus > nonZeroGuard,
+      "the workflow must only publish completed after the zero exit-code guard",
+    );
+    assert.match(run, /failed\|cancelled/);
   });
 
   test(`${workflowName} always publishes the run ID and final status`, () => {
-    const source = readWorkflow(workflowName);
-    const summaryStep = readStep(source, "Publish run details");
-    assert.match(summaryStep, /^        if: always\(\)\s*$/m);
-    assert.match(summaryStep, /RUN_ID: \$\{\{ steps\.submit\.outputs\.run_id/);
-    assert.match(summaryStep, /FINAL_STATUS: \$\{\{ steps\.wait\.outputs\.status/);
+    const summaryStep = readStep(workflowName, "Publish run details");
+    assert.equal(summaryStep.if, "always()");
+    assert.equal(summaryStep.env?.RUN_ID, "${{ steps.submit.outputs.run_id || 'not submitted' }}");
+    assert.equal(summaryStep.env?.FINAL_STATUS, "${{ steps.wait.outputs.status || 'not completed' }}");
+    assert.match(summaryStep.run ?? "", /\| Kaseki run \| .*?\$RUN_ID/);
+    assert.match(summaryStep.run ?? "", /\| Final status \| .*?\$FINAL_STATUS/);
   });
 }
 
-test("kaseki-dry.yaml retries polling after temporary controller errors", () => {
-  const waitStep = readStep(
-    readWorkflow("kaseki-dry.yaml"),
-    "Wait for Kaseki completion",
-  );
-  assert.match(waitStep, /if ! curl/);
-  assert.match(waitStep, /polling will continue/);
+// @spec: KASEKI-003: Transient status failures retry; only a zero exit code is successful.
+test("kaseki-dry.yaml retries status polling after a transient controller failure", () => {
+  const run = readStep("kaseki-dry.yaml", "Wait for Kaseki completion").run;
+  assert.ok(run, "wait step must define a shell script");
+
+  let directory: string | undefined;
+  try {
+    directory = mkdtempSync(path.join(os.tmpdir(), "kaseki-poll-retry-"));
+    const binDirectory = path.join(directory, "bin");
+    mkdirSync(binDirectory);
+    const curlCountFile = path.join(directory, "curl-count");
+    const sleepLog = path.join(directory, "sleep-log");
+    const githubOutput = path.join(directory, "github-output");
+
+    writeExecutable(
+      path.join(binDirectory, "curl"),
+      [
+        "#!/bin/sh",
+        "count=0",
+        'if [ -f "$KASEKI_CURL_COUNT_FILE" ]; then count="$(cat "$KASEKI_CURL_COUNT_FILE")"; fi',
+        "count=$((count + 1))",
+        'printf \'%s\' "$count" > "$KASEKI_CURL_COUNT_FILE"',
+        '[ "$count" -eq 1 ] && exit 22',
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+    writeExecutable(
+      path.join(binDirectory, "jq"),
+      [
+        "#!/bin/sh",
+        'count="$(cat "$KASEKI_CURL_COUNT_FILE")"',
+        'case "$2" in',
+        "  '.status | strings')",
+        '    [ "$count" -ge 2 ] || exit 1',
+        "    printf 'completed\\n'",
+        "    ;;",
+        "  '.exitCode // 0 | numbers') printf '0\\n' ;;",
+        "  *) exit 1 ;;",
+        "esac",
+        "",
+      ].join("\n"),
+    );
+    writeExecutable(
+      path.join(binDirectory, "sleep"),
+      ["#!/bin/sh", 'printf \'%s\\n\' "$*" >> "$KASEKI_SLEEP_LOG"', ""].join("\n"),
+    );
+
+    const result = spawnSync("bash", ["-c", run], {
+      encoding: "utf8",
+      timeout: 5_000,
+      env: {
+        ...process.env,
+        PATH: `${binDirectory}:${process.env.PATH ?? ""}`,
+        RUN_ID: "run-123",
+        KASEKI_API_TOKEN: "test-token",
+        KASEKI_BASE_URL: "https://controller.example.test",
+        KASEKI_CURL_COUNT_FILE: curlCountFile,
+        KASEKI_SLEEP_LOG: sleepLog,
+        GITHUB_OUTPUT: githubOutput,
+      },
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(readFileSync(curlCountFile, "utf8"), "2");
+    assert.equal(readFileSync(sleepLog, "utf8"), "60\n");
+    assert.match(readFileSync(githubOutput, "utf8"), /status=completed/);
+  } finally {
+    if (directory) rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("kaseki-docs.yaml installs project dependencies before validation", () => {
-  const source = readWorkflow("kaseki-docs.yaml");
-  const validationCommand = source.match(
-    /^      VALIDATION_COMMAND: >-\n((?:        .*\n)+)/m,
-  );
-  assert.ok(validationCommand, "docs validation command must be explicit");
-
-  const command = validationCommand[1]
-    .replace(/^        /gm, "")
-    .replace(/\n/g, " ")
-    .trim();
+  const command = readJobs("kaseki-docs.yaml")[0][1].env?.VALIDATION_COMMAND;
+  assert.ok(command, "docs validation command must be explicit");
   const installRoot = command.indexOf("npm ci");
   const installParser = command.indexOf("npm --prefix parser-node ci");
   const runTests = command.indexOf("npm test");
@@ -172,7 +259,7 @@ test("kaseki-docs.yaml installs project dependencies before validation", () => {
 });
 
 test("kaseki-dry.yaml caps every controller response body", () => {
-  const source = readWorkflow("kaseki-dry.yaml");
+  const source = readWorkflowSource("kaseki-dry.yaml");
   const responseFileWrites = source.match(/--output "\$response_file"/g) ?? [];
   const responseSizeCaps = source.match(/--max-filesize 1048576/g) ?? [];
 
@@ -185,13 +272,10 @@ test("kaseki-dry.yaml caps every controller response body", () => {
 });
 
 test("kaseki-dry.yaml restricts DRY sweep submission to HTTPS", () => {
-  const submitStep = readStep(
-    readWorkflow("kaseki-dry.yaml"),
-    "Submit DRY sweep",
-  );
+  const submitStep = readStep("kaseki-dry.yaml", "Submit DRY sweep");
 
   assert.match(
-    submitStep,
+    submitStep.run ?? "",
     /curl --proto '=https' --silent --show-error \\\n/,
     "the credential-bearing submission request must only use HTTPS",
   );

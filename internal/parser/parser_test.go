@@ -927,13 +927,19 @@ func repoTempDir(t *testing.T) string {
 //   - Parser state is not modified concurrently
 //   - Subprocess communication is properly synchronized
 //   - No data races in AST extraction or error handling
+//
+// @spec: PARSER-005: Concurrent parse responses retain the diagram from each request.
 func TestParser_ConcurrentParsing(t *testing.T) {
 	script := getParserScript(t)
 	p := mustNewParser(t, script)
 
-	// Test concurrent parsing
-	numGoroutines := 3
-	done := make(chan error, numGoroutines)
+	const numGoroutines = 3
+	type parseResult struct {
+		inputID int
+		diagram *model.Diagram
+		err     error
+	}
+	done := make(chan parseResult, numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
 		go func(n int) {
@@ -942,27 +948,42 @@ func TestParser_ConcurrentParsing(t *testing.T) {
 
 			diagram, syntaxErr, err := p.Parse(code)
 			if err != nil {
-				done <- err
+				done <- parseResult{inputID: n, err: err}
 				return
 			}
 			if syntaxErr != nil {
-				done <- fmt.Errorf("syntax error: %s", syntaxErr.Message)
+				done <- parseResult{inputID: n, err: fmt.Errorf("syntax error: %s", syntaxErr.Message)}
 				return
 			}
-			if diagram == nil {
-				done <- fmt.Errorf("nil diagram")
-				return
-			}
-			done <- nil
+			done <- parseResult{inputID: n, diagram: diagram}
 		}(i)
 	}
 
 	for i := 0; i < numGoroutines; i++ {
-		if err := <-done; err != nil {
-			t.Errorf("goroutine %d: %v", i, err)
+		result := <-done
+		if result.err != nil {
+			t.Errorf("goroutine %d: %v", result.inputID, result.err)
+			continue
+		}
+		if result.diagram == nil {
+			t.Errorf("goroutine %d returned a nil diagram", result.inputID)
+			continue
+		}
+		wantFrom := fmt.Sprintf("A%d", result.inputID)
+		wantTo := fmt.Sprintf("B%d", result.inputID)
+		if len(result.diagram.Nodes) < 2 {
+			t.Errorf("goroutine %d returned %d nodes, want at least 2", result.inputID, len(result.diagram.Nodes))
+			continue
+		}
+		gotNodes := map[string]bool{}
+		for _, node := range result.diagram.Nodes {
+			gotNodes[node.ID] = true
+		}
+		if !gotNodes[wantFrom] || !gotNodes[wantTo] {
+			t.Errorf("goroutine %d received nodes %v, want %s and %s", result.inputID, gotNodes, wantFrom, wantTo)
 		}
 	}
-	t.Logf("all %d goroutines completed successfully", numGoroutines)
+	t.Logf("validated results for %d concurrent parse requests", numGoroutines)
 }
 
 func TestParser_PathRejectionMatrix(t *testing.T) {
@@ -1098,55 +1119,87 @@ func TestParser_ReadyAcceptsPathInsideWorkingDirectory(t *testing.T) {
 	}
 }
 
+// @spec: PARSER-006: Parser operations remain rooted correctly after the caller changes directories.
 func TestParser_RepoRootCachedAcrossWorkingDirectoryChange(t *testing.T) {
-	script := getParserScript(t)
-	resolveCalls := 0
-
-	p, err := parser.NewWithConfigAndRepoRootResolver(script, parser.ConfigFromEnv(), func() (string, error) {
-		resolveCalls++
-
-		wd, err := os.Getwd()
+	const (
+		childEnv  = "MERM8_TEST_ROOT_CACHE_CHILD"
+		targetEnv = "MERM8_TEST_ROOT_CACHE_TARGET"
+	)
+	if os.Getenv(childEnv) == "1" {
+		resolveCalls := 0
+		p, err := parser.NewWithConfigAndRepoRootResolver(os.Getenv("PARSER_SCRIPT"), parser.ConfigFromEnv(), func() (string, error) {
+			resolveCalls++
+			wd, err := os.Getwd()
+			if err != nil {
+				return "", err
+			}
+			for {
+				if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
+					return wd, nil
+				}
+				parent := filepath.Dir(wd)
+				if parent == wd {
+					break
+				}
+				wd = parent
+			}
+			return "", fmt.Errorf("failed to locate repository root")
+		})
 		if err != nil {
-			return "", err
+			t.Fatalf("construct parser before changing directories: %v", err)
 		}
-		for {
-			if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
-				return wd, nil
-			}
-			parent := filepath.Dir(wd)
-			if parent == wd {
-				break
-			}
-			wd = parent
+		if resolveCalls != 1 {
+			t.Fatalf("repo root resolver called %d times during construction, want 1", resolveCalls)
 		}
+		if err := os.Chdir(os.Getenv(targetEnv)); err != nil {
+			t.Fatalf("change to temporary working directory: %v", err)
+		}
+		if err := p.Ready(); err != nil {
+			t.Fatalf("Ready failed after changing directories: %v", err)
+		}
+		diagram, syntaxErr, err := p.Parse("graph TD\nA-->B")
+		if err != nil {
+			t.Fatalf("Parse failed after changing directories: %v", err)
+		}
+		if syntaxErr != nil {
+			t.Fatalf("unexpected syntax error after changing directories: %+v", syntaxErr)
+		}
+		if diagram == nil {
+			t.Fatal("expected diagram after changing directories")
+		}
+		if resolveCalls != 1 {
+			t.Fatalf("repo root resolver called %d times after parser operations, want 1", resolveCalls)
+		}
+		return
+	}
 
-		return "", fmt.Errorf("failed to locate repository root")
-	})
+	script, err := filepath.Abs(getParserScript(t))
 	if err != nil {
-		t.Fatalf("failed to construct parser with resolver: %v", err)
+		t.Fatalf("resolve parser script path: %v", err)
 	}
-
-	if resolveCalls != 1 {
-		t.Fatalf("expected repo root resolver called once during construction, got %d", resolveCalls)
-	}
-
-	if err := p.Ready(); err != nil {
-		t.Fatalf("expected Ready to use cached repo root, got %v", err)
-	}
-
-	diagram, syntaxErr, err := p.Parse("graph TD\nA-->B")
+	workingDir, err := os.Getwd()
 	if err != nil {
-		t.Fatalf("expected Parse to use cached repo root, got %v", err)
+		t.Fatalf("get current working directory: %v", err)
 	}
-	if syntaxErr != nil {
-		t.Fatalf("unexpected syntax error: %+v", syntaxErr)
+	targetDir := t.TempDir()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestParser_RepoRootCachedAcrossWorkingDirectoryChange$")
+	cmd.Dir = workingDir
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(entry, childEnv+"=") &&
+			!strings.HasPrefix(entry, targetEnv+"=") &&
+			!strings.HasPrefix(entry, "PARSER_MODE=") &&
+			!strings.HasPrefix(entry, "PARSER_SCRIPT=") {
+			cmd.Env = append(cmd.Env, entry)
+		}
 	}
-	if diagram == nil {
-		t.Fatal("expected diagram, got nil")
-	}
-
-	if resolveCalls != 1 {
-		t.Fatalf("expected repo root resolver to remain cached after parser operations, got %d calls", resolveCalls)
+	cmd.Env = append(cmd.Env,
+		childEnv+"=1",
+		targetEnv+"="+targetDir,
+		"PARSER_MODE=subprocess",
+		"PARSER_SCRIPT="+script,
+	)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("repo-root cache child process failed: %v\n%s", err, output)
 	}
 }
 
