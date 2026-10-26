@@ -155,8 +155,9 @@ test("CI captures coverage and runs lockfile-installed Fallow for pull requests"
 
   const manifest = JSON.parse(readRepositoryFile("package.json")) as PackageManifest;
   const lockfile = JSON.parse(readRepositoryFile("package-lock.json")) as NpmLock;
-  assert.equal(manifest.devDependencies?.fallow, "3.33.1");
-  assert.equal(lockfile.packages?.["node_modules/fallow"]?.version, "3.33.1");
+  const fallowVersion = manifest.devDependencies?.fallow;
+  assert.match(fallowVersion ?? "", /^\d+\.\d+\.\d+$/);
+  assert.equal(lockfile.packages?.["node_modules/fallow"]?.version, fallowVersion);
   assert.match(lockfile.packages?.["node_modules/fallow"]?.integrity ?? "", /^sha512-/);
 });
 
