@@ -27,8 +27,8 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 | Flat config (`config.{rule-id}`)                             | v1.0.0     | 2026-12-31   | **URGENT** - Migrate now  |
 | Unversioned nested (`config.rules` without `schema-version`) | v1.0.0     | 2026-12-31   | **URGENT** - Migrate now  |
 | Snake_case `schema_version`                                  | v1.0.0     | 2026-09-30   | Migrate by Sept 2026      |
-| Snake_case option keys                                       | v1.0.0     | 2026-09-30   | Migrate by Sept 2026      |
-
+| Snake_case `schema_version`                                  | v1.0.0     | 2026-09-30   | **Sunset passed** – migrate immediately |
+| Snake_case option keys                                       | v1.0.0     | 2026-09-30   | **Sunset passed** – migrate immediately |
 ---
 
 ## Deprecated API Endpoints

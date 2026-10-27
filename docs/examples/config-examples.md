@@ -90,8 +90,8 @@ Content-Type: application/json
 **Deprecation Timeline:**
 
 - v1.0.0 (current): Supported with warnings
-- v1.1.0 (Q1 2026): Still supported with warnings
-- v1.2.0 (Q2 2026): Planned removal; sunset date **2026-12-31**
+- v1.1.0 (Q1 2026): Released – still supported with warnings
+- v1.2.0 (Q2 2026): Released – **Removed**; sunset date was **2026-12-31**
 
 ---
 
