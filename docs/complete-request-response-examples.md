@@ -358,7 +358,7 @@ Content-Type: application/json
   "config": {
     "schema-version": "v1",
     "rules": {
-      "max-fanout": {}
+      "no-such-rule": {}
     }
   }
 }
@@ -372,15 +372,24 @@ Content-Type: application/json
   "lint-supported": false,
   "error": {
     "code": "unknown_rule",
-    "message": "unknown rule: max-fanout"
+    "message": "unknown rule: no-such-rule",
+    "details": {
+      "supported": [
+        "max-depth",
+        "max-fanout",
+        "no-cycles",
+        "no-disconnected-nodes",
+        "no-duplicate-node-ids"
+      ]
+    }
   },
   "help-suggestion": {
     "title": "Unknown rule ID",
-    "explanation": "The rule ID in your config does not exist. Use one of the supported rules: core/no-cycles, core/max-depth, core/max-fanout, core/no-disconnected-nodes, core/no-duplicate-node-ids",
-    "wrong-example": "{\"config\": {\"rules\": {\"max-fanout\": {}}}}",
-    "correct-example": "{\"config\": {\"schema-version\": \"v1\", \"rules\": {\"core/max-fanout\": {}}}}",
+    "explanation": "The rule ID in your config does not exist. Use one of the supported rules returned by GET /v1/rules (for example max-fanout, max-depth, or no-cycles).",
+    "wrong-example": "{\"config\": {\"schema-version\": \"v1\", \"rules\": {\"no-such-rule\": {}}}}",
+    "correct-example": "{\"config\": {\"schema-version\": \"v1\", \"rules\": {\"max-fanout\": {}}}}",
     "doc-link": "#supported-rules",
-    "fix-action": "Check /v1/rules endpoint to find the correct rule ID (includes 'core/' prefix)"
+    "fix-action": "Check GET /v1/rules for the list of registered rule IDs."
   },
   "request-id": "aa0e8400-e29b-41d4-a716-446655440005",
   "timestamp": 1678123456500
@@ -671,11 +680,11 @@ Content-Type: application/json
       "severity": "warning",
       "message": "Node 'A' has 6 outgoing edges, exceeds limit of 3",
       "node-id": "A",
-      "raw-comment": "%! suppress rule:core/max-fanout for node:A"
+      "raw-comment": "%! suppress rule:max-fanout for node:A"
     }
   ],
   "suggestions": [
-    "Add comment at top of diagram: %! suppress rule:core/max-fanout"
+    "Add comment at top of diagram: %! suppress rule:max-fanout"
   ]
 }
 ```

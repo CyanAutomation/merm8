@@ -91,7 +91,7 @@ Content-Type: application/json
 
 - v1.0.0 (current): Supported with warnings
 - v1.1.0 (Q1 2026): Still supported with warnings
-- v1.2.0 (Q2 2026): **Removed**
+- v1.2.0 (Q2 2026): Planned removal; sunset date **2026-12-31**
 
 ---
 
@@ -203,7 +203,7 @@ Configurable outgoing edge limit per node.
 }
 ```
 
-**Default:** `limit: 10`
+**Default:** `limit: 5`
 
 ### max-depth
 
@@ -216,7 +216,7 @@ Configurable graph nesting depth limit.
 }
 ```
 
-**Default:** `limit: 10`
+**Default:** `limit: 8`
 
 ### no-cycles
 
@@ -309,11 +309,11 @@ No configuration options — rule detects all circular dependencies.
     "message": "unknown rule: core/unknown-rule",
     "details": {
       "supported": [
-        "core/max-depth",
-        "core/max-fanout",
-        "core/no-cycles",
-        "core/no-disconnected-nodes",
-        "core/no-duplicate-node-ids"
+        "max-depth",
+        "max-fanout",
+        "no-cycles",
+        "no-disconnected-nodes",
+        "no-duplicate-node-ids"
       ]
     }
   }
