@@ -511,7 +511,7 @@ Content-Type: application/json
   "syntax-error": null,
   "issues": [
     {
-      "rule-id": "core/max-fanout",
+      "rule-id": "max-fanout",
       "rule-type": "structural",
       "severity": "error",
       "message": "Node 'A' has 6 outgoing edges, exceeds limit of 3",
@@ -534,7 +534,7 @@ Content-Type: application/json
     "direction": "TD",
     "issue-counts": {
       "by-severity": {"error": 1},
-      "by-rule": {"core/max-fanout": 1}
+      "by-rule": {"max-fanout": 1}
     }
   }
   }

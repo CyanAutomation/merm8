@@ -4,12 +4,12 @@ This document describes how to secure merm8 API endpoints using bearer token aut
 
 ## Overview
 
-merm8 supports **optional bearer token authentication** for the analyze endpoints. Authentication is only enforced when the server is configured with the `ANALYZE_AUTH_TOKEN` environment variable.
+merm8 supports **bearer token authentication** for the analyze endpoints. In production mode (`DEPLOYMENT_MODE=production`) a valid `ANALYZE_AUTH_TOKEN` is required at startup and bearer auth is enforced on the `/v1/analyze*` endpoints. In development mode the bearer-auth middleware is not attached, so analyze requests are not token-checked.
 
 **Key Points**:
 
-- Authentication is **optional** by default (no token configured)
-- When configured, authentication is **mandatory** for analyze endpoints in production mode
+- Authentication is **mandatory in production mode**, which requires a valid `ANALYZE_AUTH_TOKEN` at startup
+- In development mode, no bearer-auth middleware is attached; analyze requests are not token-checked
 - Other endpoints (health checks, metrics, documentation) are **never protected** by bearer auth
 - All authentication uses the `Authorization: Bearer <token>` HTTP header (RFC 6750)
 
@@ -37,7 +37,7 @@ Authentication is controlled by environment variables:
 
 - **Type**: String (typically "production" or "development")
 - **Default**: "development"
-- **Effect**: In production mode, auth is strictly enforced; in development mode, missing/invalid tokens are logged but requests may proceed
+- **Effect**: In production mode, a valid token is required at startup and bearer auth is enforced on the `/v1/analyze*` endpoints. In development mode, no bearer-auth middleware is attached, so requests are not token-checked
 - **Usage**:
 
   ```bash
@@ -144,29 +144,29 @@ import (
 
 func analyzeWithAuth(token string) error {
     client := &http.Client{}
-    
+
     payload := []byte(`{"code":"graph TD\n  A --> B"}`)
     req, err := http.NewRequest("POST", "http://localhost:8080/v1/analyze", bytes.NewReader(payload))
     if err != nil {
         return err
     }
-    
+
     // Add authentication header
     req.Header.Set("Authorization", "Bearer " + token)
     req.Header.Set("Content-Type", "application/json")
-    
+
     resp, err := client.Do(req)
     if err != nil {
         return err
     }
     defer resp.Body.Close()
-    
+
     if resp.StatusCode == http.StatusUnauthorized {
         // Handle 401 response
         body, _ := io.ReadAll(resp.Body)
         // Process error response
     }
-    
+
     return nil
 }
 ```
@@ -410,18 +410,18 @@ Bearer tokens should **always** be transmitted over **HTTPS** in production:
        server_name api.example.com;
        return 301 https://$server_name$request_uri;
    }
-   
+
    server {
        listen 443 ssl http2;
        server_name api.example.com;
-       
+
        ssl_certificate /etc/ssl/certs/cert.pem;
        ssl_certificate_key /etc/ssl/private/key.pem;
        ssl_protocols TLSv1.2 TLSv1.3;
        ssl_ciphers HIGH:!aNULL:!MD5;
        ssl_prefer_server_ciphers on;
        add_header Strict-Transport-Security "max-age=31536000" always;
-       
+
        location / {
            proxy_pass http://localhost:8080;
        }
@@ -468,7 +468,7 @@ Bearer tokens should **always** be transmitted over **HTTPS** in production:
    ```bash
    # Verify server token
    echo $ANALYZE_AUTH_TOKEN
-   
+
    # Verify client token
    echo $MERM8_TOKEN
    ```
