@@ -8,7 +8,7 @@ Complete guide to migrating your merm8 integration from deprecated config format
 
 merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to support long-term stability and future extensibility. Legacy formats are still accepted but are scheduled for removal.
 
-**Action Required:** Migrate to the canonical v1 format before Q2 2026 when legacy formats are removed.
+**Action Required:** Migrate to the canonical v1 format before the format-specific sunset dates (snake_case keys: 2026-09-30; flat and unversioned config: 2026-12-31). The `/v1/analyse` and `/v1/analyse/raw` route aliases are removed in v1.2.0 (Q2 2026).
 
 ---
 
@@ -22,13 +22,13 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 
 ### Sunset Dates by Format
 
-| Format                                                       | Deprecated | Sun set Date | Action                    |
+| Format                                                       | Deprecated | Sunset Date | Action                    |
 | ------------------------------------------------------------ | ---------- | ------------ | ------------------------- |
 | Flat config (`config.{rule-id}`)                             | v1.0.0     | 2026-12-31   | **URGENT** - Migrate now  |
 | Unversioned nested (`config.rules` without `schema-version`) | v1.0.0     | 2026-12-31   | **URGENT** - Migrate now  |
 | Snake_case `schema_version`                                  | v1.0.0     | 2026-09-30   | Migrate by Sept 2026      |
-| Snake_case option keys                                       | v1.0.0     | 2026-09-30   | Migrate by Sept 2026      |
-
+| Snake_case `schema_version`                                  | v1.0.0     | 2026-09-30   | **Sunset passed** – migrate immediately |
+| Snake_case option keys                                       | v1.0.0     | 2026-09-30   | **Sunset passed** – migrate immediately |
 ---
 
 ## Deprecated API Endpoints

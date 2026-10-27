@@ -10,6 +10,7 @@ specific deployment.
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | `GET` | `/v1/healthz` | Liveness probe |
+| `GET` | `/v1/health` | Liveness alias (same response as `/v1/healthz`) |
 | `GET` | `/v1/ready` | Readiness and parser status |
 | `GET` | `/v1/version` | Build and service metadata |
 | `GET` | `/v1/spec` | OpenAPI description of this Worker |
@@ -17,6 +18,7 @@ specific deployment.
 | `GET` | `/v1/diagram-types` | Recognized and lint-supported diagram types |
 | `GET` | `/v1/rules` | Available lint rules |
 | `POST` | `/v1/analyze` | Validate Mermaid source and lint supported diagrams |
+| `POST` | `/v1/analyse` | British-English alias for `/v1/analyze` |
 | `POST` | `/v1/analyze/sarif` | Analyze Mermaid source and return SARIF 2.1.0 |
 | `POST` | `/v1/semantic-review` | Rate-limited JEV semantic review alongside deterministic analysis |
 
