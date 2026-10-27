@@ -61,15 +61,25 @@ curl -X POST http://localhost:8080/v1/analyze \
 
 ---
 
-### Issue: "unknown rule: core/max-fanout"
+### Issue: "unknown rule: no-such-rule"
 
 **Error:**
 
 ```json
 {
+  "valid": false,
   "error": {
     "code": "unknown_rule",
-    "message": "unknown rule: core/max-fanout"
+    "message": "unknown rule: no-such-rule",
+    "details": {
+      "supported": [
+        "max-depth",
+        "max-fanout",
+        "no-cycles",
+        "no-disconnected-nodes",
+        "no-duplicate-node-ids"
+      ]
+    }
   }
 }
 ```
@@ -77,26 +87,24 @@ curl -X POST http://localhost:8080/v1/analyze \
 **Causes:**
 
 1. Rule ID typo
-2. Using legacy rule ID (without `core/` prefix)
-3. Rule not registered in current version
+2. Rule not registered in current version
+3. Using a rule from another diagram family without checking `/v1/rules`
 
 **Solutions:**
 
 ```bash
-# Get list of supported rules
+# Get the list of supported rules (bare IDs, no prefix)
 curl http://localhost:8080/v1/rules | jq '.rules[].id'
 
 # Output:
-# core/max-fanout
-# core/max-depth
-# core/no-cycles
-# ...
+# max-depth
+# max-fanout
+# no-cycles
+# no-disconnected-nodes
+# no-duplicate-node-ids
 
-# ❌ Wrong - legacy rule ID
+# ✅ Correct - use a rule ID returned by /v1/rules
 {"config": {"schema-version": "v1", "rules": {"max-fanout": {}}}}
-
-# ✅ Correct - use rule ID from /v1/rules
-{"config": {"schema-version": "v1", "rules": {"core/max-fanout": {}}}}
 ```
 
 ---
@@ -136,7 +144,7 @@ curl -X POST http://localhost:8080/v1/analyze \
   }'
 
 # Or start server with longer timeout
-PARSER_TIMEOUT_SECONDS=15 /start-merm8.sh
+PARSER_TIMEOUT_SECONDS=15 ./mermaid-lint  # after: go build -o mermaid-lint ./cmd/server
 
 # Tips for complex diagrams:
 # - Break into smaller sub-diagrams
@@ -185,7 +193,7 @@ for i in {1..5}; do
 done
 
 # Or increase server rate limit
-ANALYZE_RATE_LIMIT_PER_MINUTE=120 /start-merm8.sh
+ANALYZE_RATE_LIMIT_PER_MINUTE=120 ./mermaid-lint  # after: go build -o mermaid-lint ./cmd/server
 ```
 
 ---
@@ -203,7 +211,7 @@ ANALYZE_RATE_LIMIT_PER_MINUTE=120 /start-merm8.sh
 ```
 
 **Meaning:**
-Your config is in deprecated format but still accepted. It will be removed in v1.2.0 (Q2 2026).
+Your config is in deprecated format but still accepted. It emits warnings until the sunset date of 2026-12-31.
 
 **Migration:**
 
@@ -308,12 +316,13 @@ See [Rule Suppression Examples](examples/rule-suppressions.md).
 
 ### Q: What's the difference between `core/max-fanout` and `max-fanout`?
 
-**A:** `core/` is the rule namespace prefix added in v1.0.0.
+**A:** `GET /v1/rules` reports bare rule IDs (`max-fanout`). Both forms are
+accepted in config: the `core/` prefix is an accepted alias that the server
+normalizes to the bare ID (`max-fanout`) before validation. Emitting
+`core/max-fanout` in new config payloads avoids the legacy-bare-ID warning
+that a bare built-in ID produces; the bare ID remains valid config.
 
-- **`max-fanout`** (legacy) - Still accepted but deprecated
-- **`core/max-fanout`** (recommended) - Use this format
-
-Check `/v1/rules` for the canonical rule ID format.
+Check `/v1/rules` for the list of registered rule IDs.
 
 ---
 
@@ -341,9 +350,11 @@ Output is SARIF 2.1.0 format. See [SARIF Examples](examples/sarif-output.md).
 **A:** Yes, in production mode:
 
 ```bash
+# Build once, then run with a parser script
+go build -o mermaid-lint ./cmd/server
 DEPLOYMENT_MODE=production \
 ANALYZE_AUTH_TOKEN=my-secret-token \
-/start-merm8.sh
+PARSER_SCRIPT=./parser-node/parse.ts ./mermaid-lint
 
 # Then authenticate requests:
 curl -X POST http://localhost:8080/v1/analyze \
@@ -445,13 +456,17 @@ Build the CLI from source using the [root README](../README.md#cli-quick-start) 
 # Build it
 go build -o merm8-cli ./cmd/merm8-cli
 
-# Lint a file
-./merm8-cli --analyze mydiagram.mmd
+# Lint a file (positional file argument)
+./merm8-cli mydiagram.mmd
 
-# With custom config
-./merm8-cli --analyze \
-  --config '{"schema-version":"v1","rules":{"core/max-fanout":{"limit":3}}}' \
-  mydiagram.mmd
+# Lint from standard input
+printf 'graph TD\n  A --> B\n' | ./merm8-cli --stdin
+
+# With a config file (--config takes a file path)
+cat > merm8-config.json << 'CFGEOF'
+{"schema-version": "v1", "rules": {"max-fanout": {"limit": 3}}}
+CFGEOF
+./merm8-cli --config merm8-config.json mydiagram.mmd
 
 # Get help
 ./merm8-cli --help

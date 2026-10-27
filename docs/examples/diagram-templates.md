@@ -270,7 +270,7 @@ stateDiagram-v2
        B --> C[C]
    ```
 
-2. **Keep fanout reasonable:** Limit outgoing edges per node (default max is 10).
+2. **Keep fanout reasonable:** Limit outgoing edges per node (default max is 5).
 
    ✅ Recommended:
 
@@ -329,7 +329,7 @@ stateDiagram-v2
        Service C --> Service A
    ```
 
-5. **Reasonable depth:** Web-rendered diagrams with excessive nesting may be hard to read (default max is 10 levels).
+5. **Reasonable depth:** Web-rendered diagrams with excessive nesting may be hard to read (default max is 8 levels).
 
    ✅ Manageable:
 
@@ -389,7 +389,7 @@ graph TD
 
 ### Issue: High Fanout
 
-**Error:** `core/max-fanout` (default limit: 10)
+**Error:** `core/max-fanout` (default limit: 5)
 
 **Example:**
 
@@ -406,7 +406,7 @@ graph TD
 
 ### Issue: Excessive Depth
 
-**Error:** `core/max-depth` (default limit: 10)
+**Error:** `core/max-depth` (default limit: 8)
 
 **Example:**
 
