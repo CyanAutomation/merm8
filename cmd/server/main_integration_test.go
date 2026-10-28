@@ -438,6 +438,22 @@ func TestServerStack_AnalyzeRateLimited_IncludesCORSAndRateLimitHeaders(t *testi
 	}
 }
 
+func TestNewHTTPServerSetsConnectionTimeouts(t *testing.T) {
+	server := newHTTPServer(":8080", http.NotFoundHandler())
+	if server.ReadHeaderTimeout <= 0 {
+		t.Fatal("ReadHeaderTimeout must be set")
+	}
+	if server.ReadTimeout <= 60*time.Second {
+		t.Fatalf("ReadTimeout=%s must allow the 60-second maximum parser timeout", server.ReadTimeout)
+	}
+	if server.WriteTimeout <= server.ReadTimeout+60*time.Second {
+		t.Fatalf("WriteTimeout=%s must cover request reading plus the 60-second maximum parser timeout", server.WriteTimeout)
+	}
+	if server.IdleTimeout <= 0 {
+		t.Fatal("IdleTimeout must be set")
+	}
+}
+
 func TestValidateStartupAuthToken_ProductionRequiresAuthToken(t *testing.T) {
 	err := validateStartupAuthToken("production", "")
 	if err == nil {

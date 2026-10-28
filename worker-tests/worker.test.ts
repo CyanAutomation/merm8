@@ -3,11 +3,61 @@ import test from "node:test";
 import worker from "../worker/index.js";
 import { parseMermaid } from "../src/parser/parse.js";
 
-const env = { API_KEY: "test-key" };
+const env = {
+  API_KEY: "test-key",
+  ANALYZE_LIMITER: { limit: async () => ({ success: true }) },
+};
+
+function analysisRequest(path: string, init: RequestInit = {}): Request {
+  const headers = new Headers(init.headers);
+  if (!headers.has("cf-connecting-ip")) headers.set("cf-connecting-ip", "203.0.113.10");
+  return new Request(`https://example.test${path}`, { ...init, headers });
+}
+
+test("rate limits all deterministic analysis routes by source IP", async () => {
+  let calls = 0;
+  const rateLimitedEnv = {
+    ...env,
+    ANALYZE_LIMITER: {
+      limit: async ({ key }: { key: string }) => {
+        assert.equal(key, "analysis:203.0.113.42");
+        calls += 1;
+        return { success: calls === 1 };
+      },
+    },
+  };
+
+  for (const path of ["/v1/analyze", "/v1/analyze/sarif", "/v1/analyse"]) {
+    const response = await worker.fetch(new Request(`https://example.test${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.42" },
+      body: JSON.stringify({ code: "flowchart TD\nA --> B" }),
+    }), rateLimitedEnv);
+    if (calls === 1) {
+      assert.equal(response.status, 200);
+    } else {
+      assert.equal(response.status, 429);
+      assert.equal(response.headers.get("retry-after"), "60");
+      assert.equal((await response.json() as { error: { code: string } }).error.code, "rate_limited");
+    }
+  }
+  assert.equal(calls, 3);
+});
+
+test("fails closed when the deterministic analysis limiter is unavailable", async () => {
+  const response = await worker.fetch(analysisRequest("/v1/analyze", {
+    method: "POST",
+    headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.42" },
+    body: JSON.stringify({ code: "flowchart TD\nA --> B" }),
+  }), { API_KEY: "test-key" });
+
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as { error: { code: string } }).error.code, "rate_limit_unavailable");
+});
 
 test("serves the splash origin with CORS headers and handles preflight", async () => {
   const corsEnv = { ...env, REST_ALLOWED_ORIGINS: "https://merm8-splash.vercel.app" };
-  const preflight = await worker.fetch(new Request("https://example.test/v1/analyze", {
+  const preflight = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "OPTIONS",
     headers: {
       origin: "https://merm8-splash.vercel.app",
@@ -63,7 +113,7 @@ test("serves a usable OpenAPI document and secure response headers", async () =>
 });
 
 test("analyses a flowchart without a process or container", async () => {
-  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+  const response = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ code: "flowchart TD\nA --> B\nB --> A" })
   }), env);
@@ -74,7 +124,7 @@ test("analyses a flowchart without a process or container", async () => {
 });
 
 test("honours splash nested rule configuration", async () => {
-  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+  const response = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({
       code: "flowchart TD\nA --> B\nB --> A\nX",
@@ -101,7 +151,7 @@ test("runs a deterministic rule for each recognized non-flowchart diagram type",
   ];
 
   for (const item of cases) {
-    const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+    const response = await worker.fetch(analysisRequest("/v1/analyze", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ code: item.code }),
     }), env);
@@ -113,7 +163,7 @@ test("runs a deterministic rule for each recognized non-flowchart diagram type",
 });
 
 test("returns structure metrics for Worker analysis", async () => {
-  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+  const response = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ code: "flowchart TD\nA --> B\nB --> C\nX[isolated]" }),
   }), env);
@@ -133,7 +183,7 @@ test("returns structure metrics for Worker analysis", async () => {
 });
 
 test("exports SARIF 2.1.0 from Worker analysis", async () => {
-  const response = await worker.fetch(new Request("https://example.test/v1/analyze/sarif", {
+  const response = await worker.fetch(analysisRequest("/v1/analyze/sarif", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ code: "flowchart TD\nA --> B\nB --> A" }),
   }), env);
@@ -153,7 +203,7 @@ test("exports SARIF 2.1.0 from Worker analysis", async () => {
 });
 
 test("rejects malformed max-fanout configuration instead of silently using defaults", async () => {
-  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+  const response = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({
       code: "flowchart TD\nA --> B",
@@ -177,7 +227,7 @@ test("validates rule configuration envelopes and option values", async () => {
   ];
 
   for (const { config, expected } of cases) {
-    const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+    const response = await worker.fetch(analysisRequest("/v1/analyze", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ code: "flowchart TD\nA --> B", config }),
     }), env);
@@ -185,7 +235,7 @@ test("validates rule configuration envelopes and option values", async () => {
     assert.deepEqual(await response.json(), { error: expected });
   }
 
-  const legacyConfig = await worker.fetch(new Request("https://example.test/v1/analyze", {
+  const legacyConfig = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ code: "flowchart TD\nA --> B", config: { "schema-version": "v1", rules: { "no-cycles": { enabled: false } } } }),
   }), env);
@@ -193,7 +243,7 @@ test("validates rule configuration envelopes and option values", async () => {
 });
 
 test("does not confuse edge references with duplicate node declarations", async () => {
-  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+  const response = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({
       code: "graph TD\n    A[Start] --> B{Decision}\n    B -->|Yes| C[Do something]\n    B -->|No| D[Do something else]\n    C --> E[End]\n    D --> E",
@@ -206,7 +256,7 @@ test("does not confuse edge references with duplicate node declarations", async 
 });
 
 test("reports a repeated explicit node declaration", async () => {
-  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+  const response = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ code: "flowchart TD\n  A[First]\n  A[Second]" }),
   }), env);
@@ -215,7 +265,7 @@ test("reports a repeated explicit node declaration", async () => {
 });
 
 test("rejects malformed flowchart relations", async () => {
-  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+  const response = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ code: "flowchart TD\n  A --> --> B" }),
   }), env);
@@ -226,7 +276,7 @@ test("rejects malformed flowchart relations", async () => {
 });
 
 test("rejects a flowchart relation without a destination node", async () => {
-  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+  const response = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ code: "graph TD\n  A -->" }),
   }), env);
@@ -282,7 +332,7 @@ test("records only explicit node declarations for duplicate-ID analysis", () => 
 test("logs malformed JSON details while returning a generic client error", async (t) => {
   const errors: unknown[][] = [];
   t.mock.method(console, "error", (...args: unknown[]) => { errors.push(args); });
-  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+  const response = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" }, body: "{"
   }), env);
   assert.equal(response.status, 400);
@@ -293,7 +343,7 @@ test("logs malformed JSON details while returning a generic client error", async
 
 test("rejects oversized analysis requests before parsing them", async () => {
   const oversizedCode = `flowchart TD\n${" ".repeat(1_048_576)}`;
-  const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
+  const response = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ code: oversizedCode }),
   }), env);
