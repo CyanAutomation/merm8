@@ -204,8 +204,8 @@ test("maps upstream timeout responses to a safe gateway timeout", async (t) => {
 test("keeps deterministic analyze independent of JEV and includes semantic route in OpenAPI", async (t) => {
   t.mock.method(globalThis, "fetch", async () => { throw new Error("must not call OpenRouter from /v1/analyze"); });
   const response = await worker.fetch(new Request("https://example.test/v1/analyze", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: "flowchart TD\nA --> B\nB --> A" }),
-  }), {});
+    method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.10" }, body: JSON.stringify({ code: "flowchart TD\nA --> B\nB --> A" }),
+  }), { ANALYZE_LIMITER: { limit: async () => ({ success: true }) } });
   assert.equal(response.status, 200);
   assert.equal((await response.json() as { valid: boolean }).valid, true);
 

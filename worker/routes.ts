@@ -41,9 +41,9 @@ const routeHandlers = new Map<string, RouteHandler>([
   ["* /v1/version", (_request, env) => json({ "service-version": env.BUILD_VERSION ?? "development", "build-commit": env.BUILD_SHA ?? "" })],
   ["* /mcp", handleMcp],
   ["POST /v1/semantic-review", handleSemanticReview],
-  ["POST /v1/analyze/sarif", request => handleAnalysis(request, true)],
-  ["POST /v1/analyze", request => handleAnalysis(request, false)],
-  ["POST /v1/analyse", request => handleAnalysis(request, false)],
+  ["POST /v1/analyze/sarif", (request, env) => handleAnalysis(request, true, env)],
+  ["POST /v1/analyze", (request, env) => handleAnalysis(request, false, env)],
+  ["POST /v1/analyse", (request, env) => handleAnalysis(request, false, env)],
 ]);
 
 async function routeRequest(request: Request, env: Env, url: URL): Promise<Response> {
