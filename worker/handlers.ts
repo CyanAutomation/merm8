@@ -2,7 +2,7 @@ import { analyzeMermaid } from "../src/engine/analyze.js";
 import { mcpHandler } from "../src/mcp/server.js";
 import { reviewMermaidSemantics } from "../src/semantic/review.js";
 import { SemanticReviewError } from "../src/semantic/types.js";
-import { allowed, isRecord, json, MAX_ANALYZE_BODY_BYTES, SEMANTIC_REVIEW_RETRY_AFTER_SECONDS, type Env } from "./shared.js";
+import { allowed, isRecord, json, ANALYZE_RETRY_AFTER_SECONDS, MAX_ANALYZE_BODY_BYTES, SEMANTIC_REVIEW_RETRY_AFTER_SECONDS, type Env } from "./shared.js";
 import { ruleConfig, validateRuleConfig } from "./config.js";
 import { toSarif } from "./sarif.js";
 
@@ -82,7 +82,36 @@ export async function handleSemanticReview(request: Request, env: Env): Promise<
   }
 }
 
-async function analysisInput(request: Request): Promise<{ code?: string; config?: unknown; response?: Response }> {
+async function analysisInput(request: Request, env: Env): Promise<{ code?: string; config?: unknown; response?: Response }> {
+  const retryHeaders = { "retry-after": String(ANALYZE_RETRY_AFTER_SECONDS) };
+  const limiter = env.ANALYZE_LIMITER;
+  if (!limiter) {
+    console.error("Analysis rate limiter is not configured");
+    return { response: json({ error: { code: "rate_limit_unavailable", message: "Analysis is temporarily unavailable" } }, 503, retryHeaders) };
+  }
+
+  const clientIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (!clientIp) {
+    console.error("Analysis client IP is unavailable");
+    return { response: json({ error: { code: "rate_limit_unavailable", message: "Analysis is temporarily unavailable" } }, 503, retryHeaders) };
+  }
+
+  try {
+    const { success } = await limiter.limit({ key: `analysis:${clientIp}` });
+    if (!success) {
+      return {
+        response: json(
+          { error: { code: "rate_limited", message: "Analysis limit exceeded; try again later" } },
+          429,
+          retryHeaders,
+        ),
+      };
+    }
+  } catch {
+    console.error("Analysis rate limiter failed");
+    return { response: json({ error: { code: "rate_limit_unavailable", message: "Analysis is temporarily unavailable" } }, 503, retryHeaders) };
+  }
+
   const parsed = await parseAnalyzeBody(request);
   if (parsed.response) return { response: parsed.response };
   const body = parsed.body!;
@@ -97,8 +126,8 @@ async function analysisInput(request: Request): Promise<{ code?: string; config?
   return { code: body.code, config: body.config };
 }
 
-export async function handleAnalysis(request: Request, sarif: boolean): Promise<Response> {
-  const input = await analysisInput(request);
+export async function handleAnalysis(request: Request, sarif: boolean, env: Env): Promise<Response> {
+  const input = await analysisInput(request, env);
   if (input.response) return input.response;
   const code = input.code!;
   const analysis = analyzeMermaid(code, ruleConfig(input.config));

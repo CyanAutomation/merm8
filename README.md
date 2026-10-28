@@ -114,7 +114,7 @@ Semantic review is optional and does not require a client API key. It uses a ser
 npx wrangler secret put OPENROUTER_API_KEY
 ```
 
-The Worker does not support an `MCP_ALLOWED_HOSTNAMES` setting. Its deterministic analysis endpoint is publicly callable, so configure Cloudflare rate limiting/WAF controls for public deployments. The Worker rate-limit binding also limits semantic review. See [Worker operations and security notes](docs/worker-api.md#request-limits).
+The Worker does not support an `MCP_ALLOWED_HOSTNAMES` setting. Its deterministic analysis endpoint is publicly callable and rate-limited to 120 requests per source IP per minute by a Worker binding; semantic review has a separate five-request limit. For stronger edge enforcement, configure Cloudflare WAF rules as well. See [Worker operations and security notes](docs/worker-api.md#request-limits).
 
 After deployment, use the Worker URL printed by Wrangler:
 

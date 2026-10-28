@@ -30,10 +30,10 @@
     "fallow": "3.34.0",
     "tsx": "^4.20.0",
     "typescript": "^7.0.2",
-    "wrangler": "^4.151.1",
+    "wrangler": "^4.155.0",
     "yaml": "^2.9.1"
   },
   "overrides": {
-    "sharp": "0.35.4"
+    "sharp": "0.35.5"
   }
 }

@@ -9,6 +9,15 @@ enabled = true
 REST_ALLOWED_ORIGINS = "https://merm8-splash.vercel.app"
 
 [[ratelimits]]
+name = "ANALYZE_LIMITER"
+# Keep this integer unique within the Cloudflare account unless deliberately sharing counters.
+namespace_id = "2026102801"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+[[ratelimits]]
 name = "SEMANTIC_REVIEW_LIMITER"
 # Keep this integer unique within the Cloudflare account unless deliberately sharing counters.
 namespace_id = "2026101801"

@@ -36,7 +36,7 @@ export const workerOpenApi = {
       post: {
         summary: "Validate Mermaid source and lint supported diagrams",
         requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["code"], properties: { code: { type: "string" }, config: { type: "object" } } } } } },
-        responses: { "200": { description: "Analysis result with structural metrics. `lint-supported` reports whether deterministic rules ran for the diagram type.", content: { "application/json": { schema: { type: "object", required: ["valid", "diagram-type", "lint-supported", "issues", "metrics"], properties: { valid: { type: "boolean" }, "diagram-type": { type: "string", enum: ["flowchart", "sequence", "class", "er", "state", "unknown"] }, "lint-supported": { type: "boolean" }, issues: { type: "array", items: { type: "object" } }, metrics: metricsSchema } } } } }, "400": errorResponse, "413": { description: "Request body exceeds the 1 MiB limit" } },
+        responses: { "200": { description: "Analysis result with structural metrics. `lint-supported` reports whether deterministic rules ran for the diagram type.", content: { "application/json": { schema: { type: "object", required: ["valid", "diagram-type", "lint-supported", "issues", "metrics"], properties: { valid: { type: "boolean" }, "diagram-type": { type: "string", enum: ["flowchart", "sequence", "class", "er", "state", "unknown"] }, "lint-supported": { type: "boolean" }, issues: { type: "array", items: { type: "object" } }, metrics: metricsSchema } } } } }, "400": errorResponse, "413": { description: "Request body exceeds the 1 MiB limit" }, "429": { description: "Analysis rate limit exceeded" }, "503": { description: "Analysis rate limiter unavailable" } },
       },
     },
     "/v1/analyze/sarif": {
@@ -47,6 +47,8 @@ export const workerOpenApi = {
           "200": { description: "SARIF 2.1.0 report.", content: { "application/sarif+json": { schema: { type: "object", required: ["version", "runs"], properties: { version: { type: "string", enum: ["2.1.0"] }, runs: { type: "array", items: { type: "object" } } } } } } },
           "400": errorResponse,
           "413": { description: "Request body exceeds the 1 MiB limit" },
+          "429": { description: "Analysis rate limit exceeded" },
+          "503": { description: "Analysis rate limiter unavailable" },
         },
       },
     },

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"path/filepath"
 	"strconv"
 	"sync"
 	"testing"
@@ -8,6 +9,41 @@ import (
 
 	"github.com/CyanAutomation/merm8/internal/model"
 )
+
+func TestParserPerRequestMemoryOverrideDoesNotRetainWorkerPool(t *testing.T) {
+	t.Setenv("PARSER_MODE", "pool")
+	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
+
+	root, err := findRepoRoot()
+	if err != nil {
+		t.Fatalf("find repository root: %v", err)
+	}
+	p, err := NewWithConfig(filepath.Join(root, "parser-node", "parse.ts"), Config{
+		Timeout:           10 * time.Second,
+		NodeMaxOldSpaceMB: 256,
+	})
+	if err != nil {
+		t.Fatalf("construct parser: %v", err)
+	}
+	t.Cleanup(func() { _ = p.Close() })
+
+	for _, memoryMB := range []int{256, 257} {
+		_, syntaxErr, err := p.ParseWithConfig("flowchart TD\nA --> B", Config{
+			Timeout:           10 * time.Second,
+			NodeMaxOldSpaceMB: memoryMB,
+		})
+		if err != nil || syntaxErr != nil {
+			t.Fatalf("parse with %d MiB: syntaxErr=%v err=%v", memoryMB, syntaxErr, err)
+		}
+	}
+
+	if _, ok := p.workerPools[256]; !ok {
+		t.Fatal("expected the configured memory pool to remain available")
+	}
+	if _, ok := p.workerPools[257]; ok {
+		t.Fatal("per-request memory override created a retained worker pool")
+	}
+}
 
 func TestParserConfig_EffectiveConfig_Boundaries(t *testing.T) {
 	defaults := DefaultConfig()
