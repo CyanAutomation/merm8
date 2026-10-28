@@ -528,9 +528,13 @@ func (p *Parser) parseWithConfig(mermaidCode string, cfg Config) (*model.Diagram
 		syntaxErr *SyntaxError
 		err       error
 	)
-	if p.mode == parserModePool {
+	if p.mode == parserModePool && cfg.NodeMaxOldSpaceMB == p.nodeMaxOldSpaceMB {
 		diagram, syntaxErr, err = p.parseWithWorkerPool(mermaidCode, cfg)
 	} else {
+		// Request-specific memory limits must not create retained pools. Pool only
+		// the configured server profile; execute other profiles in one-shot
+		// subprocesses so attacker-controlled profile values cannot grow the
+		// process's worker population over time.
 		diagram, syntaxErr, err = p.parseWithSubprocess(mermaidCode, cfg)
 	}
 

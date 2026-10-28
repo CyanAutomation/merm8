@@ -136,7 +136,7 @@ func main() {
 	parserWorkerPoolSize := parser.WorkerPoolSizeFromEnv()
 	logger.Info("server starting", "addr", addr, "parser", scriptPath, "mode", deploymentMode, "parser_mode", parserExecMode, "parser_mode_default", "pool", "parser_worker_pool_size", parserWorkerPoolSize, "parser_worker_pool_size_guidance", "tune with CPU/memory headroom when parser_mode=pool", "parser_concurrency_limit", parserConcurrencyLimit, "parser_timeout_seconds", int(parserCfg.Timeout.Seconds()), "parser_max_old_space_mb", parserCfg.NodeMaxOldSpaceMB, "analyze_rate_limit_per_minute", rateLimitPerMinute, "analyze_auth_enabled", authToken != "", "cors_allowed_origins", allowedOrigins)
 
-	server := &http.Server{Addr: addr, Handler: rootHandler}
+	server := newHTTPServer(addr, rootHandler)
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -170,6 +170,17 @@ func main() {
 
 	if len(shutdownErrs) > 0 && gracefulCtx.Err() == context.DeadlineExceeded {
 		logger.Warn("shutdown completed with timeout", "shutdown_timeout_seconds", int(defaultShutdownTimeout.Seconds()))
+	}
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       75 * time.Second,
+		WriteTimeout:      150 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 	}
 }
 

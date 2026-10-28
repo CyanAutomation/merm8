@@ -135,13 +135,15 @@ they are never silently replaced with defaults.
 receive `413` with the `payload_too_large` error code. Clients should split
 larger diagrams before sending them for analysis.
 
-The Worker uses a Cloudflare Rate Limiting binding for semantic reviews. It
-allows five requests per source IP per 60 seconds in each Cloudflare location
-and returns `429 rate_limited` with `Retry-After: 60` when the limit is reached.
-Requests without `CF-Connecting-IP` share an `unknown` bucket. The binding is
-local to a Cloudflare location and eventually consistent; it is an abuse
-throttle, not a global accounting or spend limit. People sharing an IP can share
-the quota.
+The Worker uses Cloudflare Rate Limiting bindings for deterministic analysis
+and semantic reviews. `/v1/analyze`, `/v1/analyze/sarif`, and `/v1/analyse`
+allow 120 requests per source IP per 60 seconds in each Cloudflare location.
+Semantic review allows five requests per source IP per 60 seconds. Both return
+`429 rate_limited` with `Retry-After: 60` when the limit is reached. They fail
+closed with `503 rate_limit_unavailable` if the binding or Cloudflare source IP
+is unavailable. The bindings are local to a Cloudflare location and eventually
+consistent; they are abuse throttles, not global accounting or spend limits.
+People sharing an IP can share a quota.
 
 For public deployments, also configure Cloudflare WAF rate-limiting rules for
 `POST /v1/analyze` and `POST /v1/semantic-review` where the deployment hostname

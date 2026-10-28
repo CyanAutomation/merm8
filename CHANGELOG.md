@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Worker deterministic analysis endpoints now share a 120-request-per-source-IP-per-minute limit.
+- Per-request Go parser memory profiles now use one-shot subprocesses; only the configured profile uses retained workers.
+- Go HTTP connections now have bounded header, request, response, and idle timeouts.
+- Updated Wrangler, Undici, and sharp to patched dependency versions.
 - Benchmark case JSON now omits empty optional description, diagram path, category, diagram type, and tags fields.
 - Worker semantic review no longer requires a caller API key and is limited to five requests per source IP per minute in each Cloudflare location; MCP authentication remains unchanged.
 - The served OpenAPI document no longer advertises unversioned routes that the server does not register; active versioned spelling aliases remain documented as deprecated.
