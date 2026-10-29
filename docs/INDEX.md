@@ -26,8 +26,9 @@ Complete guide to merm8 documentation, organized by use case.
 ### For Operators (Running merm8)
 
 1. Setup: [Parser Tuning Guide](parser-tuning.md) - Performance optimization
-2. Monitor: [Metrics & Observability](metrics-observability.md) - Health checks and metrics
-3. Integrate: [API Integration Guide](api-integration-guide.md#monitoring--observability) - Monitoring setup
+2. Tune: [Caching Behavior](caching.md) - Cache scopes, bounds, and freshness policies
+3. Monitor: [Metrics & Observability](metrics-observability.md) - Health checks and metrics
+4. Integrate: [API Integration Guide](api-integration-guide.md#monitoring--observability) - Monitoring setup
 
 ### For CI/CD Integration
 

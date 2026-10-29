@@ -37,6 +37,8 @@ type Metrics struct {
 	lintSupportCheckCount *counterVec   // count of lint-support checks by result
 	corsRejectedTotal     *counterVec   // total rejected CORS origins
 	parserCacheEvents     *counterVec   // parser cache events by result and entry type
+	analysisCacheEvents   *counterVec
+	parserCacheBytes      *gaugeVec
 }
 
 func NewMetrics() *Metrics {
@@ -55,6 +57,8 @@ func NewMetrics() *Metrics {
 		lintSupportCheckCount: newCounterVec("lint_support_check_total", "Total lint-support checks by result (supported or unsupported).", "diagram_type", "result"),
 		corsRejectedTotal:     newCounterVec("cors_rejected_total", "Total CORS requests rejected because origin is not in the allowlist."),
 		parserCacheEvents:     newCounterVec("parser_cache_events_total", "Parser cache events grouped by result (hit/miss/eviction) and entry type.", "result", "entry_type"),
+		analysisCacheEvents:   newCounterVec("analysis_cache_events_total", "Analysis result cache events grouped by result (hit/miss/eviction).", "result"),
+		parserCacheBytes:      newGaugeVec("parser_cache_estimated_bytes", "Estimated bytes retained by parser result caches.", "entry_type"),
 	}
 
 	m.collectors = []prometheusMetric{
@@ -72,8 +76,37 @@ func NewMetrics() *Metrics {
 		m.lintSupportCheckCount,
 		m.corsRejectedTotal,
 		m.parserCacheEvents,
+		m.analysisCacheEvents,
+		m.parserCacheBytes,
 	}
 	return m
+}
+
+// ObserveParserCacheBytes reports the estimated retained bytes by cache entry type.
+func (m *Metrics) ObserveParserCacheBytes(entryType string, bytes int) {
+	if m == nil {
+		return
+	}
+	if entryType != "success" && entryType != "syntax" {
+		entryType = "any"
+	}
+	if bytes < 0 {
+		bytes = 0
+	}
+	m.parserCacheBytes.set(uint64(bytes), entryType)
+}
+
+// ObserveAnalysisCacheEvent records deterministic analysis result cache events.
+func (m *Metrics) ObserveAnalysisCacheEvent(result string) {
+	if m == nil {
+		return
+	}
+	switch result {
+	case "hit", "miss", "eviction":
+	default:
+		result = "miss"
+	}
+	m.analysisCacheEvents.inc(result)
 }
 
 func (m *Metrics) Handler() http.Handler {

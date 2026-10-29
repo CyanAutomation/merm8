@@ -192,7 +192,7 @@ var openapi = map[string]interface{}{
 			"get": map[string]interface{}{
 				"tags":        []string{"Probes"},
 				"summary":     "Prometheus metrics",
-				"description": "Returns service metrics in Prometheus text exposition format. Exported families are request_total{route,method,status}, request_duration_seconds{route,method} histogram, analyze_requests_total{outcome}, and parser_duration_seconds{outcome} histogram. Restrict exposure to trusted scrape networks/identities in production.",
+				"description": "Returns service metrics in Prometheus text exposition format, including request and parser histograms, parser cache events and estimated bytes, and deterministic analysis cache events. Restrict exposure to trusted scrape networks/identities in production.",
 				"operationId": "getMetrics",
 				"responses": map[string]interface{}{
 					"200": map[string]interface{}{

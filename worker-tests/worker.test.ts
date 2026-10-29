@@ -87,6 +87,12 @@ test("serves Worker-native health and discovery endpoints", async () => {
   const rules = await worker.fetch(new Request("https://example.test/v1/rules"), env);
   const payload = await rules.json() as { rules: Array<{ id: string; description: string; severity: string }> };
   assert.ok(payload.rules.some(rule => rule.id === "no-cycles" && rule.description && rule.severity === "error"));
+  assert.match(rules.headers.get("cache-control") ?? "", /max-age=300/);
+  assert.ok(rules.headers.get("etag"));
+  const cachedRules = await worker.fetch(new Request("https://example.test/v1/rules", { headers: { "if-none-match": rules.headers.get("etag")! } }), env);
+  assert.equal(cachedRules.status, 304);
+  const uncachedHealth = await worker.fetch(new Request("https://example.test/v1/healthz"), env);
+  assert.equal(uncachedHealth.headers.get("cache-control"), null);
 });
 
 test("serves a usable OpenAPI document and secure response headers", async () => {

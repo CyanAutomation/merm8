@@ -181,10 +181,62 @@ test("returns deterministic analysis and separate semantic review from a single 
   assert.equal(JSON.stringify(result).includes("openrouter-key"), false);
 });
 
+test("reuses a short-lived semantic decision for an identical state and model", async (t) => {
+  let providerCalls = 0;
+  let limiterCalls = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    providerCalls += 1;
+    return Response.json(jevPayload());
+  });
+  const env = {
+    ...configuredEnv,
+    MERM8_DECISION_MODEL: "cache-test-model",
+    SEMANTIC_REVIEW_LIMITER: { limit: async () => { limiterCalls += 1; return { success: true }; } },
+  };
+  const code = "flowchart TD\nCacheUnique[Cache key test] --> ReviewUnique[Review result]";
+  const first = await worker.fetch(request(JSON.stringify({ code })), env);
+  const second = await worker.fetch(request(JSON.stringify({ code })), env);
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(providerCalls, 1);
+  assert.equal(limiterCalls, 2);
+});
+
+test("does not reuse semantic decisions across requested models", async (t) => {
+  let providerCalls = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    providerCalls += 1;
+    return Response.json(jevPayload());
+  });
+  const code = "flowchart TD\nModelKeyUnique --> ModelResultUnique";
+  for (const model of ["semantic-model-one", "semantic-model-two"]) {
+    const response = await worker.fetch(request(JSON.stringify({ code })), { ...configuredEnv, MERM8_DECISION_MODEL: model });
+    assert.equal(response.status, 200);
+  }
+  assert.equal(providerCalls, 2);
+});
+
+test("coalesces concurrent semantic requests for the same state and model", async (t) => {
+  let providerCalls = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    providerCalls += 1;
+    await new Promise(resolve => setTimeout(resolve, 10));
+    return Response.json(jevPayload());
+  });
+  const body = JSON.stringify({ code: "flowchart TD\nConcurrentKeyUnique --> ConcurrentResultUnique" });
+  const [first, second] = await Promise.all([
+    worker.fetch(request(body), { ...configuredEnv, MERM8_DECISION_MODEL: "coalesced-model" }),
+    worker.fetch(request(body), { ...configuredEnv, MERM8_DECISION_MODEL: "coalesced-model" }),
+  ]);
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(providerCalls, 1);
+});
+
 test("maps upstream network failures to a safe unavailable response", async (t) => {
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => { calls += 1; throw new TypeError("upstream private detail"); });
-  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA --> B" })), configuredEnv);
+  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nNetworkFailureUnique --> NetworkResultUnique" })), configuredEnv);
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { error: { code: "jev_upstream_error", message: "Semantic review provider is unavailable" } });
   assert.equal(calls, 2);
@@ -196,7 +248,7 @@ test("maps upstream timeout responses to a safe gateway timeout", async (t) => {
     error.name = "TimeoutError";
     throw error;
   });
-  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nA --> B" })), configuredEnv);
+  const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nTimeoutFailureUnique --> TimeoutResultUnique" })), configuredEnv);
   assert.equal(response.status, 504);
   assert.deepEqual(await response.json(), { error: { code: "jev_timeout", message: "Semantic review provider timed out" } });
 });

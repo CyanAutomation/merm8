@@ -80,6 +80,30 @@ func TestMetricsEndpoint_ExposesCoreMetricFamilies(t *testing.T) {
 	}
 }
 
+func TestAnalyzeCacheEventsAreExported(t *testing.T) {
+	mux := http.NewServeMux()
+	tm := telemetry.NewMetrics()
+	diagram := &model.Diagram{Type: model.DiagramTypeFlowchart, Nodes: []model.Node{{ID: "A"}, {ID: "B"}}, Edges: []model.Edge{{From: "A", To: "B"}}}
+	h := api.NewHandler(&metricsParser{diagram: diagram}, engine.New())
+	h.SetTelemetryMetrics(tm)
+	h.SetMetricsHandler(tm.Handler())
+	h.RegisterRoutes(mux)
+	for i := 0; i < 2; i++ {
+		request := httptest.NewRequest(http.MethodPost, "/v1/analyze", strings.NewReader(`{"code":"flowchart TD\nA-->B"}`))
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("analysis %d status=%d body=%s", i, response.Code, response.Body.String())
+		}
+	}
+	metrics := httptest.NewRecorder()
+	mux.ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/v1/metrics", nil))
+	body := metrics.Body.String()
+	if !strings.Contains(body, `analysis_cache_events_total{result="miss"} 1`) || !strings.Contains(body, `analysis_cache_events_total{result="hit"} 1`) {
+		t.Fatalf("expected analysis cache hit and miss metrics, got %q", body)
+	}
+}
+
 func TestAnalyzeErrorMetrics_OutcomesRecorded(t *testing.T) {
 	mux := http.NewServeMux()
 	tm := telemetry.NewMetrics()

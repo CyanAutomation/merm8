@@ -200,15 +200,17 @@ can tune their different workloads independently.
 | `PARSER_CACHE_SUCCESS_TTL_SECONDS` | 30 seconds | 0-86,400 |
 | `PARSER_CACHE_SYNTAX_CAPACITY` | 256 entries | 0-10,000 |
 | `PARSER_CACHE_SYNTAX_TTL_SECONDS` | 15 seconds | 0-86,400 |
+| `PARSER_CACHE_SUCCESS_MAX_BYTES` | 16 MiB estimated | 0-256 MiB |
+| `PARSER_CACHE_SYNTAX_MAX_BYTES` | 2 MiB estimated | 0-256 MiB |
 
-A capacity **or** TTL of `0` disables that cache. Invalid, negative, and
+A capacity, TTL, or byte budget of `0` disables that cache. Invalid, negative, and
 out-of-range environment values safely fall back to the documented default.
 
-Capacities limit entry counts rather than bytes. Successful entries retain a
-copy of the parsed diagram, so their memory cost grows with diagram size;
-syntax entries are usually smaller. Raising capacity or TTL can improve hit
-rates but increases the amount of data retained in the Go heap. Monitor heap
-usage and cache hit/eviction metrics after changing either value.
+The byte budgets use a conservative estimate based on serialized entry size and
+limit retained parser results alongside entry counts. Raising capacity, TTL, or
+byte budgets can improve hit rates but increases the amount of data retained in
+the Go heap. Monitor `parser_cache_events_total`,
+`parser_cache_estimated_bytes`, and process heap usage when tuning these values.
 
 ```bash
 # Disable caching of syntax failures while retaining successful parses.

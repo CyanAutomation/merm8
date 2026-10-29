@@ -3,6 +3,15 @@ const errorResponse = {
   content: { "application/json": { schema: { type: "object", properties: { error: { type: "object" } } } } },
 };
 
+const cacheStatusHeader = {
+  description: "Worker analysis cache disposition. Repeated requests may return a cached result.",
+  schema: { type: "string", example: "merm8; hit" },
+};
+const metadataHeaders = {
+  "Cache-Control": { description: "Metadata freshness policy.", schema: { type: "string" } },
+  ETag: { description: "Build-specific validator for conditional requests.", schema: { type: "string" } },
+};
+
 const metricsSchema = {
   type: "object",
   required: ["node-count", "edge-count", "disconnected-node-count", "duplicate-node-count", "max-fanin", "max-fanout", "diagram-type", "issue-counts"],
@@ -27,16 +36,17 @@ export const workerOpenApi = {
     description: "Worker-native deterministic Mermaid structural analysis and optional JEV-powered semantic review.",
   },
   paths: {
+    "/v1/spec": { get: { summary: "OpenAPI specification", responses: { "200": { description: "Worker API specification", headers: metadataHeaders } } } },
     "/v1/healthz": { get: { summary: "Liveness probe", responses: { "200": { description: "Service is live" } } } },
     "/v1/ready": { get: { summary: "Readiness probe", responses: { "200": { description: "Service is ready" } } } },
-    "/v1/version": { get: { summary: "Build metadata", responses: { "200": { description: "Build metadata" } } } },
-    "/v1/diagram-types": { get: { summary: "Worker-recognized diagram types", responses: { "200": { description: "Capabilities" } } } },
-    "/v1/rules": { get: { summary: "Available lint rules", responses: { "200": { description: "Rules" } } } },
+    "/v1/version": { get: { summary: "Build metadata", responses: { "200": { description: "Build metadata", headers: metadataHeaders } } } },
+    "/v1/diagram-types": { get: { summary: "Worker-recognized diagram types", responses: { "200": { description: "Capabilities", headers: metadataHeaders } } } },
+    "/v1/rules": { get: { summary: "Available lint rules", responses: { "200": { description: "Rules", headers: metadataHeaders } } } },
     "/v1/analyze": {
       post: {
         summary: "Validate Mermaid source and lint supported diagrams",
         requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["code"], properties: { code: { type: "string" }, config: { type: "object" } } } } } },
-        responses: { "200": { description: "Analysis result with structural metrics. `lint-supported` reports whether deterministic rules ran for the diagram type.", content: { "application/json": { schema: { type: "object", required: ["valid", "diagram-type", "lint-supported", "issues", "metrics"], properties: { valid: { type: "boolean" }, "diagram-type": { type: "string", enum: ["flowchart", "sequence", "class", "er", "state", "unknown"] }, "lint-supported": { type: "boolean" }, issues: { type: "array", items: { type: "object" } }, metrics: metricsSchema } } } } }, "400": errorResponse, "413": { description: "Request body exceeds the 1 MiB limit" }, "429": { description: "Analysis rate limit exceeded" }, "503": { description: "Analysis rate limiter unavailable" } },
+        responses: { "200": { description: "Analysis result with structural metrics. `lint-supported` reports whether deterministic rules ran for the diagram type.", headers: { "Cache-Status": cacheStatusHeader }, content: { "application/json": { schema: { type: "object", required: ["valid", "diagram-type", "lint-supported", "issues", "metrics"], properties: { valid: { type: "boolean" }, "diagram-type": { type: "string", enum: ["flowchart", "sequence", "class", "er", "state", "unknown"] }, "lint-supported": { type: "boolean" }, issues: { type: "array", items: { type: "object" } }, metrics: metricsSchema } } } } }, "400": errorResponse, "413": { description: "Request body exceeds the 1 MiB limit" }, "429": { description: "Analysis rate limit exceeded" }, "503": { description: "Analysis rate limiter unavailable" } },
       },
     },
     "/v1/analyze/sarif": {
@@ -44,8 +54,8 @@ export const workerOpenApi = {
         summary: "Analyze Mermaid source and return SARIF 2.1.0",
         requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["code"], properties: { code: { type: "string" }, config: { type: "object" } } } } } },
         responses: {
-          "200": { description: "SARIF 2.1.0 report.", content: { "application/sarif+json": { schema: { type: "object", required: ["version", "runs"], properties: { version: { type: "string", enum: ["2.1.0"] }, runs: { type: "array", items: { type: "object" } } } } } } },
-          "400": errorResponse,
+          "200": { description: "SARIF 2.1.0 report.", headers: { "Cache-Status": cacheStatusHeader }, content: { "application/sarif+json": { schema: { type: "object", required: ["version", "runs"], properties: { version: { type: "string", enum: ["2.1.0"] }, runs: { type: "array", items: { type: "object" } } } } } } },
+          "400": { ...errorResponse, headers: { "Cache-Status": cacheStatusHeader } },
           "413": { description: "Request body exceeds the 1 MiB limit" },
           "429": { description: "Analysis rate limit exceeded" },
           "503": { description: "Analysis rate limiter unavailable" },

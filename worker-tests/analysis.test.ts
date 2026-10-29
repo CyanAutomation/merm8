@@ -33,6 +33,31 @@ test("analysis preserves flowchart findings, ordering, severity overrides, and m
   });
 });
 
+test("Worker analysis cache reports cold and warm responses with matching results", async () => {
+  const worker = (await import("../worker/index.js")).default;
+  const env = { ANALYZE_LIMITER: { limit: async () => ({ success: true }) } };
+  const body = JSON.stringify({ code: "flowchart TD\nCacheAUnique --> CacheBUnique" });
+  const request = () => new Request("https://example.test/v1/analyze", {
+    method: "POST",
+    headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.80" },
+    body,
+  });
+  const first = await worker.fetch(request(), env);
+  const firstBody = await first.json();
+  const second = await worker.fetch(request(), env);
+  const secondBody = await second.json();
+  assert.equal(first.headers.get("cache-status"), "merm8; fwd=uri-miss");
+  assert.equal(second.headers.get("cache-status"), "merm8; hit");
+  assert.deepEqual(secondBody, firstBody);
+
+  const configured = await worker.fetch(new Request("https://example.test/v1/analyze", {
+    method: "POST",
+    headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.80" },
+    body: JSON.stringify({ code: "flowchart TD\nCacheAUnique --> CacheBUnique\nCacheAUnique --> CacheCUnique", config: { "max-fanout": { limit: 1 } } }),
+  }), env);
+  assert.equal(configured.headers.get("cache-status"), "merm8; fwd=uri-miss");
+});
+
 test("analysis keeps diagram-specific rules for sequence, class, ER, and state diagrams", () => {
   const cases = [
     {
