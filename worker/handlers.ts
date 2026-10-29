@@ -6,9 +6,8 @@ import { allowed, isRecord, json, ANALYZE_RETRY_AFTER_SECONDS, MAX_ANALYZE_BODY_
 import { ruleConfig, validateRuleConfig } from "./config.js";
 import { toSarif } from "./sarif.js";
 import { canonicalJson, TtlLruCache } from "../src/cache/ttl-lru.js";
-import type { Analysis } from "../src/domain/types.js";
 
-const analysisCache = new TtlLruCache<Analysis>(128, 60_000, 4 * 1024 * 1024);
+const analysisCache = new TtlLruCache<ReturnType<typeof analyzeMermaid>>(128, 60_000, 4 * 1024 * 1024);
 
 async function parseAnalyzeBody(request: Request): Promise<{ body?: { code?: unknown; config?: unknown }; response?: Response }> {
   const contentLength = Number(request.headers.get("content-length"));

@@ -6,6 +6,7 @@
   "boundaries": {
     "zones": [
       { "name": "domain", "patterns": ["src/domain/**"] },
+      { "name": "cache", "patterns": ["src/cache/**"] },
       { "name": "parser", "patterns": ["src/parser/**"] },
       { "name": "engine", "patterns": ["src/engine/**"] },
       { "name": "semantic", "patterns": ["src/semantic/**"] },
@@ -18,9 +19,10 @@
       { "from": "domain", "allow": ["domain"] },
       { "from": "parser", "allow": ["domain", "parser"] },
       { "from": "engine", "allow": ["domain", "parser", "engine"] },
-      { "from": "semantic", "allow": ["domain", "parser", "engine", "semantic"] },
+      { "from": "semantic", "allow": ["domain", "parser", "engine", "semantic", "cache"] },
       { "from": "mcp", "allow": ["engine", "mcp"] },
-      { "from": "worker", "allow": ["engine", "semantic", "mcp", "worker"] },
+      { "from": "worker", "allow": ["engine", "semantic", "mcp", "worker", "cache"] },
+      { "from": "cache", "allow": ["cache"] },
       { "from": "parser-node", "allow": ["parser-node"] },
       {
         "from": "tooling",
