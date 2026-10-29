@@ -153,6 +153,8 @@ Exported metric families and labels:
 | `lint_support_check_total`     | Counter   | `diagram_type`, `result`    | Total lint-support checks by diagram type and result (`supported` or `unsupported`).                                                                                                                           |
 | `cors_rejected_total`          | Counter   | —                           | Total CORS requests rejected because origin is not in the allowlist.                                                                                                                                           |
 | `parser_cache_events_total`    | Counter   | `result`, `entry_type`      | Parser cache events grouped by result (`hit`, `miss`, `eviction`) and entry type (`success`, `syntax`, `any`).                                                                                                 |
+| `parser_cache_estimated_bytes` | Gauge     | `entry_type`                | Estimated retained bytes in successful-parse and syntax-error caches.                                                                                                                                        |
+| `analysis_cache_events_total`  | Counter   | `result`                    | Go deterministic analysis cache events (`hit`, `miss`, `eviction`).                                                                                                                                        |
 
 Notes:
 
@@ -163,6 +165,7 @@ Notes:
 - `lint_support_check_total` is emitted for every diagram type check against the lint capability list.
 - `cors_rejected_total` is emitted whenever a CORS preflight or request is rejected due to disallowed origin.
 - `parser_cache_events_total` is emitted on parser cache hits, misses, and evictions.
+- `analysis_cache_events_total` records Go deterministic analysis cache hits, misses, and evictions. Per-rule timing is recorded only when rules execute.
 
 Example:
 

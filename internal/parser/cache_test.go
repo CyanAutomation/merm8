@@ -103,6 +103,19 @@ func TestLRUTTLCacheExpirationOrderDiffersFromLRUOrder(t *testing.T) {
 	}
 }
 
+func TestLRUTTLCacheExpiresAtExactTTLBoundary(t *testing.T) {
+	now := time.Unix(5_500, 0)
+	cache := newLRUTTLCache[string](1, time.Second)
+	cache.now = func() time.Time { return now }
+
+	cache.Set("expires-now", "value")
+	now = now.Add(time.Second)
+
+	if value, ok, removed := cache.Get("expires-now"); ok || value != "" || removed != 1 {
+		t.Fatalf("expected entry to expire at exact TTL boundary, got value=%q ok=%v removed=%d", value, ok, removed)
+	}
+}
+
 func TestLRUTTLCacheUpdateDiscardsStaleExpirationRecord(t *testing.T) {
 	now := time.Unix(6_000, 0)
 	cache := newLRUTTLCache[string](2, time.Second)
@@ -140,6 +153,28 @@ func TestLRUTTLCacheExpirationAndCapacityPressure(t *testing.T) {
 		if _, ok, removed := cache.Get(key); !ok || removed != 0 {
 			t.Fatalf("expected %q to survive capacity pressure, got ok=%v removed=%d", key, ok, removed)
 		}
+	}
+}
+
+func TestLRUTTLCacheEnforcesEstimatedByteBudget(t *testing.T) {
+	cache := newLRUTTLCache[string](10, time.Hour, 5)
+	if removed := cache.SetWeighted("a", "123", 3); removed != 0 {
+		t.Fatalf("first set removed %d entries", removed)
+	}
+	if removed := cache.SetWeighted("b", "456", 3); removed != 1 {
+		t.Fatalf("byte pressure removed %d entries, want 1", removed)
+	}
+	if _, ok, _ := cache.Get("a"); ok {
+		t.Fatal("least-recent entry survived byte pressure")
+	}
+	if _, ok, _ := cache.Get("b"); !ok {
+		t.Fatal("most-recent entry was evicted")
+	}
+	if removed := cache.SetWeighted("large", "123456", 6); removed != 0 {
+		t.Fatalf("oversized entry removal count = %d", removed)
+	}
+	if _, ok, _ := cache.Get("large"); ok {
+		t.Fatal("oversized entry was admitted")
 	}
 }
 
@@ -387,6 +422,7 @@ func TestCacheConfigFromEnv(t *testing.T) {
 	for _, name := range []string{
 		"PARSER_CACHE_SUCCESS_CAPACITY", "PARSER_CACHE_SUCCESS_TTL_SECONDS",
 		"PARSER_CACHE_SYNTAX_CAPACITY", "PARSER_CACHE_SYNTAX_TTL_SECONDS",
+		"PARSER_CACHE_SUCCESS_MAX_BYTES", "PARSER_CACHE_SYNTAX_MAX_BYTES",
 	} {
 		t.Setenv(name, "")
 	}
@@ -399,7 +435,8 @@ func TestCacheConfigFromEnv(t *testing.T) {
 	t.Setenv("PARSER_CACHE_SUCCESS_TTL_SECONDS", "45")
 	t.Setenv("PARSER_CACHE_SYNTAX_CAPACITY", "50")
 	t.Setenv("PARSER_CACHE_SYNTAX_TTL_SECONDS", "10")
-	want := CacheConfig{SuccessCapacity: 100, SuccessTTL: 45 * time.Second, SyntaxCapacity: 50, SyntaxTTL: 10 * time.Second}
+	want := DefaultCacheConfig()
+	want.SuccessCapacity, want.SuccessTTL, want.SyntaxCapacity, want.SyntaxTTL = 100, 45*time.Second, 50, 10*time.Second
 	if got := CacheConfigFromEnv(); got != want {
 		t.Fatalf("overridden cache config = %+v, want %+v", got, want)
 	}
@@ -410,6 +447,8 @@ func TestCacheConfigFromEnvInvalidValuesUseDefaults(t *testing.T) {
 	t.Setenv("PARSER_CACHE_SUCCESS_TTL_SECONDS", "not-a-number")
 	t.Setenv("PARSER_CACHE_SYNTAX_CAPACITY", "10001")
 	t.Setenv("PARSER_CACHE_SYNTAX_TTL_SECONDS", "86401")
+	t.Setenv("PARSER_CACHE_SUCCESS_MAX_BYTES", "-1")
+	t.Setenv("PARSER_CACHE_SYNTAX_MAX_BYTES", "268435457")
 	if got, want := CacheConfigFromEnv(), DefaultCacheConfig(); got != want {
 		t.Fatalf("invalid cache config = %+v, want defaults %+v", got, want)
 	}
@@ -435,12 +474,33 @@ func TestParseCacheDisabledByZeroCapacityOrTTL(t *testing.T) {
 	}
 }
 
+func TestParseCacheDisabledByZeroByteLimit(t *testing.T) {
+	cache := newParseCache(CacheConfig{
+		SuccessCapacity: 2,
+		SuccessTTL:      time.Hour,
+		SuccessMaxBytes: 0,
+		SyntaxCapacity:  2,
+		SyntaxTTL:       time.Hour,
+		SyntaxMaxBytes:  1024,
+	})
+	cache.putSuccess("large-result", &model.Diagram{Nodes: []model.Node{{ID: "A"}}})
+	cache.putSyntax("syntax", &SyntaxError{Message: "bad"})
+	if _, _, ok := cache.get("large-result"); ok {
+		t.Fatal("zero success byte limit must disable the success cache")
+	}
+	if _, _, ok := cache.get("syntax"); !ok {
+		t.Fatal("syntax cache should remain enabled with a non-zero byte limit")
+	}
+}
+
 func TestCacheConfigEffectiveConfigNormalizesUnsafeValues(t *testing.T) {
 	got := (CacheConfig{
 		SuccessCapacity: -1,
 		SuccessTTL:      -time.Second,
 		SyntaxCapacity:  maxParseCacheCapacity + 1,
 		SyntaxTTL:       maxParseCacheTTL + time.Second,
+		SuccessMaxBytes: -1,
+		SyntaxMaxBytes:  maxParseCacheBytes + 1,
 	}).EffectiveConfig()
 	defaults := DefaultCacheConfig()
 	if got.SuccessCapacity != defaults.SuccessCapacity || got.SuccessTTL != defaults.SuccessTTL {
@@ -449,6 +509,9 @@ func TestCacheConfigEffectiveConfigNormalizesUnsafeValues(t *testing.T) {
 	if got.SyntaxCapacity != maxParseCacheCapacity || got.SyntaxTTL != maxParseCacheTTL {
 		t.Fatalf("excessive values were not capped: %+v", got)
 	}
+	if got.SuccessMaxBytes != defaults.SuccessMaxBytes || got.SyntaxMaxBytes != maxParseCacheBytes {
+		t.Fatalf("byte limits were not defaulted and capped: %+v", got)
+	}
 }
 
 func TestNewUsesCacheConfigFromEnv(t *testing.T) {
@@ -456,6 +519,8 @@ func TestNewUsesCacheConfigFromEnv(t *testing.T) {
 	t.Setenv("PARSER_CACHE_SUCCESS_TTL_SECONDS", "8")
 	t.Setenv("PARSER_CACHE_SYNTAX_CAPACITY", "9")
 	t.Setenv("PARSER_CACHE_SYNTAX_TTL_SECONDS", "10")
+	t.Setenv("PARSER_CACHE_SUCCESS_MAX_BYTES", "10000")
+	t.Setenv("PARSER_CACHE_SYNTAX_MAX_BYTES", "2000")
 
 	p, err := newWithConfigAndCacheAndRepoRootResolver("parse.ts", Config{}, CacheConfigFromEnv(), func() (string, error) {
 		return t.TempDir(), nil
@@ -463,8 +528,8 @@ func TestNewUsesCacheConfigFromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct parser: %v", err)
 	}
-	if p.cache.success.maxSize != 7 || p.cache.success.ttl != 8*time.Second ||
-		p.cache.syntax.maxSize != 9 || p.cache.syntax.ttl != 10*time.Second {
+	if p.cache.success.maxSize != 7 || p.cache.success.ttl != 8*time.Second || p.cache.success.maxBytes != 10000 ||
+		p.cache.syntax.maxSize != 9 || p.cache.syntax.ttl != 10*time.Second || p.cache.syntax.maxBytes != 2000 {
 		t.Fatalf("parser did not receive environment cache policy: success=%d/%s syntax=%d/%s",
 			p.cache.success.maxSize, p.cache.success.ttl, p.cache.syntax.maxSize, p.cache.syntax.ttl)
 	}

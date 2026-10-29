@@ -121,6 +121,24 @@ func TestServeSpec_HasRequiredOpenAPIFieldsAndRefs(t *testing.T) {
 	}
 }
 
+func TestServeSpec_UsesETagAndReturnsNotModified(t *testing.T) {
+	h := api.NewHandler(&mockParser{}, engine.New())
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	first := httptest.NewRecorder()
+	mux.ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/v1/spec", nil))
+	if first.Code != http.StatusOK || first.Header().Get("ETag") == "" || first.Header().Get("Cache-Control") != "public, max-age=3600" {
+		t.Fatalf("first response lacks cache metadata: status=%d headers=%v", first.Code, first.Header())
+	}
+	secondRequest := httptest.NewRequest(http.MethodGet, "/v1/spec", nil)
+	secondRequest.Header.Set("If-None-Match", first.Header().Get("ETag"))
+	second := httptest.NewRecorder()
+	mux.ServeHTTP(second, secondRequest)
+	if second.Code != http.StatusNotModified || second.Body.Len() != 0 {
+		t.Fatalf("conditional response = %d body=%q, want empty 304", second.Code, second.Body.String())
+	}
+}
+
 func TestServeSpec_AnalyzeExamplesMatchExpectedShape(t *testing.T) {
 	spec := loadServedSpec(t)
 

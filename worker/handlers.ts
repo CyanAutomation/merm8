@@ -5,6 +5,9 @@ import { SemanticReviewError } from "../src/semantic/types.js";
 import { allowed, isRecord, json, ANALYZE_RETRY_AFTER_SECONDS, MAX_ANALYZE_BODY_BYTES, SEMANTIC_REVIEW_RETRY_AFTER_SECONDS, type Env } from "./shared.js";
 import { ruleConfig, validateRuleConfig } from "./config.js";
 import { toSarif } from "./sarif.js";
+import { canonicalJson, TtlLruCache } from "../src/cache/ttl-lru.js";
+
+const analysisCache = new TtlLruCache<ReturnType<typeof analyzeMermaid>>(128, 60_000, 4 * 1024 * 1024);
 
 async function parseAnalyzeBody(request: Request): Promise<{ body?: { code?: unknown; config?: unknown }; response?: Response }> {
   const contentLength = Number(request.headers.get("content-length"));
@@ -130,12 +133,19 @@ export async function handleAnalysis(request: Request, sarif: boolean, env: Env)
   const input = await analysisInput(request, env);
   if (input.response) return input.response;
   const code = input.code!;
-  const analysis = analyzeMermaid(code, ruleConfig(input.config));
-  if (!sarif) return json(analysis);
-  if (!analysis.valid) {
-    return json({ error: { code: analysis.error?.code ?? "syntax_error", message: analysis.error?.message ?? "Mermaid source could not be parsed", details: analysis.error } }, 400);
+  const config = ruleConfig(input.config);
+  const cacheKey = canonicalJson({ code, config });
+  let analysis = analysisCache.get(cacheKey);
+  const cacheHit = !!analysis;
+  if (!analysis) {
+    analysis = analyzeMermaid(code, config);
+    analysisCache.set(cacheKey, analysis);
   }
-  return new Response(JSON.stringify(toSarif(code, analysis)), { headers: { "content-type": "application/sarif+json; charset=utf-8" } });
+  if (!sarif) return json(analysis, 200, { "cache-status": cacheHit ? "merm8; hit" : "merm8; fwd=uri-miss" });
+  if (!analysis.valid) {
+    return json({ error: { code: analysis.error?.code ?? "syntax_error", message: analysis.error?.message ?? "Mermaid source could not be parsed", details: analysis.error } }, 400, { "cache-status": cacheHit ? "merm8; hit" : "merm8; fwd=uri-miss" });
+  }
+  return new Response(JSON.stringify(toSarif(code, analysis)), { headers: { "content-type": "application/sarif+json; charset=utf-8", "cache-status": cacheHit ? "merm8; hit" : "merm8; fwd=uri-miss" } });
 }
 
 export async function handleMcp(request: Request, env: Env): Promise<Response> {
