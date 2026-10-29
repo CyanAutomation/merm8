@@ -103,6 +103,19 @@ func TestLRUTTLCacheExpirationOrderDiffersFromLRUOrder(t *testing.T) {
 	}
 }
 
+func TestLRUTTLCacheExpiresAtExactTTLBoundary(t *testing.T) {
+	now := time.Unix(5_500, 0)
+	cache := newLRUTTLCache[string](1, time.Second)
+	cache.now = func() time.Time { return now }
+
+	cache.Set("expires-now", "value")
+	now = now.Add(time.Second)
+
+	if value, ok, removed := cache.Get("expires-now"); ok || value != "" || removed != 1 {
+		t.Fatalf("expected entry to expire at exact TTL boundary, got value=%q ok=%v removed=%d", value, ok, removed)
+	}
+}
+
 func TestLRUTTLCacheUpdateDiscardsStaleExpirationRecord(t *testing.T) {
 	now := time.Unix(6_000, 0)
 	cache := newLRUTTLCache[string](2, time.Second)

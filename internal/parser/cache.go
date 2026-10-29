@@ -226,7 +226,7 @@ func (c *lruTTLCache[T]) Get(key string) (T, bool, int) {
 	}
 
 	entry := elem.Value.(*lruTTLCacheEntry[T])
-	if now.After(entry.expiresAt) {
+	if !now.Before(entry.expiresAt) {
 		c.removeElementLocked(elem)
 		return zero, false, evicted + 1
 	}
@@ -309,7 +309,7 @@ func (c *lruTTLCache[T]) ByteSize() int {
 
 func (c *lruTTLCache[T]) evictExpiredLocked(now time.Time) int {
 	evicted := 0
-	for c.expiry.Len() > 0 && now.After(c.expiry[0].expiresAt) {
+	for c.expiry.Len() > 0 && !now.Before(c.expiry[0].expiresAt) {
 		record := heap.Pop(&c.expiry).(expirationRecord)
 		elem, ok := c.entries[record.key]
 		if !ok {
