@@ -8,14 +8,16 @@ import {
   JevClientError,
   SemanticReviewError,
   type ChoiceAnswer,
+  type JevDecisionResult,
+  type SemanticState,
   type SemanticReviewEnvironment,
   type SemanticReviewResponse,
 } from "./types.js";
 
 const BOOLEAN_NORMALIZATION_THRESHOLD = 0.5;
 const DEFAULT_DECISION_MODEL = "~typesafe/jev-latest";
-const semanticDecisionCache = new TtlLruCache<Awaited<ReturnType<typeof requestJevDecisions>>>(32, 120_000, 2 * 1024 * 1024);
-const semanticDecisionInflight = new Map<string, Promise<Awaited<ReturnType<typeof requestJevDecisions>>>>();
+const semanticDecisionCache = new TtlLruCache<JevDecisionResult>(32, 120_000, 2 * 1024 * 1024);
+const semanticDecisionInflight = new Map<string, Promise<JevDecisionResult>>();
 const MAX_SEMANTIC_INFLIGHT_KEYS = 32;
 
 async function semanticDecisionCacheKey(model: string, state: unknown): Promise<string> {
@@ -58,6 +60,47 @@ function mapJevError(error: unknown): SemanticReviewError {
   return new SemanticReviewError("jev_upstream_error", "Semantic review provider is unavailable", unavailable ? 503 : 502);
 }
 
+async function getSemanticDecisions(
+  state: SemanticState,
+  model: string,
+  apiKey: string | undefined,
+  options: SemanticReviewOptions,
+): Promise<JevDecisionResult> {
+  if (!apiKey?.trim()) {
+    return requestJevDecisions(state, semanticQuestions, { ...options, apiKey, model });
+  }
+
+  const cacheKey = await semanticDecisionCacheKey(model, state);
+  const cached = semanticDecisionCache.get(cacheKey);
+  if (cached) {
+    emitSemanticCacheLog(options, { outcome: "success", "requested-model": model, "resolved-model": cached.model, "question-count": Object.keys(semanticQuestions).length, "duration-ms": 0, "retry-count": 0, "cache-result": "hit" });
+    return cached;
+  }
+
+  const inflight = semanticDecisionInflight.get(cacheKey);
+  if (inflight) {
+    const decisions = await inflight;
+    emitSemanticCacheLog(options, { outcome: "success", "requested-model": model, "resolved-model": decisions.model, "question-count": Object.keys(semanticQuestions).length, "duration-ms": 0, "retry-count": 0, "cache-result": "coalesced" });
+    return decisions;
+  }
+
+  const request = requestJevDecisions(state, semanticQuestions, {
+    ...options,
+    apiKey,
+    model,
+    log: (event, metadata) => emitSemanticCacheLog(options, { ...metadata, "cache-result": "miss" }, event),
+  });
+  const trackInflight = semanticDecisionInflight.size < MAX_SEMANTIC_INFLIGHT_KEYS;
+  if (trackInflight) semanticDecisionInflight.set(cacheKey, request);
+  try {
+    const decisions = await request;
+    semanticDecisionCache.set(cacheKey, decisions);
+    return decisions;
+  } finally {
+    if (trackInflight) semanticDecisionInflight.delete(cacheKey);
+  }
+}
+
 export interface SemanticReviewOptions extends Omit<JevClientOptions, "apiKey" | "model"> {}
 
 export async function reviewMermaidSemantics(
@@ -74,7 +117,7 @@ export async function reviewMermaidSemantics(
   }
 
   const analysis = analyzeDiagram(parsed.diagram);
-  let state;
+  let state: SemanticState;
   try {
     state = buildSemanticState(parsed.diagram, analysis);
   } catch (error) {
@@ -84,44 +127,10 @@ export async function reviewMermaidSemantics(
     throw error;
   }
 
-  let decisions;
+  let decisions: JevDecisionResult;
   try {
     const model = env.MERM8_DECISION_MODEL?.trim() || DEFAULT_DECISION_MODEL;
-    const apiKey = env.OPENROUTER_API_KEY;
-    if (apiKey?.trim()) {
-      const cacheKey = await semanticDecisionCacheKey(model, state);
-      decisions = semanticDecisionCache.get(cacheKey);
-      if (decisions) {
-        emitSemanticCacheLog(options, { outcome: "success", "requested-model": model, "resolved-model": decisions.model, "question-count": Object.keys(semanticQuestions).length, "duration-ms": 0, "retry-count": 0, "cache-result": "hit" });
-      } else {
-        const inflight = semanticDecisionInflight.get(cacheKey);
-        if (inflight) {
-          decisions = await inflight;
-          emitSemanticCacheLog(options, { outcome: "success", "requested-model": model, "resolved-model": decisions.model, "question-count": Object.keys(semanticQuestions).length, "duration-ms": 0, "retry-count": 0, "cache-result": "coalesced" });
-        } else {
-          const request = requestJevDecisions(state, semanticQuestions, {
-            ...options,
-            apiKey,
-            model,
-            log: (event, metadata) => emitSemanticCacheLog(options, { ...metadata, "cache-result": "miss" }, event),
-          });
-          const trackInflight = semanticDecisionInflight.size < MAX_SEMANTIC_INFLIGHT_KEYS;
-          if (trackInflight) semanticDecisionInflight.set(cacheKey, request);
-          try {
-            decisions = await request;
-            semanticDecisionCache.set(cacheKey, decisions);
-          } finally {
-            if (trackInflight) semanticDecisionInflight.delete(cacheKey);
-          }
-        }
-      }
-    } else {
-      decisions = await requestJevDecisions(state, semanticQuestions, {
-        ...options,
-        apiKey,
-        model,
-      });
-    }
+    decisions = await getSemanticDecisions(state, model, env.OPENROUTER_API_KEY, options);
   } catch (error) {
     throw mapJevError(error);
   }

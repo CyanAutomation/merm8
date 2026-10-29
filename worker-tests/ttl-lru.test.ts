@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { TtlLruCache } from "./ttl-lru.js";
+import { TtlLruCache } from "../src/cache/ttl-lru.js";
 
 test("TTL LRU refreshes recency, expires entries, and enforces its byte budget", () => {
   let now = 0;
