@@ -33,6 +33,8 @@ This service exposes two metrics-style endpoints:
 | `lint_support_check_total`     | Counter   | `diagram_type`, `result`    | checks   | Cross-product of diagram types and result (`supported` or `unsupported`)                                                       |
 | `cors_rejected_total`          | Counter   | —                           | requests | No dynamic labels; count of total rejections                                                                                         |
 | `parser_cache_events_total`    | Counter   | `result`, `entry_type`      | events   | Result is one of `hit`, `miss`, `eviction`; entry type is `success`, `syntax`, or `any`                                          |
+| `parser_cache_estimated_bytes` | Gauge     | `entry_type`                | bytes    | Approximate retained bytes in Go parser caches, split by successful and syntax-error results                                    |
+| `analysis_cache_events_total`  | Counter   | `result`                    | events   | Go deterministic analysis cache hits, misses, and evictions                                                                     |
 
 ### `/v1/internal/metrics` (JSON payload)
 

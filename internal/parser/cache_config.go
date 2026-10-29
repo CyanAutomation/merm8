@@ -8,22 +8,27 @@ import (
 )
 
 const (
-	defaultParseSuccessCacheTTL  = 30 * time.Second
-	defaultParseSyntaxCacheTTL   = 15 * time.Second
-	defaultParseSuccessCacheSize = 256
-	defaultParseSyntaxCacheSize  = 256
+	defaultParseSuccessCacheTTL   = 30 * time.Second
+	defaultParseSyntaxCacheTTL    = 15 * time.Second
+	defaultParseSuccessCacheSize  = 256
+	defaultParseSyntaxCacheSize   = 256
+	defaultParseSuccessCacheBytes = 16 << 20
+	defaultParseSyntaxCacheBytes  = 2 << 20
 
 	maxParseCacheCapacity = 10_000
 	maxParseCacheTTL      = 24 * time.Hour
+	maxParseCacheBytes    = 256 << 20
 )
 
 // CacheConfig controls the independent successful-parse and syntax-error
-// caches. A zero capacity or TTL disables the corresponding cache.
+// caches. A zero capacity, TTL, or byte limit disables the corresponding cache.
 type CacheConfig struct {
 	SuccessCapacity int
 	SuccessTTL      time.Duration
 	SyntaxCapacity  int
 	SyntaxTTL       time.Duration
+	SuccessMaxBytes int
+	SyntaxMaxBytes  int
 }
 
 // DefaultCacheConfig returns the cache policy used when no overrides are set.
@@ -33,6 +38,8 @@ func DefaultCacheConfig() CacheConfig {
 		SuccessTTL:      defaultParseSuccessCacheTTL,
 		SyntaxCapacity:  defaultParseSyntaxCacheSize,
 		SyntaxTTL:       defaultParseSyntaxCacheTTL,
+		SuccessMaxBytes: defaultParseSuccessCacheBytes,
+		SyntaxMaxBytes:  defaultParseSyntaxCacheBytes,
 	}
 }
 
@@ -60,6 +67,16 @@ func (c CacheConfig) EffectiveConfig() CacheConfig {
 	} else if c.SyntaxTTL > maxParseCacheTTL {
 		c.SyntaxTTL = maxParseCacheTTL
 	}
+	if c.SuccessMaxBytes < 0 {
+		c.SuccessMaxBytes = defaults.SuccessMaxBytes
+	} else if c.SuccessMaxBytes > maxParseCacheBytes {
+		c.SuccessMaxBytes = maxParseCacheBytes
+	}
+	if c.SyntaxMaxBytes < 0 {
+		c.SyntaxMaxBytes = defaults.SyntaxMaxBytes
+	} else if c.SyntaxMaxBytes > maxParseCacheBytes {
+		c.SyntaxMaxBytes = maxParseCacheBytes
+	}
 	return c
 }
 
@@ -72,7 +89,18 @@ func CacheConfigFromEnv() CacheConfig {
 	cfg.SuccessTTL = cacheTTLFromEnv("PARSER_CACHE_SUCCESS_TTL_SECONDS", cfg.SuccessTTL)
 	cfg.SyntaxCapacity = cacheCapacityFromEnv("PARSER_CACHE_SYNTAX_CAPACITY", cfg.SyntaxCapacity)
 	cfg.SyntaxTTL = cacheTTLFromEnv("PARSER_CACHE_SYNTAX_TTL_SECONDS", cfg.SyntaxTTL)
+	cfg.SuccessMaxBytes = cacheBytesFromEnv("PARSER_CACHE_SUCCESS_MAX_BYTES", cfg.SuccessMaxBytes)
+	cfg.SyntaxMaxBytes = cacheBytesFromEnv("PARSER_CACHE_SYNTAX_MAX_BYTES", cfg.SyntaxMaxBytes)
 	return cfg
+}
+
+func cacheBytesFromEnv(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	value, err := strconv.Atoi(raw)
+	if raw == "" || err != nil || value < 0 || value > maxParseCacheBytes {
+		return fallback
+	}
+	return value
 }
 
 func cacheCapacityFromEnv(name string, fallback int) int {

@@ -75,6 +75,17 @@ func TestObserveParserCacheEvent_NormalizesLabels(t *testing.T) {
 	}
 }
 
+func TestObserveParserCacheBytesExportsEstimatedOccupancy(t *testing.T) {
+	m := NewMetrics()
+	m.ObserveParserCacheBytes("success", 1024)
+	m.ObserveParserCacheBytes("syntax", 17)
+	response := httptest.NewRecorder()
+	m.Handler().ServeHTTP(response, httptest.NewRequest("GET", "/metrics", nil))
+	if !strings.Contains(response.Body.String(), `parser_cache_estimated_bytes{entry_type="success"} 1024`) || !strings.Contains(response.Body.String(), `parser_cache_estimated_bytes{entry_type="syntax"} 17`) {
+		t.Fatalf("parser cache bytes absent from metrics: %q", response.Body.String())
+	}
+}
+
 func TestMetricsHandlerEscapesNewlinesInLabelValues(t *testing.T) {
 	metrics := NewMetrics()
 	metrics.ObserveRuleExecutionDuration("rule\nline", 500*time.Millisecond)

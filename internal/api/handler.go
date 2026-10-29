@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -113,6 +114,18 @@ type analyzeRequest struct {
 	Code   string                 `json:"code"`
 	Config json.RawMessage        `json:"config"`
 	Parser *analyzeParserSettings `json:"parser,omitempty"`
+}
+
+func analysisResultCacheKey(diagram *model.Diagram, config rules.Config) string {
+	payload, err := json.Marshal(struct {
+		Diagram *model.Diagram `json:"diagram"`
+		Config  rules.Config   `json:"config"`
+	}{diagram, config})
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256(payload)
+	return fmt.Sprintf("%x", digest)
 }
 
 type analyzeParserSettings struct {
@@ -601,6 +614,7 @@ type Handler struct {
 	buildTime          string
 	metricsHandler     http.Handler
 	telemetryMetrics   *telemetry.Metrics
+	analysisCache      *analysisResultCache
 	analyzeCounters    analyzeOutcomeCounters
 	startTime          time.Time
 	mu                 sync.RWMutex
@@ -806,6 +820,7 @@ func NewHandler(p ParserInterface, e *engine.Engine) *Handler {
 		startTime:          time.Now(),
 		strictConfigSchema: defaultStrictConfigSchema.Load(),
 		parserConcurrency:  newParserConcurrencyLimiter(),
+		analysisCache:      newAnalysisResultCache(defaultAnalysisCacheEntries, defaultAnalysisCacheTTL, defaultAnalysisCacheBytes, nil),
 	}
 }
 
@@ -1616,23 +1631,50 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		return
 	}
 
-	ruleMetricsSink := newRequestRuleMetricsSink()
-	issues := h.engine.RunWithInstrumentation(diagram, normalizedCfg, ruleMetricsSink)
-	for _, ruleMetrics := range ruleMetricsSink.Snapshot() {
-		logger.Info(
-			"engine rule metrics",
-			"request_id", RequestIDFromContext(r.Context()),
-			"rule_id", ruleMetrics.RuleID,
-			"executions", ruleMetrics.Executions,
-			"issues_emitted", ruleMetrics.IssuesEmitted,
-			"total_duration_ns", ruleMetrics.TotalDurationNS,
-		)
-		// Record rule metrics to application telemetry (Prometheus)
-		h.mu.RLock()
-		telemetry := h.telemetryMetrics
-		h.mu.RUnlock()
-		if telemetry != nil {
-			telemetry.RecordRuleMetrics(ruleMetrics)
+	cacheKey := analysisResultCacheKey(diagram, normalizedCfg)
+	core, cacheHit, cacheEvictions := h.analysisCache.Get(cacheKey)
+	h.mu.RLock()
+	metrics = h.telemetryMetrics
+	h.mu.RUnlock()
+	if metrics != nil {
+		if cacheHit {
+			metrics.ObserveAnalysisCacheEvent("hit")
+		} else {
+			metrics.ObserveAnalysisCacheEvent("miss")
+		}
+		for i := 0; i < cacheEvictions; i++ {
+			metrics.ObserveAnalysisCacheEvent("eviction")
+		}
+	}
+	if !cacheHit {
+		ruleMetricsSink := newRequestRuleMetricsSink()
+		core.Issues = h.engine.RunWithInstrumentation(diagram, normalizedCfg, ruleMetricsSink)
+		core.Metrics = computeMetrics(diagram, core.Issues)
+		for _, ruleMetrics := range ruleMetricsSink.Snapshot() {
+			logger.Info(
+				"engine rule metrics",
+				"request_id", RequestIDFromContext(r.Context()),
+				"rule_id", ruleMetrics.RuleID,
+				"executions", ruleMetrics.Executions,
+				"issues_emitted", ruleMetrics.IssuesEmitted,
+				"total_duration_ns", ruleMetrics.TotalDurationNS,
+			)
+			h.mu.RLock()
+			metrics = h.telemetryMetrics
+			h.mu.RUnlock()
+			if metrics != nil {
+				metrics.RecordRuleMetrics(ruleMetrics)
+			}
+		}
+		if h.analysisCache != nil {
+			for i := 0; i < h.analysisCache.Set(cacheKey, core); i++ {
+				h.mu.RLock()
+				metrics = h.telemetryMetrics
+				h.mu.RUnlock()
+				if metrics != nil {
+					metrics.ObserveAnalysisCacheEvent("eviction")
+				}
+			}
 		}
 	}
 	observeAnalyzeOutcome(telemetry.OutcomeLintSuccess)
@@ -1645,10 +1687,10 @@ func (h *Handler) analyzeWithCallback(w http.ResponseWriter, r *http.Request, on
 		RequestID:     RequestIDFromContext(r.Context()),
 		Timestamp:     time.Now().UnixMilli(),
 		SyntaxError:   nil,
-		Issues:        issues,
+		Issues:        core.Issues,
 		Warnings:      deprecationWarnings,
 		Meta:          responseMetaForWarnings(deprecationWarnings),
-		Metrics:       computeMetrics(diagram, issues),
+		Metrics:       core.Metrics,
 	}
 	onValid(resp)
 }
@@ -3523,18 +3565,48 @@ func zeroMetrics(diagramType model.DiagramType) *metricsResponse {
 
 // ServeSpec serves the OpenAPI specification as JSON.
 func (h *Handler) ServeSpec(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
-
-	data, _ := json.MarshalIndent(OpenAPISpec(), "", "  ")
-	w.Write(data)
+	serveCacheableAsset(w, r, "application/json", openAPISpecPayload(), "public, max-age=3600")
 }
 
 // ServeSwagger serves the Swagger UI HTML page.
 func (h *Handler) ServeSwagger(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
-	w.Write(swaggerHTML)
+	serveCacheableAsset(w, r, "text/html; charset=utf-8", swaggerHTML, "public, max-age=3600")
+}
+
+var cachedOpenAPISpec = struct {
+	sync.Mutex
+	data map[string][]byte
+}{data: make(map[string][]byte)}
+
+func openAPISpecPayload() []byte {
+	cacheKey := fmt.Sprintf("%p|%s", openapi, strings.TrimSpace(os.Getenv("MERM8_API_URL")))
+	cachedOpenAPISpec.Lock()
+	defer cachedOpenAPISpec.Unlock()
+	if data, ok := cachedOpenAPISpec.data[cacheKey]; ok {
+		return data
+	}
+	data, _ := json.MarshalIndent(OpenAPISpec(), "", "  ")
+	if len(cachedOpenAPISpec.data) >= 4 {
+		cachedOpenAPISpec.data = make(map[string][]byte)
+	}
+	cachedOpenAPISpec.data[cacheKey] = data
+	return data
+}
+
+func serveCacheableAsset(w http.ResponseWriter, r *http.Request, contentType string, data []byte, cacheControl string) {
+	digest := sha256.Sum256(data)
+	etag := fmt.Sprintf(`"%x"`, digest)
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", cacheControl)
+	w.Header().Set("ETag", etag)
+	for _, candidate := range strings.Split(r.Header.Get("If-None-Match"), ",") {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == etag || candidate == "*" {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
+	_, _ = w.Write(data)
 }
 
 // ServeBenchmark serves a benchmark HTML asset from disk.

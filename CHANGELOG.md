@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Bounded, process-local analysis result caching for the Go API and Worker; short-lived semantic decision reuse with concurrent request coalescing; conditional caching for stable metadata endpoints.
+- Estimated byte budgets and Prometheus occupancy reporting for Go parser caches.
+- Prometheus hit, miss, and eviction counters for Go analysis result caching.
 - Worker analysis now returns structural metrics and SARIF 2.1.0 reports.
 - Worker lint support now includes sequence, class, ER, and state diagrams, with the supported rule list published through discovery endpoints.
 
@@ -22,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Worker semantic review no longer requires a caller API key and is limited to five requests per source IP per minute in each Cloudflare location; MCP authentication remains unchanged.
 - The served OpenAPI document no longer advertises unversioned routes that the server does not register; active versioned spelling aliases remain documented as deprecated.
 - Parser cache expiration tracking now uses a min-heap independent of LRU recency, avoiding full-cache scans on cache access.
-- Parser result caching is now configurable with independent success and syntax capacities and TTLs; setting either capacity or TTL to zero disables that cache.
+- Parser result caching is now configurable with independent success and syntax capacities, TTLs, and estimated byte budgets; setting any limit to zero disables that cache.
 - The default Go lint engine now reports flowchart, sequence, class, ER, and state diagrams as lint-supported and runs each family's registered rules.
 
 ### Fixed

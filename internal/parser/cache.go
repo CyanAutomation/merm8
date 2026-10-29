@@ -3,6 +3,7 @@ package parser
 import (
 	"container/heap"
 	"container/list"
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -12,6 +13,10 @@ import (
 // CacheMetricsObserver receives parser cache events for telemetry.
 type CacheMetricsObserver interface {
 	ObserveParserCacheEvent(result, entryType string)
+}
+
+type CacheMemoryMetricsObserver interface {
+	ObserveParserCacheBytes(entryType string, bytes int)
 }
 
 type parseCache struct {
@@ -25,9 +30,16 @@ type parseCache struct {
 
 func newParseCache(cfg CacheConfig) *parseCache {
 	cfg = cfg.EffectiveConfig()
+	successCapacity, syntaxCapacity := cfg.SuccessCapacity, cfg.SyntaxCapacity
+	if cfg.SuccessMaxBytes == 0 {
+		successCapacity = 0
+	}
+	if cfg.SyntaxMaxBytes == 0 {
+		syntaxCapacity = 0
+	}
 	return &parseCache{
-		success: newLRUTTLCache[*model.Diagram](cfg.SuccessCapacity, cfg.SuccessTTL),
-		syntax:  newLRUTTLCache[*SyntaxError](cfg.SyntaxCapacity, cfg.SyntaxTTL),
+		success: newLRUTTLCache[*model.Diagram](successCapacity, cfg.SuccessTTL, cfg.SuccessMaxBytes),
+		syntax:  newLRUTTLCache[*SyntaxError](syntaxCapacity, cfg.SyntaxTTL, cfg.SyntaxMaxBytes),
 	}
 }
 
@@ -48,6 +60,9 @@ func (c *parseCache) get(key string) (*model.Diagram, *SyntaxError, bool) {
 	v, successOK, successRemoved := c.success.Get(key)
 	if successOK {
 		c.entries.RUnlock()
+		if successRemoved > 0 {
+			c.observeMemory()
+		}
 		c.observeRemovals(successRemoved, "success")
 		c.observe("hit", "success")
 		return cloneDiagram(v), nil, true
@@ -55,12 +70,18 @@ func (c *parseCache) get(key string) (*model.Diagram, *SyntaxError, bool) {
 	syntaxErr, syntaxOK, syntaxRemoved := c.syntax.Get(key)
 	if syntaxOK {
 		c.entries.RUnlock()
+		if successRemoved+syntaxRemoved > 0 {
+			c.observeMemory()
+		}
 		c.observeRemovals(successRemoved, "success")
 		c.observeRemovals(syntaxRemoved, "syntax")
 		c.observe("hit", "syntax")
 		return nil, cloneSyntaxError(syntaxErr), true
 	}
 	c.entries.RUnlock()
+	if successRemoved+syntaxRemoved > 0 {
+		c.observeMemory()
+	}
 	c.observeRemovals(successRemoved, "success")
 	c.observeRemovals(syntaxRemoved, "syntax")
 	c.observe("miss", "any")
@@ -73,8 +94,9 @@ func (c *parseCache) putSuccess(key string, diagram *model.Diagram) {
 	}
 	c.entries.Lock()
 	c.syntax.Delete(key)
-	removed := c.success.Set(key, cloneDiagram(diagram))
+	removed := c.success.SetWeighted(key, cloneDiagram(diagram), estimatedEntryBytes(diagram))
 	c.entries.Unlock()
+	c.observeMemory()
 	c.observeRemovals(removed, "success")
 }
 
@@ -84,9 +106,32 @@ func (c *parseCache) putSyntax(key string, syntaxErr *SyntaxError) {
 	}
 	c.entries.Lock()
 	c.success.Delete(key)
-	removed := c.syntax.Set(key, cloneSyntaxError(syntaxErr))
+	removed := c.syntax.SetWeighted(key, cloneSyntaxError(syntaxErr), estimatedEntryBytes(syntaxErr))
 	c.entries.Unlock()
+	c.observeMemory()
 	c.observeRemovals(removed, "syntax")
+}
+
+func (c *parseCache) observeMemory() {
+	c.metricsMu.RLock()
+	metrics := c.metrics
+	c.metricsMu.RUnlock()
+	observer, ok := metrics.(CacheMemoryMetricsObserver)
+	if !ok {
+		return
+	}
+	observer.ObserveParserCacheBytes("success", c.success.ByteSize())
+	observer.ObserveParserCacheBytes("syntax", c.syntax.ByteSize())
+}
+
+func estimatedEntryBytes(value any) int {
+	serialized, err := json.Marshal(value)
+	if err != nil {
+		return 0
+	}
+	// JSON size is a stable lower bound; multiplying by two roughly accounts
+	// for Go string headers, slices, maps, and copied values retained in entries.
+	return len(serialized)*2 + 128
 }
 
 func (c *parseCache) observeRemovals(removed int, entryType string) {
@@ -105,13 +150,15 @@ func (c *parseCache) observe(result, entryType string) {
 }
 
 type lruTTLCache[T any] struct {
-	mu      sync.Mutex
-	ttl     time.Duration
-	maxSize int
-	entries map[string]*list.Element
-	order   *list.List
-	expiry  expirationHeap
-	now     func() time.Time
+	mu       sync.Mutex
+	ttl      time.Duration
+	maxSize  int
+	maxBytes int
+	bytes    int
+	entries  map[string]*list.Element
+	order    *list.List
+	expiry   expirationHeap
+	now      func() time.Time
 }
 
 type lruTTLCacheEntry[T any] struct {
@@ -119,6 +166,7 @@ type lruTTLCacheEntry[T any] struct {
 	value      T
 	expiresAt  time.Time
 	generation uint64
+	weight     int
 }
 
 // expirationRecord is deliberately separate from the LRU list. Records are
@@ -145,13 +193,18 @@ func (h *expirationHeap) Pop() any {
 	return value
 }
 
-func newLRUTTLCache[T any](maxSize int, ttl time.Duration) *lruTTLCache[T] {
+func newLRUTTLCache[T any](maxSize int, ttl time.Duration, maxBytes ...int) *lruTTLCache[T] {
+	byteLimit := 0
+	if len(maxBytes) > 0 {
+		byteLimit = maxBytes[0]
+	}
 	return &lruTTLCache[T]{
-		ttl:     ttl,
-		maxSize: maxSize,
-		entries: make(map[string]*list.Element),
-		order:   list.New(),
-		now:     time.Now,
+		ttl:      ttl,
+		maxSize:  maxSize,
+		maxBytes: byteLimit,
+		entries:  make(map[string]*list.Element),
+		order:    list.New(),
+		now:      time.Now,
 	}
 }
 
@@ -173,7 +226,7 @@ func (c *lruTTLCache[T]) Get(key string) (T, bool, int) {
 	}
 
 	entry := elem.Value.(*lruTTLCacheEntry[T])
-	if now.After(entry.expiresAt) {
+	if !now.Before(entry.expiresAt) {
 		c.removeElementLocked(elem)
 		return zero, false, evicted + 1
 	}
@@ -183,8 +236,16 @@ func (c *lruTTLCache[T]) Get(key string) (T, bool, int) {
 }
 
 func (c *lruTTLCache[T]) Set(key string, value T) int {
+	return c.SetWeighted(key, value, 1)
+}
+
+// SetWeighted bounds retained memory using the caller's estimated entry size.
+func (c *lruTTLCache[T]) SetWeighted(key string, value T, weight int) int {
 	if c.maxSize <= 0 || c.ttl <= 0 {
 		return 0
+	}
+	if weight < 0 {
+		weight = 0
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -194,7 +255,14 @@ func (c *lruTTLCache[T]) Set(key string, value T) int {
 
 	if elem, ok := c.entries[key]; ok {
 		entry := elem.Value.(*lruTTLCacheEntry[T])
+		if c.maxBytes > 0 && weight > c.maxBytes {
+			c.removeElementLocked(elem)
+			return removed + 1
+		}
+		c.bytes -= entry.weight
 		entry.value = value
+		entry.weight = weight
+		c.bytes += weight
 		entry.expiresAt = now.Add(c.ttl)
 		entry.generation++
 		heap.Push(&c.expiry, expirationRecord{key: key, expiresAt: entry.expiresAt, generation: entry.generation})
@@ -202,16 +270,22 @@ func (c *lruTTLCache[T]) Set(key string, value T) int {
 		return removed
 	}
 
-	entry := &lruTTLCacheEntry[T]{key: key, value: value, expiresAt: now.Add(c.ttl), generation: 1}
+	if c.maxBytes > 0 && weight > c.maxBytes {
+		return removed
+	}
+	entry := &lruTTLCacheEntry[T]{key: key, value: value, expiresAt: now.Add(c.ttl), generation: 1, weight: weight}
 	elem := c.order.PushFront(entry)
 	c.entries[key] = elem
+	c.bytes += weight
 	heap.Push(&c.expiry, expirationRecord{key: key, expiresAt: entry.expiresAt, generation: entry.generation})
 
-	if c.order.Len() > c.maxSize {
+	for c.order.Len() > c.maxSize || (c.maxBytes > 0 && c.bytes > c.maxBytes) {
 		oldest := c.order.Back()
 		if oldest != nil {
 			c.removeElementLocked(oldest)
 			removed++
+		} else {
+			break
 		}
 	}
 
@@ -227,9 +301,15 @@ func (c *lruTTLCache[T]) Delete(key string) {
 	}
 }
 
+func (c *lruTTLCache[T]) ByteSize() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.bytes
+}
+
 func (c *lruTTLCache[T]) evictExpiredLocked(now time.Time) int {
 	evicted := 0
-	for c.expiry.Len() > 0 && now.After(c.expiry[0].expiresAt) {
+	for c.expiry.Len() > 0 && !now.Before(c.expiry[0].expiresAt) {
 		record := heap.Pop(&c.expiry).(expirationRecord)
 		elem, ok := c.entries[record.key]
 		if !ok {
@@ -248,6 +328,7 @@ func (c *lruTTLCache[T]) evictExpiredLocked(now time.Time) int {
 func (c *lruTTLCache[T]) removeElementLocked(elem *list.Element) {
 	entry := elem.Value.(*lruTTLCacheEntry[T])
 	delete(c.entries, entry.key)
+	c.bytes -= entry.weight
 	c.order.Remove(elem)
 }
 
