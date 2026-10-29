@@ -13,7 +13,7 @@ function corsHeaders(request: Request, env: Env): HeadersInit {
     "access-control-allow-origin": origin,
     "access-control-allow-methods": "GET, POST, OPTIONS",
     "access-control-allow-headers": "content-type, authorization, x-api-key",
-    "access-control-expose-headers": "retry-after",
+    "access-control-expose-headers": "retry-after, cache-status",
     "access-control-max-age": "86400",
     vary: "Origin",
   };
@@ -29,15 +29,34 @@ function withCors(response: Response, headers: HeadersInit, env: Env): Response 
   new Headers(headers).forEach((value, name) => merged.set(name, value));
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers: merged });
 }
+
+const SPEC_JSON = JSON.stringify(workerOpenApi);
+const RULES_JSON = JSON.stringify({ rules: ruleMetadata });
+const DIAGRAM_TYPES_JSON = JSON.stringify({ "parser-recognized": ["flowchart", "sequence", "class", "er", "state"], "lint-supported": ["flowchart", "sequence", "class", "er", "state"] });
+
+function staticJson(serialized: string): Response {
+  return new Response(serialized, { headers: { "content-type": "application/json; charset=utf-8" } });
+}
+
+function cacheMetadata(request: Request, response: Response, resource: string, env: Env): Response {
+  const build = (env.BUILD_SHA ?? env.BUILD_VERSION ?? "development").replace(/[^a-zA-Z0-9._-]/g, "");
+  const etag = `"${resource}-${build || "development"}"`;
+  const headers = new Headers(response.headers);
+  headers.set("cache-control", resource === "version" ? "public, max-age=60" : "public, max-age=300, stale-while-revalidate=3600");
+  headers.set("etag", etag);
+  const match = request.headers.get("if-none-match")?.split(",").map(value => value.trim());
+  if (match?.includes(etag) || match?.includes("*")) return new Response(null, { status: 304, headers });
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
 const routeHandlers = new Map<string, RouteHandler>([
   ["* /", () => json({ status: "ok" })],
   ["* /v1/docs", (_request, _env, url) => Response.redirect(`${url.origin}/v1/spec`, 302)],
-  ["* /v1/spec", () => json(workerOpenApi)],
+  ["* /v1/spec", () => staticJson(SPEC_JSON)],
   ["* /v1/healthz", () => json({ status: "ok" })],
   ["* /v1/health", () => json({ status: "ok" })],
   ["* /v1/ready", () => json({ status: "ready", parser: "worker-native" })],
-  ["* /v1/diagram-types", () => json({ "parser-recognized": ["flowchart", "sequence", "class", "er", "state"], "lint-supported": ["flowchart", "sequence", "class", "er", "state"] })],
-  ["* /v1/rules", () => json({ rules: ruleMetadata })],
+  ["* /v1/diagram-types", () => staticJson(DIAGRAM_TYPES_JSON)],
+  ["* /v1/rules", () => staticJson(RULES_JSON)],
   ["* /v1/version", (_request, env) => json({ "service-version": env.BUILD_VERSION ?? "development", "build-commit": env.BUILD_SHA ?? "" })],
   ["* /mcp", handleMcp],
   ["POST /v1/semantic-review", handleSemanticReview],
@@ -49,7 +68,13 @@ const routeHandlers = new Map<string, RouteHandler>([
 async function routeRequest(request: Request, env: Env, url: URL): Promise<Response> {
   const key = `${request.method} ${url.pathname}`;
   const handler = routeHandlers.get(key) ?? routeHandlers.get(`* ${url.pathname}`);
-  return handler ? handler(request, env, url) : json({ error: { code: "not_found", message: "Not found" } }, 404);
+  const response = handler ? await handler(request, env, url) : json({ error: { code: "not_found", message: "Not found" } }, 404);
+  if (request.method !== "GET") return response;
+  if (url.pathname === "/v1/spec") return cacheMetadata(request, response, "spec", env);
+  if (url.pathname === "/v1/rules") return cacheMetadata(request, response, "rules", env);
+  if (url.pathname === "/v1/diagram-types") return cacheMetadata(request, response, "diagram-types", env);
+  if (url.pathname === "/v1/version") return cacheMetadata(request, response, "version", env);
+  return response;
 }
 const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {

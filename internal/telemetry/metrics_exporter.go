@@ -27,6 +27,41 @@ type counterVec struct {
 	series     map[string]counterSeries
 }
 
+type gaugeVec struct {
+	name       string
+	help       string
+	labelNames []string
+	mu         sync.RWMutex
+	series     map[string]counterSeries
+}
+
+func newGaugeVec(name, help string, labelNames ...string) *gaugeVec {
+	return &gaugeVec{
+		name:       name,
+		help:       help,
+		labelNames: append([]string(nil), labelNames...),
+		series:     make(map[string]counterSeries),
+	}
+}
+
+func (gv *gaugeVec) set(value uint64, labelValues ...string) {
+	validateLabelValues(gv.name, gv.labelNames, labelValues)
+	key := labelValuesKey(labelValues)
+	gv.mu.Lock()
+	defer gv.mu.Unlock()
+	gv.series[key] = counterSeries{labels: append([]string(nil), labelValues...), value: value}
+}
+
+func (gv *gaugeVec) appendPrometheus(out *strings.Builder) {
+	appendMetricHeader(out, gv.name, gv.help, "gauge")
+	gv.mu.RLock()
+	defer gv.mu.RUnlock()
+	for _, key := range sortedCounterKeys(gv.series) {
+		series := gv.series[key]
+		fmt.Fprintf(out, "%s%s %d\n", gv.name, formatPrometheusLabels(gv.labelNames, series.labels), series.value)
+	}
+}
+
 type counterSeries struct {
 	labels []string
 	value  uint64

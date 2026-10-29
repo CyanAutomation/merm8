@@ -3,6 +3,7 @@ import { parseMermaid } from "../parser/parse.js";
 import { semanticQuestions } from "./questions.js";
 import { buildSemanticState, SemanticStateLimitError } from "./state.js";
 import { requestJevDecisions, type JevClientOptions } from "./jev-client.js";
+import { TtlLruCache } from "../cache/ttl-lru.js";
 import {
   JevClientError,
   SemanticReviewError,
@@ -12,6 +13,16 @@ import {
 } from "./types.js";
 
 const BOOLEAN_NORMALIZATION_THRESHOLD = 0.5;
+const DEFAULT_DECISION_MODEL = "~typesafe/jev-latest";
+const semanticDecisionCache = new TtlLruCache<Awaited<ReturnType<typeof requestJevDecisions>>>(32, 120_000, 2 * 1024 * 1024);
+const semanticDecisionInflight = new Map<string, Promise<Awaited<ReturnType<typeof requestJevDecisions>>>>();
+const MAX_SEMANTIC_INFLIGHT_KEYS = 32;
+
+async function semanticDecisionCacheKey(model: string, state: unknown): Promise<string> {
+  const payload = JSON.stringify({ model, state, questions: semanticQuestions });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
 
 function choiceAnswer(answers: Record<string, unknown>, key: string): ChoiceAnswer {
   const answer = answers[key] as ChoiceAnswer | undefined;
@@ -75,11 +86,42 @@ export async function reviewMermaidSemantics(
 
   let decisions;
   try {
-    decisions = await requestJevDecisions(state, semanticQuestions, {
-      ...options,
-      apiKey: env.OPENROUTER_API_KEY,
-      model: env.MERM8_DECISION_MODEL,
-    });
+    const model = env.MERM8_DECISION_MODEL?.trim() || DEFAULT_DECISION_MODEL;
+    const apiKey = env.OPENROUTER_API_KEY;
+    if (apiKey?.trim()) {
+      const cacheKey = await semanticDecisionCacheKey(model, state);
+      decisions = semanticDecisionCache.get(cacheKey);
+      if (decisions) {
+        emitSemanticCacheLog(options, { outcome: "success", "requested-model": model, "resolved-model": decisions.model, "question-count": Object.keys(semanticQuestions).length, "duration-ms": 0, "retry-count": 0, "cache-result": "hit" });
+      } else {
+        const inflight = semanticDecisionInflight.get(cacheKey);
+        if (inflight) {
+          decisions = await inflight;
+          emitSemanticCacheLog(options, { outcome: "success", "requested-model": model, "resolved-model": decisions.model, "question-count": Object.keys(semanticQuestions).length, "duration-ms": 0, "retry-count": 0, "cache-result": "coalesced" });
+        } else {
+          const request = requestJevDecisions(state, semanticQuestions, {
+            ...options,
+            apiKey,
+            model,
+            log: (event, metadata) => emitSemanticCacheLog(options, { ...metadata, "cache-result": "miss" }, event),
+          });
+          const trackInflight = semanticDecisionInflight.size < MAX_SEMANTIC_INFLIGHT_KEYS;
+          if (trackInflight) semanticDecisionInflight.set(cacheKey, request);
+          try {
+            decisions = await request;
+            semanticDecisionCache.set(cacheKey, decisions);
+          } finally {
+            if (trackInflight) semanticDecisionInflight.delete(cacheKey);
+          }
+        }
+      }
+    } else {
+      decisions = await requestJevDecisions(state, semanticQuestions, {
+        ...options,
+        apiKey,
+        model,
+      });
+    }
   } catch (error) {
     throw mapJevError(error);
   }
@@ -102,4 +144,16 @@ export async function reviewMermaidSemantics(
     },
     meta: { source: "jev", model: decisions.model },
   };
+}
+
+function emitSemanticCacheLog(
+  options: SemanticReviewOptions,
+  metadata: Record<string, string | number>,
+  event = "semantic_review_jev",
+): void {
+  try {
+    (options.log ?? ((name, values) => console.info(name, values)))(event, metadata);
+  } catch {
+    // Cache logging must not change the semantic review result.
+  }
 }

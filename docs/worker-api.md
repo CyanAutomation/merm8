@@ -34,6 +34,19 @@ the source was parsed successfully but no Worker lint rules ran for that diagram
 Successful responses also include node, edge, connectivity, fan-in/out, and issue-count
 metrics. The response uses HTTP 200 when no family rules are available.
 
+Repeated deterministic analyses use a bounded, short-lived, isolate-local
+result cache. The `Cache-Status` response header reports `merm8; hit` or
+`merm8; fwd=uri-miss`. Rate limiting still applies to cache hits. Semantic
+review caches successful provider decisions for identical semantic state,
+questions, and model for up to two minutes, and concurrent identical reviews
+share an in-flight provider request; errors are not cached. Both caches are
+ephemeral and are not shared across Worker locations.
+
+`/v1/spec`, `/v1/rules`, and `/v1/diagram-types` return build-specific ETags
+and are fresh for five minutes. `/v1/version` is fresh for one minute. Health
+and readiness responses are uncached. Conditional metadata requests can receive
+HTTP 304.
+
 `POST /v1/analyze/sarif` accepts the same JSON body and rule configuration as
 `/v1/analyze`. Valid source returns a SARIF 2.1.0 report with rule metadata, source
 locations, and stable issue fingerprints. Invalid JSON, rule configuration, Mermaid,
