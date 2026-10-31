@@ -87,7 +87,7 @@ Each entry contains:
 
 - **Requirement**: A handler created without an engine dependency still analyzes a valid diagram successfully using its default engine
 - **Tests**: `TestNewHandler_DefaultsNilEngineDependency`
-- **File**: `internal/api/handler_nil_engine_test.go`
+- **File**: `internal/api/handler_dependency_test.go`
 
 ### API-010: SARIF Fallback Request URI
 
@@ -107,6 +107,12 @@ Each entry contains:
 - **Requirement**: Concurrent analysis requests issued while a strictness setting is fixed return the corresponding strict validation error or lenient analysis result
 - **Tests**: `TestAnalyze_ConcurrentRequestsRespectStrictConfigSetting`
 - **File**: `internal/api/handler_test.go`
+
+### API-013: Unavailable Handler Dependencies Return Structured Errors
+
+- **Requirement**: Analysis, raw analysis, SARIF, and rule-schema handlers return an internal error that identifies a required unavailable parser or engine dependency; SARIF responses retain the SARIF media type.
+- **Tests**: `TestHandlerReturnsDependencyUnavailableError`
+- **File**: `internal/api/handler_dependency_test.go`
 
 ### SARIF-001: API Error Codes Map to SARIF Levels
 
@@ -140,7 +146,7 @@ Each entry contains:
 ### TELEMETRY-001: Unknown Outcome Labels Fallback to 'other'
 
 - **Requirement**: Telemetry library coerces unknown outcome labels to 'other' for metric safety
-- **Tests**: `TestMetrics_UnknownAnalyzeOutcomeDefaultsToOther`, `TestMetrics_UnknownParserDurationOutcomeDefaultsToOther`
+- **Tests**: `TestMetrics_UnknownOutcomeLabelsDefaultToOther` (analysis outcome and parser duration subtests)
 - **File**: `internal/telemetry/metrics_test.go`
 - **Impact**: Prevents unbounded cardinality in Prometheus metrics
 
@@ -148,6 +154,12 @@ Each entry contains:
 
 - **Requirement**: Cache event labels are normalized (hit/miss → result; success/any → entry_type)
 - **Tests**: `TestObserveParserCacheEvent_NormalizesLabels`
+- **File**: `internal/telemetry/metrics_test.go`
+
+### TELEMETRY-003: Parser Cache Occupancy Metrics
+
+- **Requirement**: Estimated retained parser-cache bytes are exported separately for success and syntax cache entries.
+- **Tests**: `TestObserveParserCacheBytesExportsEstimatedOccupancy`
 - **File**: `internal/telemetry/metrics_test.go`
 
 ---

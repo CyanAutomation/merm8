@@ -8,49 +8,48 @@ import (
 	"time"
 )
 
-// TestMetrics_UnknownAnalyzeOutcomeDefaultsToOther validates that telemetry library
-// coerces unknown analyze outcome labels to 'other' for metric safety.
-// @spec: TELEMETRY-001: Unknown outcome labels fallback to 'other' for metric safety
-func TestMetrics_UnknownAnalyzeOutcomeDefaultsToOther(t *testing.T) {
-	m := NewMetrics()
-	m.ObserveAnalyzeOutcome(OutcomeInternalError) // Known outcome
-	m.ObserveAnalyzeOutcome("invalid_json")       // Unknown outcome
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/metrics", nil)
-	w := httptest.NewRecorder()
-	m.Handler().ServeHTTP(w, req)
-
-	body := w.Body.String()
-	// Verify known outcome is recorded correctly
-	if !strings.Contains(body, `analyze_requests_total{outcome="internal_error"} 1`) {
-		t.Fatalf("expected known analyze outcome recorded, got %q", body)
+// @spec: TELEMETRY-001: Unknown outcome labels fallback to 'other' for metric safety.
+func TestMetrics_UnknownOutcomeLabelsDefaultToOther(t *testing.T) {
+	tests := []struct {
+		name      string
+		observe   func(*Metrics)
+		knownLine string
+		fallback  string
+	}{
+		{
+			name: "analysis outcome",
+			observe: func(m *Metrics) {
+				m.ObserveAnalyzeOutcome(OutcomeInternalError)
+				m.ObserveAnalyzeOutcome("invalid_json")
+			},
+			knownLine: `analyze_requests_total{outcome="internal_error"} 1`,
+			fallback:  `analyze_requests_total{outcome="other"} 1`,
+		},
+		{
+			name: "parser duration outcome",
+			observe: func(m *Metrics) {
+				m.ObserveParserDuration(OutcomeParserTimeout, 5*time.Millisecond)
+				m.ObserveParserDuration("missing_code", 5*time.Millisecond)
+			},
+			knownLine: `parser_duration_seconds_count{outcome="parser_timeout"} 1`,
+			fallback:  `parser_duration_seconds_count{outcome="other"} 1`,
+		},
 	}
-	// Verify unknown outcome falls back to 'other'
-	if !strings.Contains(body, `analyze_requests_total{outcome="other"} 1`) {
-		t.Fatalf("expected unknown analyze outcome to fallback to 'other', got %q", body)
-	}
-}
 
-// TestMetrics_UnknownParserDurationOutcomeDefaultsToOther validates that telemetry library
-// coerces unknown parser duration outcome labels to 'other' for metric safety.
-// @spec: TELEMETRY-001: Unknown outcome labels fallback to 'other' for metric safety
-func TestMetrics_UnknownParserDurationOutcomeDefaultsToOther(t *testing.T) {
-	m := NewMetrics()
-	m.ObserveParserDuration(OutcomeParserTimeout, 5*time.Millisecond) // Known outcome
-	m.ObserveParserDuration("missing_code", 5*time.Millisecond)       // Unknown outcome
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := NewMetrics()
+			tc.observe(m)
+			w := httptest.NewRecorder()
+			m.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/metrics", nil))
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/metrics", nil)
-	w := httptest.NewRecorder()
-	m.Handler().ServeHTTP(w, req)
-
-	body := w.Body.String()
-	// Verify known outcome is recorded correctly
-	if !strings.Contains(body, `parser_duration_seconds_count{outcome="parser_timeout"} 1`) {
-		t.Fatalf("expected known parser duration outcome recorded, got %q", body)
-	}
-	// Verify unknown outcome falls back to 'other'
-	if !strings.Contains(body, `parser_duration_seconds_count{outcome="other"} 1`) {
-		t.Fatalf("expected unknown parser duration outcome to fallback to 'other', got %q", body)
+			body := w.Body.String()
+			for _, want := range []string{tc.knownLine, tc.fallback} {
+				if !strings.Contains(body, want) {
+					t.Errorf("metrics output missing %q; body=%q", want, body)
+				}
+			}
+		})
 	}
 }
 
@@ -75,6 +74,7 @@ func TestObserveParserCacheEvent_NormalizesLabels(t *testing.T) {
 	}
 }
 
+// @spec: TELEMETRY-003: Parser cache occupancy metrics report estimated bytes by cache entry type.
 func TestObserveParserCacheBytesExportsEstimatedOccupancy(t *testing.T) {
 	m := NewMetrics()
 	m.ObserveParserCacheBytes("success", 1024)
