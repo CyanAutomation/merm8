@@ -11,10 +11,10 @@ import (
 // @spec: TELEMETRY-001: Unknown outcome labels fallback to 'other' for metric safety.
 func TestMetrics_UnknownOutcomeLabelsDefaultToOther(t *testing.T) {
 	tests := []struct {
-		name       string
-		observe    func(*Metrics)
-		knownLine  string
-		fallback   string
+		name      string
+		observe   func(*Metrics)
+		knownLine string
+		fallback  string
 	}{
 		{
 			name: "analysis outcome",
