@@ -87,7 +87,7 @@ Each entry contains:
 
 - **Requirement**: A handler created without an engine dependency still analyzes a valid diagram successfully using its default engine
 - **Tests**: `TestNewHandler_DefaultsNilEngineDependency`
-- **File**: `internal/api/handler_nil_engine_test.go`
+- **File**: `internal/api/handler_dependency_test.go`
 
 ### API-010: SARIF Fallback Request URI
 
