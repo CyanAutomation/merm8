@@ -152,6 +152,7 @@ Other useful Go API endpoints include `/v1/healthz`, `/v1/ready`, `/v1/rules`, `
 
 - Inputs: file paths, `--stdin`, or standard input when no files are given.
 - Modes: local analysis by default; `--url <server>` uses the API.
+- Timeout: `--timeout <duration>` (default `10s`) bounds HTTP requests when `--url` is set.
 - Output: `--format text` (default) or `--format json`.
 - Config: `--config <file>`.
 - CI behavior: `--fail-on-syntax` defaults to true; `--fail-on-lint` defaults to false.
