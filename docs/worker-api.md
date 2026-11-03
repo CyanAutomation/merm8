@@ -9,6 +9,7 @@ specific deployment.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
+| `GET` | `/` | Service root; returns `{"status": "ok"}` |
 | `GET` | `/v1/healthz` | Liveness probe |
 | `GET` | `/v1/health` | Liveness alias (same response as `/v1/healthz`) |
 | `GET` | `/v1/ready` | Readiness and parser status |
