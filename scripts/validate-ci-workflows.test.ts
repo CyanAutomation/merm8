@@ -58,7 +58,15 @@ type PackageManifest = {
 };
 
 type NpmLock = {
-  packages?: Record<string, { version?: string; integrity?: string }>;
+  packages?: Record<
+    string,
+    {
+      version?: string;
+      integrity?: string;
+      engines?: { node?: string };
+      devDependencies?: Record<string, string>;
+    }
+  >;
 };
 
 type ZizmorConfig = {
@@ -255,7 +263,7 @@ test("main push CI runs are not coalesced before deployment", () => {
   );
 });
 
-test("the repository declares and uses Node.js 24", () => {
+test("the repository declares and uses Node.js 26", () => {
   const nodeWorkflows = [
     ".github/workflows/ci.yml",
     ".github/workflows/deploy-cloudflare.yml",
@@ -263,6 +271,7 @@ test("the repository declares and uses Node.js 24", () => {
     ".github/workflows/kaseki-docs.yaml",
     ".github/workflows/kaseki-dry.yaml",
     ".github/workflows/race-tests.yml",
+    ".github/workflows/readme-links.yml",
     ".github/workflows/release.yml",
   ];
 
@@ -282,8 +291,8 @@ test("the repository declares and uses Node.js 24", () => {
       );
       assert.equal(
         String(nodeVersion),
-        "24",
-        `${filePath} must use Node.js 24`,
+        "26",
+        `${filePath} must use Node.js 26`,
       );
     }
   }
@@ -292,9 +301,27 @@ test("the repository declares and uses Node.js 24", () => {
   const parserManifest = JSON.parse(
     readRepositoryFile("parser-node/package.json"),
   ) as PackageManifest;
+  const rootLock = JSON.parse(
+    readRepositoryFile("package-lock.json"),
+  ) as NpmLock;
+  const parserLock = JSON.parse(
+    readRepositoryFile("parser-node/package-lock.json"),
+  ) as NpmLock;
 
-  assert.equal(rootManifest.engines?.node, ">=24.0.0");
-  assert.equal(parserManifest.engines?.node, ">=24.0.0");
-  assert.match(rootManifest.devDependencies?.["@types/node"] ?? "", /^\^(?:2[4-9]|[3-9]\d)\./);
-  assert.equal(readRepositoryFile(".nvmrc").trim(), "24");
+  assert.equal(rootManifest.engines?.node, ">=26.0.0");
+  assert.equal(parserManifest.engines?.node, ">=26.0.0");
+  assert.match(rootManifest.devDependencies?.["@types/node"] ?? "", /^\^26\./);
+  assert.equal(
+    rootLock.packages?.[""]?.engines?.node,
+    rootManifest.engines?.node,
+  );
+  assert.equal(
+    rootLock.packages?.[""]?.devDependencies?.["@types/node"],
+    rootManifest.devDependencies?.["@types/node"],
+  );
+  assert.equal(
+    parserLock.packages?.[""]?.engines?.node,
+    parserManifest.engines?.node,
+  );
+  assert.equal(readRepositoryFile(".nvmrc").trim(), "26");
 });
