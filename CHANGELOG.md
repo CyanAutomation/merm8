@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raised the minimum Node.js version for parser and project tooling to 26.
 - Worker deterministic analysis endpoints now share a 120-request-per-source-IP-per-minute limit.
 - Per-request Go parser memory profiles now use one-shot subprocesses; only the configured profile uses retained workers.
 - Go HTTP connections now have bounded header, request, response, and idle timeouts.
