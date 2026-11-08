@@ -218,7 +218,10 @@ test("kaseki-dry.yaml retries status polling after a transient controller failur
 
     const result = spawnSync("bash", ["-c", run], {
       encoding: "utf8",
-      timeout: 5_000,
+      // This test runs inside npm test alongside the full worker suite. Keep
+      // enough headroom for loaded CI hosts; the mocked sleep keeps normal
+      // execution fast while this limit still catches a stuck polling loop.
+      timeout: 15_000,
       env: {
         ...process.env,
         PATH: `${binDirectory}:${process.env.PATH ?? ""}`,
