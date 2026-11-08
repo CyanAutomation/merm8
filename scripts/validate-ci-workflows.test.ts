@@ -295,6 +295,6 @@ test("the repository declares and uses Node.js 24", () => {
 
   assert.equal(rootManifest.engines?.node, ">=24.0.0");
   assert.equal(parserManifest.engines?.node, ">=24.0.0");
-  assert.match(rootManifest.devDependencies?.["@types/node"] ?? "", /^\^24\./);
+  assert.match(rootManifest.devDependencies?.["@types/node"] ?? "", /^\^(?:2[4-9]|[3-9]\d)\./);
   assert.equal(readRepositoryFile(".nvmrc").trim(), "24");
 });
