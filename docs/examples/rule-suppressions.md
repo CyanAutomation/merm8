@@ -51,7 +51,7 @@ Suppress rule violations globally without config - add a suppression comment abo
 **Diagram Code:**
 
 ```mermaid
-%! suppress rule:no-cycles
+%% merm8-disable no-cycles
 
 graph TD
   A[Node A] --> B[Node B]

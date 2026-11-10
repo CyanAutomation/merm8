@@ -21,7 +21,7 @@ This service exposes two metrics-style endpoints:
 | -------------------------- | --------- | --------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `request_total`            | Counter   | `route`, `method`, `status` | requests | `route` is bounded to known route patterns + `unknown`; `method` is small fixed set; `status` depends on handlers/middleware and should stay low tens                        |
 | `request_duration_seconds` | Histogram | `route`, `method`           | seconds  | Same bounded `route` and `method` dimensions; bucket count uses Prometheus default buckets                                                                                   |
-| `analyze_requests_total`   | Counter   | `outcome`                   | requests | `outcome` is bounded enum: `syntax_error`, `lint_success`, `parser_timeout`, `parser_subprocess_error`, `parser_decode_error`, `parser_contract_violation`, `internal_error` |
+| `analyze_requests_total`   | Counter   | `outcome`                   | requests | `outcome` is bounded enum: `syntax_error`, `lint_success`, `parser_timeout`, `parser_subprocess_error`, `parser_decode_error`, `parser_contract_violation`, `internal_error`, `other` (fallback for outcomes without a dedicated counter) |
 | `parser_duration_seconds`  | Histogram | `outcome`                   | seconds  | Same bounded `outcome` enum as above; default buckets                                                                                                                        |
 | `parser_latency_seconds`       | Histogram | `outcome`                   | seconds  | Same bounded outcome enum as above; default buckets                                                                                                                          |
 | `rule_execution_duration_seconds` | Histogram | `rule_id`                 | seconds  | One label per registered rule ID; cardinality grows with custom rules                                                            |
@@ -44,14 +44,16 @@ Example shape:
 {
   "analyze": {
     "valid_success": 0,
-    "syntax_error": 0
+    "syntax_error": 0,
+    "other": 0
   },
   "parser": {
     "timeout": 0,
     "subprocess": 0,
     "decode": 0,
     "contract": 0,
-    "internal": 0
+    "internal": 0,
+    "other": 0
   }
 }
 ```
@@ -131,7 +133,7 @@ The `docs/prometheus-alerts.yaml` file contains production-ready Prometheus aler
    - **Action:** Reduce diagram complexity, increase `PARSER_TIMEOUT_SECONDS`, or scale parser concurrency
    - **Details:** See `ParserTimeoutRateHigh` in `prometheus-alerts.yaml`
 
-2. **Parser memory limit** — Alerts when parser subprocess hits memory ceiling
+2. **Parser memory limit** — Alerts when parser subprocess hits memory ceiling (memory-limit failures surface under the `parser_subprocess_error` outcome label; the HTTP error code is `parser_memory_limit`)
    - **Action:** Increase `PARSER_MAX_OLD_SPACE_MB` or reduce diagram size
    - **Details:** See `ParserMemoryLimitExceeded` in `prometheus-alerts.yaml`
 

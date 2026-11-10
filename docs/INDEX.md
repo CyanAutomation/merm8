@@ -56,14 +56,14 @@ Complete integration guide covering:
 - Monitoring and health checks
 - Best practices
 
-**Read time:** 15 minutes  
+**Read time:** 15 minutes
 **Audience:** Developers integrating merm8
 
 ---
 
 #### [Complete Request/Response Examples](complete-request-response-examples.md)
 
-11 real-world scenarios with actual JSON:
+15 real-world scenarios with actual JSON:
 
 1. Minimal valid request
 2. Single rule validation
@@ -79,7 +79,7 @@ Complete integration guide covering:
 
 Each example includes relevant request and response headers.
 
-**Read time:** 10 minutes  
+**Read time:** 10 minutes
 **Audience:** Developers writing clients and integrations
 
 ---
@@ -96,7 +96,7 @@ Step-by-step guide to migrate from legacy configs:
 - Response field migration guide
 - Verification and validation tools
 
-**Read time:** 15 minutes  
+**Read time:** 15 minutes
 **Audience:** Users with existing integrations
 
 ---
@@ -111,7 +111,7 @@ Solutions for common issues:
 - Scripts for bulk processing
 - Debug procedures
 
-**Read time:** 10 minutes  
+**Read time:** 10 minutes
 **Audience:** Everyone (bookmark this!)
 
 ---
@@ -127,7 +127,7 @@ Configuration format guide:
 - Flat format (deprecated)
 - Field breakdowns and examples
 
-**Read time:** 5 minutes  
+**Read time:** 5 minutes
 **Audience:** Configuration creators
 
 ---
@@ -149,7 +149,7 @@ Each rule shows:
 - Issue detection
 - Multiple fix strategies
 
-**Read time:** 10 minutes  
+**Read time:** 10 minutes
 **Audience:** Diagram creators and reviewers
 
 ---
@@ -164,7 +164,7 @@ Suppression strategies:
 - Negation (exemption override)
 - Examples by rule type
 
-**Read time:** 5 minutes  
+**Read time:** 5 minutes
 **Audience:** Advanced configuration users
 
 ---
@@ -182,7 +182,7 @@ Performance optimization guide:
 - Memory and timeout tuning
 - Troubleshooting timeouts
 
-**Read time:** 10 minutes  
+**Read time:** 10 minutes
 **Audience:** DevOps and operators
 
 ---
@@ -197,7 +197,7 @@ Monitoring and observability:
 - Alerting examples
 - Dashboard setup
 
-**Read time:** 8 minutes  
+**Read time:** 8 minutes
 **Audience:** SREs and operators
 
 ---
@@ -214,7 +214,7 @@ Ready-to-use diagram templates:
 - Error handling pipelines
 - Microservices architectures
 
-**Read time:** 5 minutes  
+**Read time:** 5 minutes
 **Audience:** Diagram creators
 
 ---
@@ -227,7 +227,7 @@ Supported diagram types and features:
 - Linting capability per type
 - Feature availability matrix
 
-**Read time:** 3 minutes  
+**Read time:** 3 minutes
 **Audience:** Everyone
 
 ---
@@ -244,7 +244,7 @@ Security Analysis Results Format (SARIF 2.1.0):
 - Security tool compatibility
 - Rule mapping guide
 
-**Read time:** 8 minutes  
+**Read time:** 8 minutes
 **Audience:** Security engineers, CI/CD practitioners
 
 ---
@@ -258,7 +258,7 @@ Rule ID organization and namespacing:
 - Future extensibility patterns
 - Migration to namespaced IDs
 
-**Read time:** 5 minutes  
+**Read time:** 5 minutes
 **Audience:** Advanced users, tool integrators
 
 ---
@@ -271,7 +271,7 @@ Subgraph identification patterns:
 - Scope and limitations
 - Future compatibility notes
 
-**Read time:** 3 minutes  
+**Read time:** 3 minutes
 **Audience:** Advanced configuration users
 
 ---
