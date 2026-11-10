@@ -3,7 +3,7 @@
 The benchmark suite evaluates diagram analysis accuracy and performance across all rule families. Run it via the Go binary:
 
 ```bash
-go run ./cmd/merm8-bench --input benchmarks/fixtures/ --output json,html,csv,markdown
+go run ./benchmarks/main.go -output json,html,csv,markdown
 ```
 
 ## Capabilities
@@ -24,27 +24,25 @@ go run ./cmd/merm8-bench --input benchmarks/fixtures/ --output json,html,csv,mar
 
 ## Fixture Format
 
-Test fixtures use Mermaid comment annotations:
+Test fixtures use Mermaid comment annotations in the `.mmd` files under `benchmarks/cases/`:
 
-- `%% @rule: no-cycles:1` — specifies expected issue count for documentation (enforced strict validation planned)
-- Multiple rules: `%% @rule: max-fanout:3, max-depth:1`
+- `%% @rule: no-cycles` — declares which rule the case exercises; if multiple comma-separated rule IDs are listed, the first is used
+- `%% @count: N` — specifies the expected number of issues for a violation case (default: 1)
 - Expected issues are matched against actual rule output to compute detection rate and false positive rate
 
 Fixture directory structure:
 
 ```
-benchmarks/fixtures/
-  flowchart/          # 18 existing fixtures
-    valid_flowchart.mmd
-    disconnected_nodes.mmd
-    ...
-  sequence/           # 17 new fixtures
-  class/              # 12 new fixtures
-  er/                 # 10 new fixtures
-  state/              # 10 new fixtures
+benchmarks/cases/
+  flowchart/          # 22 fixtures
+    valid/  edge-cases/  violations/
+  sequence/           # 17 fixtures
+  class/              # 12 fixtures
+  er/                 # 10 fixtures
+  state/              # 11 fixtures
 ```
 
-Total: 67 test cases across 5 diagram families. As new rules are registered, existing fixtures automatically evaluate against them.
+Total: 72 test cases across 5 diagram families. As new rules are registered, existing fixtures automatically evaluate against them.
 
 ## Report Formats
 
@@ -78,10 +76,9 @@ GitHub-flavored markdown suitable for CI/CD workflow comments. Pipe-delimited ta
 ```yaml
 - name: Run benchmark suite
   run: |
-    go run ./cmd/merm8-bench \
-      --input benchmarks/fixtures/ \
-      --output json,markdown \
-      --compare-baseline benchmarks/reports/baseline.json || true
+    go run ./benchmarks/main.go \
+      -output json,markdown \
+      -compare-baseline benchmarks/baselines/v0.1.0.json || true
 - name: Post results to PR
   if: github.event_name == 'pull_request'
   run: |
@@ -90,7 +87,7 @@ GitHub-flavored markdown suitable for CI/CD workflow comments. Pipe-delimited ta
 
 ### Baseline Comparison Workflow
 
-1. Capture baseline on a known-good commit: `--compare-baseline none` (generates `baseline.json`)
-2. Compare subsequent runs: `--compare-baseline benchmarks/reports/baseline.json`
+1. Save a known-good run's JSON report as a baseline (e.g., copy `benchmarks/reports/latest-results.json` to `benchmarks/baselines/<version>.json`)
+2. Compare subsequent runs: `--compare-baseline benchmarks/baselines/<version>.json`
 3. Review regression alerts for parse time >10% or lint time >10% increases
 4. Update baseline when regression is intentional (e.g., after adding new rules)

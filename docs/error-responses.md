@@ -355,8 +355,8 @@ These errors indicate problems during Mermaid parsing or execution.
 
 **Timeout Limits**:
 
-- Default: 30 seconds (configurable per-request: 1-60 seconds)
-- Set via config: `{"parser": {"timeout-seconds": 30}}`
+- Default: 5 seconds (server default; configurable per-request: 1-60 seconds)
+- Set via config: `{"parser": {"timeout_seconds": 30}}`
 
 **Likely Causes**:
 
@@ -372,7 +372,7 @@ These errors indicate problems during Mermaid parsing or execution.
    {
      "code": "...",
      "config": {...},
-     "parser": {"timeout-seconds": 45}
+     "parser": {"timeout_seconds": 45}
    }
    ```
 
@@ -403,7 +403,7 @@ These errors indicate problems during Mermaid parsing or execution.
    ```json
    {
      "code": "...",
-     "parser": {"max-memory-mb": 1024}
+     "parser": {"max_old_space_mb": 1024}
    }
    ```
 
@@ -619,7 +619,7 @@ X-RateLimit-Reset: 1704067890
 
 2. **Configure timeouts based on expected diagram complexity**:
    - Simple diagrams: 5-10s
-   - Medium complexity: 15-30s (default)
+   - Medium complexity: 15-30s
    - Complex/pathological: 45-60s (per-request)
 
 3. **Enable rate limiting if needed**:
