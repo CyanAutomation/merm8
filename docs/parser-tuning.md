@@ -319,11 +319,11 @@ histogram_quantile(0.95, rate(parser_duration_seconds_bucket[5m]))
 # Timeout rate
 rate(analyze_requests_total{outcome="parser_timeout"}[5m])
 
-# Memory limit errors
-rate(analyze_requests_total{outcome="parser_memory_limit_error"}[5m])
+# Memory limit errors (outcome is parser_subprocess_error; the HTTP error code is parser_memory_limit)
+rate(analyze_requests_total{outcome="parser_subprocess_error"}[5m])
 
 # Server busy rate (concurrency limit hit)
-rate(analyze_requests_total{outcome="server_busy"}[5m])
+rate(request_total{status="503"}[5m])
 
 # Request concurrency (in-flight)
 request_duration_seconds (as gauge proxy: concurrent requests)
@@ -343,7 +343,7 @@ action: Increase PARSER_TIMEOUT_SECONDS or split diagrams
 
 ```yaml
 alert: ParserMemoryLimitErrors
-expr: increase(analyze_requests_total{outcome="parser_memory_limit_error"}[5m]) > 0
+expr: increase(analyze_requests_total{outcome="parser_subprocess_error"}[5m]) > 0
 action: Increase PARSER_MAX_OLD_SPACE_MB
 ```
 
@@ -351,7 +351,7 @@ action: Increase PARSER_MAX_OLD_SPACE_MB
 
 ```yaml
 alert: ConcurrencyLimitHit
-expr: rate(analyze_requests_total{outcome="server_busy"}[5m]) > 0.05
+expr: rate(request_total{status="503"}[5m]) > 0.05
 action: Increase PARSER_CONCURRENCY_LIMIT or add more instances
 ```
 

@@ -460,17 +460,16 @@ Content-Type: application/json
 }
 ```
 
-**Response (503 Service Unavailable):**
+**Response (504 Gateway Timeout):**
 
 ```json
 {
   "valid": false,
   "error": {
     "code": "parser_timeout",
-    "message": "Parser timeout after 2 seconds",
-    "kind": "timeout"
+    "message": "parser timed out while validating Mermaid code"
   },
-  "request-id": "bb0e8400-e29b-41d4-a716-446655440006",
+  "request-id": "bb0e8400-e29b-41d4-a716-446655440006"
 }
 ```
 
