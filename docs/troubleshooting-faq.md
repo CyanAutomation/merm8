@@ -10,11 +10,12 @@ Common issues, error codes, and solutions for merm8.
 | ---- | ------------------- | ------------------------------- | ------------------------------------------------------------ |
 | 200  | OK                  | Request successful              | No action needed                                             |
 | 400  | Bad Request         | Invalid JSON or config          | Check request format and config validity                     |
-| 403  | Forbidden           | Auth token missing/invalid      | Verify `Authorization: Bearer <token>` header                |
+| 401  | Unauthorized        | Auth token missing/invalid      | Verify `Authorization: Bearer <token>` header                |
+| 413  | Payload Too Large   | Request body exceeds 1 MiB      | Reduce payload size or split the request                     |
 | 429  | Too Many Requests   | Rate limit exceeded             | Implement exponential backoff; check `X-RateLimit-*` headers |
-| 502  | Bad Gateway         | Server communication issue      | Restart merm8 process; check network routing                 |
-| 503  | Service Unavailable | Server busy or parser timeout   | Reduce concurrency; increase `PARSER_TIMEOUT_SECONDS`        |
-| 504  | Gateway Timeout     | Request exceeded server timeout | Simplify diagram or increase timeout                         |
+| 500  | Internal Server Error | Parser subprocess/decode/contract failure | Check parser environment; simplify the diagram      |
+| 503  | Service Unavailable | Parser concurrency limit reached | Retry after `Retry-After`; increase `PARSER_CONCURRENCY_LIMIT` if capacity allows |
+| 504  | Gateway Timeout     | Parser exceeded timeout         | Simplify diagram or increase `PARSER_TIMEOUT_SECONDS`        |
 
 ---
 
@@ -118,7 +119,7 @@ curl http://localhost:8080/v1/rules | jq '.rules[].id'
   "valid": false,
   "error": {
     "code": "parser_timeout",
-    "message": "Parser timeout after 5 seconds"
+    "message": "parser timed out while validating Mermaid code"
   }
 }
 ```

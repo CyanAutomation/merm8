@@ -40,15 +40,14 @@ This guide demonstrates the three config formats supported by merm8: flat (legac
 
 ## Nested Format (v0.9.x – v1.0.x, deprecated) ⚠️
 
-**Legacy format. Still accepted in v1.0.x without strict mode, but deprecated.**
+**Legacy format. Accepted without strict mode, but deprecated.**
 
 ```json
 {
   "code": "graph TD\n  A-->B\n  B-->C",
   "config": {
-    "schema-version": "v1",
     "rules": {
-      "core/max-fanout": {
+      "max-fanout": {
         "limit": 2
       }
     }
@@ -58,8 +57,9 @@ This guide demonstrates the three config formats supported by merm8: flat (legac
 
 **Difference from Canonical:**
 
-- Identical structure — nested format is just a variant of canonical.
-- Will emit deprecation warning if `config.rules` is present but `config.schema-version` is absent.
+- Uses unversioned `config.rules` without a `config.schema-version` field.
+- Emits a deprecation warning whenever `config.rules` is present but `config.schema-version` is absent.
+- Accepts the same rule options as canonical; only the wrapper shape differs.
 
 ---
 
@@ -90,8 +90,8 @@ Content-Type: application/json
 **Deprecation Timeline:**
 
 - v1.0.0 (current): Supported with warnings
-- v1.1.0 (Q1 2026): Released – still supported with warnings
-- v1.2.0 (Q2 2026): Released – **Removed**; sunset date was **2026-12-31**
+- v1.1.0 (planned): Still supported with warnings
+- Sunset date: **2026-12-31** (see `GET /v1/config-versions`, format `unversioned`); flat config is rejected after this date
 
 ---
 
@@ -134,7 +134,7 @@ Content-Type: application/json
 
 ### From snake_case to kebab-case
 
-**Before (v1.0.0 – v1.1.0):**
+**Before (v1.0.0 – v1.2.0):**
 
 ```json
 {
@@ -166,9 +166,8 @@ Content-Type: application/json
 
 **Timeline:**
 
-- v1.0.0 (current): Both accepted (snake_case generates warnings)
-- v1.1.0 (Q1 2026): snake_case removed
-- v1.2.0 (Q2 2026): Only kebab-case accepted
+- v1.0.0 (current): Both variants accepted (snake_case generates warnings)
+- Sunset date: **2026-09-30** (see `GET /v1/config-versions`, format `schema_version (underscore)`); only kebab-case accepted after this date
 
 ---
 

@@ -349,14 +349,14 @@ Interpretation matrix:
 
 - Missing `Access-Control-Allow-Origin` (regardless of status) ⇒ CORS allowlist problem.
 - `503` with `error.code="server_busy"` and CORS header present ⇒ backend concurrency/capacity issue (not CORS).
-- `503` with `error.code="parser_timeout"` and CORS header present ⇒ parser timeout under load/complex input.
+- `504` with `error.code="parser_timeout"` and CORS header present ⇒ parser timeout under load/complex input.
 
 #### Operational telemetry interpretation
 
 When diagnosing incidents, correlate API behavior with Prometheus metrics:
 
 - `cors_rejected_total` increasing ⇒ allowlist/CORS origin mismatch.
-- `analyze_requests_total{outcome="server_busy"}` increasing ⇒ analyze concurrency/capacity bottleneck.
+- `request_total{status="503"}` increasing ⇒ analyze concurrency/capacity bottleneck (`server_busy` responses).
 
 **Example origin mismatch:**
 
@@ -555,16 +555,15 @@ Content-Type: application/json
 }
 ```
 
-**Response (503 Service Unavailable):**
+**Response (504 Gateway Timeout):**
 
 ```json
 {
   "valid": false,
   "error": {
     "code": "parser_timeout",
-    "message": "Parser timeout after 2 seconds",
-    "details": "Diagram too complex for configured timeout"
-  },
+    "message": "parser timed out while validating Mermaid code"
+  }
 }
 ```
 
