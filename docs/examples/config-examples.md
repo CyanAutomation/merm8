@@ -219,16 +219,13 @@ Configurable graph nesting depth limit.
 
 ### no-cycles
 
-Configurable self-loop handling; rule detects all other circular dependencies.
+No configuration options — rule detects all circular dependencies.
 
 ```json
 "core/no-cycles": {
-  "allow-self-loop": false,
   "suppression-selectors": ["node:LegacyCircular"]
 }
 ```
-
-**Default:** `allow-self-loop: false`
 
 ---
 
