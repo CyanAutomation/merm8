@@ -63,7 +63,7 @@ Complete integration guide covering:
 
 #### [Complete Request/Response Examples](complete-request-response-examples.md)
 
-15 real-world scenarios with actual JSON:
+16 real-world scenarios with actual JSON:
 
 1. Minimal valid request
 2. Single rule validation
@@ -72,10 +72,11 @@ Complete integration guide covering:
 5. Parse error response
 6. Config validation error
 7. Parser timeout
-8. Rate limiting
-9. Deprecation warnings
-10. Complex enterprise diagram
-11. Raw analysis format
+8. Parser timeout response (504)
+9. Rate limiting
+10. Deprecation warnings
+11. Complex enterprise diagram
+12. Raw analysis format
 
 Each example includes relevant request and response headers.
 

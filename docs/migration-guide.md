@@ -30,6 +30,7 @@ merm8 v1.0.0 introduced a versioned config schema (`schema-version: v1`) to supp
 | Snake_case option keys                                       | v1.0.0     | 2026-09-30   | **Sunset passed** – migrate immediately |
 ---
 
+
 ## Deprecated API Endpoints
 
 All API endpoints use the `/v1/*` prefix. Only British-English spelling aliases for analyze operations (`POST /v1/analyse`, `POST /v1/analyse/raw`) remain active as temporary compatibility routes; they emit deprecation headers and are scheduled for removal in v1.2.0 (Q2 2026).

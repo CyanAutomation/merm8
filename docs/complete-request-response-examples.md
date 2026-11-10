@@ -835,7 +835,7 @@ See [docs/examples/rule-suppressions.md](examples/rule-suppressions.md) for deta
 
 ---
 
-## 15. Server Busy: Parser Concurrency Limit Reached
+## 16. Server Busy: Parser Concurrency Limit Reached
 
 When the parser concurrency limit is reached (default 8 concurrent requests), the server returns HTTP 503 with the error code `server_busy` and includes a `Retry-After` header indicating when to retry.
 
