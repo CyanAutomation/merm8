@@ -372,22 +372,36 @@ test("dependency review runs on pull requests with a pinned action", () => {
 test("Go vulnerability scanning runs on PRs and a schedule with a pinned tool", () => {
   const workflow = readWorkflow(".github/workflows/govulncheck.yml");
   const steps = workflow.jobs?.govulncheck?.steps ?? [];
-  const setupGo = steps.find((step) =>
-    step.uses?.startsWith("actions/setup-go@"),
+  const setupToolGo = steps.find((step) =>
+    step.uses?.startsWith("actions/setup-go@") &&
+    step.with?.["go-version"] === "1.26.x",
+  );
+  const setupProjectGo = steps.find((step) =>
+    step.uses?.startsWith("actions/setup-go@") &&
+    step.with?.["go-version-file"] === "go.mod",
+  );
+  const install = steps.find((step) =>
+    (step.run ?? "").includes("go install golang.org/x/vuln/cmd/govulncheck@"),
   );
   const scan = steps.find((step) =>
-    (step.run ?? "").includes("golang.org/x/vuln/cmd/govulncheck@"),
+    (step.run ?? "").includes("govulncheck ./..."),
   );
 
   assert.ok(workflow.on?.pull_request);
   assert.ok(workflow.on?.push?.branches?.includes("main"));
   assert.ok((workflow.on?.schedule?.length ?? 0) > 0);
-  assert.match(setupGo?.uses ?? "", /@[0-9a-f]{40}$/);
-  assert.equal(setupGo?.with?.["go-version-file"], "go.mod");
-  assert.equal(setupGo?.with?.["go-version"], undefined);
-  assert.equal(setupGo?.with?.cache, false);
+  assert.match(setupToolGo?.uses ?? "", /@[0-9a-f]{40}$/);
+  assert.equal(setupToolGo?.with?.cache, false);
+  assert.match(setupProjectGo?.uses ?? "", /@[0-9a-f]{40}$/);
+  assert.equal(setupProjectGo?.with?.["go-version-file"], "go.mod");
+  assert.equal(setupProjectGo?.with?.cache, false);
+  assert.equal(install?.env?.GOBIN, "${{ runner.temp }}/bin");
+  assert.match(
+    install?.run ?? "",
+    /go install golang\.org\/x\/vuln\/cmd\/govulncheck@v1\.9\.0/,
+  );
   assert.match(
     scan?.run ?? "",
-    /go run golang\.org\/x\/vuln\/cmd\/govulncheck@v1\.9\.0 \.\/\.\.\./,
+    /\$\{\{ runner\.temp \}\}\/bin\/govulncheck \.\/\.\.\./,
   );
 });
