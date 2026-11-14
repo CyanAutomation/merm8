@@ -25,24 +25,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # govulncheck v1.9.0 requires Go 1.26; build it separately, then scan with the project toolchain.
-      - name: Set up Go to install govulncheck
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: "1.26.x"
-          cache: false
-      - name: Install govulncheck
-        env:
-          GOBIN: ${{ runner.temp }}/bin
-        run: |
-          mkdir -p "$GOBIN"
-          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
-      - name: Set up Go for the project
+      - name: Set up Go from go.mod
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
       - name: Scan Go packages for reachable vulnerabilities
-        run: |
-          go version
-          ${{ runner.temp }}/bin/govulncheck ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...

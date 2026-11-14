@@ -372,36 +372,36 @@ test("dependency review runs on pull requests with a pinned action", () => {
 test("Go vulnerability scanning runs on PRs and a schedule with a pinned tool", () => {
   const workflow = readWorkflow(".github/workflows/govulncheck.yml");
   const steps = workflow.jobs?.govulncheck?.steps ?? [];
-  const setupToolGo = steps.find((step) =>
-    step.uses?.startsWith("actions/setup-go@") &&
-    step.with?.["go-version"] === "1.26.x",
-  );
-  const setupProjectGo = steps.find((step) =>
-    step.uses?.startsWith("actions/setup-go@") &&
-    step.with?.["go-version-file"] === "go.mod",
-  );
-  const install = steps.find((step) =>
-    (step.run ?? "").includes("go install golang.org/x/vuln/cmd/govulncheck@"),
-  );
+  const setupGo = steps.find((step) => step.uses?.startsWith("actions/setup-go@"));
   const scan = steps.find((step) =>
-    (step.run ?? "").includes("govulncheck ./..."),
+    (step.run ?? "").includes("golang.org/x/vuln/cmd/govulncheck@"),
+  );
+  const goVersionMatch = readRepositoryFile("go.mod").match(
+    /^go (\d+)\.(\d+)(?:\.(\d+))?$/m,
   );
 
   assert.ok(workflow.on?.pull_request);
   assert.ok(workflow.on?.push?.branches?.includes("main"));
   assert.ok((workflow.on?.schedule?.length ?? 0) > 0);
-  assert.match(setupToolGo?.uses ?? "", /@[0-9a-f]{40}$/);
-  assert.equal(setupToolGo?.with?.cache, false);
-  assert.match(setupProjectGo?.uses ?? "", /@[0-9a-f]{40}$/);
-  assert.equal(setupProjectGo?.with?.["go-version-file"], "go.mod");
-  assert.equal(setupProjectGo?.with?.cache, false);
-  assert.equal(install?.env?.GOBIN, "${{ runner.temp }}/bin");
-  assert.match(
-    install?.run ?? "",
-    /go install golang\.org\/x\/vuln\/cmd\/govulncheck@v1\.9\.0/,
+  assert.equal(
+    steps.filter((step) => step.uses?.startsWith("actions/setup-go@")).length,
+    1,
+  );
+  assert.match(setupGo?.uses ?? "", /@[0-9a-f]{40}$/);
+  assert.equal(setupGo?.with?.["go-version-file"], "go.mod");
+  assert.equal(setupGo?.with?.["go-version"], undefined);
+  assert.equal(setupGo?.with?.cache, false);
+  assert.ok(goVersionMatch, "go.mod must declare the project Go version");
+  const [, goMajor, goMinor, goPatch = "0"] = goVersionMatch;
+  assert.ok(
+    Number(goMajor) > 1 ||
+      (Number(goMajor) === 1 &&
+        (Number(goMinor) > 26 ||
+          (Number(goMinor) === 26 && Number(goPatch) >= 11))),
+    "govulncheck reports reachable standard library vulnerabilities before Go 1.26.11",
   );
   assert.match(
     scan?.run ?? "",
-    /\$\{\{ runner\.temp \}\}\/bin\/govulncheck \.\/\.\.\./,
+    /go run golang\.org\/x\/vuln\/cmd\/govulncheck@v1\.9\.0 \.\/\.\.\./,
   );
 });
