@@ -363,7 +363,7 @@ test("dependency review runs on pull requests with a pinned action", () => {
 
   assert.ok(workflow.on?.pull_request, "dependency review must run on pull requests");
   assert.match(review?.uses ?? "", /@[0-9a-f]{40}$/);
-  assert.equal(review?.with?.["fail-on-severity"], "high");
+  assert.equal(review?.with?.["fail-on-severity"], "moderate");
   assert.equal(review?.with?.["comment-summary-in-pr"], "never");
   assert.equal(workflow.jobs?.["dependency-review"]?.permissions?.contents, "read");
   assert.equal(workflow.jobs?.["dependency-review"]?.permissions?.["pull-requests"], "read");
@@ -383,7 +383,8 @@ test("Go vulnerability scanning runs on PRs and a schedule with a pinned tool", 
   assert.ok(workflow.on?.push?.branches?.includes("main"));
   assert.ok((workflow.on?.schedule?.length ?? 0) > 0);
   assert.match(setupGo?.uses ?? "", /@[0-9a-f]{40}$/);
-  assert.equal(setupGo?.with?.["go-version"], "1.26.x");
+  assert.equal(setupGo?.with?.["go-version-file"], "go.mod");
+  assert.equal(setupGo?.with?.["go-version"], undefined);
   assert.equal(setupGo?.with?.cache, false);
   assert.match(
     scan?.run ?? "",
