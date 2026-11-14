@@ -114,6 +114,3 @@ jobs:
     uses: ./.github/workflows/deploy-cloudflare.yml
     with:
       build_sha: ${{ github.sha }}
-    secrets:
-      cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

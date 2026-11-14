@@ -238,4 +238,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. For bugs and feature requests, use [GitHub Issues](https://github.com/CyanAutomation/merm8/issues). The project is licensed under [Apache-2.0](LICENSE).
 
-The release workflow publishes GitHub Releases from validated semantic-version tags. See [Releases](https://github.com/CyanAutomation/merm8/releases) and the [Changelog](CHANGELOG.md) for release history.
+Create releases manually through GitHub's Releases UI. See [Releases](https://github.com/CyanAutomation/merm8/releases) and the [Changelog](CHANGELOG.md) for release history.
