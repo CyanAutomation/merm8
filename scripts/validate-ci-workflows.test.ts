@@ -15,21 +15,25 @@ function readRepositoryFile(filePath: string): string {
 }
 
 type Workflow = {
+  on?: {
+    pull_request?: { branches?: string[]; paths?: string[] };
+    push?: { branches?: string[]; tags?: string[] };
+    schedule?: Array<{ cron?: string }>;
+    workflow_call?: { secrets?: Record<string, unknown> };
+  };
   concurrency?: {
     group?: string;
     "cancel-in-progress"?: boolean | string;
-  };
-  on?: {
-    pull_request?: {
-      paths?: string[];
-    };
   };
   jobs?: Record<
     string,
     {
       if?: string;
       needs?: string | string[];
+      permissions?: Record<string, string>;
       outputs?: Record<string, string>;
+      environment?: string | { name?: string; url?: string };
+      secrets?: Record<string, string>;
       steps?: Array<{
         id?: string;
         name?: string;
@@ -272,7 +276,6 @@ test("the repository declares and uses Node.js 26", () => {
     ".github/workflows/kaseki-dry.yaml",
     ".github/workflows/race-tests.yml",
     ".github/workflows/readme-links.yml",
-    ".github/workflows/release.yml",
   ];
 
   for (const filePath of nodeWorkflows) {
@@ -324,4 +327,66 @@ test("the repository declares and uses Node.js 26", () => {
     parserManifest.engines?.node,
   );
   assert.equal(readRepositoryFile(".nvmrc").trim(), "26");
+});
+
+test("Cloudflare deployment reads credentials from the cloudflare environment", () => {
+  const workflow = readWorkflow(".github/workflows/deploy-cloudflare.yml");
+  const deploy = workflow.jobs?.deploy;
+  const deploymentStep = deploy?.steps?.find((step) =>
+    (step.run ?? "").includes("wrangler deploy"),
+  );
+  const environment = deploy?.environment;
+  const ciWorkflow = readWorkflow(".github/workflows/ci.yml");
+
+  assert.equal(
+    typeof environment === "string" ? environment : environment?.name,
+    "cloudflare",
+  );
+  assert.equal(
+    deploymentStep?.env?.CLOUDFLARE_API_TOKEN,
+    "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+  );
+  assert.equal(
+    deploymentStep?.env?.CLOUDFLARE_ACCOUNT_ID,
+    "${{ vars.CLOUDFLARE_ACCOUNT_ID }}",
+  );
+  assert.equal(workflow.on?.workflow_call?.secrets, undefined);
+  assert.equal(ciWorkflow.jobs?.["deploy-production"]?.secrets, undefined);
+});
+
+test("dependency review runs on pull requests with a pinned action", () => {
+  const workflow = readWorkflow(".github/workflows/dependency-review.yml");
+  const steps = workflow.jobs?.["dependency-review"]?.steps ?? [];
+  const review = steps.find((step) =>
+    step.uses?.startsWith("actions/dependency-review-action@"),
+  );
+
+  assert.ok(workflow.on?.pull_request, "dependency review must run on pull requests");
+  assert.match(review?.uses ?? "", /@[0-9a-f]{40}$/);
+  assert.equal(review?.with?.["fail-on-severity"], "high");
+  assert.equal(review?.with?.["comment-summary-in-pr"], "never");
+  assert.equal(workflow.jobs?.["dependency-review"]?.permissions?.contents, "read");
+  assert.equal(workflow.jobs?.["dependency-review"]?.permissions?.["pull-requests"], "read");
+});
+
+test("Go vulnerability scanning runs on PRs and a schedule with a pinned tool", () => {
+  const workflow = readWorkflow(".github/workflows/govulncheck.yml");
+  const steps = workflow.jobs?.govulncheck?.steps ?? [];
+  const setupGo = steps.find((step) =>
+    step.uses?.startsWith("actions/setup-go@"),
+  );
+  const scan = steps.find((step) =>
+    (step.run ?? "").includes("golang.org/x/vuln/cmd/govulncheck@"),
+  );
+
+  assert.ok(workflow.on?.pull_request);
+  assert.ok(workflow.on?.push?.branches?.includes("main"));
+  assert.ok((workflow.on?.schedule?.length ?? 0) > 0);
+  assert.match(setupGo?.uses ?? "", /@[0-9a-f]{40}$/);
+  assert.equal(setupGo?.with?.["go-version"], "1.26.x");
+  assert.equal(setupGo?.with?.cache, false);
+  assert.match(
+    scan?.run ?? "",
+    /go run golang\.org\/x\/vuln\/cmd\/govulncheck@v1\.9\.0 \.\/\.\.\./,
+  );
 });
