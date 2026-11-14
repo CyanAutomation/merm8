@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Pull requests now check introduced dependencies for known vulnerabilities, and weekly Go vulnerability scans check reachable dependencies.
 - Bounded, process-local analysis result caching for the Go API and Worker; short-lived semantic decision reuse with concurrent request coalescing; conditional caching for stable metadata endpoints.
 - Estimated byte budgets and Prometheus occupancy reporting for Go parser caches.
 - Prometheus hit, miss, and eviction counters for Go analysis result caching.
@@ -17,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Release creation is manual through GitHub's Releases UI; the repository no longer defines an automated release workflow.
 - Raised the minimum Node.js version for parser and project tooling to 26.
 - Worker deterministic analysis endpoints now share a 120-request-per-source-IP-per-minute limit.
 - Per-request Go parser memory profiles now use one-shot subprocesses; only the configured profile uses retained workers.
