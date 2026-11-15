@@ -20,6 +20,8 @@ Use this skill when prompts include or imply:
 ## Mandatory rules
 
 - Read the current implementation and canonical project docs before relying on examples.
+- Identify the source of truth for details that can change, and verify them before applying this guidance.
+- Cross-reference another skill when the task crosses a component or contract boundary.
 - Preserve public contracts unless the task explicitly calls for a contract change.
 - Keep changes scoped and report assumptions that affect the result.
 

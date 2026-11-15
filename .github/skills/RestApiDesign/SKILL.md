@@ -17,6 +17,8 @@ Use this skill when adding or changing HTTP routes, payloads, status codes, head
 
 ## Mandatory rules
 
+- Treat the route, status, and field details below as current guidance; confirm them in the target runtime's route table and canonical contract before editing.
+- Pair this skill with `GoBackendDevelopment` or `CloudflareWorkerDeployment` for implementation work. Their contracts are not interchangeable.
 - The canonical Go analysis route is `POST /v1/analyze`. The `/v1/analyse` spelling is a deprecated compatibility alias. Keep new examples on the canonical route.
 - The preferred config shape is `{"schema-version":"v1","rules":{...}}`. Use the documented kebab-case field names, such as `diagram-type`, `syntax-error`, `node-count`, and `rule-id`.
 - Keep syntax and lint outcomes separate from HTTP request failures. Mermaid syntax errors are returned as an analysis response with HTTP 200 and `valid: false`; invalid requests/config return 400; oversized bodies return 413; parser saturation returns 503; parser timeout returns 504; internal parser failures return 500.

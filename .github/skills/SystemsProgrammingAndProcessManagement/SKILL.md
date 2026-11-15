@@ -17,6 +17,8 @@ Use this skill when changing subprocess invocation, worker pools, parser timeout
 
 ## Mandatory rules
 
+- Confirm modes, limits, and shutdown behavior against the current parser configuration and lifecycle code before relying on the defaults below.
+- Use `NodeJsAndJavaScript` as well when a process protocol change requires coordinated updates to the Node bridge.
 - Treat `internal/parser` as the owner of process lifecycle and protocol. The default `PARSER_MODE=pool` reuses long-lived workers; `subprocess` selects one-parse-per-process behavior.
 - In worker mode, requests and replies are newline-delimited JSON envelopes. Preserve request IDs, serialize access to each worker, and recycle unhealthy or timed-out workers.
 - The parser timeout defaults to five seconds and is configured with `PARSER_TIMEOUT_SECONDS`; do not copy a hard-coded timeout into callers. Respect the existing bounded parser configuration and memory limits.

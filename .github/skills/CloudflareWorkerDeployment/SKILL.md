@@ -17,6 +17,8 @@ Use this skill when changing Cloudflare Worker routes, parser/engine behavior, b
 
 ## Mandatory rules
 
+- Confirm bindings, routes, limits, and secrets in the current Worker code, `wrangler.toml`, and `docs/worker-api.md`; these values can change.
+- Use `RestApiDesign` as well when changing the Worker HTTP contract and `GitHubActionsAndCI` when changing workflow behavior.
 - The Wrangler entry point is `worker/index.ts`; shared Worker-safe parser and analysis code lives in `src/`.
 - The Worker is a separate implementation from the Go API. Check `docs/worker-api.md`, `worker/openapi.ts`, and runtime routes before claiming endpoint or rule parity.
 - Use Wrangler configuration and bindings from `wrangler.toml`. Do not put credentials in source or plain configuration; use Wrangler secrets for `API_KEY` and `OPENROUTER_API_KEY` when those features are configured.
