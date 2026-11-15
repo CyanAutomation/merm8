@@ -89,6 +89,17 @@ test("analysis keeps diagram-specific rules for sequence, class, ER, and state d
   }
 });
 
+test("sequence analysis reports a repeated undeclared actor only once", () => {
+  const result = analyzeMermaid(
+    "sequenceDiagram\nparticipant Alice\nAlice->>Ghost: First\nGhost->>Alice: Second",
+  );
+
+  assert.deepEqual(
+    result.issues.map(({ "rule-id": rule, line, message }) => [rule, line, message]),
+    [["no-undefined-actors", 3, "undefined actor reference: Ghost"]],
+  );
+});
+
 test("disabled rules do not change structural metrics", () => {
   const result = analyzeMermaid("flowchart TD\nA --> B\nSolo", {
     "no-disconnected-nodes": { enabled: false },

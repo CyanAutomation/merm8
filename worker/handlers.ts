@@ -5,9 +5,58 @@ import { SemanticReviewError } from "../src/semantic/types.js";
 import { allowed, isRecord, json, ANALYZE_RETRY_AFTER_SECONDS, MAX_ANALYZE_BODY_BYTES, SEMANTIC_REVIEW_RETRY_AFTER_SECONDS, type Env } from "./shared.js";
 import { ruleConfig, validateRuleConfig } from "./config.js";
 import { toSarif } from "./sarif.js";
-import { canonicalJson, TtlLruCache } from "../src/cache/ttl-lru.js";
+import { canonicalJson } from "../src/cache/canonical-json.js";
+import { TtlLruCache } from "../src/cache/ttl-lru.js";
 
 const analysisCache = new TtlLruCache<ReturnType<typeof analyzeMermaid>>(128, 60_000, 4 * 1024 * 1024);
+
+type RateLimitOptions = {
+  limiter: Env["ANALYZE_LIMITER"];
+  namespace: string;
+  service: string;
+  unavailableMessage: string;
+  limitedMessage: string;
+  retryAfterSeconds: number;
+};
+
+function rateLimitUnavailable(message: string, retryAfterSeconds: number): Response {
+  return json(
+    { error: { code: "rate_limit_unavailable", message } },
+    503,
+    { "retry-after": String(retryAfterSeconds) },
+  );
+}
+
+async function rateLimitResponse(
+  request: Request,
+  options: RateLimitOptions,
+): Promise<Response | undefined> {
+  const { limiter, namespace, service, unavailableMessage, limitedMessage, retryAfterSeconds } = options;
+  if (!limiter) {
+    console.error(`${service} rate limiter is not configured`);
+    return rateLimitUnavailable(unavailableMessage, retryAfterSeconds);
+  }
+
+  const clientIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (!clientIp) {
+    console.error(`${service} client IP is unavailable`);
+    return rateLimitUnavailable(unavailableMessage, retryAfterSeconds);
+  }
+
+  try {
+    const { success } = await limiter.limit({ key: `${namespace}:${clientIp}` });
+    if (success) return undefined;
+  } catch {
+    console.error(`${service} rate limiter failed`);
+    return rateLimitUnavailable(unavailableMessage, retryAfterSeconds);
+  }
+
+  return json(
+    { error: { code: "rate_limited", message: limitedMessage } },
+    429,
+    { "retry-after": String(retryAfterSeconds) },
+  );
+}
 
 async function parseAnalyzeBody(request: Request): Promise<{ body?: { code?: unknown; config?: unknown }; response?: Response }> {
   const contentLength = Number(request.headers.get("content-length"));
@@ -28,42 +77,35 @@ async function parseAnalyzeBody(request: Request): Promise<{ body?: { code?: unk
   }
 }
 
+function validateCodeBody(
+  body: unknown,
+  invalidObjectMessage: string,
+): { code: string; config?: unknown } | Response {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return json({ error: { code: "invalid_request", message: invalidObjectMessage } }, 400);
+  }
+  const record = body as { code?: unknown; config?: unknown };
+  if (typeof record.code !== "string") {
+    return json({ error: { code: "invalid_request", message: "code must be a string" } }, 400);
+  }
+  return { code: record.code, config: record.config };
+}
+
 async function semanticReviewInput(request: Request, env: Env): Promise<{ code?: string; response?: Response }> {
-  const retryHeaders = { "retry-after": String(SEMANTIC_REVIEW_RETRY_AFTER_SECONDS) };
-  const limiter = env.SEMANTIC_REVIEW_LIMITER;
-  if (!limiter) {
-    console.error("Semantic review rate limiter is not configured");
-    return { response: json({ error: { code: "rate_limit_unavailable", message: "Semantic review is temporarily unavailable" } }, 503, retryHeaders) };
-  }
-
-  const clientIp = request.headers.get("cf-connecting-ip")?.trim();
-  if (!clientIp) {
-    console.error("Semantic review client IP is unavailable");
-    return { response: json({ error: { code: "rate_limit_unavailable", message: "Semantic review is temporarily unavailable" } }, 503, retryHeaders) };
-  }
-
-  try {
-    const { success } = await limiter.limit({ key: `semantic-review:${clientIp}` });
-    if (!success) {
-      return {
-        response: json(
-          { error: { code: "rate_limited", message: "Semantic review limit exceeded; try again later" } },
-          429,
-          retryHeaders,
-        ),
-      };
-    }
-  } catch {
-    console.error("Semantic review rate limiter failed");
-    return { response: json({ error: { code: "rate_limit_unavailable", message: "Semantic review is temporarily unavailable" } }, 503, retryHeaders) };
-  }
+  const rateLimitError = await rateLimitResponse(request, {
+    limiter: env.SEMANTIC_REVIEW_LIMITER,
+    namespace: "semantic-review",
+    service: "Semantic review",
+    unavailableMessage: "Semantic review is temporarily unavailable",
+    limitedMessage: "Semantic review limit exceeded; try again later",
+    retryAfterSeconds: SEMANTIC_REVIEW_RETRY_AFTER_SECONDS,
+  });
+  if (rateLimitError) return { response: rateLimitError };
 
   const parsed = await parseAnalyzeBody(request);
   if (parsed.response) return { response: parsed.response };
-  const body = parsed.body;
-  if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.code !== "string") {
-    return { response: json({ error: { code: "invalid_request", message: "code must be a string" } }, 400) };
-  }
+  const body = validateCodeBody(parsed.body, "request body must be an object");
+  if (body instanceof Response) return { response: body };
   return { code: body.code };
 }
 
@@ -86,44 +128,20 @@ export async function handleSemanticReview(request: Request, env: Env): Promise<
 }
 
 async function analysisInput(request: Request, env: Env): Promise<{ code?: string; config?: unknown; response?: Response }> {
-  const retryHeaders = { "retry-after": String(ANALYZE_RETRY_AFTER_SECONDS) };
-  const limiter = env.ANALYZE_LIMITER;
-  if (!limiter) {
-    console.error("Analysis rate limiter is not configured");
-    return { response: json({ error: { code: "rate_limit_unavailable", message: "Analysis is temporarily unavailable" } }, 503, retryHeaders) };
-  }
-
-  const clientIp = request.headers.get("cf-connecting-ip")?.trim();
-  if (!clientIp) {
-    console.error("Analysis client IP is unavailable");
-    return { response: json({ error: { code: "rate_limit_unavailable", message: "Analysis is temporarily unavailable" } }, 503, retryHeaders) };
-  }
-
-  try {
-    const { success } = await limiter.limit({ key: `analysis:${clientIp}` });
-    if (!success) {
-      return {
-        response: json(
-          { error: { code: "rate_limited", message: "Analysis limit exceeded; try again later" } },
-          429,
-          retryHeaders,
-        ),
-      };
-    }
-  } catch {
-    console.error("Analysis rate limiter failed");
-    return { response: json({ error: { code: "rate_limit_unavailable", message: "Analysis is temporarily unavailable" } }, 503, retryHeaders) };
-  }
+  const rateLimitError = await rateLimitResponse(request, {
+    limiter: env.ANALYZE_LIMITER,
+    namespace: "analysis",
+    service: "Analysis",
+    unavailableMessage: "Analysis is temporarily unavailable",
+    limitedMessage: "Analysis limit exceeded; try again later",
+    retryAfterSeconds: ANALYZE_RETRY_AFTER_SECONDS,
+  });
+  if (rateLimitError) return { response: rateLimitError };
 
   const parsed = await parseAnalyzeBody(request);
   if (parsed.response) return { response: parsed.response };
-  const body = parsed.body!;
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return { response: json({ error: { code: "invalid_request", message: "request body must be an object" } }, 400) };
-  }
-  if (typeof body.code !== "string") {
-    return { response: json({ error: { code: "invalid_request", message: "code must be a string" } }, 400) };
-  }
+  const body = validateCodeBody(parsed.body, "request body must be an object");
+  if (body instanceof Response) return { response: body };
   const configError = validateRuleConfig(body.config);
   if (configError) return { response: json({ error: configError }, 400) };
   return { code: body.code, config: body.config };

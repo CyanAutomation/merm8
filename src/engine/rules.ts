@@ -47,15 +47,34 @@ function flowchartCycleIssues(diagram: Diagram, config: RuleConfig): Issue[] {
 function flowchartFanoutIssues(diagram: Diagram, config: RuleConfig): Issue[] {
   if (!enabled("max-fanout", config)) return [];
   const limit = typeof config["max-fanout"]?.limit === "number" ? config["max-fanout"].limit : 5;
-  const outgoing = new Map<string, number>();
-  for (const edge of diagram.edges) outgoing.set(edge.from, (outgoing.get(edge.from) ?? 0) + 1);
-  const findings: Issue[] = [];
-  for (const [id, count] of outgoing) {
-    if (count <= limit) continue;
-    const node = nodeFor(diagram, id);
-    findings.push(issue("max-fanout", "warning", `node "${id}" has fanout ${count} (limit ${limit})`, node?.line, node?.column, config));
+  const outgoing = fanoutCounts(diagram);
+  return [...outgoing]
+    .map(([id, count]) => fanoutIssue(diagram, id, count, limit, config))
+    .filter(isIssue);
+}
+
+function fanoutCounts(diagram: Diagram): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const { from } of diagram.edges) {
+    counts.set(from, (counts.get(from) ?? 0) + 1);
   }
-  return findings;
+  return counts;
+}
+
+function fanoutIssue(
+  diagram: Diagram,
+  id: string,
+  count: number,
+  limit: number,
+  config: RuleConfig,
+): Issue | undefined {
+  if (count <= limit) return undefined;
+  const node = nodeFor(diagram, id);
+  return issue("max-fanout", "warning", `node "${id}" has fanout ${count} (limit ${limit})`, node?.line, node?.column, config);
+}
+
+function isIssue(value: Issue | undefined): value is Issue {
+  return value !== undefined;
 }
 
 function disconnectedFlowchartIssues(diagram: Diagram, config: RuleConfig): Issue[] {
@@ -95,16 +114,31 @@ function undefinedActorIssues(diagram: Diagram, config: RuleConfig): Issue[] {
   if (!enabled("no-undefined-actors", config)) return [];
   const declared = new Set(diagram.sourceNodeIds);
   const reported = new Set<string>();
-  const findings: Issue[] = [];
-  for (const edge of diagram.edges) {
-    for (const id of [edge.from, edge.to]) {
-      if (declared.has(id) || reported.has(id)) continue;
-      reported.add(id);
-      const node = nodeFor(diagram, id);
-      findings.push(issue("no-undefined-actors", "error", `undefined actor reference: ${id}`, node?.line ?? edge.line, node?.column ?? edge.column, config));
-    }
-  }
-  return findings;
+  return diagram.edges.flatMap(edge =>
+    [edge.from, edge.to]
+      .filter(id => firstUndeclaredReference(id, declared, reported))
+      .map(id => undefinedActorIssue(diagram, edge, id, config)),
+  );
+}
+
+function firstUndeclaredReference(
+  id: string,
+  declared: Set<string>,
+  reported: Set<string>,
+): boolean {
+  if (declared.has(id) || reported.has(id)) return false;
+  reported.add(id);
+  return true;
+}
+
+function undefinedActorIssue(
+  diagram: Diagram,
+  edge: Diagram["edges"][number],
+  id: string,
+  config: RuleConfig,
+): Issue {
+  const node = nodeFor(diagram, id);
+  return issue("no-undefined-actors", "error", `undefined actor reference: ${id}`, node?.line ?? edge.line, node?.column ?? edge.column, config);
 }
 
 function duplicateClassIssues(diagram: Diagram, config: RuleConfig): Issue[] {

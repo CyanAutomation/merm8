@@ -150,18 +150,26 @@ type RequestSettings = {
 
 type RetryState = { count: number };
 
+function positiveIntegerOption(value: number | undefined, fallback: number): number {
+  return Number.isInteger(value) && value! > 0 ? value! : fallback;
+}
+
+function nonNegativeIntegerOption(
+  value: number | undefined,
+  fallback: number,
+  maximum?: number,
+): number {
+  if (!Number.isInteger(value) || value! < 0) return fallback;
+  return maximum === undefined ? value! : Math.min(value!, maximum);
+}
+
 function requestSettings(options: JevClientOptions): RequestSettings {
-  const model = options.model?.trim() || DEFAULT_DECISION_MODEL;
-  const timeoutMs = Number.isInteger(options.timeoutMs) && (options.timeoutMs ?? 0) > 0
-    ? options.timeoutMs!
-    : DEFAULT_JEV_TIMEOUT_MS;
-  const maxRetries = Number.isInteger(options.maxRetries) && (options.maxRetries ?? 0) >= 0
-    ? Math.min(options.maxRetries!, 2)
-    : DEFAULT_MAX_RETRIES;
-  const retryDelayMs = Number.isInteger(options.retryDelayMs) && (options.retryDelayMs ?? -1) >= 0
-    ? options.retryDelayMs!
-    : 100;
-  return { model, timeoutMs, maxRetries, retryDelayMs };
+  return {
+    model: options.model?.trim() || DEFAULT_DECISION_MODEL,
+    timeoutMs: positiveIntegerOption(options.timeoutMs, DEFAULT_JEV_TIMEOUT_MS),
+    maxRetries: nonNegativeIntegerOption(options.maxRetries, DEFAULT_MAX_RETRIES, 2),
+    retryDelayMs: nonNegativeIntegerOption(options.retryDelayMs, 100),
+  };
 }
 
 async function requestWithRetries(

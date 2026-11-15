@@ -98,6 +98,23 @@ test("does not retry non-transient authentication failures", async () => {
   assert.equal(calls, 1);
 });
 
+test("caps configured transient retries at two retries", async () => {
+  let calls = 0;
+  await assert.rejects(
+    requestJevDecisions(sampleState(), semanticQuestions, {
+      apiKey: "server-secret",
+      maxRetries: 20,
+      retryDelayMs: 0,
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response(null, { status: 503 });
+      },
+    }),
+    (error: unknown) => error instanceof JevClientError && error.code === "http",
+  );
+  assert.equal(calls, 3);
+});
+
 test("times out fetch using an abort signal", async () => {
   await assert.rejects(
     requestJevDecisions(sampleState(), semanticQuestions, {
