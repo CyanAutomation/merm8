@@ -104,8 +104,19 @@ test("validates JSON and required code before semantic processing", async (t) =>
   const malformed = await worker.fetch(request("{"), configuredEnv);
   assert.equal(malformed.status, 400);
 
+  for (const body of ["null", "[]", "7"]) {
+    const invalidShape = await worker.fetch(request(body), configuredEnv);
+    assert.equal(invalidShape.status, 400);
+    assert.deepEqual(await invalidShape.json(), {
+      error: { code: "invalid_request", message: "request body must be an object" },
+    });
+  }
+
   const missingCode = await worker.fetch(request(JSON.stringify({ diagram: "flowchart TD" })), configuredEnv);
   assert.equal(missingCode.status, 400);
+  assert.deepEqual(await missingCode.json(), {
+    error: { code: "invalid_request", message: "code must be a string" },
+  });
 });
 
 test("supports semantic review preflight and exposes retry information through CORS", async () => {

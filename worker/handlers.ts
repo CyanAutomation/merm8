@@ -104,7 +104,7 @@ async function semanticReviewInput(request: Request, env: Env): Promise<{ code?:
 
   const parsed = await parseAnalyzeBody(request);
   if (parsed.response) return { response: parsed.response };
-  const body = validateCodeBody(parsed.body, "code must be a string");
+  const body = validateCodeBody(parsed.body, "request body must be an object");
   if (body instanceof Response) return { response: body };
   return { code: body.code };
 }
