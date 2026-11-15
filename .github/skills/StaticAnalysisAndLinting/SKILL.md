@@ -17,6 +17,8 @@ Use this skill when changing built-in rules, rule metadata, severity/config vali
 
 ## Mandatory rules
 
+- Use `GraphTheoryAndAlgorithms` as well when a rule needs graph traversal, reachability, cycles, depth, or connectivity logic.
+- Verify behavior and metadata against the current registry, tests, and config/schema docs; the details below describe current conventions and may change.
 - Rules implement `ID()` and `Run(d *model.Diagram, cfg rules.Config) []model.Issue`. Check the interface and existing rules before copying a pattern.
 - Built-in metadata, allowed options, defaults, and constraints are maintained in `internal/rules/registry.go`; keep them aligned with runtime validation and generated API/schema artifacts.
 - The versioned config shape is `{"schema-version":"v1","rules":{"max-fanout":{"limit":5,"severity":"warning"}}}`. Canonical keys use kebab-case.
