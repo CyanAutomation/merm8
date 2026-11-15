@@ -17,6 +17,7 @@ Use this skill when changing Mermaid parsing, examples, syntax hints, diagram mo
 
 ## Mandatory rules
 
+- Confirm supported families and syntax against current parser fixtures and runtime capability endpoints; this list can change independently by runtime.
 - Distinguish Mermaid's language from merm8's supported subset. Current recognized families include flowchart, sequence, class, ER, and state; parser recognition does not by itself guarantee lint support.
 - Check runtime capability from `GET /v1/diagram-types` and `GET /v1/rules` where available. The Worker and Go server can expose different rule sets.
 - Use Mermaid's official documentation for syntax claims. Avoid describing all Mermaid diagrams as directed graphs; sequence, class, and ER diagrams have different structures and semantics.

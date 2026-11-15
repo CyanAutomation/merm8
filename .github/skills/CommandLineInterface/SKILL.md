@@ -17,6 +17,7 @@ Use this skill when changing CLI flags, file/stdin handling, config loading, tex
 
 ## Mandatory rules
 
+- Verify option defaults, output fields, and exit codes against the current CLI implementation and README before relying on the details below.
 - Preserve these options and defaults unless the requested behavior changes: `--stdin`, `--format text|json`, `--url`, `--config`, `--fail-on-lint`, `--fail-on-syntax` (defaults true), and `--timeout` (HTTP timeout, defaults to 10 seconds).
 - With no file arguments the CLI reads stdin; file paths can be analyzed together, and `--stdin` can combine stdin with file inputs.
 - Local mode uses `PARSER_SCRIPT` when set and otherwise `./parser-node/parse.ts`; it requires the Node parser dependencies. Remote mode appends `/analyze` to `--url`, so use a version base such as `http://localhost:8080/v1` for the Go API.

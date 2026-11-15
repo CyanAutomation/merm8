@@ -17,6 +17,8 @@ Use this skill when changing parser behavior, Mermaid dependency use, AST extrac
 
 ## Mandatory rules
 
+- Verify the protocol and AST shape in the current parser and its fixtures before relying on these details.
+- Use `SystemsProgrammingAndProcessManagement` when changing Go-side process lifecycle or worker-pool management.
 - Read `parser-node/parse.ts`, `parser-node/ast-types.ts`, and relevant AST modules before changing the output shape.
 - The one-shot mode reads all stdin and emits one JSON result. `--worker` uses newline-delimited JSON envelopes with an `id` and `code`, and emits one correlated result per line.
 - Keep stdout limited to protocol JSON. Send diagnostics to stderr.
