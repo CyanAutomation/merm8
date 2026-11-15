@@ -17,6 +17,8 @@ Use this skill for Go server, handler, configuration, middleware, and backend in
 
 ## Mandatory rules
 
+- Verify route behavior and DTO details in current code and `openapi.yaml`; the details below can change with the contract.
+- Use `RestApiDesign` for HTTP contract changes and `SystemsProgrammingAndProcessManagement` for parser lifecycle/protocol changes.
 - Read the handler and `API_GUIDE.md` before changing HTTP behavior. API request/response types are defined in `internal/api/handler.go`; `internal/model/diagram.go` models parsed diagrams and issues.
 - Construct the server with the existing dependency pattern (`api.NewHandler(parser, engine.New())`). Keep parser, engine, telemetry, and configuration boundaries intact.
 - Preserve versioned routes, kebab-case JSON names, structured error responses, and backwards compatibility. Use the REST API skill for status-code and schema guidance.

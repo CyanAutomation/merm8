@@ -17,6 +17,8 @@ Use this skill when adding or changing graph traversal, reachability, cycle, dep
 
 ## Mandatory rules
 
+- Use `StaticAnalysisAndLinting` as well when a graph algorithm changes rule registration, configuration, severity, or issue reporting.
+- Verify model fields and rule interfaces in the current source before relying on the conventions below.
 - Read the model first. `model.Diagram.Nodes` and `Edges` are slices; build indexes locally where useful rather than assuming a map-backed model.
 - Implement the current `rules.Rule` interface: `ID() string` and `Run(d *model.Diagram, cfg rules.Config) []model.Issue`.
 - Add `Families()` when a rule applies only to selected diagram families. Current groups are flowchart, sequence, class, ER, and state.
