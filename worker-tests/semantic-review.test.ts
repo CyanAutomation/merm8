@@ -149,6 +149,18 @@ test("returns an explicit unconfigured error when OpenRouter credentials are mis
   assert.deepEqual(await response.json(), { error: { code: "missing_openrouter_credentials", message: "OpenRouter credentials are not configured" } });
 });
 
+test("maps invalid decision-model configuration to a safe unavailable response", async () => {
+  const response = await worker.fetch(
+    request(JSON.stringify({ code: "flowchart TD\nInvalidModelStart --> InvalidModelEnd" })),
+    { ...configuredEnv, MERM8_DECISION_MODEL: "invalid model name" },
+  );
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: { code: "semantic_review_unconfigured", message: "Semantic review is not configured" },
+  });
+});
+
 test("returns deterministic analysis and separate semantic review from a single JEV request", async (t) => {
   let calls = 0;
   t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -251,6 +263,47 @@ test("maps upstream timeout responses to a safe gateway timeout", async (t) => {
   const response = await worker.fetch(request(JSON.stringify({ code: "flowchart TD\nTimeoutFailureUnique --> TimeoutResultUnique" })), configuredEnv);
   assert.equal(response.status, 504);
   assert.deepEqual(await response.json(), { error: { code: "jev_timeout", message: "Semantic review provider timed out" } });
+});
+
+test("maps invalid provider answers and HTTP statuses to safe responses", async (t) => {
+  let status = 401;
+  let invalidAnswers = true;
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    calls += 1;
+    if (invalidAnswers) return Response.json({ model: "typesafe/jev-1.13", answers: {} });
+    return new Response(null, { status });
+  });
+
+  const invalid = await worker.fetch(
+    request(JSON.stringify({ code: "flowchart TD\nInvalidAnswersStart --> InvalidAnswersEnd" })),
+    configuredEnv,
+  );
+  assert.equal(invalid.status, 502);
+  assert.deepEqual(await invalid.json(), {
+    error: { code: "jev_invalid_response", message: "Semantic review provider returned an invalid response" },
+  });
+
+  invalidAnswers = false;
+  const unauthorized = await worker.fetch(
+    request(JSON.stringify({ code: "flowchart TD\nUnauthorizedStart --> UnauthorizedEnd" })),
+    configuredEnv,
+  );
+  assert.equal(unauthorized.status, 502);
+  assert.deepEqual(await unauthorized.json(), {
+    error: { code: "jev_upstream_error", message: "Semantic review provider is unavailable" },
+  });
+
+  status = 503;
+  const unavailable = await worker.fetch(
+    request(JSON.stringify({ code: "flowchart TD\nHttpUnavailableStart --> HttpUnavailableEnd" })),
+    configuredEnv,
+  );
+  assert.equal(unavailable.status, 503);
+  assert.deepEqual(await unavailable.json(), {
+    error: { code: "jev_upstream_error", message: "Semantic review provider is unavailable" },
+  });
+  assert.equal(calls, 4);
 });
 
 test("keeps deterministic analyze independent of JEV and includes semantic route in OpenAPI", async (t) => {

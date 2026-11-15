@@ -81,6 +81,27 @@ function readWorkflow(filePath: string): Workflow {
   return parseYaml(readRepositoryFile(filePath)) as Workflow;
 }
 
+function assertWorkflowUsesNodeVersion(filePath: string, version: string): void {
+  const setupSteps = Object.values(readWorkflow(filePath).jobs ?? {})
+    .flatMap((job) => job.steps ?? [])
+    .filter((step) => step.uses?.startsWith("actions/setup-node@"));
+
+  assert.ok(setupSteps.length > 0, `${filePath} must set up Node.js`);
+  assert.deepEqual(
+    setupSteps.map((step) => String(step.with?.["node-version"])),
+    setupSteps.map(() => version),
+    `${filePath} must specify Node.js ${version}`,
+  );
+}
+
+function isVersionAtLeast(version: string, minimum: readonly number[]): boolean {
+  const actual = version.split(".").map(Number);
+  for (let index = 0; index < minimum.length; index += 1) {
+    if (actual[index] !== minimum[index]) return actual[index] > minimum[index];
+  }
+  return true;
+}
+
 test("integration workflow runs Go integration-tagged suites", () => {
   const workflow = readWorkflow(
     ".github/workflows/integration-contract-tests.yml",
@@ -144,19 +165,26 @@ test("Dependabot updates Go and both npm dependency roots weekly", () => {
   }
 });
 
-test("CI captures coverage and runs lockfile-installed Fallow for pull requests", () => {
+test("CI fetches full history for TypeScript audits", () => {
   const workflow = readWorkflow(".github/workflows/ci.yml");
-  const steps = workflow.jobs?.test?.steps ?? [];
-  const checkout = steps.find((step) => step.uses?.startsWith("actions/checkout@"));
-  const installStep = steps.find((step) => step.name === "Install Node dependencies");
+  const checkout = workflow.jobs?.test?.steps?.find((step) => step.uses?.startsWith("actions/checkout@"));
+  assert.equal(checkout?.with?.["fetch-depth"], 0);
+});
+
+test("CI captures V8 coverage while running Worker tests", () => {
+  const steps = readWorkflow(".github/workflows/ci.yml").jobs?.test?.steps ?? [];
   const testStep = steps.find((step) => step.name === "Type-check and test Worker");
+  assert.equal(testStep?.env?.NODE_V8_COVERAGE, "${{ runner.temp }}/merm8-v8coverage");
+});
+
+test("CI runs lockfile-installed Fallow after npm ci for pull requests", () => {
+  const steps = readWorkflow(".github/workflows/ci.yml").jobs?.test?.steps ?? [];
+  const installStep = steps.find((step) => step.name === "Install Node dependencies");
   const auditStep = steps.find((step) => step.name === "Audit changed TypeScript code");
 
-  assert.equal(checkout?.with?.["fetch-depth"], 0);
   assert.ok(installStep, "workflow must install locked Node dependencies");
   assert.ok(auditStep, "workflow must audit changed TypeScript code");
   assert.match(installStep?.run ?? "", /npm ci/);
-  assert.equal(testStep?.env?.NODE_V8_COVERAGE, "${{ runner.temp }}/merm8-v8coverage");
   assert.equal(auditStep?.if, "github.event_name == 'pull_request'");
   assert.equal(auditStep?.run, "./node_modules/.bin/fallow audit --coverage \"$COVERAGE_DIR\"");
   assert.ok(
@@ -207,14 +235,12 @@ test("Zizmor suppression tracks the reusable workflow reference line", () => {
   );
 });
 
-test("production deployment is limited to Worker bundle changes", () => {
+test("CI detects Worker bundle changes on main pushes", () => {
   const workflow = readWorkflow(".github/workflows/ci.yml");
   const detector = workflow.jobs?.["worker-changes"];
-  const deploy = workflow.jobs?.["deploy-production"];
   const detectorStep = detector?.steps?.find((step) => step.id === "detect");
 
   assert.ok(detector, "CI must detect changes that affect the Worker bundle");
-  assert.ok(deploy, "CI must define production deployment");
   assert.equal(
     detector?.if,
     "github.event_name == 'push' && github.ref == 'refs/heads/main'",
@@ -241,6 +267,11 @@ test("production deployment is limited to Worker bundle changes", () => {
       `Worker change detection must include ${path}`,
     );
   }
+});
+
+test("production deployment requires detected Worker bundle changes", () => {
+  const deploy = readWorkflow(".github/workflows/ci.yml").jobs?.["deploy-production"];
+  assert.ok(deploy, "CI must define production deployment");
   assert.ok(
     Array.isArray(deploy?.needs) && deploy.needs.includes("worker-changes"),
     "deployment must depend on Worker change detection",
@@ -267,8 +298,8 @@ test("main push CI runs are not coalesced before deployment", () => {
   );
 });
 
-test("the repository declares and uses Node.js 26", () => {
-  const nodeWorkflows = [
+test("Node.js workflows use the declared runtime version", () => {
+  for (const filePath of [
     ".github/workflows/ci.yml",
     ".github/workflows/deploy-cloudflare.yml",
     ".github/workflows/integration-contract-tests.yml",
@@ -276,30 +307,10 @@ test("the repository declares and uses Node.js 26", () => {
     ".github/workflows/kaseki-dry.yaml",
     ".github/workflows/race-tests.yml",
     ".github/workflows/readme-links.yml",
-  ];
+  ]) assertWorkflowUsesNodeVersion(filePath, "26");
+});
 
-  for (const filePath of nodeWorkflows) {
-    const workflow = readWorkflow(filePath);
-    const setupSteps = Object.values(workflow.jobs ?? {})
-      .flatMap((job) => job.steps ?? [])
-      .filter((step) => step.uses?.startsWith("actions/setup-node@"));
-
-    assert.ok(setupSteps.length > 0, `${filePath} must set up Node.js`);
-    for (const step of setupSteps) {
-      const nodeVersion = step.with?.["node-version"];
-      assert.notEqual(
-        nodeVersion,
-        undefined,
-        `${filePath} must specify the Node.js version`,
-      );
-      assert.equal(
-        String(nodeVersion),
-        "26",
-        `${filePath} must use Node.js 26`,
-      );
-    }
-  }
-
+test("Node.js manifests, lockfiles, and .nvmrc agree on version 26", () => {
   const rootManifest = JSON.parse(readRepositoryFile("package.json")) as PackageManifest;
   const parserManifest = JSON.parse(
     readRepositoryFile("parser-node/package.json"),
@@ -376,10 +387,6 @@ test("Go vulnerability scanning runs on PRs and a schedule with a pinned tool", 
   const scan = steps.find((step) =>
     (step.run ?? "").includes("golang.org/x/vuln/cmd/govulncheck@"),
   );
-  const goVersionMatch = readRepositoryFile("go.mod").match(
-    /^go (\d+)\.(\d+)(?:\.(\d+))?$/m,
-  );
-
   assert.ok(workflow.on?.pull_request);
   assert.ok(workflow.on?.push?.branches?.includes("main"));
   assert.ok((workflow.on?.schedule?.length ?? 0) > 0);
@@ -391,17 +398,19 @@ test("Go vulnerability scanning runs on PRs and a schedule with a pinned tool", 
   assert.equal(setupGo?.with?.["go-version-file"], "go.mod");
   assert.equal(setupGo?.with?.["go-version"], undefined);
   assert.equal(setupGo?.with?.cache, false);
-  assert.ok(goVersionMatch, "go.mod must declare the project Go version");
-  const [, goMajor, goMinor, goPatch = "0"] = goVersionMatch;
-  assert.ok(
-    Number(goMajor) > 1 ||
-      (Number(goMajor) === 1 &&
-        (Number(goMinor) > 26 ||
-          (Number(goMinor) === 26 && Number(goPatch) >= 11))),
-    "govulncheck reports reachable standard library vulnerabilities before Go 1.26.11",
-  );
   assert.match(
     scan?.run ?? "",
     /go run golang\.org\/x\/vuln\/cmd\/govulncheck@v1\.9\.0 \.\/\.\.\./,
+  );
+});
+
+test("Go module version includes the standard library vulnerability fix", () => {
+  const goVersionMatch = readRepositoryFile("go.mod").match(
+    /^go (\d+\.\d+(?:\.\d+)?)$/m,
+  );
+  assert.ok(goVersionMatch, "go.mod must declare the project Go version");
+  assert.ok(
+    isVersionAtLeast(goVersionMatch[1], [1, 26, 11]),
+    "govulncheck reports reachable standard library vulnerabilities before Go 1.26.11",
   );
 });

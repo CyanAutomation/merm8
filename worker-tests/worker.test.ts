@@ -118,6 +118,55 @@ test("serves a usable OpenAPI document and secure response headers", async () =>
   assert.deepEqual(await root.json(), { status: "ok" });
 });
 
+test("every documented OpenAPI operation is served by the Worker router", async () => {
+  const spec = await worker.fetch(new Request("https://example.test/v1/spec"), env);
+  const document = await spec.json() as {
+    paths: Record<string, { get?: unknown; post?: unknown }>;
+  };
+
+  for (const [pathname, pathItem] of Object.entries(document.paths)) {
+    for (const method of ["get", "post"] as const) {
+      if (!pathItem[method]) continue;
+      const response = await worker.fetch(analysisRequest(pathname, {
+        method: method.toUpperCase(),
+        ...(method === "post" ? {
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ code: "flowchart TD\nContractStart --> ContractEnd" }),
+        } : {}),
+      }), env);
+
+      assert.notEqual(response.status, 404, `${method.toUpperCase()} ${pathname} is documented but not routed`);
+    }
+  }
+});
+
+test("Worker analysis includes every field required by its OpenAPI response schema", async () => {
+  const specResponse = await worker.fetch(new Request("https://example.test/v1/spec"), env);
+  const document = await specResponse.json() as {
+    paths: Record<string, {
+      post?: {
+        responses?: Record<string, {
+          content?: Record<string, { schema?: { required?: string[] } }>;
+        }>;
+      };
+    }>;
+  };
+  const required = document.paths["/v1/analyze"]?.post?.responses?.["200"]
+    ?.content?.["application/json"]?.schema?.required;
+  assert.ok(required, "OpenAPI must declare the successful analysis response fields");
+
+  const response = await worker.fetch(analysisRequest("/v1/analyze", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: "flowchart TD\nSchemaStart --> SchemaEnd" }),
+  }), env);
+  const analysis = await response.json() as Record<string, unknown>;
+
+  for (const field of required) {
+    assert.ok(Object.hasOwn(analysis, field), `analysis response must include ${field}`);
+  }
+});
+
 test("analyses a flowchart without a process or container", async () => {
   const response = await worker.fetch(analysisRequest("/v1/analyze", {
     method: "POST", headers: { "content-type": "application/json" },

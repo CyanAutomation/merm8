@@ -7,6 +7,7 @@ import { TtlLruCache } from "../cache/ttl-lru.js";
 import {
   JevClientError,
   SemanticReviewError,
+  type JevErrorCode,
   type ChoiceAnswer,
   type JevDecisionResult,
   type SemanticState,
@@ -39,25 +40,59 @@ function booleanAnswer(answers: Record<string, unknown>, key: string): { value: 
   return { value: answer.noul >= BOOLEAN_NORMALIZATION_THRESHOLD, probability: answer.noul };
 }
 
+type SemanticErrorMapping = {
+  code: ConstructorParameters<typeof SemanticReviewError>[0];
+  message: string;
+  status: number;
+};
+
+const fixedJevErrorMappings: Record<Exclude<JevErrorCode, "http">, SemanticErrorMapping> = {
+  credentials: {
+    code: "missing_openrouter_credentials",
+    message: "OpenRouter credentials are not configured",
+    status: 503,
+  },
+  configuration: {
+    code: "semantic_review_unconfigured",
+    message: "Semantic review is not configured",
+    status: 503,
+  },
+  timeout: {
+    code: "jev_timeout",
+    message: "Semantic review provider timed out",
+    status: 504,
+  },
+  invalid_response: {
+    code: "jev_invalid_response",
+    message: "Semantic review provider returned an invalid response",
+    status: 502,
+  },
+  network: {
+    code: "jev_upstream_error",
+    message: "Semantic review provider is unavailable",
+    status: 503,
+  },
+};
+
+function mappedSemanticError(mapping: SemanticErrorMapping): SemanticReviewError {
+  return new SemanticReviewError(mapping.code, mapping.message, mapping.status);
+}
+
+function mapHttpError(error: JevClientError): SemanticReviewError {
+  const retryable = error.status === 429 || (error.status ?? 0) >= 500;
+  return new SemanticReviewError(
+    "jev_upstream_error",
+    "Semantic review provider is unavailable",
+    retryable ? 503 : 502,
+  );
+}
+
 function mapJevError(error: unknown): SemanticReviewError {
   if (!(error instanceof JevClientError)) {
     return new SemanticReviewError("jev_upstream_error", "Semantic review could not be completed", 502);
   }
-  if (error.code === "credentials") {
-    return new SemanticReviewError("missing_openrouter_credentials", "OpenRouter credentials are not configured", 503);
-  }
-  if (error.code === "configuration") {
-    return new SemanticReviewError("semantic_review_unconfigured", "Semantic review is not configured", 503);
-  }
-  if (error.code === "timeout") {
-    return new SemanticReviewError("jev_timeout", "Semantic review provider timed out", 504);
-  }
-  if (error.code === "invalid_response") {
-    return new SemanticReviewError("jev_invalid_response", "Semantic review provider returned an invalid response", 502);
-  }
-  const retryableHttp = error.code === "http" && ((error.status ?? 0) === 429 || (error.status ?? 0) >= 500);
-  const unavailable = error.code === "network" || retryableHttp;
-  return new SemanticReviewError("jev_upstream_error", "Semantic review provider is unavailable", unavailable ? 503 : 502);
+  if (error.code === "http") return mapHttpError(error);
+  return mappedSemanticError(fixedJevErrorMappings[error.code]);
 }
 
 async function getSemanticDecisions(

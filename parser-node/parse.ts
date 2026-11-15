@@ -70,46 +70,59 @@ async function loadMermaid(): Promise<MermaidRuntime> {
 
 async function main(): Promise<void> {
   if (versionInfoMode) {
-    try {
-      const mermaid = await loadMermaid();
-      const mermaidRuntimeVersion = String(mermaid?.version || "").trim();
-      const mermaidDependencyVersion = String(
-        parserPkg?.dependencies?.mermaid || "",
-      ).trim();
-      writeResult({
-        parser_version: String(parserPkg?.version || "").trim(),
-        mermaid_version: mermaidRuntimeVersion || mermaidDependencyVersion,
-      });
-      process.exit(0);
-    } catch (err) {
-      const mermaidDependencyVersion = String(
-        parserPkg?.dependencies?.mermaid || "",
-      ).trim();
-      writeResult({
-        parser_version: String(parserPkg?.version || "").trim(),
-        mermaid_version: mermaidDependencyVersion,
-        error: "internal parser error: " + errorMessage(err),
-      });
-      process.exit(1);
-    }
+    process.exitCode = await writeVersionInfo() ? 0 : 1;
+    return;
   }
 
   if (workerMode) {
     await runWorkerMode();
-    process.exit(0);
+    return;
   }
 
+  await runSingleMode();
+}
+
+async function writeVersionInfo(): Promise<boolean> {
+  const info = await loadVersionInfo();
+  writeResult(info.result);
+  return info.success;
+}
+
+async function loadVersionInfo(): Promise<{ success: boolean; result: unknown }> {
+  try {
+    const mermaid = await loadMermaid();
+    return {
+      success: true,
+      result: parserVersionInfo(String(mermaid?.version || "").trim()),
+    };
+  } catch (err) {
+    return {
+      success: false,
+      result: parserVersionInfo("", "internal parser error: " + errorMessage(err)),
+    };
+  }
+}
+
+function parserVersionInfo(runtimeVersion: string, error?: string): unknown {
+  const mermaidDependencyVersion = String(parserPkg?.dependencies?.mermaid || "").trim();
+  return {
+    parser_version: String(parserPkg?.version || "").trim(),
+    mermaid_version: runtimeVersion || mermaidDependencyVersion,
+    ...(error ? { error } : {}),
+  };
+}
+
+async function runSingleMode(): Promise<void> {
   const input = readFileSync(0, "utf8");
   const singleResult = await parseSource(input);
   writeResult(singleResult);
-  if (
-    !singleResult.valid &&
-    singleResult.error &&
-    (singleResult.error.message.startsWith("internal parser error:") ||
-      singleResult.error.message.startsWith("parser_memory_limit:"))
-  ) {
-    process.exit(1);
-  }
+  if (isFatalParserError(singleResult)) process.exitCode = 1;
+}
+
+function isFatalParserError(result: ParseResult): boolean {
+  if (result.valid || !result.error) return false;
+  return result.error.message.startsWith("internal parser error:") ||
+    result.error.message.startsWith("parser_memory_limit:");
 }
 
 async function runWorkerMode(): Promise<void> {
@@ -122,53 +135,50 @@ async function runWorkerMode(): Promise<void> {
   });
 
   for await (const line of rl) {
-    const trimmed = String(line || "").trim();
-    if (!trimmed) {
-      continue;
-    }
-
-    let envelope: RawRecord;
-    try {
-      envelope = JSON.parse(trimmed) as RawRecord;
-    } catch (err) {
-      writeResult({
-        id: "",
-        error: "invalid worker request: " + errorMessage(err),
-      });
-      continue;
-    }
-
-    const id = String(envelope?.id || "").trim();
-    if (!id) {
-      writeResult({
-        id: "",
-        error: "invalid worker request: missing id",
-      });
-      continue;
-    }
-
-    const timeoutMs = normalizeWorkerTimeoutMs(envelope?.timeout_ms);
-
-    try {
-      const result = await withWorkerTimeout(
-        parseSource(String(envelope?.code || "")),
-        timeoutMs,
-      );
-      writeResult({ id, result });
-    } catch (err) {
-      if (isWorkerTimeoutError(err)) {
-        writeResult({
-          id,
-          error: "parser_timeout: exceeded " + String(timeoutMs) + "ms",
-        });
-        continue;
-      }
-      writeResult({
-        id,
-        error: "internal parser error: " + errorMessage(err),
-      });
-    }
+    const result = await processWorkerLine(String(line || ""));
+    if (result) writeResult(result);
   }
+}
+
+async function processWorkerLine(line: string): Promise<unknown | null> {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+
+  const parsed = parseWorkerEnvelope(trimmed);
+  if (parsed.error) return { id: "", error: parsed.error };
+  const envelope = parsed.envelope;
+  const id = String(envelope?.id || "").trim();
+  if (!id) return { id: "", error: "invalid worker request: missing id" };
+
+  return processWorkerRequest(id, envelope!);
+}
+
+function parseWorkerEnvelope(line: string): { envelope?: RawRecord; error?: string } {
+  try {
+    return { envelope: JSON.parse(line) as RawRecord };
+  } catch (err) {
+    return { error: "invalid worker request: " + errorMessage(err) };
+  }
+}
+
+async function processWorkerRequest(id: string, envelope: RawRecord): Promise<unknown> {
+  const timeoutMs = normalizeWorkerTimeoutMs(envelope?.timeout_ms);
+  try {
+    const result = await withWorkerTimeout(
+      parseSource(String(envelope?.code || "")),
+      timeoutMs,
+    );
+    return { id, result };
+  } catch (err) {
+    return workerRequestFailure(id, timeoutMs, err);
+  }
+}
+
+function workerRequestFailure(id: string, timeoutMs: number, error: unknown): unknown {
+  if (isWorkerTimeoutError(error)) {
+    return { id, error: "parser_timeout: exceeded " + String(timeoutMs) + "ms" };
+  }
+  return { id, error: "internal parser error: " + errorMessage(error) };
 }
 
 function normalizeWorkerTimeoutMs(rawTimeoutMs: unknown): number {
@@ -261,14 +271,21 @@ async function validateSyntax(mermaid: MermaidRuntime, input: string): Promise<P
     await mermaid.parse(input);
     return null;
   } catch (err) {
-    const failure = asRecord(err);
-    const location = asRecord(asRecord(failure?.hash)?.loc);
-    const message = failure?.message ? String(failure.message) : String(err);
-    const line = Number(location?.first_line ?? 0);
-    const column = Number(location?.first_column ?? 0);
-    const enhancedMessage = buildParseErrorMessage(message, detectCommonMistakes(input));
-    return parseError(enhancedMessage, line, column);
+    const details = syntaxErrorDetails(err);
+    const message = buildParseErrorMessage(details.message, detectCommonMistakes(input));
+    return parseError(message, details.line, details.column);
   }
+}
+
+function syntaxErrorDetails(error: unknown): { message: string; line: number; column: number } {
+  const { message: rawMessage, hash: rawHash } = asRecord(error) ?? {};
+  const { loc: rawLocation } = asRecord(rawHash) ?? {};
+  const { first_line: rawLine, first_column: rawColumn } = asRecord(rawLocation) ?? {};
+  return {
+    message: rawMessage ? String(rawMessage) : String(error),
+    line: Number(rawLine ?? 0),
+    column: Number(rawColumn ?? 0),
+  };
 }
 
 function runtimeFailure(err: unknown): ParseResult {
@@ -284,40 +301,26 @@ function runtimeFailure(err: unknown): ParseResult {
 // Error detection and hint generation
 // ---------------------------------------------------------------------------
 
+type MistakeDetector = (input: string, firstLine: string) => boolean;
+
+const mistakeDetectors: ReadonlyArray<readonly [Mistake, MistakeDetector]> = [
+  ["graphviz", (_input, firstLine) =>
+    firstLine.startsWith("digraph") || firstLine.startsWith("rankdir") || firstLine === "{"],
+  ["yaml-frontmatter", (_input, firstLine) => firstLine.startsWith("---")],
+  ["tabs", input => input.includes("\t")],
+  ["wrong-arrow-graphviz", input => input.includes(" -> ") && !input.includes("-->")],
+  ["wrong-arrow-single", input =>
+    input.includes("->") &&
+    !input.includes("-->") &&
+    !input.includes(" -> ") &&
+    input.toLowerCase().includes("flowchart")],
+];
+
 function detectCommonMistakes(input: string): Mistake[] {
   const firstLine = input.split("\n")[0].trim();
-  const mistakes: Mistake[] = [];
-
-  // Detect Graphviz syntax
-  if (
-    firstLine.startsWith("digraph") ||
-    firstLine.startsWith("rankdir") ||
-    firstLine === "{"
-  ) {
-    mistakes.push("graphviz");
-  }
-
-  // Detect YAML frontmatter
-  if (firstLine.startsWith("---")) {
-    mistakes.push("yaml-frontmatter");
-  }
-
-  // Detect tabs instead of spaces
-  if (input.includes("\t")) {
-    mistakes.push("tabs");
-  }
-
-  // Detect wrong arrow styles
-  const graphvizArrow = input.includes(" -> ") && !input.includes("-->");
-  const singleArrow =
-    input.includes("->") && !input.includes("-->") && !input.includes(" -> ");
-  if (graphvizArrow) {
-    mistakes.push("wrong-arrow-graphviz");
-  } else if (singleArrow && input.toLowerCase().includes("flowchart")) {
-    mistakes.push("wrong-arrow-single");
-  }
-
-  return mistakes;
+  return mistakeDetectors
+    .filter(([, detect]) => detect(input, firstLine))
+    .map(([mistake]) => mistake);
 }
 
 function buildErrorHint(baseMessage: string, mistakes: Mistake[]): string {
