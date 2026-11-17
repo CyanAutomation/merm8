@@ -22,6 +22,7 @@ specific deployment.
 | `POST` | `/v1/analyse` | British-English alias for `/v1/analyze` |
 | `POST` | `/v1/analyze/sarif` | Analyze Mermaid source and return SARIF 2.1.0 |
 | `POST` | `/v1/semantic-review` | Rate-limited JEV semantic review alongside deterministic analysis |
+| `*` | `/mcp` | MCP protocol endpoint for agent/tool integrations (requires `API_KEY`) |
 
 The Worker recognizes and lints flowchart, sequence, class, ER, and state diagrams.
 Its rule set includes `max-fanout`, `no-cycles`, `no-disconnected-nodes`, and

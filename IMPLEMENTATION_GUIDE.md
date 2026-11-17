@@ -21,7 +21,7 @@ The merm8 service follows a Go modular architecture:
 
 ### Prerequisites
 
-- Go 1.24+
+- Go 1.26+
 - Node.js 26+ and npm
 
 ### Building
@@ -58,10 +58,10 @@ go test -race ./internal/api ./internal/engine ./internal/parser
 
 ```bash
 # Run benchmark suite
-go run ./cmd/merm8-bench --input benchmarks/fixtures/ --output json,html,markdown
+go run ./benchmarks/main.go -output json,html,csv,markdown
 
 # Compare against baseline
-go run ./cmd/merm8-bench --compare-baseline benchmarks/reports/baseline.json
+go run ./benchmarks/main.go -compare-baseline benchmarks/baselines/v0.1.0.json
 ```
 
 See [docs/benchmarking.md](docs/benchmarking.md) for full benchmark capabilities documentation.
