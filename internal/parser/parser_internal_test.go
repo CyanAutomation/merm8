@@ -44,6 +44,9 @@ func TestParserPerRequestMemoryOverrideDoesNotRetainWorkerPool(t *testing.T) {
 	if _, ok := p.workerPools[256]; !ok {
 		t.Fatal("expected the configured memory pool to remain available")
 	}
+	if _, ok := p.workerPools[257]; ok {
+		t.Fatal("per-request memory override created a retained worker pool")
+	}
 }
 
 func TestParserConfig_EffectiveConfig_Boundaries(t *testing.T) {
