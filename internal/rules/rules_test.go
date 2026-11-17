@@ -34,6 +34,7 @@ func TestNoDuplicateNodeIDs_Duplicate(t *testing.T) {
 	}
 }
 
+// @spec: RULE-001: A repeated node ID produces one error finding per duplicated ID.
 func TestNoDuplicateNodeIDs_MultiDuplicate(t *testing.T) {
 	d := &model.Diagram{
 		Nodes: []model.Node{{ID: "A"}, {ID: "A"}, {ID: "A"}},
@@ -42,6 +43,15 @@ func TestNoDuplicateNodeIDs_MultiDuplicate(t *testing.T) {
 	// Should report only once per duplicate ID
 	if len(issues) != 1 {
 		t.Fatalf("expected 1 issue for triplicate, got %d", len(issues))
+	}
+	if issues[0].RuleID != "no-duplicate-node-ids" {
+		t.Fatalf("rule ID = %q, want no-duplicate-node-ids", issues[0].RuleID)
+	}
+	if issues[0].Message != "duplicate node ID: A" {
+		t.Fatalf("message = %q, want duplicate node ID: A", issues[0].Message)
+	}
+	if issues[0].Severity != "error" {
+		t.Fatalf("severity = %q, want error", issues[0].Severity)
 	}
 }
 

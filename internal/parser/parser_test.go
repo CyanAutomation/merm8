@@ -655,30 +655,54 @@ func TestParser_ASTExtractionFailureAndContractMapping(t *testing.T) {
 	}
 }
 
-func TestParser_WorkerPoolValidFalseWithoutErrorReturnsContractError(t *testing.T) {
-	t.Setenv("PARSER_MODE", "pool")
-	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
-	t.Setenv("MERM8_TEST_PARSER_MODE", "worker-valid-false-without-error")
+// @spec: PARSER-007: Malformed parser responses return a contract error without partial results.
+func TestParser_MalformedResponsesReturnContractErrors(t *testing.T) {
+	tests := []struct {
+		name             string
+		parserMode       string
+		fixtureMode      string
+		wantErrorMessage string
+	}{
+		{
+			name:             "pooled worker omits error for invalid result",
+			parserMode:       "pool",
+			fixtureMode:      "worker-valid-false-without-error",
+			wantErrorMessage: "invalid result missing error for valid=false",
+		},
+		{
+			name:             "valid result omits AST",
+			parserMode:       "subprocess",
+			fixtureMode:      "valid-without-ast",
+			wantErrorMessage: "valid result missing AST",
+		},
+	}
 
-	tempDir := repoTempDir(t)
-	script := writeMockParserFixture(t, tempDir, "parse.ts")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PARSER_MODE", tc.parserMode)
+			if tc.parserMode == "pool" {
+				t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
+			}
+			t.Setenv("MERM8_TEST_PARSER_MODE", tc.fixtureMode)
 
-	p, err := parser.NewWithConfig(script, parser.Config{Timeout: 10 * time.Second})
-	if err != nil {
-		t.Fatalf("failed to construct parser: %v", err)
-	}
-	diagram, syntaxErr, err := p.Parse("graph TD\nA-->B")
-	if err == nil {
-		t.Fatal("expected contract error, got nil")
-	}
-	if !errors.Is(err, parser.ErrContract) {
-		t.Fatalf("expected contract category error, got %v", err)
-	}
-	if !strings.Contains(err.Error(), "invalid result missing error for valid=false") {
-		t.Fatalf("expected missing-error contract message, got %q", err.Error())
-	}
-	if diagram != nil || syntaxErr != nil {
-		t.Fatalf("expected nil diagram/syntaxErr for malformed worker envelope, got diagram=%v syntaxErr=%v", diagram, syntaxErr)
+			script := writeMockParserFixture(t, repoTempDir(t), "parse.ts")
+			p, err := parser.NewWithConfig(script, parser.Config{Timeout: 10 * time.Second})
+			if err != nil {
+				t.Fatalf("construct parser: %v", err)
+			}
+			t.Cleanup(func() { _ = p.Close() })
+
+			diagram, syntaxErr, err := p.Parse("graph TD\nA-->B")
+			if !errors.Is(err, parser.ErrContract) {
+				t.Fatalf("error = %v, want parser contract error", err)
+			}
+			if !strings.Contains(err.Error(), tc.wantErrorMessage) {
+				t.Fatalf("error = %q, want message containing %q", err, tc.wantErrorMessage)
+			}
+			if diagram != nil || syntaxErr != nil {
+				t.Fatalf("malformed response returned partial result: diagram=%v syntaxErr=%v", diagram, syntaxErr)
+			}
+		})
 	}
 }
 
@@ -716,28 +740,6 @@ func TestParser_LargeGraph(t *testing.T) {
 		t.Errorf("expected 19 edges for linear chain, got %d", len(diagram.Edges))
 	}
 	t.Logf("parsed %d nodes, %d edges in %v", len(diagram.Nodes), len(diagram.Edges), elapsed)
-}
-
-func TestParser_ValidWithoutASTReturnsInternalError(t *testing.T) {
-	tempDir := repoTempDir(t)
-	t.Setenv("MERM8_TEST_PARSER_MODE", "valid-without-ast")
-	script := writeMockParserFixture(t, tempDir, "parse.ts")
-
-	p := mustNewParser(t, script)
-	diagram, syntaxErr, err := p.Parse("graph TD; A-->B")
-
-	if err == nil {
-		t.Fatal("expected internal error, got nil")
-	}
-	if syntaxErr != nil {
-		t.Fatalf("expected nil syntaxErr, got %+v", syntaxErr)
-	}
-	if diagram != nil {
-		t.Fatalf("expected nil diagram, got %+v", diagram)
-	}
-	if !errors.Is(err, parser.ErrContract) {
-		t.Fatalf("expected contract category error, got %v", err)
-	}
 }
 
 func TestParser_SubprocessInternalError(t *testing.T) {

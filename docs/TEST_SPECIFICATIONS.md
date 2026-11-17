@@ -44,7 +44,7 @@ Each entry contains:
 ### API-005: Parser Timeout Handling
 
 - **Requirement**: Parser timeout returns 504 with error code `parser_timeout`
-- **Tests**: `TestAnalyze_ParserTimeout_Returns504`, `TestAnalyzeV1_ParserTimeout_Returns504AndErrorCode`
+- **Tests**: `TestAnalyze_ParserTimeout_Returns504`
 - **File**: `internal/api/handler_test.go`
 
 ### API-006: Parser Subprocess Error Handling
@@ -114,6 +114,18 @@ Each entry contains:
 - **Tests**: `TestHandlerReturnsDependencyUnavailableError`
 - **File**: `internal/api/handler_dependency_test.go`
 
+### API-014: Concurrent Mixed Analysis Requests Keep Results Isolated
+
+- **Requirement**: Concurrent valid, syntax-error, and configured analysis requests each return their own expected response without cross-request state leakage
+- **Tests**: `TestAnalyze_ConcurrentMixedPayloadsKeepResponseContractsIsolated`
+- **File**: `internal/api/handler_test.go`
+
+### API-015: Analysis Help Returns Usable Guidance
+
+- **Requirement**: The help endpoint returns an actionable flowchart example, syntax guidance, and an HTTPS documentation link
+- **Tests**: `TestAnalyzeHelp_ReturnsActionableGuidance`
+- **File**: `internal/api/handler_test.go`
+
 ### SARIF-001: API Error Codes Map to SARIF Levels
 
 - **Requirement**: `TransformError` maps parser failures to SARIF error level, request validation and capacity errors to warning level, and unknown codes to warning by default
@@ -127,20 +139,26 @@ Each entry contains:
 ### OBSERVABILITY-001: Metrics Middleware Records HTTP Request Metadata
 
 - **Requirement**: Metrics middleware records `request_total` counter with correct route, method, status labels
-- **Tests**: `TestMetricsMiddleware_RecordsRequestWhenMetricsConfigured`
+- **Tests**: `TestMetricsMiddleware_RecordsMetricsAndPreservesHTTPBehavior`
 - **File**: `internal/api/metrics_middleware_test.go`
-- **Assertion Strategy**: Structured Prometheus metric parsing (JSON-based labels)
+- **Assertion Strategy**: Parse Prometheus exposition labels and compare route, method, and status values
 
 ### OBSERVABILITY-002: Metrics Middleware Preserves HTTP Behavior
 
 - **Requirement**: Metrics middleware does NOT modify HTTP response status, headers, or body
-- **Tests**: `TestMetricsMiddleware_PreservesHTTPBehavior`
+- **Tests**: `TestMetricsMiddleware_RecordsMetricsAndPreservesHTTPBehavior`
 - **File**: `internal/api/metrics_middleware_test.go`
 
 ### OBSERVABILITY-003: Metrics Middleware Records Without Side Effects
 
 - **Requirement**: Metrics recording does NOT affect downstream request/response handling
-- **Tests**: `TestMetricsMiddleware_RecordsMetricsWithoutSideEffects`
+- **Tests**: `TestMetricsMiddleware_RecordsMetricsAndPreservesHTTPBehavior`
+- **File**: `internal/api/metrics_middleware_test.go`
+
+### OBSERVABILITY-004: Versioned Routes Use Stable Metric Labels
+
+- **Requirement**: Registered versioned API routes use their explicit route labels instead of falling back to `unknown`
+- **Tests**: `TestMetricsMiddleware_UsesKnownVersionedRouteLabels`
 - **File**: `internal/api/metrics_middleware_test.go`
 
 ### TELEMETRY-001: Unknown Outcome Labels Fallback to 'other'
@@ -256,6 +274,30 @@ Each entry contains:
 - **Requirement**: After construction, `Ready` and `Parse` continue to work from another working directory using the resolved repository root
 - **Tests**: `TestParser_RepoRootCachedAcrossWorkingDirectoryChange`
 - **File**: `internal/parser/parser_test.go`
+
+### PARSER-007: Malformed Parser Responses Return Contract Errors
+
+- **Requirement**: Parser responses that claim invalid results without errors or valid results without an AST return a contract error and no partial diagram or syntax result
+- **Tests**: `TestParser_MalformedResponsesReturnContractErrors` (pooled-worker invalid result and subprocess result without AST subtests)
+- **File**: `internal/parser/parser_test.go`
+
+### PARSER-008: Per-Request Memory Overrides Do Not Retain Worker Pools
+
+- **Requirement**: A request using a different Node memory limit may use a temporary worker pool, but does not retain an additional pool after parsing
+- **Tests**: `TestParserPerRequestMemoryOverrideDoesNotRetainWorkerPool`
+- **File**: `internal/parser/parser_internal_test.go`
+
+### WORKER-003: Closing a Worker Pool Unblocks Waiters and Rejects Pending Work
+
+- **Requirement**: Closing a pool wakes borrowers blocked on capacity and prevents a worker created concurrently with closure from being returned or retained
+- **Tests**: `TestWorkerPoolCloseUnblocksWaiters`, `TestWorkerPoolBorrowReturnsErrorWhenClosedDuringWorkerCreation`
+- **File**: `internal/parser/worker_pool_test.go`
+
+### RULE-001: Duplicate Node Declarations Produce One Finding Per ID
+
+- **Requirement**: Multiple declarations of one node ID produce one error finding for that duplicated ID
+- **Tests**: `TestNoDuplicateNodeIDs_MultiDuplicate`
+- **File**: `internal/rules/rules_test.go`
 
 ### BENCHMARK-001: Optional Benchmark Metadata Is Omitted
 

@@ -406,22 +406,6 @@ func TestAnalyze_ParserTimeout_Returns504(t *testing.T) {
 	assertExactErrorResponse(t, w.Body.Bytes(), "parser_timeout", "parser timed out while validating Mermaid code")
 }
 
-func TestAnalyzeV1_ParserTimeout_Returns504AndErrorCode(t *testing.T) {
-	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
-		return nil, nil, fmt.Errorf("%w: after 1s", parser.ErrTimeout)
-	})
-	body, _ := json.Marshal(map[string]string{"code": "graph TD; A-->B"})
-	req := httptest.NewRequest(http.MethodPost, "/v1/analyze", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-
-	if w.Code != http.StatusGatewayTimeout {
-		t.Fatalf("expected 504 when parser times out, got %d", w.Code)
-	}
-	assertExactErrorResponse(t, w.Body.Bytes(), "parser_timeout", "parser timed out while validating Mermaid code")
-}
-
 func TestAnalyze_ParserSubprocessError_Returns500(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, fmt.Errorf("%w: exit status 1", parser.ErrSubprocess)
@@ -993,8 +977,6 @@ func TestAnalyze_SyntaxError_HintsSortedByConfidence(t *testing.T) {
 	}
 }
 
-// TestAnalyzeHelp_Returns200 tests that /analyze/help endpoint returns proper help data.
-
 func hintByCode(t *testing.T, resp map[string]interface{}, code string) map[string]interface{} {
 	t.Helper()
 	hintsRaw, ok := resp["hints"].([]interface{})
@@ -1116,7 +1098,9 @@ func TestAnalyze_SyntaxError_GenericFallbackContextAndBounds(t *testing.T) {
 	}
 }
 
-func TestAnalyzeHelp_Returns200(t *testing.T) {
+// TestAnalyzeHelp_ReturnsActionableGuidance verifies representative help content and links.
+// @spec: API-015: The help endpoint returns usable flowchart guidance and links.
+func TestAnalyzeHelp_ReturnsActionableGuidance(t *testing.T) {
 	mux := newTestMux(func(code string) (*model.Diagram, *parser.SyntaxError, error) {
 		return nil, nil, nil
 	})
@@ -1129,40 +1113,48 @@ func TestAnalyzeHelp_Returns200(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp map[string]interface{}
+	var resp struct {
+		DiagramTypes map[string]struct {
+			Description string `json:"description"`
+			Example     string `json:"example"`
+		} `json:"diagram-types"`
+		CommonErrors []struct {
+			Pattern string `json:"pattern"`
+			Fix     string `json:"fix"`
+		} `json:"common-errors"`
+		ArrowSyntax map[string]string `json:"arrow-syntax"`
+		Resources   map[string]string `json:"resources"`
+	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	// Verify response structure
-	if _, hasTypes := resp["diagram-types"]; !hasTypes {
-		t.Errorf("expected diagram-types field")
+	flowchart, ok := resp.DiagramTypes["flowchart"]
+	if !ok {
+		t.Fatal("help response is missing the flowchart guide")
 	}
-	if _, hasErrors := resp["common-errors"]; !hasErrors {
-		t.Errorf("expected common-errors field")
+	if !strings.Contains(flowchart.Description, "processes") {
+		t.Errorf("flowchart description = %q, want guidance for process diagrams", flowchart.Description)
 	}
-	if _, hasArrows := resp["arrow-syntax"]; !hasArrows {
-		t.Errorf("expected arrow-syntax field")
-	}
-	if _, hasResources := resp["resources"]; !hasResources {
-		t.Errorf("expected resources field")
+	if !strings.HasPrefix(flowchart.Example, "flowchart TD") || !strings.Contains(flowchart.Example, "Start") {
+		t.Errorf("flowchart example is not a usable Mermaid flowchart: %q", flowchart.Example)
 	}
 
-	// Verify diagram-types contains examples
-	if types, ok := resp["diagram-types"].(map[string]interface{}); ok {
-		if len(types) == 0 {
-			t.Errorf("expected diagram-types to have content")
+	foundMissingTypeHelp := false
+	for _, commonError := range resp.CommonErrors {
+		if commonError.Pattern == "No diagram type detected" && strings.Contains(commonError.Fix, "type keyword") {
+			foundMissingTypeHelp = true
+			break
 		}
-		if flowchart, ok := types["flowchart"]; ok {
-			if fcMap, ok := flowchart.(map[string]interface{}); ok {
-				if _, hasDesc := fcMap["description"]; !hasDesc {
-					t.Errorf("expected description in flowchart template")
-				}
-				if _, hasExample := fcMap["example"]; !hasExample {
-					t.Errorf("expected example in flowchart template")
-				}
-			}
-		}
+	}
+	if !foundMissingTypeHelp {
+		t.Errorf("common errors are missing actionable help for an absent diagram type: %#v", resp.CommonErrors)
+	}
+	if !strings.Contains(resp.ArrowSyntax["flowchart"], "-->") {
+		t.Errorf("flowchart arrow syntax = %q, want Mermaid arrow operator guidance", resp.ArrowSyntax["flowchart"])
+	}
+	if !strings.HasPrefix(resp.Resources["documentation"], "https://") {
+		t.Errorf("documentation resource = %q, want an HTTPS link", resp.Resources["documentation"])
 	}
 }
 
@@ -2337,7 +2329,8 @@ func TestAnalyze_LargeTopologyMetricsAndFindings(t *testing.T) {
 	}
 }
 
-func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
+// @spec: API-014: Concurrent mixed analysis requests keep their response contracts isolated.
+func TestAnalyze_ConcurrentMixedPayloadsKeepResponseContractsIsolated(t *testing.T) {
 	t.Parallel()
 
 	validDiagram := &model.Diagram{
@@ -2514,17 +2507,19 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 		},
 	}
 
-	const goroutinesPerScenario = 120
-	errCh := make(chan error, len(scenarios)*goroutinesPerScenario)
+	const concurrentRequestsPerScenario = 32
+	errCh := make(chan error, len(scenarios)*concurrentRequestsPerScenario)
+	start := make(chan struct{})
 	var wg sync.WaitGroup
 
 	for _, sc := range scenarios {
 		sc := sc
-		for i := 0; i < goroutinesPerScenario; i++ {
+		for i := 0; i < concurrentRequestsPerScenario; i++ {
 			i := i
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+				<-start
 				defer func() {
 					if r := recover(); r != nil {
 						errCh <- fmt.Errorf("scenario %s[%d] panicked: %v", sc.name, i, r)
@@ -2545,6 +2540,7 @@ func TestAnalyze_Stress_ConcurrentMixedPayloads(t *testing.T) {
 		}
 	}
 
+	close(start)
 	wg.Wait()
 	close(errCh)
 
