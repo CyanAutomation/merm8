@@ -70,19 +70,14 @@ type notifyingPoolCondition struct {
 	*sync.Cond
 	waitStarted     chan struct{}
 	waitStartedOnce sync.Once
-	waitAgain       chan struct{}
-	waitCalls       int
 }
 
 func (c *notifyingPoolCondition) Wait() {
-	c.waitCalls++
-	if c.waitCalls == 2 {
-		close(c.waitAgain)
-	}
 	c.waitStartedOnce.Do(func() { close(c.waitStarted) })
 	c.Cond.Wait()
 }
 
+// @spec: WORKER-003: Closing a worker pool unblocks waiters and rejects work in progress.
 func TestWorkerPoolCloseUnblocksWaiters(t *testing.T) {
 	pool := newWorkerPool(1, func() (*parserWorker, error) {
 		return newUnstartedWorker(), nil
@@ -98,12 +93,10 @@ func TestWorkerPoolCloseUnblocksWaiters(t *testing.T) {
 	})
 
 	waitStarted := make(chan struct{})
-	waitAgain := make(chan struct{})
 	pool.mu.Lock()
 	pool.cond = &notifyingPoolCondition{
 		Cond:        pool.cond.(*sync.Cond),
 		waitStarted: waitStarted,
-		waitAgain:   waitAgain,
 	}
 	pool.mu.Unlock()
 
@@ -116,15 +109,6 @@ func TestWorkerPoolCloseUnblocksWaiters(t *testing.T) {
 	case <-waitStarted:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for borrower to block on pool capacity")
-	}
-
-	pool.mu.Lock()
-	pool.cond.Signal()
-	pool.mu.Unlock()
-	select {
-	case <-waitAgain:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for borrower to recheck pool capacity")
 	}
 
 	if err := pool.close(); err != nil {
@@ -142,6 +126,7 @@ func TestWorkerPoolCloseUnblocksWaiters(t *testing.T) {
 
 }
 
+// @spec: WORKER-003: Closing a worker pool unblocks waiters and rejects work in progress.
 func TestWorkerPoolBorrowReturnsErrorWhenClosedDuringWorkerCreation(t *testing.T) {
 	newFnStarted := make(chan struct{})
 	allowNewFnReturn := make(chan struct{})

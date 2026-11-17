@@ -10,6 +10,7 @@ import (
 	"github.com/CyanAutomation/merm8/internal/model"
 )
 
+// @spec: PARSER-008: Per-request memory overrides do not retain additional worker pools.
 func TestParserPerRequestMemoryOverrideDoesNotRetainWorkerPool(t *testing.T) {
 	t.Setenv("PARSER_MODE", "pool")
 	t.Setenv("PARSER_WORKER_POOL_SIZE", "1")
@@ -37,6 +38,9 @@ func TestParserPerRequestMemoryOverrideDoesNotRetainWorkerPool(t *testing.T) {
 		}
 	}
 
+	if got := len(p.workerPools); got != 1 {
+		t.Fatalf("retained worker pool count = %d, want only the configured pool", got)
+	}
 	if _, ok := p.workerPools[256]; !ok {
 		t.Fatal("expected the configured memory pool to remain available")
 	}
