@@ -112,7 +112,9 @@ jobs:
 
           if [[ ! "$http_status" =~ ^(200|202)$ ]]; then
             echo "::error title=Soyuz submission failed::Soyuz returned HTTP $http_status"
-            echo "Soyuz returned HTTP \`$http_status\`. Response body omitted." >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "Soyuz returned HTTP \`$http_status\`. Response body omitted."
+            } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
@@ -120,10 +122,12 @@ jobs:
           run_id="$(SOYUZ_RUN_ID="$run_id" node --experimental-strip-types scripts/validate-soyuz-run-id.ts)"
           display_id="$(jq -er '.data.displayId | strings | select(test("^soyuz-[0-9]+$"))' "$response_file")"
           run_status="$(jq -er '.data.status | strings | select(test("^(admitting|queued|claimed|running|cancel_requested|cancelled|completed|failed|admission_failed)$"))' "$response_file")"
-          printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
-          printf 'display_id=%s\n' "$display_id" >> "$GITHUB_OUTPUT"
-          printf 'run_status=%s\n' "$run_status" >> "$GITHUB_OUTPUT"
-          printf 'submission_status=accepted\n' >> "$GITHUB_OUTPUT"
+          {
+            printf 'run_id=%s\n' "$run_id"
+            printf 'display_id=%s\n' "$display_id"
+            printf 'run_status=%s\n' "$run_status"
+            printf 'submission_status=accepted\n'
+          } >> "$GITHUB_OUTPUT"
           echo "Soyuz accepted the documentation sweep as $display_id."
 
       - name: Publish Soyuz submission details
