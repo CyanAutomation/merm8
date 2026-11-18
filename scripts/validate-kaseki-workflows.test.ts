@@ -81,6 +81,7 @@ function runSubmission(
   stdout: string;
   stderr: string;
   output: string;
+  summary: string;
   curlArgs: string;
   payload: Record<string, unknown>;
 } {
@@ -93,6 +94,8 @@ function runSubmission(
     mkdirSync(binDirectory);
     const githubOutput = path.join(directory, "github-output");
     writeFileSync(githubOutput, "");
+    const githubStepSummary = path.join(directory, "github-step-summary");
+    writeFileSync(githubStepSummary, "");
     const curlArgsFile = path.join(directory, "curl-args");
     const payloadFile = path.join(directory, "payload.json");
 
@@ -139,6 +142,7 @@ function runSubmission(
         MOCK_CURL_ARGS_FILE: curlArgsFile,
         MOCK_CURL_PAYLOAD_FILE: payloadFile,
         GITHUB_OUTPUT: githubOutput,
+        GITHUB_STEP_SUMMARY: githubStepSummary,
       },
     });
 
@@ -147,6 +151,7 @@ function runSubmission(
       stdout: result.stdout,
       stderr: result.stderr,
       output: readFileSync(githubOutput, "utf8"),
+      summary: readFileSync(githubStepSummary, "utf8"),
       curlArgs: readFileSync(curlArgsFile, "utf8"),
       payload: JSON.parse(readFileSync(payloadFile, "utf8")) as Record<string, unknown>,
     };
@@ -286,6 +291,7 @@ test("Soyuz submit step accepts 202 and 200, and reuses its UUID idempotency key
     assert.match(result.output, /submission_status=accepted/);
     assert.match(result.output, /display_id=soyuz-213/);
     assert.match(result.output, /run_status=queued/);
+    assert.doesNotMatch(result.output, /idempotency_key=/);
     assert.match(result.curlArgs, /https:\/\/soyuz\.scheimann\.workers\.dev\/v1\/runs/);
     assert.match(result.curlArgs, /Authorization: Bearer test-kaseki-submission-token/);
     const idempotencyHeader = result.curlArgs.match(/Idempotency-Key: ([0-9a-f-]{36})/i)?.[1];
@@ -295,11 +301,14 @@ test("Soyuz submit step accepts 202 and 200, and reuses its UUID idempotency key
 });
 
 test("Soyuz submit step fails on non-success HTTP responses", () => {
-  const result = runSubmission("kaseki-docs.yaml", 503, {
-    error: { code: "QUEUE_PUBLISH_UNCERTAIN", message: "retry shortly" },
-  });
-  assert.notEqual(result.status, 0);
-  assert.doesNotMatch(result.output, /submission_status=accepted/);
+  for (const workflowName of workflows) {
+    const result = runSubmission(workflowName, 503, {
+      error: { code: "QUEUE_PUBLISH_UNCERTAIN", message: "retry shortly" },
+    });
+    assert.notEqual(result.status, 0);
+    assert.doesNotMatch(result.output, /submission_status=accepted/);
+    assert.match(result.summary, /Soyuz returned HTTP `503`/);
+  }
 });
 
 test("Soyuz submit step rejects malformed response IDs or lifecycle values", () => {
