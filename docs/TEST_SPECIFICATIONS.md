@@ -311,22 +311,22 @@ Each entry contains:
 - **Tests**: `repository skills have valid metadata and required sections`
 - **File**: `scripts/validate-skills.test.ts`
 
-### KASEKI-001: Kaseki Workflow Jobs Are Restricted to Main and the Protected Environment
+### SOYUZ-001: Soyuz Submission Jobs Are Restricted to Main and the Protected Environment
 
-- **Requirement**: Both Kaseki workflows run only for the main branch and load controller configuration from the `kaseki-agent` environment
-- **Tests**: `kaseki-dry.yaml only runs jobs dispatched from main`, `kaseki-docs.yaml only runs jobs dispatched from main`, and the corresponding environment-bound configuration tests for both workflows
+- **Requirement**: Both Kaseki workflows run only for the main branch and read `SOYUZ_BASE_URL` plus `KASEKI_SUBMISSION_API_TOKEN` from the protected `soyuz` environment; the token is available only to the submit step
+- **Tests**: Main-ref, environment binding, and token-exposure tests for both workflows; Soyuz URL validation tests
 - **Files**: `.github/workflows/kaseki-dry.yaml`, `.github/workflows/kaseki-docs.yaml`, `scripts/validate-kaseki-workflows.test.ts`
 
-### KASEKI-002: Kaseki Submissions Are Bounded and Idempotent
+### SOYUZ-002: Soyuz Submissions Are Bounded and Idempotent
 
-- **Requirement**: Kaseki submissions target main and the triggering commit, create bounded normal pull requests, and use an idempotency key
-- **Tests**: Main-branch submission, triggering-commit checkout, bounded pull request, and idempotency tests for both Kaseki workflows
+- **Requirement**: Soyuz submissions target main and the triggering commit, preserve bounded pull-request requests, and send the same UUID idempotency key in the request body and header; only HTTP 200 replays and HTTP 202 new submissions are accepted
+- **Tests**: Request endpoint, payload bounds, checkout ref, idempotency, response parsing, URL and UUIDv7 validation tests
 - **Files**: `.github/workflows/kaseki-dry.yaml`, `.github/workflows/kaseki-docs.yaml`, `scripts/validate-kaseki-workflows.test.ts`
 
-### KASEKI-003: Polling Retries and Exit Codes Control Success
+### SOYUZ-003: Workflow Success Means Submission Accepted
 
-- **Requirement**: Temporary controller status failures are retried, and a completed run is successful only when its exit code is zero
-- **Tests**: `kaseki-dry.yaml retries status polling after a transient controller failure` and the zero-exit-code completion tests for both workflows
+- **Requirement**: Both workflows finish after Soyuz accepts or replays a request, report the canonical and display run IDs plus the submission-time state, and explicitly state that this does not confirm execution completion
+- **Tests**: `reports accepted submission without polling for completion`, successful 200/202 submit tests, and rejection tests for HTTP errors or malformed response values
 - **Files**: `.github/workflows/kaseki-dry.yaml`, `.github/workflows/kaseki-docs.yaml`, `scripts/validate-kaseki-workflows.test.ts`
 
 ### PARSER-NODE-001: Settled Worker Requests Clear Timeout Timers

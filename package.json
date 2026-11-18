@@ -9,7 +9,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test:worker": "node --import tsx --test worker-tests/*.test.ts",
-    "test:workflows": "node --import tsx --test scripts/validate-kaseki-url.test.ts scripts/validate-kaseki-run-id.test.ts scripts/validate-kaseki-workflows.test.ts scripts/validate-ci-workflows.test.ts",
+    "test:workflows": "node --import tsx --test scripts/validate-soyuz-url.test.ts scripts/validate-soyuz-run-id.test.ts scripts/validate-kaseki-workflows.test.ts scripts/validate-ci-workflows.test.ts",
     "test:parser": "node --import tsx --test parser-node/parse.test.ts",
     "test:skills": "node --import tsx --test scripts/validate-skills.test.ts",
     "test:readme-links": "node --import tsx --test scripts/check-readme-links.test.ts",
