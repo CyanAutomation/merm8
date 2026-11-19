@@ -20,8 +20,8 @@ const repositoryRoot = path.resolve(
 );
 const workflows = ["kaseki-dry.yaml", "kaseki-docs.yaml"];
 const submitStepNames: Record<string, string> = {
-  "kaseki-dry.yaml": "Submit DRY sweep",
-  "kaseki-docs.yaml": "Submit documentation sweep",
+  "kaseki-dry.yaml": "Submit DRY sweep to Soyuz",
+  "kaseki-docs.yaml": "Submit documentation sweep to Soyuz",
 };
 
 type WorkflowStep = {
@@ -72,7 +72,95 @@ function writeExecutable(filePath: string, contents: string): void {
   chmodSync(filePath, 0o755);
 }
 
-// @spec: KASEKI-001: Kaseki jobs run only on main and bind configuration to the protected environment.
+function runSubmission(
+  workflowName: string,
+  httpStatus: number,
+  response: Record<string, unknown>,
+): {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+  output: string;
+  summary: string;
+  curlArgs: string;
+  payload: Record<string, unknown>;
+} {
+  const run = readStep(workflowName, submitStepNames[workflowName]).run;
+  assert.ok(run, "submission step must define a shell script");
+
+  const directory = mkdtempSync(path.join(os.tmpdir(), "soyuz-submit-"));
+  try {
+    const binDirectory = path.join(directory, "bin");
+    mkdirSync(binDirectory);
+    const githubOutput = path.join(directory, "github-output");
+    writeFileSync(githubOutput, "");
+    const githubStepSummary = path.join(directory, "github-step-summary");
+    writeFileSync(githubStepSummary, "");
+    const curlArgsFile = path.join(directory, "curl-args");
+    const payloadFile = path.join(directory, "payload.json");
+
+    writeExecutable(
+      path.join(binDirectory, "curl"),
+      [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        'args=("$@")',
+        'output_file=""',
+        'payload=""',
+        'while (($#)); do',
+        '  case "$1" in',
+        '    --output) output_file="$2"; shift 2 ;;',
+        '    --data) payload="$2"; shift 2 ;;',
+        '    *) shift ;;',
+        '  esac',
+        "done",
+        'printf \'%s\\n\' "${args[@]}" > "$MOCK_CURL_ARGS_FILE"',
+        'printf \'%s\' "$payload" > "$MOCK_CURL_PAYLOAD_FILE"',
+        'printf \'%s\' "$MOCK_CURL_RESPONSE" > "$output_file"',
+        'printf \'%s\' "$MOCK_HTTP_STATUS"',
+        'if (( MOCK_HTTP_STATUS >= 400 )); then exit 22; fi',
+        "",
+      ].join("\n"),
+    );
+
+    const result = spawnSync("bash", ["-c", run], {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+      timeout: 5_000,
+      env: {
+        ...process.env,
+        PATH: `${binDirectory}:${process.env.PATH ?? ""}`,
+        SOYUZ_BASE_URL: "https://soyuz.scheimann.workers.dev",
+        KASEKI_SUBMISSION_API_TOKEN: "test-kaseki-submission-token",
+        REPO_URL: "https://github.com/CyanAutomation/merm8",
+        REF: "main",
+        TASK_DESCRIPTION: "Test task description",
+        ALLOWLIST: "src/**/*.ts",
+        VALIDATION_COMMAND: "npm test",
+        MOCK_HTTP_STATUS: String(httpStatus),
+        MOCK_CURL_RESPONSE: JSON.stringify(response),
+        MOCK_CURL_ARGS_FILE: curlArgsFile,
+        MOCK_CURL_PAYLOAD_FILE: payloadFile,
+        GITHUB_OUTPUT: githubOutput,
+        GITHUB_STEP_SUMMARY: githubStepSummary,
+      },
+    });
+
+    return {
+      status: result.status,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      output: readFileSync(githubOutput, "utf8"),
+      summary: readFileSync(githubStepSummary, "utf8"),
+      curlArgs: readFileSync(curlArgsFile, "utf8"),
+      payload: JSON.parse(readFileSync(payloadFile, "utf8")) as Record<string, unknown>,
+    };
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+// @spec: SOYUZ-001: Submission jobs run only on main and use the protected Soyuz environment.
 for (const workflowName of workflows) {
   test(`${workflowName} only runs jobs dispatched from main`, () => {
     for (const [jobName, job] of readJobs(workflowName)) {
@@ -83,43 +171,53 @@ for (const workflowName of workflows) {
       );
     }
   });
-}
 
-// @spec: KASEKI-001: Every Kaseki job reads its controller settings from the environment.
-for (const workflowName of workflows) {
-  test(`${workflowName} reads Kaseki configuration from the environment-bound jobs`, () => {
+  test(`${workflowName} reads the Soyuz URL and submission credential from the soyuz environment`, () => {
     for (const [jobName, job] of readJobs(workflowName)) {
       assert.equal(
         job.environment,
-        "kaseki-agent",
-        `${workflowName} job ${jobName} must select the Kaseki environment`,
+        "soyuz",
+        `${workflowName} job ${jobName} must select the Soyuz environment`,
       );
       assert.equal(
-        job.env?.KASEKI_BASE_URL,
-        "${{ vars.KASEKI_BASE_URL }}",
-        `${workflowName} job ${jobName} must read the environment-scoped base URL`,
+        job.env?.SOYUZ_BASE_URL,
+        "${{ vars.SOYUZ_BASE_URL }}",
+        `${workflowName} job ${jobName} must read the environment-scoped URL`,
       );
+      assert.equal(job.env?.KASEKI_BASE_URL, undefined);
+      assert.equal(job.env?.KASEKI_ALLOWED_HOSTS, undefined);
+
+      const submit = job.steps?.find((step) => step.name === submitStepNames[workflowName]);
       assert.equal(
-        job.env?.KASEKI_ALLOWED_HOSTS,
-        "${{ vars.KASEKI_ALLOWED_HOSTS }}",
-        `${workflowName} job ${jobName} must read the environment-scoped host allowlist`,
+        submit?.env?.KASEKI_SUBMISSION_API_TOKEN,
+        "${{ secrets.KASEKI_SUBMISSION_API_TOKEN }}",
+        `${workflowName} job ${jobName} must use the scoped Soyuz submission credential`,
+      );
+      assert.equal(submit?.env?.CLIENT_API_TOKEN, undefined);
+      assert.ok(
+        job.steps?.filter((step) => step !== submit)
+          .every((step) => step.env?.KASEKI_SUBMISSION_API_TOKEN === undefined),
+        "the submission credential must only be exposed to the submit step",
       );
     }
   });
 }
 
-// @spec: KASEKI-002: Kaseki submissions use the triggering commit, bounded PRs, main, and idempotency keys.
+// @spec: SOYUZ-002: Requests preserve bounded PR behavior and use a UUID idempotency key.
 for (const workflowName of workflows) {
-  test(`${workflowName} submits Kaseki runs against the main branch`, () => {
-    const job = readJobs(workflowName).map(([, value]) => value).find((value) =>
-      value.steps?.some((step) => step.name === submitStepNames[workflowName]),
-    );
-    assert.ok(job, `${workflowName} must define its submit job`);
-    assert.equal(job.env?.REF, "main");
-
+  test(`${workflowName} submits to Soyuz using the configured base URL`, () => {
     const submitStep = readStep(workflowName, submitStepNames[workflowName]);
-    assert.match(submitStep.run ?? "", /--arg ref "\$REF"/);
-    assert.match(submitStep.run ?? "", /\bref:\s*\$ref\b/);
+    const run = submitStep.run ?? "";
+
+    assert.match(run, /--request POST "\$SOYUZ_BASE_URL\/v1\/runs"/);
+    assert.match(run, /Authorization: Bearer \$KASEKI_SUBMISSION_API_TOKEN/);
+    assert.match(run, /Idempotency-Key: \$idempotency_key/);
+    assert.match(run, /\bidempotencyKey: \$idempotencyKey/);
+    assert.match(run, /taskMode:\s*"patch",\s*publishMode:\s*"pr"/);
+    assert.match(run, /publishMode:\s*"pr",\s*timeoutSeconds:\s*10800,\s*maxDiffBytes:\s*102400/);
+    assert.match(run, /changedFilesAllowlist:/);
+    assert.match(run, /validationCommands:/);
+    assert.doesNotMatch(run, /\/api\/v1\/runs|\/status/);
   });
 
   test(`${workflowName} checks out the triggering commit for validation`, () => {
@@ -131,115 +229,96 @@ for (const workflowName of workflows) {
     assert.equal(checkout.with?.["persist-credentials"], false);
   });
 
-  test(`${workflowName} submits bounded normal pull requests`, () => {
+  test(`${workflowName} accepts only Soyuz fresh-submit and idempotent-replay responses`, () => {
     const run = readStep(workflowName, submitStepNames[workflowName]).run ?? "";
-    assert.match(run, /taskMode:\s*"patch",\s*publishMode:\s*"pr"/);
-    assert.match(run, /publishMode:\s*"pr",\s*timeoutSeconds:\s*10800,\s*maxDiffBytes:\s*102400/);
+    assert.match(run, /200\|202|202\|200/);
+    assert.match(run, /\.data\.id/);
+    assert.match(run, /\.data\.displayId/);
+    assert.match(run, /\.data\.status/);
+    assert.match(run, /scripts\/validate-soyuz-run-id\.ts/);
+    assert.match(run, /submission_status=accepted/);
   });
 
-  test(`${workflowName} makes submission retries idempotent`, () => {
-    const run = readStep(workflowName, submitStepNames[workflowName]).run ?? "";
-    assert.match(run, /idempotency_key=/);
-    assert.match(run, /idempotencyKey:\s*\$idempotencyKey/);
-  });
-
-  test(`${workflowName} only reports successful Kaseki completion for exit code zero`, () => {
-    const run = readStep(workflowName, "Wait for Kaseki completion").run ?? "";
-    const completedBranch = run.indexOf("completed)");
-    const nonZeroGuard = run.indexOf('if [[ "$exit_code" != 0 ]]', completedBranch);
-    const successStatus = run.indexOf('echo "status=completed"', nonZeroGuard);
-
-    assert.ok(completedBranch >= 0, "wait step must handle completed runs");
-    assert.ok(nonZeroGuard > completedBranch, "completed runs must validate exitCode");
-    assert.ok(
-      successStatus > nonZeroGuard,
-      "the workflow must only publish completed after the zero exit-code guard",
-    );
-    assert.match(run, /failed\|cancelled/);
-  });
-
-  test(`${workflowName} always publishes the run ID and final status`, () => {
-    const summaryStep = readStep(workflowName, "Publish run details");
-    assert.equal(summaryStep.if, "always()");
-    assert.equal(summaryStep.env?.RUN_ID, "${{ steps.submit.outputs.run_id || 'not submitted' }}");
-    assert.equal(summaryStep.env?.FINAL_STATUS, "${{ steps.wait.outputs.status || 'not completed' }}");
-    assert.match(summaryStep.run ?? "", /\| Kaseki run \| .*?\$RUN_ID/);
-    assert.match(summaryStep.run ?? "", /\| Final status \| .*?\$FINAL_STATUS/);
+  test(`${workflowName} keeps the Soyuz token out of other steps and non-main triggers`, () => {
+    const workflow = readWorkflow(workflowName) as Workflow & {
+      on?: Record<string, unknown>;
+    };
+    const steps = Object.values(workflow.jobs ?? {}).flatMap((job) => job.steps ?? []);
+    const sources = steps.map((step) => step.run ?? "").join("\n");
+    assert.doesNotMatch(sources, /\/ready|gateway-test|verify-controller-health/);
+    assert.doesNotMatch(sources, /KASEKI_API_TOKEN|CLIENT_API_TOKEN/);
+    assert.equal(workflow.on?.pull_request, undefined);
+    assert.equal(workflow.on?.push, undefined);
   });
 }
 
-// @spec: KASEKI-003: Transient status failures retry; only a zero exit code is successful.
-test("kaseki-dry.yaml retries status polling after a transient controller failure", () => {
-  const run = readStep("kaseki-dry.yaml", "Wait for Kaseki completion").run;
-  assert.ok(run, "wait step must define a shell script");
-
-  let directory: string | undefined;
-  try {
-    directory = mkdtempSync(path.join(os.tmpdir(), "kaseki-poll-retry-"));
-    const binDirectory = path.join(directory, "bin");
-    mkdirSync(binDirectory);
-    const curlCountFile = path.join(directory, "curl-count");
-    const sleepLog = path.join(directory, "sleep-log");
-    const githubOutput = path.join(directory, "github-output");
-
-    writeExecutable(
-      path.join(binDirectory, "curl"),
-      [
-        "#!/bin/sh",
-        "count=0",
-        'if [ -f "$KASEKI_CURL_COUNT_FILE" ]; then count="$(cat "$KASEKI_CURL_COUNT_FILE")"; fi',
-        "count=$((count + 1))",
-        'printf \'%s\' "$count" > "$KASEKI_CURL_COUNT_FILE"',
-        '[ "$count" -eq 1 ] && exit 22',
-        "exit 0",
-        "",
-      ].join("\n"),
-    );
-    writeExecutable(
-      path.join(binDirectory, "jq"),
-      [
-        "#!/bin/sh",
-        'count="$(cat "$KASEKI_CURL_COUNT_FILE")"',
-        'case "$2" in',
-        "  '.status | strings')",
-        '    [ "$count" -ge 2 ] || exit 1',
-        "    printf 'completed\\n'",
-        "    ;;",
-        "  '.exitCode // 0 | numbers') printf '0\\n' ;;",
-        "  *) exit 1 ;;",
-        "esac",
-        "",
-      ].join("\n"),
-    );
-    writeExecutable(
-      path.join(binDirectory, "sleep"),
-      ["#!/bin/sh", 'printf \'%s\\n\' "$*" >> "$KASEKI_SLEEP_LOG"', ""].join("\n"),
+// @spec: SOYUZ-003: Workflows succeed on Soyuz admission and never wait for execution completion.
+for (const workflowName of workflows) {
+  test(`${workflowName} reports accepted submission without polling for completion`, () => {
+    const steps = readJobs(workflowName).flatMap(([, job]) => job.steps ?? []);
+    assert.equal(
+      steps.some((step) => step.name?.startsWith("Wait for")),
+      false,
+      "workflow must not poll run status",
     );
 
-    const result = spawnSync("bash", ["-c", run], {
-      encoding: "utf8",
-      // This test runs inside npm test alongside the full worker suite. Keep
-      // enough headroom for loaded CI hosts; the mocked sleep keeps normal
-      // execution fast while this limit still catches a stuck polling loop.
-      timeout: 15_000,
-      env: {
-        ...process.env,
-        PATH: `${binDirectory}:${process.env.PATH ?? ""}`,
-        RUN_ID: "run-123",
-        KASEKI_API_TOKEN: "test-token",
-        KASEKI_BASE_URL: "https://controller.example.test",
-        KASEKI_CURL_COUNT_FILE: curlCountFile,
-        KASEKI_SLEEP_LOG: sleepLog,
-        GITHUB_OUTPUT: githubOutput,
-      },
-    });
+    const summaryStep = steps.find((step) => step.name === "Publish Soyuz submission details");
+    assert.ok(summaryStep, "workflow must publish the admitted run ID and status");
+    assert.equal(summaryStep.if, "always()");
+    assert.equal(summaryStep.env?.RUN_ID, "${{ steps.submit.outputs.run_id || 'not submitted' }}");
+    assert.equal(summaryStep.env?.DISPLAY_ID, "${{ steps.submit.outputs.display_id || 'not assigned' }}");
+    assert.equal(summaryStep.env?.RUN_STATUS, "${{ steps.submit.outputs.run_status || 'not received' }}");
+    assert.match(summaryStep.run ?? "", /\$SUBMISSION_STATUS/);
+    assert.match(summaryStep.run ?? "", /Soyuz run/);
+    assert.match(summaryStep.run ?? "", /admitted the task/i);
+    assert.match(summaryStep.run ?? "", /does not confirm execution completion/i);
+  });
+}
 
+test("Soyuz submit step accepts 202 and 200, and reuses its UUID idempotency key", () => {
+  const response = {
+    data: {
+      id: "01944e2d-73a1-7cc4-b282-efce9adf00d2",
+      displayId: "soyuz-213",
+      status: "queued",
+    },
+    requestId: "c899e364-6a40-498e-9cf5-1c003bf012f4",
+  };
+
+  for (const httpStatus of [200, 202]) {
+    const result = runSubmission("kaseki-dry.yaml", httpStatus, response);
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(readFileSync(curlCountFile, "utf8"), "2");
-    assert.equal(readFileSync(sleepLog, "utf8"), "60\n");
-    assert.match(readFileSync(githubOutput, "utf8"), /status=completed/);
-  } finally {
-    if (directory) rmSync(directory, { recursive: true, force: true });
+    assert.match(result.output, /submission_status=accepted/);
+    assert.match(result.output, /display_id=soyuz-213/);
+    assert.match(result.output, /run_status=queued/);
+    assert.doesNotMatch(result.output, /idempotency_key=/);
+    assert.match(result.curlArgs, /https:\/\/soyuz\.scheimann\.workers\.dev\/v1\/runs/);
+    assert.match(result.curlArgs, /Authorization: Bearer test-kaseki-submission-token/);
+    const idempotencyHeader = result.curlArgs.match(/Idempotency-Key: ([0-9a-f-]{36})/i)?.[1];
+    assert.ok(idempotencyHeader, "request must send the idempotency key header");
+    assert.equal(result.payload.idempotencyKey, idempotencyHeader);
+  }
+});
+
+test("Soyuz submit step fails on non-success HTTP responses", () => {
+  for (const workflowName of workflows) {
+    const result = runSubmission(workflowName, 503, {
+      error: { code: "QUEUE_PUBLISH_UNCERTAIN", message: "retry shortly" },
+    });
+    assert.notEqual(result.status, 0);
+    assert.doesNotMatch(result.output, /submission_status=accepted/);
+    assert.match(result.summary, /Soyuz returned HTTP `503`/);
+  }
+});
+
+test("Soyuz submit step rejects malformed response IDs or lifecycle values", () => {
+  for (const data of [
+    { id: "not-a-uuid", displayId: "soyuz-213", status: "queued" },
+    { id: "01944e2d-73a1-7cc4-b282-efce9adf00d2", displayId: "soyuz-213", status: "unknown" },
+  ]) {
+    const result = runSubmission("kaseki-dry.yaml", 202, { data });
+    assert.notEqual(result.status, 0);
+    assert.doesNotMatch(result.output, /submission_status=accepted/);
   }
 });
 
@@ -261,12 +340,12 @@ test("kaseki-docs.yaml installs project dependencies before validation", () => {
   );
 });
 
-test("kaseki-dry.yaml caps every controller response body", () => {
+test("kaseki-dry.yaml caps every Soyuz response body", () => {
   const source = readWorkflowSource("kaseki-dry.yaml");
   const responseFileWrites = source.match(/--output "\$response_file"/g) ?? [];
   const responseSizeCaps = source.match(/--max-filesize 1048576/g) ?? [];
 
-  assert.ok(responseFileWrites.length > 0, "workflow must capture controller responses");
+  assert.ok(responseFileWrites.length > 0, "workflow must capture Soyuz responses");
   assert.equal(
     responseSizeCaps.length,
     responseFileWrites.length,
@@ -274,12 +353,30 @@ test("kaseki-dry.yaml caps every controller response body", () => {
   );
 });
 
-test("kaseki-dry.yaml restricts DRY sweep submission to HTTPS", () => {
-  const submitStep = readStep("kaseki-dry.yaml", "Submit DRY sweep");
+test("both submission requests are restricted to HTTPS", () => {
+  for (const workflowName of workflows) {
+    const submitStep = readStep(workflowName, submitStepNames[workflowName]);
+    assert.match(
+      submitStep.run ?? "",
+      /curl --proto '=https' --tlsv1\.2 --fail-with-body --silent --show-error/,
+      `${workflowName} must restrict credential-bearing requests to HTTPS`,
+    );
+  }
+});
 
-  assert.match(
-    submitStep.run ?? "",
-    /curl --proto '=https' --silent --show-error \\\n/,
-    "the credential-bearing submission request must only use HTTPS",
-  );
+test("all workflow shell scripts parse with Bash", () => {
+  for (const workflowName of workflows) {
+    for (const step of readJobs(workflowName).flatMap(([, job]) => job.steps ?? [])) {
+      if (!step.run) continue;
+      const result = spawnSync("bash", ["-n"], {
+        encoding: "utf8",
+        input: step.run,
+      });
+      assert.equal(
+        result.status,
+        0,
+        `${workflowName} step "${step.name}" must have valid Bash syntax: ${result.stderr}`,
+      );
+    }
+  }
 });
