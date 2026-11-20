@@ -119,6 +119,17 @@ var ruleSpecificConstraints = map[string]map[string]optionConstraint{
 
 const suppressionSelectorConstraints = "Each entry must match !?(node|subgraph|rule):<id> with no whitespace; ! negates a selector."
 
+// implementedRuleSharedOptionMetadata returns the configurable-option metadata
+// shared verbatim by every implemented rule: enabled, severity, and
+// suppression-selectors (with full suppression-selector constraints).
+func implementedRuleSharedOptionMetadata() []OptionMetadata {
+	return []OptionMetadata{
+		{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
+		{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
+		{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: suppressionSelectorConstraints},
+	}
+}
+
 var builtInRuleMetadata = []RuleMetadata{
 	{
 		ID:          "max-fanout",
@@ -131,12 +142,9 @@ var builtInRuleMetadata = []RuleMetadata{
 			"suppression-selectors": []string{},
 			"limit":                 defaultMaxFanout,
 		},
-		ConfigurableOptions: []OptionMetadata{
-			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
-			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
-			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: suppressionSelectorConstraints},
-			{Name: "limit", Type: "integer", Description: "Maximum allowed outgoing edges per node.", Constraints: "Must be an integer >= 1. Default is 5."},
-		},
+		ConfigurableOptions: append(implementedRuleSharedOptionMetadata(),
+			OptionMetadata{Name: "limit", Type: "integer", Description: "Maximum allowed outgoing edges per node.", Constraints: "Must be an integer >= 1. Default is 5."},
+		),
 	},
 	{
 		ID:          "no-duplicate-node-ids",
@@ -148,11 +156,7 @@ var builtInRuleMetadata = []RuleMetadata{
 			"severity":              "error",
 			"suppression-selectors": []string{},
 		},
-		ConfigurableOptions: []OptionMetadata{
-			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
-			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
-			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: suppressionSelectorConstraints},
-		},
+		ConfigurableOptions: implementedRuleSharedOptionMetadata(),
 	},
 	{
 		ID:          "no-disconnected-nodes",
@@ -164,11 +168,7 @@ var builtInRuleMetadata = []RuleMetadata{
 			"severity":              "error",
 			"suppression-selectors": []string{},
 		},
-		ConfigurableOptions: []OptionMetadata{
-			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
-			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
-			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: suppressionSelectorConstraints},
-		},
+		ConfigurableOptions: implementedRuleSharedOptionMetadata(),
 	},
 	{
 		ID:          "max-depth",
@@ -181,12 +181,9 @@ var builtInRuleMetadata = []RuleMetadata{
 			"suppression-selectors": []string{},
 			"limit":                 defaultMaxDepth,
 		},
-		ConfigurableOptions: []OptionMetadata{
-			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
-			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
-			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: suppressionSelectorConstraints},
-			{Name: "limit", Type: "integer", Description: "Maximum allowed depth for root-to-leaf traversals.", Constraints: "Must be an integer >= 1. Default is 8."},
-		},
+		ConfigurableOptions: append(implementedRuleSharedOptionMetadata(),
+			OptionMetadata{Name: "limit", Type: "integer", Description: "Maximum allowed depth for root-to-leaf traversals.", Constraints: "Must be an integer >= 1. Default is 8."},
+		),
 	},
 	{
 		ID:          "no-cycles",
@@ -199,12 +196,9 @@ var builtInRuleMetadata = []RuleMetadata{
 			"suppression-selectors": []string{},
 			"allow-self-loop":       false,
 		},
-		ConfigurableOptions: []OptionMetadata{
-			{Name: "enabled", Type: "boolean", Description: "Enable or disable this rule.", Constraints: "Must be true or false."},
-			{Name: "severity", Type: "string", Description: "Severity assigned to emitted issues (case-insensitive; surrounding whitespace ignored).", Constraints: "Accepted values (canonical): error, warning, info."},
-			{Name: "suppression-selectors", Type: "array[string]", Description: "Selectors that suppress matching issues.", Constraints: suppressionSelectorConstraints},
-			{Name: "allow-self-loop", Type: "boolean", Description: "Allow single-node self-loop cycles without emitting issues.", Constraints: "Must be true or false."},
-		},
+		ConfigurableOptions: append(implementedRuleSharedOptionMetadata(),
+			OptionMetadata{Name: "allow-self-loop", Type: "boolean", Description: "Allow single-node self-loop cycles without emitting issues.", Constraints: "Must be true or false."},
+		),
 	},
 	{
 		ID:           "class-no-orphan-classes",
