@@ -10,7 +10,7 @@ run-name: Docs sweep · ${{ github.repository }}@${{ github.sha }}
 permissions:
   contents: read
 
-# Configure SOYUZ_BASE_URL and KASEKI_SUBMISSION_API_TOKEN in the soyuz
+# Configure SOYUZ_BASE_URL and SOYUZ_SUBMISSION_API_TOKEN in the soyuz
 # environment. Limit that environment to main without reviewers.
 concurrency:
   group: soyuz-docs-sweep-${{ github.repository }}
@@ -48,10 +48,10 @@ jobs:
         id: submit
         shell: bash
         env:
-          KASEKI_SUBMISSION_API_TOKEN: ${{ secrets.KASEKI_SUBMISSION_API_TOKEN }}
+          SOYUZ_SUBMISSION_API_TOKEN: ${{ secrets.SOYUZ_SUBMISSION_API_TOKEN }}
         run: |
           set -euo pipefail
-          : "${KASEKI_SUBMISSION_API_TOKEN:?KASEKI_SUBMISSION_API_TOKEN is not configured}"
+          : "${SOYUZ_SUBMISSION_API_TOKEN:?SOYUZ_SUBMISSION_API_TOKEN is not configured}"
           idempotency_key="$(tr '[:upper:]' '[:lower:]' < /proc/sys/kernel/random/uuid)"
 
           payload="$(
@@ -104,7 +104,7 @@ jobs:
               --max-filesize 1048576 --output "$response_file" \
               --write-out '%{http_code}' \
               --request POST "$SOYUZ_BASE_URL/v1/runs" \
-              --header "Authorization: Bearer $KASEKI_SUBMISSION_API_TOKEN" \
+              --header "Authorization: Bearer $SOYUZ_SUBMISSION_API_TOKEN" \
               --header "Idempotency-Key: $idempotency_key" \
               --header 'Content-Type: application/json' \
               --data "$payload" || true
