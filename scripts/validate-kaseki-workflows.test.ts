@@ -131,7 +131,7 @@ function runSubmission(
         ...process.env,
         PATH: `${binDirectory}:${process.env.PATH ?? ""}`,
         SOYUZ_BASE_URL: "https://soyuz.scheimann.workers.dev",
-        KASEKI_SUBMISSION_API_TOKEN: "test-kaseki-submission-token",
+        SOYUZ_SUBMISSION_API_TOKEN: "test-soyuz-submission-token",
         REPO_URL: "https://github.com/CyanAutomation/merm8",
         REF: "main",
         TASK_DESCRIPTION: "Test task description",
@@ -189,14 +189,18 @@ for (const workflowName of workflows) {
 
       const submit = job.steps?.find((step) => step.name === submitStepNames[workflowName]);
       assert.equal(
-        submit?.env?.KASEKI_SUBMISSION_API_TOKEN,
-        "${{ secrets.KASEKI_SUBMISSION_API_TOKEN }}",
+        submit?.env?.SOYUZ_SUBMISSION_API_TOKEN,
+        "${{ secrets.SOYUZ_SUBMISSION_API_TOKEN }}",
         `${workflowName} job ${jobName} must use the scoped Soyuz submission credential`,
       );
+      assert.equal(submit?.env?.KASEKI_SUBMISSION_API_TOKEN, undefined);
       assert.equal(submit?.env?.CLIENT_API_TOKEN, undefined);
       assert.ok(
         job.steps?.filter((step) => step !== submit)
-          .every((step) => step.env?.KASEKI_SUBMISSION_API_TOKEN === undefined),
+          .every((step) =>
+            step.env?.SOYUZ_SUBMISSION_API_TOKEN === undefined &&
+            step.env?.KASEKI_SUBMISSION_API_TOKEN === undefined
+          ),
         "the submission credential must only be exposed to the submit step",
       );
     }
@@ -210,7 +214,7 @@ for (const workflowName of workflows) {
     const run = submitStep.run ?? "";
 
     assert.match(run, /--request POST "\$SOYUZ_BASE_URL\/v1\/runs"/);
-    assert.match(run, /Authorization: Bearer \$KASEKI_SUBMISSION_API_TOKEN/);
+    assert.match(run, /Authorization: Bearer \$SOYUZ_SUBMISSION_API_TOKEN/);
     assert.match(run, /Idempotency-Key: \$idempotency_key/);
     assert.match(run, /\bidempotencyKey: \$idempotencyKey/);
     assert.match(run, /taskMode:\s*"patch",\s*publishMode:\s*"pr"/);
@@ -246,7 +250,10 @@ for (const workflowName of workflows) {
     const steps = Object.values(workflow.jobs ?? {}).flatMap((job) => job.steps ?? []);
     const sources = steps.map((step) => step.run ?? "").join("\n");
     assert.doesNotMatch(sources, /\/ready|gateway-test|verify-controller-health/);
-    assert.doesNotMatch(sources, /KASEKI_API_TOKEN|CLIENT_API_TOKEN/);
+    assert.doesNotMatch(
+      sources,
+      /KASEKI_SUBMISSION_API_TOKEN|KASEKI_API_TOKEN|CLIENT_API_TOKEN/,
+    );
     assert.equal(workflow.on?.pull_request, undefined);
     assert.equal(workflow.on?.push, undefined);
   });
@@ -293,7 +300,7 @@ test("Soyuz submit step accepts 202 and 200, and reuses its UUID idempotency key
     assert.match(result.output, /run_status=queued/);
     assert.doesNotMatch(result.output, /idempotency_key=/);
     assert.match(result.curlArgs, /https:\/\/soyuz\.scheimann\.workers\.dev\/v1\/runs/);
-    assert.match(result.curlArgs, /Authorization: Bearer test-kaseki-submission-token/);
+    assert.match(result.curlArgs, /Authorization: Bearer test-soyuz-submission-token/);
     const idempotencyHeader = result.curlArgs.match(/Idempotency-Key: ([0-9a-f-]{36})/i)?.[1];
     assert.ok(idempotencyHeader, "request must send the idempotency key header");
     assert.equal(result.payload.idempotencyKey, idempotencyHeader);
