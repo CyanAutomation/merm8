@@ -313,7 +313,7 @@ Each entry contains:
 
 ### SOYUZ-001: Soyuz Submission Jobs Are Restricted to Main and the Protected Environment
 
-- **Requirement**: Both Kaseki workflows run only for the main branch and read `SOYUZ_BASE_URL` plus `KASEKI_SUBMISSION_API_TOKEN` from the protected `soyuz` environment; the token is available only to the submit step
+- **Requirement**: Both Kaseki workflows run only for the main branch and read `SOYUZ_BASE_URL` plus `SOYUZ_SUBMISSION_API_TOKEN` from the protected `soyuz` environment; the token is available only to the submit step
 - **Tests**: Main-ref, environment binding, and token-exposure tests for both workflows; Soyuz URL validation tests
 - **Files**: `.github/workflows/kaseki-dry.yaml`, `.github/workflows/kaseki-docs.yaml`, `scripts/validate-kaseki-workflows.test.ts`
 
