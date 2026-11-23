@@ -1,8 +1,8 @@
 import type { Analysis } from "../domain/types.js";
 import type { A2uiComponent, A2uiMessage, SemanticReview } from "./types.js";
 
-export const A2UI_BASIC_CATALOG_ID = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json" as const;
-export const A2UI_DIAGRAM_REVIEW_SURFACE_ID = "diagramReview" as const;
+const A2UI_BASIC_CATALOG_ID = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json" as const;
+const A2UI_DIAGRAM_REVIEW_SURFACE_ID = "diagramReview" as const;
 
 export type A2uiPresentationOrder = "summary-first" | "checks-first" | "clarity-first";
 export type A2uiPresentationDensity = "concise" | "detailed";

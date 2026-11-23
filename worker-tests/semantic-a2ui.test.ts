@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Analysis } from "../domain/types.js";
-import { buildSemanticReviewA2ui } from "./a2ui.js";
-import type { SemanticReview } from "./types.js";
+import type { Analysis } from "../src/domain/types.js";
+import { buildSemanticReviewA2ui } from "../src/semantic/a2ui.js";
+import type { SemanticReview } from "../src/semantic/types.js";
 
 const review: SemanticReview = {
   purpose: { value: "process", confidence: 0.92 },
