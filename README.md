@@ -108,7 +108,7 @@ npm run deploy
 npx wrangler secret put API_KEY
 ```
 
-Semantic review is optional and does not require a client API key. It uses a server-side OpenRouter credential and allows up to five requests per source IP per minute in each Cloudflare location:
+Semantic review is optional and does not require a client API key. JEV returns semantic judgments and chooses a bounded A2UI review layout from approved reading orders and density levels. The Worker builds the A2UI surface; it does not accept model-authored executable UI. The service uses a server-side OpenRouter credential and allows up to five requests per source IP per minute in each Cloudflare location:
 
 ```bash
 npx wrangler secret put OPENROUTER_API_KEY

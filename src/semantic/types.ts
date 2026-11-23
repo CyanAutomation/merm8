@@ -49,8 +49,29 @@ export interface SemanticReview {
   "review-priority": { value: string; confidence: number };
 }
 
+export interface A2uiComponent {
+  id: string;
+  component: "Card" | "Column" | "Text";
+  child?: string;
+  children?: string[];
+  text?: string | { "@path": string };
+  variant?: "caption" | "body";
+}
+
+export interface A2uiMessage {
+  version: "1.0";
+  createSurface: {
+    surfaceId: "diagramReview";
+    catalogId: "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json";
+    sendDataModel: false;
+    components: A2uiComponent[];
+    dataModel: Record<string, unknown>;
+  };
+}
+
 export interface SemanticReviewResponse extends Analysis {
   "semantic-review": SemanticReview;
+  a2ui: A2uiMessage[];
   meta: { source: "jev"; model: string };
 }
 

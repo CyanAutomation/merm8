@@ -56,4 +56,21 @@ export const semanticQuestions = {
       high: "Material ambiguity or unclear meaning could lead to consequential misunderstanding, so review should happen before relying on the diagram.",
     },
   },
+  "presentation-order": {
+    type: "choice",
+    instructions: "Choose the most useful reading order for an A2UI review of this diagram. Use checks-first when deterministic issues are present and likely to be the operator's first task. Use clarity-first when semantic ambiguity or unclear labels/branches dominate. Otherwise use summary-first. This selects only an approved layout recipe and must not change or hide any analysis result.",
+    criteria: {
+      "summary-first": "Lead with diagram purpose and semantic review priority, then show semantic signals and deterministic checks.",
+      "checks-first": "Lead with deterministic rule findings, then show the semantic summary and signals.",
+      "clarity-first": "Lead with clarity, branch, abstraction, and ambiguity signals, then show purpose, priority, and deterministic checks.",
+    },
+  },
+  "presentation-density": {
+    type: "choice",
+    instructions: "Choose compact or detailed presentation for this A2UI review. Prefer detailed when review priority is medium or high, semantic concerns are present, or deterministic issues exist. Prefer concise when the diagram is straightforward and low risk. This choice may change grouping and whether confidence values are shown, but must never remove the review priority, semantic judgments, or total deterministic issue count.",
+    criteria: {
+      concise: "Use compact grouped cards and concise verdicts, while retaining every semantic judgment and the total deterministic issue count.",
+      detailed: "Use expanded cards with confidence values and more deterministic issue details.",
+    },
+  },
 } satisfies JevQuestions;
