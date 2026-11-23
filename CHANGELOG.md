@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- JEV semantic review now selects a bounded A2UI reading order and density, and
+  the Worker returns a Google A2UI v1.0 surface built from validated results.
+- Added coverage for JEV presentation choices, A2UI component ordering, and
+  bounded issue summaries.
+
 - Pull requests now check introduced dependencies for known vulnerabilities, and weekly Go vulnerability scans check reachable dependencies.
 - Bounded, process-local analysis result caching for the Go API and Worker; short-lived semantic decision reuse with concurrent request coalescing; conditional caching for stable metadata endpoints.
 - Estimated byte budgets and Prometheus occupancy reporting for Go parser caches.

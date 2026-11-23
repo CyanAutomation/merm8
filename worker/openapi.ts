@@ -27,6 +27,77 @@ const metricsSchema = {
   },
 };
 
+const a2uiSchema = {
+  type: "array",
+  minItems: 1,
+  maxItems: 1,
+  items: {
+    type: "object",
+    required: ["version", "createSurface"],
+    properties: {
+      version: { type: "string", enum: ["1.0"] },
+      createSurface: {
+        type: "object",
+        required: ["surfaceId", "catalogId", "sendDataModel", "components", "dataModel"],
+        properties: {
+          surfaceId: { type: "string", enum: ["diagramReview"] },
+          catalogId: { type: "string", enum: ["https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"] },
+          sendDataModel: { type: "boolean", enum: [false] },
+          components: {
+            type: "array",
+            maxItems: 64,
+            items: {
+              type: "object",
+              required: ["id"],
+              properties: { id: { type: "string", pattern: "^[A-Za-z][A-Za-z0-9_-]{0,63}$" } },
+              oneOf: [
+                {
+                  type: "object",
+                  required: ["component", "child"],
+                  properties: { id: { type: "string", pattern: "^[A-Za-z][A-Za-z0-9_-]{0,63}$" }, component: { type: "string", enum: ["Card"] }, child: { type: "string" } },
+                  additionalProperties: false,
+                },
+                {
+                  type: "object",
+                  required: ["component", "children"],
+                  properties: {
+                    id: { type: "string", pattern: "^[A-Za-z][A-Za-z0-9_-]{0,63}$" },
+                    component: { type: "string", enum: ["Column"] },
+                    children: { type: "array", minItems: 1, items: { type: "string" } },
+                  },
+                  additionalProperties: false,
+                },
+                {
+                  type: "object",
+                  required: ["component", "text"],
+                  properties: {
+                    id: { type: "string", pattern: "^[A-Za-z][A-Za-z0-9_-]{0,63}$" },
+                    component: { type: "string", enum: ["Text"] },
+                    text: {
+                      oneOf: [
+                        { type: "string" },
+                        {
+                          type: "object",
+                          required: ["@path"],
+                          properties: { "@path": { type: "string", pattern: "^/(summary|semantic|issues|presentation)/[A-Za-z0-9_-]+$" } },
+                          additionalProperties: false,
+                        },
+                      ],
+                    },
+                    variant: { type: "string", enum: ["caption", "body"] },
+                  },
+                  additionalProperties: false,
+                },
+              ],
+            },
+          },
+          dataModel: { type: "object" },
+        },
+      },
+    },
+  },
+};
+
 /** The Worker intentionally publishes only endpoints it implements. */
 export const workerOpenApi = {
   openapi: "3.0.3",
@@ -65,19 +136,19 @@ export const workerOpenApi = {
     "/v1/semantic-review": {
       post: {
         summary: "Run a rate-limited JEV semantic review alongside deterministic analysis",
-        description: "Calls OpenRouter Decisions API once with six typed questions. The endpoint is rate-limited by client IP and uses a server-side OPENROUTER_API_KEY. Semantic judgements and probabilities are separate from deterministic lint issues.",
+        description: "Calls OpenRouter Decisions API once with eight typed questions. Two JEV choices select an approved A2UI reading order and density; the Worker builds the bounded A2UI surface from validated semantic and deterministic results. The endpoint is rate-limited by client IP and uses a server-side OPENROUTER_API_KEY. Semantic judgements and probabilities remain separate from deterministic lint issues.",
         requestBody: {
           required: true,
           content: { "application/json": { schema: { type: "object", required: ["code"], properties: { code: { type: "string", description: "Mermaid source." } } } } },
         },
         responses: {
           "200": {
-            description: "Deterministic structural result with a separate semantic-review object.",
+            description: "Deterministic structural result, semantic judgements, and a bounded A2UI v1.0 review surface.",
             content: {
               "application/json": {
                 schema: {
                   type: "object",
-                  required: ["valid", "diagram-type", "lint-supported", "issues", "metrics", "semantic-review", "meta"],
+                  required: ["valid", "diagram-type", "lint-supported", "issues", "metrics", "semantic-review", "a2ui", "meta"],
                   properties: {
                     valid: { type: "boolean" },
                     "diagram-type": { type: "string", enum: ["flowchart", "sequence", "class", "er", "state", "unknown"] },
@@ -96,6 +167,7 @@ export const workerOpenApi = {
                         "review-priority": { type: "object", required: ["value", "confidence"], properties: { value: { type: "string", enum: ["none", "low", "medium", "high"] }, confidence: { type: "number", minimum: 0, maximum: 1 } } },
                       },
                     },
+                    a2ui: a2uiSchema,
                     meta: { type: "object", required: ["source", "model"], properties: { source: { type: "string", enum: ["jev"] }, model: { type: "string" } } },
                   },
                 },

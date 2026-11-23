@@ -81,7 +81,7 @@ test("retries transient provider errors once and logs only request metadata", as
   assert.equal(calls, 2);
   assert.equal(logs.length, 1);
   assert.equal(logs[0].event, "semantic_review_jev");
-  assert.equal(logs[0].metadata["question-count"], 6);
+  assert.equal(logs[0].metadata["question-count"], 8);
   assert.equal(logs[0].metadata["retry-count"], 1);
   assert.equal(JSON.stringify(logs).includes("server-secret"), false);
 });

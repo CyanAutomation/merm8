@@ -65,6 +65,13 @@ diagram state to OpenRouter's Decisions API. JEV returns probabilistic semantic
 judgements in `semantic-review`; these are not deterministic lint issues and do
 not change the meaning of `/v1/analyze`.
 
+JEV also answers two typed presentation questions. The Worker maps those
+choices to an approved reading order (`summary-first`, `checks-first`, or
+`clarity-first`) and density (`concise` or `detailed`), then returns a Google
+A2UI v1.0 message in `a2ui`. The message uses the Basic Catalog and a small
+`Card`, `Column`, and `Text` component set. JEV selects the layout recipe; it
+does not return executable code, arbitrary components, or UI actions.
+
 The semantic endpoint does not require a client API key. The Worker rate-limits
 it to five requests per source IP per minute in each Cloudflare location.
 OpenRouter uses a separate server-side `OPENROUTER_API_KEY`; that credential is
@@ -93,9 +100,11 @@ Content-Type: application/json
 {"code":"flowchart TD\nA[Receive order] --> B[Validate payment]"}
 ```
 
-The response includes deterministic structural fields and a separate semantic
-section. `noul` probabilities are returned directly; each accompanying boolean
-is a neutral 0.5 normalization for clients that need a simple display value.
+The response includes deterministic structural fields, the semantic section,
+and an A2UI review surface. `noul` probabilities are returned directly; each
+accompanying boolean is a neutral 0.5 normalization for clients that need a
+simple display value. A2UI carries display text derived from validated results;
+the deterministic `issues` and `semantic-review` fields remain canonical.
 
 ```json
 {
@@ -121,6 +130,26 @@ is a neutral 0.5 normalization for clients that need a simple display value.
     "ambiguity": { "value": false, "probability": 0.16 },
     "review-priority": { "value": "low", "confidence": 0.79 }
   },
+  "a2ui": [
+    {
+      "version": "1.0",
+      "createSurface": {
+        "surfaceId": "diagramReview",
+        "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+        "sendDataModel": false,
+        "components": [
+          { "id": "root", "component": "Column", "children": ["summaryCard"] },
+          { "id": "summaryCard", "component": "Card", "child": "summaryContent" },
+          { "id": "summaryContent", "component": "Column", "children": ["summaryTitle"] },
+          { "id": "summaryTitle", "component": "Text", "variant": "body", "text": { "@path": "/summary/title" } }
+        ],
+        "dataModel": {
+          "presentation": { "order": "summary-first", "density": "concise" },
+          "summary": { "title": "Diagram review" }
+        }
+      }
+    }
+  ],
   "meta": { "source": "jev", "model": "typesafe/jev-1.13" }
 }
 ```

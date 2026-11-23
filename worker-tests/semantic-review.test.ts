@@ -15,7 +15,10 @@ function jevPayload(questions: Record<string, JevQuestion> = semanticQuestions) 
     model: "typesafe/jev-1.13",
     answers: Object.fromEntries(Object.entries(questions).map(([key, question]) => {
       if (question.type === "noul") return [key, { type: "noul", noul: key === "ambiguity" ? 0.2 : 0.9 }];
-      const choice = key === "review-priority" ? "low" : "process";
+      const choice = key === "review-priority" ? "low"
+        : key === "presentation-order" ? "summary-first"
+          : key === "presentation-density" ? "concise"
+            : Object.keys(question.criteria)[0]!;
       const choices = Object.keys(question.criteria);
       return [key, { type: "choice", choice, confidence: 0.88, probabilities: Object.fromEntries(choices.map((item) => [item, item === choice ? 1 : 0])) }];
     })),
@@ -180,7 +183,7 @@ test("returns deterministic analysis and separate semantic review from a single 
     assert.equal(new Headers(init?.headers).get("authorization"), "Bearer openrouter-key");
     const payload = JSON.parse(String(init?.body)) as { model: string; state: { diagram: { nodes: Array<{ id: string; label: string }> } }; questions: Record<string, unknown> };
     assert.equal(payload.model, "~typesafe/jev-latest");
-    assert.equal(Object.keys(payload.questions).length, 6);
+    assert.equal(Object.keys(payload.questions).length, 8);
     assert.deepEqual(payload.state.diagram.nodes.slice(0, 2), [{ id: "A", label: "Receive order" }, { id: "B", label: "Validate payment" }]);
     return Response.json(jevPayload());
   });
@@ -202,6 +205,49 @@ test("returns deterministic analysis and separate semantic review from a single 
   assert.equal(result["semantic-review"].ambiguity.value, false);
   assert.deepEqual(result.meta, { source: "jev", model: "typesafe/jev-1.13" });
   assert.equal(JSON.stringify(result).includes("openrouter-key"), false);
+});
+
+test("uses JEV layout choices to author a constrained A2UI review surface", async (t) => {
+  let requestedQuestions: Record<string, JevQuestion> | undefined;
+  t.mock.method(globalThis, "fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const requestBody = JSON.parse(String(init?.body)) as { questions: Record<string, JevQuestion> };
+    requestedQuestions = requestBody.questions;
+    const answers = Object.fromEntries(Object.entries(requestBody.questions).map(([key, question]) => {
+      if (question.type === "noul") return [key, { type: "noul", noul: key === "ambiguity" ? 0.8 : 0.9 }];
+      const choice = key === "presentation-order" ? "checks-first"
+        : key === "presentation-density" ? "detailed"
+          : key === "review-priority" ? "high"
+            : key === "diagram-purpose" ? "process" : Object.keys(question.criteria)[0]!;
+      const choices = Object.keys(question.criteria);
+      return [key, {
+        type: "choice",
+        choice,
+        confidence: 0.88,
+        probabilities: Object.fromEntries(choices.map((item) => [item, item === choice ? 1 : 0])),
+      }];
+    }));
+    return Response.json({ model: "typesafe/jev-1.13", answers });
+  });
+
+  const response = await worker.fetch(
+    request(JSON.stringify({ code: "flowchart TD\nA[Start] --> B[Review]" })),
+    configuredEnv,
+  );
+  assert.equal(response.status, 200);
+  assert.ok(requestedQuestions?.["presentation-order"]);
+  assert.ok(requestedQuestions?.["presentation-density"]);
+
+  const result = await response.json() as {
+    a2ui?: Array<{ version: string; createSurface: { surfaceId: string; catalogId: string; components: Array<{ id: string; children?: string[] }>; dataModel: { presentation: { order: string; density: string } } } }>;
+  };
+  const message = result.a2ui?.[0];
+  assert.equal(message?.version, "1.0");
+  assert.equal(message?.createSurface.surfaceId, "diagramReview");
+  assert.equal(message?.createSurface.catalogId, "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json");
+  assert.deepEqual(message?.createSurface.dataModel.presentation, { order: "checks-first", density: "detailed" });
+  assert.deepEqual(message?.createSurface.components.find((component) => component.id === "root")?.children,
+    ["issuesCard", "summaryCard", "semanticCard"]);
+  assert.ok((message?.createSurface.components.length ?? 999) <= 64);
 });
 
 test("reuses a short-lived semantic decision for an identical state and model", async (t) => {
@@ -326,7 +372,7 @@ test("keeps deterministic analyze independent of JEV and includes semantic route
   assert.equal((await response.json() as { valid: boolean }).valid, true);
 
   const specResponse = await worker.fetch(new Request("https://example.test/v1/spec"), {});
-  const spec = await specResponse.json() as { paths: Record<string, { post?: { security?: unknown[]; requestBody?: unknown; responses?: Record<string, unknown> } }> };
+  const spec = await specResponse.json() as { paths: Record<string, { post?: { description?: string; security?: unknown[]; requestBody?: unknown; responses?: Record<string, unknown> } }> };
   const endpoint = spec.paths["/v1/semantic-review"]?.post;
   assert.ok(endpoint);
   assert.equal(endpoint.security, undefined);
@@ -334,4 +380,17 @@ test("keeps deterministic analyze independent of JEV and includes semantic route
   assert.equal(endpoint.responses?.["401"], undefined);
   assert.ok(endpoint.responses?.["429"]);
   assert.ok(endpoint.responses?.["504"]);
+  assert.match(endpoint.description ?? "", /eight typed questions/);
+  const success = endpoint.responses?.["200"] as {
+    content?: Record<string, { schema?: { required?: string[]; properties?: Record<string, unknown> } }>;
+  };
+  const successSchema = success.content?.["application/json"]?.schema;
+  assert.ok(successSchema?.required?.includes("a2ui"));
+  type Schema = { type?: string; enum?: string[]; properties?: Record<string, Schema>; items?: Schema; oneOf?: Schema[] };
+  const a2uiSchema = successSchema?.properties?.a2ui as Schema | undefined;
+  assert.equal(a2uiSchema?.type, "array");
+  const componentSchemas = a2uiSchema?.items?.properties?.createSurface?.properties?.components?.items?.oneOf;
+  assert.deepEqual(componentSchemas?.map((schema) => schema.properties?.component?.enum?.[0]).sort(), ["Card", "Column", "Text"]);
+  assert.ok(componentSchemas?.some((schema) => schema.properties?.children?.type === "array"));
+  assert.ok(componentSchemas?.some((schema) => schema.properties?.text?.oneOf?.length === 2));
 });
