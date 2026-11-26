@@ -302,6 +302,29 @@ test("coalesces concurrent semantic requests for the same state and model", asyn
   assert.equal(providerCalls, 1);
 });
 
+test("maps a rejected coalesced provider request to a safe error for every caller", async (t) => {
+  let providerCalls = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    providerCalls += 1;
+    await new Promise(resolve => setTimeout(resolve, 10));
+    throw new TypeError("upstream private detail");
+  });
+  const body = JSON.stringify({ code: "flowchart TD\nConcurrentFailureUnique --> ConcurrentFailureResult" });
+  const env = { ...configuredEnv, MERM8_DECISION_MODEL: "coalesced-failure-model" };
+  const [first, second] = await Promise.all([
+    worker.fetch(request(body), env),
+    worker.fetch(request(body), env),
+  ]);
+
+  for (const response of [first, second]) {
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), {
+      error: { code: "jev_upstream_error", message: "Semantic review provider is unavailable" },
+    });
+  }
+  assert.equal(providerCalls, 2);
+});
+
 test("maps upstream network failures to a safe unavailable response", async (t) => {
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => { calls += 1; throw new TypeError("upstream private detail"); });
