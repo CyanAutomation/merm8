@@ -163,7 +163,11 @@ diagram content. Missing `OPENROUTER_API_KEY` returns
 `503 missing_openrouter_credentials`; invalid model configuration returns
 `503 semantic_review_unconfigured`. Provider timeouts return `504 jev_timeout`,
 invalid provider answers return `502 jev_invalid_response`, and unavailable
-provider responses return `502` or `503 jev_upstream_error`.
+provider responses return `502` or `503 jev_upstream_error`. Transient provider
+responses are retried once by default. When OpenRouter supplies `Retry-After`,
+the Worker honors delays up to five seconds; longer delays are returned as a
+safe `503` with the provider's retry hint so callers can wait without the Worker
+holding a request open. Invalid JSON and invalid typed answers are not retried.
 
 ## Rule configuration validation
 

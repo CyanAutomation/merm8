@@ -80,12 +80,14 @@ export type JevErrorCode = "configuration" | "credentials" | "timeout" | "http" 
 export class JevClientError extends Error {
   readonly code: JevErrorCode;
   readonly status?: number;
+  readonly retryAfterSeconds?: number;
 
-  constructor(code: JevErrorCode, message: string, status?: number) {
+  constructor(code: JevErrorCode, message: string, status?: number, retryAfterSeconds?: number) {
     super(message);
     this.name = "JevClientError";
     this.code = code;
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -95,13 +97,15 @@ export class SemanticReviewError extends Error {
   readonly code: SemanticReviewErrorCode;
   readonly status: number;
   readonly details?: unknown;
+  readonly retryAfterSeconds?: number;
 
-  constructor(code: SemanticReviewErrorCode, message: string, status: number, details?: unknown) {
+  constructor(code: SemanticReviewErrorCode, message: string, status: number, details?: unknown, retryAfterSeconds?: number) {
     super(message);
     this.name = "SemanticReviewError";
     this.code = code;
     this.status = status;
     this.details = details;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 

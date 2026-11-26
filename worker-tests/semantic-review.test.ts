@@ -322,6 +322,45 @@ test("maps upstream timeout responses to a safe gateway timeout", async (t) => {
   assert.deepEqual(await response.json(), { error: { code: "jev_timeout", message: "Semantic review provider timed out" } });
 });
 
+test("passes bounded provider retry guidance through the semantic-review response", async (t) => {
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    calls += 1;
+    return new Response(null, { status: 429, headers: { "retry-after": "60" } });
+  });
+
+  const response = await worker.fetch(
+    request(JSON.stringify({ code: "flowchart TD\nRetryAfterStart --> RetryAfterEnd" })),
+    configuredEnv,
+  );
+
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("retry-after"), "60");
+  assert.deepEqual(await response.json(), {
+    error: { code: "jev_upstream_error", message: "Semantic review provider is unavailable" },
+  });
+  assert.equal(calls, 1);
+});
+
+test("maps malformed provider JSON to a safe invalid-response error without retrying", async (t) => {
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    calls += 1;
+    return new Response("{invalid", { headers: { "content-type": "application/json" } });
+  });
+
+  const response = await worker.fetch(
+    request(JSON.stringify({ code: "flowchart TD\nMalformedProviderStart --> MalformedProviderEnd" })),
+    configuredEnv,
+  );
+
+  assert.equal(response.status, 502);
+  assert.deepEqual(await response.json(), {
+    error: { code: "jev_invalid_response", message: "Semantic review provider returned an invalid response" },
+  });
+  assert.equal(calls, 1);
+});
+
 test("maps invalid provider answers and HTTP statuses to safe responses", async (t) => {
   let status = 401;
   let invalidAnswers = true;

@@ -5,6 +5,8 @@ export const JEV_DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions";
 const DEFAULT_DECISION_MODEL = "~typesafe/jev-latest";
 const DEFAULT_JEV_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_RETRIES = 1;
+const DEFAULT_MAX_RETRY_AFTER_MS = 5_000;
+const MAX_RETRY_AFTER_MS = 30_000;
 const RETRYABLE_HTTP_STATUSES = new Set([429, 503, 529]);
 
 export interface JevClientOptions {
@@ -14,6 +16,8 @@ export interface JevClientOptions {
   timeoutMs?: number;
   maxRetries?: number;
   retryDelayMs?: number;
+  maxRetryAfterMs?: number;
+  waitImpl?: (ms: number) => Promise<void>;
   log?: (event: string, metadata: Record<string, string | number>) => void;
 }
 
@@ -73,6 +77,27 @@ function retryable(error: JevClientError): boolean {
     (error.code === "http" && error.status !== undefined && RETRYABLE_HTTP_STATUSES.has(error.status));
 }
 
+function retryAfterSeconds(headers: Headers): number | undefined {
+  const value = headers.get("retry-after")?.trim();
+  if (!value) return undefined;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds);
+
+  const retryAt = Date.parse(value);
+  if (!Number.isFinite(retryAt)) return undefined;
+  return Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
+}
+
+function retryDelayMs(error: JevClientError, settings: RequestSettings, attempt: number): number | null {
+  if (!retryable(error)) return null;
+  if (error.retryAfterSeconds !== undefined) {
+    const retryAfterMs = error.retryAfterSeconds * 1000;
+    return retryAfterMs <= settings.maxRetryAfterMs ? retryAfterMs : null;
+  }
+  return settings.retryDelayMs * 2 ** (attempt + 1);
+}
+
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -102,7 +127,14 @@ async function requestAttempt(
       body: JSON.stringify({ model, state, questions }),
       signal: controller.signal,
     });
-    if (!response.ok) throw new JevClientError("http", `JEV returned HTTP ${response.status}`, response.status);
+    if (!response.ok) {
+      throw new JevClientError(
+        "http",
+        `JEV returned HTTP ${response.status}`,
+        response.status,
+        retryAfterSeconds(response.headers),
+      );
+    }
     const payload = await readResponsePayload(response, controller, timeoutMs);
     return validatePayload(payload, questions, model, apiKey);
   } catch (error) {
@@ -146,6 +178,7 @@ type RequestSettings = {
   timeoutMs: number;
   maxRetries: number;
   retryDelayMs: number;
+  maxRetryAfterMs: number;
 };
 
 type RetryState = { count: number };
@@ -169,6 +202,7 @@ function requestSettings(options: JevClientOptions): RequestSettings {
     timeoutMs: positiveIntegerOption(options.timeoutMs, DEFAULT_JEV_TIMEOUT_MS),
     maxRetries: nonNegativeIntegerOption(options.maxRetries, DEFAULT_MAX_RETRIES, 2),
     retryDelayMs: nonNegativeIntegerOption(options.retryDelayMs, 100),
+    maxRetryAfterMs: nonNegativeIntegerOption(options.maxRetryAfterMs, DEFAULT_MAX_RETRY_AFTER_MS, MAX_RETRY_AFTER_MS),
   };
 }
 
@@ -191,9 +225,10 @@ async function requestWithRetries(
       );
     } catch (error) {
       const clientError = asClientError(error);
-      if (attempt >= settings.maxRetries || !retryable(clientError)) throw clientError;
+      const delayMs = retryDelayMs(clientError, settings, attempt);
+      if (attempt >= settings.maxRetries || delayMs === null) throw clientError;
       retryState.count += 1;
-      await wait(settings.retryDelayMs * 2 ** retryState.count);
+      await (options.waitImpl ?? wait)(delayMs);
     }
   }
 }

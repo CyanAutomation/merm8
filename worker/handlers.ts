@@ -111,7 +111,11 @@ async function semanticReviewInput(request: Request, env: Env): Promise<{ code?:
 
 function semanticReviewFailure(error: unknown): Response {
   if (error instanceof SemanticReviewError) {
-    return json({ error: { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) } }, error.status);
+    return json(
+      { error: { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) } },
+      error.status,
+      error.retryAfterSeconds === undefined ? {} : { "retry-after": String(error.retryAfterSeconds) },
+    );
   }
   console.error("Semantic review failed");
   return json({ error: { code: "semantic_review_failed", message: "Semantic review could not be completed" } }, 500);

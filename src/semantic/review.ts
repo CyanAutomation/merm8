@@ -94,6 +94,8 @@ function mapHttpError(error: JevClientError): SemanticReviewError {
     "jev_upstream_error",
     "Semantic review provider is unavailable",
     retryable ? 503 : 502,
+    undefined,
+    retryable ? error.retryAfterSeconds : undefined,
   );
 }
 
