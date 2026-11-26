@@ -86,6 +86,78 @@ test("retries transient provider errors once and logs only request metadata", as
   assert.equal(JSON.stringify(logs).includes("server-secret"), false);
 });
 
+test("uses bounded Retry-After delays for transient provider responses", async () => {
+  let calls = 0;
+  const waits: number[] = [];
+  const result = await requestJevDecisions(sampleState(), semanticQuestions, {
+    apiKey: "server-secret",
+    retryDelayMs: 0,
+    maxRetries: 1,
+    waitImpl: async (ms) => { waits.push(ms); },
+    fetchImpl: async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response(null, { status: 429, headers: { "retry-after": "2" } })
+        : Response.json(validPayload(semanticQuestions));
+    },
+  });
+
+  assert.equal(result.model, "typesafe/jev-1.13");
+  assert.equal(calls, 2);
+  assert.deepEqual(waits, [2000]);
+});
+
+test("skips automatic retries when provider Retry-After exceeds the wait budget", async () => {
+  let calls = 0;
+  const waits: number[] = [];
+  await assert.rejects(
+    requestJevDecisions(sampleState(), semanticQuestions, {
+      apiKey: "server-secret",
+      retryDelayMs: 0,
+      maxRetries: 2,
+      waitImpl: async (ms) => { waits.push(ms); },
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response(null, { status: 429, headers: { "retry-after": "60" } });
+      },
+    }),
+    (error: unknown) => error instanceof JevClientError && error.code === "http" && error.status === 429,
+  );
+
+  assert.equal(calls, 1);
+  assert.deepEqual(waits, []);
+});
+
+test("does not retry invalid JSON from a successful provider response", async () => {
+  let calls = 0;
+  await assert.rejects(
+    requestJevDecisions(sampleState(), semanticQuestions, {
+      apiKey: "server-secret",
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response("{invalid", { headers: { "content-type": "application/json" } });
+      },
+    }),
+    (error: unknown) => error instanceof JevClientError && error.code === "invalid_response",
+  );
+
+  assert.equal(calls, 1);
+});
+
+test("accepts a provider response delayed within its timeout budget", async () => {
+  const result = await requestJevDecisions(sampleState(), semanticQuestions, {
+    apiKey: "server-secret",
+    timeoutMs: 500,
+    maxRetries: 0,
+    fetchImpl: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return Response.json(validPayload(semanticQuestions));
+    },
+  });
+
+  assert.equal(result.model, "typesafe/jev-1.13");
+});
+
 test("does not retry non-transient authentication failures", async () => {
   let calls = 0;
   await assert.rejects(

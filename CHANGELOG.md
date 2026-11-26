@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- OpenRouter semantic-review retries now honor bounded `Retry-After` hints and forward longer provider delays to callers.
 - Kaseki documentation and DRY workflows now submit to Soyuz with the scoped submission token and report admission without polling for execution completion.
 - Release creation is manual through GitHub's Releases UI; the repository no longer defines an automated release workflow.
 - Raised the minimum Node.js version for parser and project tooling to 26.

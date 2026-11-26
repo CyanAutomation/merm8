@@ -179,7 +179,7 @@ export const workerOpenApi = {
           "422": { ...errorResponse, description: "The parser produced no nodes that can be reviewed semantically." },
           "502": { ...errorResponse, description: "The JEV response was invalid or the upstream request was rejected." },
           "429": { ...errorResponse, description: "The request exceeds the semantic review rate limit.", headers: { "Retry-After": { description: "Seconds to wait before retrying.", schema: { type: "integer", example: 60 } } } },
-          "503": { ...errorResponse, description: "OpenRouter credentials/model configuration or the rate limiter is unavailable, or the provider is unavailable." },
+          "503": { ...errorResponse, description: "OpenRouter credentials/model configuration or the rate limiter is unavailable, or the provider is unavailable. A provider Retry-After hint is forwarded when available.", headers: { "Retry-After": { description: "Seconds to wait before retrying when provided by the provider.", schema: { type: "integer", minimum: 0, example: 60 } } } },
           "504": { ...errorResponse, description: "The JEV Decisions API request timed out." },
         },
       },
